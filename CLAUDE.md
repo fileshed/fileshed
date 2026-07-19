@@ -265,10 +265,11 @@ When working with Nuxt UI components, fetch the LLM docs from the URLs above rat
 ```
 fileshed/
 ├── packages/
-│   └── core/                # @fileshed/core — domain types + Zod codecs
+│   └── core/                # @fileshed/core — shared domain vocabulary + API contract
 │       └── src/
-│           ├── models/      # Domain type definitions
-│           └── codecs/      # Zod codecs (row ⇄ domain, DTO ⇄ domain)
+│           └── models/      # Domain type definitions
+│               ├── schemas/     # Zod codecs for the domain types
+│               └── requests/    # API DTO types + schemas (as the API grows)
 ├── src/
 │   ├── client/              # @fileshed/client — Vue 3 + Nuxt UI v4 frontend
 │   │   └── src/

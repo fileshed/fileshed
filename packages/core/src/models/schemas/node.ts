@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 // Models
-import type { Node } from '../models/node.ts';
+import type { Node } from '../node.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
