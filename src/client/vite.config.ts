@@ -2,18 +2,21 @@
 // Vite Configuration
 //----------------------------------------------------------------------------------------------------------------------
 
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import vueDevtools from 'vite-plugin-vue-devtools';
 import checker from 'vite-plugin-checker';
 import vue from '@vitejs/plugin-vue';
 import ui from '@nuxt/ui/vite';
 import devServer from '@hono/vite-dev-server';
 
+// Utils
+import { loadViteEnv } from './env.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export default defineConfig(({ mode }) =>
 {
-    const env = loadEnv(mode, '../..', '');
+    const env = loadViteEnv(mode, '../..');
 
     return {
         envDir: '../..',
@@ -31,7 +34,7 @@ export default defineConfig(({ mode }) =>
             vue(),
             ui(),
             devServer({
-                entry: '../server/app.ts',
+                entry: '../server/server.ts',
                 exclude: [
                     /^(?!\/api\/).*/,
                 ],

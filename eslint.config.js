@@ -228,6 +228,79 @@ export default [
     },
 
     //------------------------------------------------------------------------------------------------------------------
+    // iDesign Layer Boundaries (server)
+    //------------------------------------------------------------------------------------------------------------------
+
+    {
+        files: [ 'src/server/routes/**' ],
+        rules: {
+            'no-restricted-imports': [ 'error', {
+                patterns: [
+                    {
+                        group: [ '**/engines/**', '**/resource-access/**' ],
+                        message: 'Routes call managers only -- see the iDesign section in CLAUDE.md.',
+                    },
+                ],
+            } ],
+        },
+    },
+    {
+        files: [ 'src/server/engines/**' ],
+        rules: {
+            'no-restricted-imports': [ 'error', {
+                patterns: [
+                    {
+                        group: [ '**/managers/**', '**/routes/**', '**/resource-access/**' ],
+                        message: 'Engines are pure -- they import models and utils only, see the iDesign section '
+                            + 'in CLAUDE.md.',
+                    },
+                ],
+            } ],
+        },
+    },
+    {
+        files: [ 'src/server/managers/**' ],
+        rules: {
+            'no-restricted-imports': [ 'error', {
+                patterns: [
+                    {
+                        group: [ '**/routes/**' ],
+                        message: 'Managers may not import routes -- see the iDesign section in CLAUDE.md.',
+                    },
+                ],
+            } ],
+        },
+    },
+    {
+        files: [ 'src/server/resource-access/**' ],
+        rules: {
+            'no-restricted-imports': [ 'error', {
+                patterns: [
+                    {
+                        group: [ '**/managers/**', '**/routes/**', '**/engines/**' ],
+                        message: 'Resource access is the bottom layer -- it imports models and utils only, see the '
+                            + 'iDesign section in CLAUDE.md.',
+                    },
+                ],
+            } ],
+        },
+    },
+    {
+        files: [ 'src/server/utils/**' ],
+        rules: {
+            'no-restricted-imports': [ 'error', {
+                patterns: [
+                    {
+                        group: [ '**/managers/**', '**/routes/**', '**/engines/**', '**/resource-access/**' ],
+                        message: 'Utils are cross-cutting -- they import nothing from the layer stack, see the '
+                            + 'iDesign section in CLAUDE.md.',
+                    },
+                ],
+            } ],
+        },
+    },
+
+    //------------------------------------------------------------------------------------------------------------------
     // Vue
     //------------------------------------------------------------------------------------------------------------------
 
