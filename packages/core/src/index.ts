@@ -5,15 +5,28 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-export type { Node, NodeType, FileNode, FolderNode, LinkNode } from './models/node.ts';
-export type { Role, ShareRole } from './models/role.ts';
+export type { Node, FileNode, FolderNode, LinkNode } from './models/node.ts';
+export { type NodeType, nodeTypes } from './models/node.ts';
+export { type Role, type ShareRole, roles, shareRoles } from './models/role.ts';
 export type { Share } from './models/share.ts';
 export type { ShareRequest, PendingShareRequest, ResolvedShareRequest } from './models/shareRequest.ts';
-export type { PublicLink, PublicLinkMode, PublicLinkDisposition } from './models/publicLink.ts';
+export {
+    type ShareRequestStatus,
+    type ResolvedShareRequestStatus,
+    shareRequestStatuses,
+    resolvedShareRequestStatuses,
+} from './models/shareRequest.ts';
+export type { PublicLink } from './models/publicLink.ts';
+export {
+    type PublicLinkMode,
+    type PublicLinkDisposition,
+    publicLinkModes,
+    publicLinkDispositions,
+} from './models/publicLink.ts';
 export type { Blob } from './models/blob.ts';
 export type { DeletionOffer } from './models/deletionOffer.ts';
-export type { StorageBackend, StorageBackendKind } from './models/storageBackend.ts';
-export type { UserProfile, UserRole } from './models/userProfile.ts';
+export { type StorageBackend, type StorageBackendKind, storageBackendKinds } from './models/storageBackend.ts';
+export { type UserProfile, type UserRole, userRoles } from './models/userProfile.ts';
 
 // Schemas
 export { nodeCodec, parseNode } from './models/schemas/node.ts';

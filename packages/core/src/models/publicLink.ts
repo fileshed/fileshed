@@ -5,9 +5,11 @@
 // live, set once revoked. Links are revoked, not deleted, so a revoked token still resolves -- to a dead link.
 //----------------------------------------------------------------------------------------------------------------------
 
-export type PublicLinkMode = 'view' | 'download';
+export const publicLinkModes = [ 'view', 'download' ] as const;
+export type PublicLinkMode = typeof publicLinkModes[number];
 
-export type PublicLinkDisposition = 'inline' | 'attachment';
+export const publicLinkDispositions = [ 'inline', 'attachment' ] as const;
+export type PublicLinkDisposition = typeof publicLinkDispositions[number];
 
 export interface PublicLink
 {

@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 // Models
-import type { ShareRequest } from '../shareRequest.ts';
+import { type ShareRequest, resolvedShareRequestStatuses } from '../shareRequest.ts';
 
 // Schemas
 import { shareRoleCodec } from './role.ts';
@@ -36,7 +36,7 @@ const pendingShareRequestCodec = z.strictObject({
 
 const resolvedShareRequestCodec = z.strictObject({
     ...shareRequestBaseShape,
-    status: z.literal([ 'granted', 'declined' ]),
+    status: z.enum(resolvedShareRequestStatuses),
     resolvedAt: z.date(),
 });
 

@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 // Models
-import type { UserProfile } from '../userProfile.ts';
+import { type UserProfile, userRoles } from '../userProfile.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -13,7 +13,7 @@ export const userProfileCodec = z.strictObject({
     id: z.string(),
     email: z.string(),
     name: z.string().optional(),
-    role: z.enum([ 'admin', 'user' ]),
+    role: z.enum(userRoles),
     quotaLimit: z.number().nullable(),
     createdAt: z.date(),
 });

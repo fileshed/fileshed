@@ -5,7 +5,8 @@
 // backend-specific and validated by the backend that consumes it, not at this boundary.
 //----------------------------------------------------------------------------------------------------------------------
 
-export type StorageBackendKind = 'fs' | 'db' | 's3' | 'azure';
+export const storageBackendKinds = [ 'fs', 'db', 's3', 'azure' ] as const;
+export type StorageBackendKind = typeof storageBackendKinds[number];
 
 export interface StorageBackend
 {

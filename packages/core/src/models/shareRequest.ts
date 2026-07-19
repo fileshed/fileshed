@@ -11,6 +11,14 @@ import type { ShareRole } from './role.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
+export const resolvedShareRequestStatuses = [ 'granted', 'declined' ] as const;
+export type ResolvedShareRequestStatus = typeof resolvedShareRequestStatuses[number];
+
+export const shareRequestStatuses = [ 'pending', ...resolvedShareRequestStatuses ] as const;
+export type ShareRequestStatus = typeof shareRequestStatuses[number];
+
+//----------------------------------------------------------------------------------------------------------------------
+
 interface ShareRequestBase
 {
     id : string;
@@ -32,7 +40,7 @@ export interface PendingShareRequest extends ShareRequestBase
 
 export interface ResolvedShareRequest extends ShareRequestBase
 {
-    status : 'granted' | 'declined';
+    status : ResolvedShareRequestStatus;
     resolvedAt : Date;
 }
 

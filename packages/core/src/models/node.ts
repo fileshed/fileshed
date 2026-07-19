@@ -7,7 +7,8 @@
 // requirements.md secs 3.1/3.2/3.2b for the placement and ownership rules a node participates in.
 //----------------------------------------------------------------------------------------------------------------------
 
-export type NodeType = 'file' | 'folder' | 'link';
+export const nodeTypes = [ 'file', 'folder', 'link' ] as const;
+export type NodeType = typeof nodeTypes[number];
 
 interface NodeBase
 {

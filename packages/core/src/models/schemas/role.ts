@@ -7,10 +7,13 @@
 
 import { z } from 'zod';
 
+// Models
+import { roles, shareRoles } from '../role.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
-export const roleCodec = z.enum([ 'viewer', 'editor', 'owner' ]);
+export const roleCodec = z.enum(roles);
 
-export const shareRoleCodec = z.enum([ 'viewer', 'editor' ]);
+export const shareRoleCodec = z.enum(shareRoles);
 
 //----------------------------------------------------------------------------------------------------------------------

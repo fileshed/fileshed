@@ -6,7 +6,8 @@
 // permission Role. quotaLimit is a byte cap, or null for unlimited.
 //----------------------------------------------------------------------------------------------------------------------
 
-export type UserRole = 'admin' | 'user';
+export const userRoles = [ 'admin', 'user' ] as const;
+export type UserRole = typeof userRoles[number];
 
 export interface UserProfile
 {
