@@ -170,21 +170,21 @@ import { NodeRA } from '../resource-access/node.ts';
 
 class NodeManager
 {
-    private readonly engine = new NodeEngine();
-    private readonly ra = new NodeRA();
+    #engine = new NodeEngine();
+    #ra = new NodeRA();
 
     async get(id : string) : Promise<Node>
     {
-        return this.ra.get(id);
+        return this.#ra.get(id);
     }
 
     async rename(id : string, name : string) : Promise<Node>
     {
         // Engine validates/transforms
-        const validated = this.engine.validateName(name);
+        const validated = this.#engine.validateName(name);
 
         // RA persists
-        return this.ra.rename(id, validated);
+        return this.#ra.rename(id, validated);
     }
 }
 
@@ -194,6 +194,11 @@ export default new NodeManager();
 
 //----------------------------------------------------------------------------------------------------------------------
 ```
+
+Class privates are ES `#` fields, never TypeScript's `private` modifier — `#` is real runtime privacy, `private` is
+erased. The module-singleton export above suits stateless managers; managers built around runtime dependencies (a
+database handle, an auth instance) take them via constructor instead and are composed in app.ts — both shapes are
+house style.
 
 ## Vue Guidelines
 
