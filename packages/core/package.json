@@ -1,0 +1,16 @@
+{
+    "name": "@fileshed/core",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "./src/index.ts",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "lint": "eslint .",
+        "lint:types": "tsc --noEmit"
+    },
+    "dependencies": {
+        "zod": "^4.4.3"
+    }
+}
