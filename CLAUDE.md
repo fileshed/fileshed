@@ -92,6 +92,14 @@ Use dashes filling to 120 characters to separate file sections:
 - Files start and end with a comment break
 - Use blank lines to separate major sections
 
+File headers are **title-only by default**. Add a description only when it states a constraint the code can't show
+(an invariant, an ordering requirement, a non-obvious why). Never narrate future work, changesets, scaffolding
+status, or what the file will become — comments describe the code that exists, not the plan.
+
+No AI slop comments anywhere: nothing that narrates the next line, restates a signature, explains language
+features, duplicates a type in JSDoc, or talks to a reviewer ("updated to...", "now uses..."). If deleting a
+comment loses nothing but word count, delete it.
+
 ### Import Organization
 
 1. External library imports first
@@ -246,6 +254,8 @@ The client uses **Nuxt UI v4** in standalone Vue mode (via its Vite plugin, **no
 - **Per-component raw docs:** `https://ui.nuxt.com/raw/docs/components/<name>.md` (e.g. `.../button.md`, `.../modal.md`)
 
 When working with Nuxt UI components, fetch the LLM docs from the URLs above rather than guessing at the API. Use `llms.txt` for a quick overview, `llms-full.txt` or the per-component `.md` for full props/slots/usage.
+
+**Styling: Tailwind utilities first.** No custom styles unless utilities genuinely can't express it (complex selectors, keyframe animations, deep third-party overrides). A component with no custom styles omits the `<style>` block entirely — don't leave an empty one.
 
 ### Component Naming
 

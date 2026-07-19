@@ -37,6 +37,6 @@
     "vitest": "^4.1.10"
   },
   "lint-staged": {
-    "*.{js,ts,vue}": "eslint --max-warnings=0 --fix"
+    "*.{js,ts,vue}": "eslint --max-warnings=0 --no-warn-ignored --fix"
   }
 }
