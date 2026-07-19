@@ -1,0 +1,103 @@
+//----------------------------------------------------------------------------------------------------------------------
+// Auth Spec Support
+//
+// Boots the real stack against a fresh in-memory SQLite database: the actual factory, the actual auth instance, and the
+// actual boot orchestration (better-auth migrations + app migrations + admin bootstrap). No HTTP server, no mocks --
+// specs drive the app with app.request and read state through the real Kysely handle.
+//----------------------------------------------------------------------------------------------------------------------
+
+import type { Hono } from 'hono';
+
+// Resource Access
+import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
+import { type Auth, createAuth } from '@server/resource-access/auth.ts';
+import { initialize } from '@server/resource-access/boot.ts';
+
+// App
+import { createApp } from '@server/app.ts';
+
+// Utils
+import type { Config } from '@server/utils/config.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+
+export const ORIGIN = 'http://localhost:3000';
+
+export function testConfig(overrides : Partial<Config> = {}) : Config
+{
+    return {
+        HOST: '0.0.0.0',
+        PORT: 3000,
+        DATABASE_KIND: 'sqlite',
+        DATABASE_PATH: ':memory:',
+        DATABASE_URL: undefined,
+        AUTH_SECRET: 'test-auth-secret-test-auth-secret-test',
+        BASE_URL: ORIGIN,
+        FILESHED_ADMIN_EMAIL: undefined,
+        FILESHED_ADMIN_PASSWORD: undefined,
+        ...overrides,
+    };
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface BootedApp
+{
+    config : Config;
+    handle : DatabaseHandle;
+    auth : Auth;
+    app : Hono;
+}
+
+export async function bootTestApp(overrides : Partial<Config> = {}) : Promise<BootedApp>
+{
+    const config = testConfig(overrides);
+    const handle = createDatabase(config);
+    const auth = createAuth(handle, config);
+
+    await initialize(handle, auth, config);
+
+    return { config, handle, auth, app: createApp(auth) };
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// HTTP helpers
+//----------------------------------------------------------------------------------------------------------------------
+
+export function signUp(app : Hono, email : string, password : string, name = 'Test User') : Promise<Response>
+{
+    return app.request(`${ ORIGIN }/api/auth/sign-up/email`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'origin': ORIGIN },
+        body: JSON.stringify({ email, name, password }),
+    });
+}
+
+export function signIn(app : Hono, email : string, password : string) : Promise<Response>
+{
+    return app.request(`${ ORIGIN }/api/auth/sign-in/email`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'origin': ORIGIN },
+        body: JSON.stringify({ email, password }),
+    });
+}
+
+// The session cookie is the first token of the Set-Cookie header (name=value), the form a browser echoes back.
+export function cookieFrom(res : Response) : string
+{
+    return res.headers.get('set-cookie')?.split(';')[0] ?? '';
+}
+
+// Sign up, then flip the account to admin at the database. A fresh sign-in afterwards mints a session that reflects the
+// promoted role (the sign-up cookie predates it).
+export async function makeAdmin(booted : BootedApp, email : string, password : string) : Promise<string>
+{
+    await signUp(booted.app, email, password);
+    await booted.handle.db.updateTable('user').set({ role: 'admin' })
+        .where('email', '=', email)
+        .execute();
+
+    return cookieFrom(await signIn(booted.app, email, password));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
