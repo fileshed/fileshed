@@ -11,19 +11,31 @@
 
 import { Hono } from 'hono';
 
+import { MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
+
 // Routes
 import health from './routes/health.ts';
 import { createAdminRoutes } from './routes/admin.ts';
+import { createBlobRoutes } from './routes/blobs.ts';
+import { createMeRoutes } from './routes/me.ts';
+import { createNodeRoutes } from './routes/nodes.ts';
+import { createUploadRoutes } from './routes/uploads.ts';
 
 // Resource Access
 import { type Auth, createAuth } from './resource-access/auth.ts';
 import { createDatabase } from './resource-access/database/database.ts';
 import { initialize } from './resource-access/boot.ts';
+import { seedDefaultBackend } from './resource-access/database/seeds.ts';
+import { BlobRA } from './resource-access/blob/index.ts';
+import { NodeRA } from './resource-access/nodes/node.ts';
 
 // Managers
 import { AdminManager } from './managers/admin.ts';
+import { BlobManager } from './managers/blob.ts';
+import { NodeManager } from './managers/node.ts';
 import { SessionManager } from './managers/session.ts';
-import { ForbiddenError } from './managers/errors.ts';
+import { mapManagerError } from './managers/errors.ts';
+import { startGcTimer } from './managers/gc.ts';
 
 // Utils
 import { type Config, loadConfig } from './utils/config.ts';
@@ -54,7 +66,13 @@ export function targetsAuthAdminSurface(pathname : string) : boolean
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function createApp(auth ?: Auth) : Hono
+export interface AppServices
+{
+    blobs : BlobManager;
+    nodes : NodeManager;
+}
+
+export function createApp(auth ?: Auth, services ?: AppServices) : Hono
 {
     const app = new Hono();
 
@@ -80,8 +98,18 @@ export function createApp(auth ?: Auth) : Hono
 
     if(auth)
     {
+        const sessions = new SessionManager(auth);
+
         app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-        app.route('/api/admin', createAdminRoutes(new SessionManager(auth), new AdminManager(auth)));
+        app.route('/api/admin', createAdminRoutes(sessions, new AdminManager(auth)));
+
+        if(services)
+        {
+            app.route('/api/blobs', createBlobRoutes(sessions, services.blobs));
+            app.route('/api/uploads', createUploadRoutes(sessions, services.blobs));
+            app.route('/api/nodes', createNodeRoutes(sessions, services.nodes));
+            app.route('/api/me', createMeRoutes(sessions, services.nodes));
+        }
     }
 
     app.route('/api/health', health);
@@ -94,9 +122,10 @@ export function createApp(auth ?: Auth) : Hono
 
     app.onError((error, ctx) =>
     {
-        if(error instanceof ForbiddenError)
+        const mapped = mapManagerError(error);
+        if(mapped)
         {
-            return ctx.json({ error: error.message }, 403);
+            return ctx.json(mapped.body, mapped.status);
         }
 
         logger.error({ err: error }, 'Unhandled error');
@@ -110,17 +139,36 @@ export function createApp(auth ?: Auth) : Hono
 // Boot
 //----------------------------------------------------------------------------------------------------------------------
 
-// The one composition path from empty process to serving app: config, database, auth, migrations + bootstrap, then
-// the wired app. Both entries (server.ts and the Vite dev entry) consume this.
-export async function bootApp() : Promise<{ app : Hono; config : Config }>
+// The one composition path from empty process to serving app: config, database, auth, migrations + bootstrap, blob
+// storage, managers, timers, then the wired app. Both entries (server.ts and the Vite dev entry) consume this.
+// shutdown() stops the background timers -- anything booting more than once (specs, a future graceful-shutdown path)
+// must call it, or sweeps keep firing against a torn-down database.
+export async function bootApp() : Promise<{ app : Hono; config : Config; shutdown : () => void }>
 {
     const config = loadConfig();
     const handle = createDatabase(config);
     const auth = createAuth(handle, config);
 
     await initialize(handle, auth, config);
+    await seedDefaultBackend(handle, config);
 
-    return { app: createApp(auth), config };
+    const blob = new BlobRA(handle);
+    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
+    const nodes = new NodeManager(handle, new NodeRA(handle), blob);
+
+    const stopGc = startGcTimer(
+        { handle, blob, graceMs: config.GC_GRACE_DAYS * MS_PER_DAY },
+        config.GC_INTERVAL_MINUTES * MS_PER_MINUTE
+    );
+    const stopSweeps = blobs.startSweeps();
+
+    const shutdown = () : void =>
+    {
+        stopGc();
+        stopSweeps();
+    };
+
+    return { app: createApp(auth, { blobs, nodes }), config, shutdown };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
