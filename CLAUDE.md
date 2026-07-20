@@ -138,6 +138,24 @@ import { validate } from './utils/validation.ts';
 - **FORBIDDEN**: Never use `any` type - use `unknown`, generics, or proper types instead
 - **FORBIDDEN**: Never use non-null assertions (`!`) - use proper null checks or type guards
 
+### Domain Types & Codecs
+
+Hand-written TypeScript types are canonical; Zod codecs are made to match them, never the reverse. `z.infer` never
+defines a public type.
+
+- Every exported domain type and request/response DTO is a hand-written `interface` (or `type` alias for unions/enums).
+  Discriminated unions are hand-written variant interfaces plus a union alias (see `models/node.ts`).
+- **Types and codecs never share a file.** The types live in `models/*.ts` and `models/requests/*.ts`; the codecs
+  live in the parallel `models/schemas/*.ts` and `models/requests/schemas/*.ts`. Vocabulary const arrays stay with
+  their types (`nodeSortKeys` beside `NodeSortKey`); serializers (`toNodeResponse`, etc.) live with the codecs.
+- Codecs stay **structural** — no `: z.ZodType<T>` annotation. That annotation kills `.shape` composition and collapses
+  the `z.input`/`z.output` split the wire-loose/parsed-invariant DTOs depend on.
+- Bind each codec to its type with `typeAssert<Equals<z.output<typeof codec>, TheType>>();` (from `@fileshed/core`),
+  placed right after the codec, in the schema file. A drifted codec then fails the build, not silently at runtime.
+- Optional-with-default schema fields are **required** in the canonical type (`parentID : string | null`) — the
+  looseness lives only in the schema input. Serializers (`toNodeResponse`, etc.) return the hand-written type.
+- If an assertion fails, the interface is wrong — fix the interface, never loosen the schema.
+
 ## Architecture Patterns
 
 ### iDesign Architecture

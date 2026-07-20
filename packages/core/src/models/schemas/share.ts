@@ -10,6 +10,9 @@ import type { Share } from '../share.ts';
 // Schemas
 import { shareRoleCodec } from './role.ts';
 
+// Utils
+import { type Equals, typeAssert } from '../../utils/typeAssert.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export const shareCodec = z.strictObject({
@@ -20,6 +23,8 @@ export const shareCodec = z.strictObject({
     createdBy: z.string(),
     createdAt: z.date(),
 });
+
+typeAssert<Equals<z.output<typeof shareCodec>, Share>>();
 
 export function parseShare(data : unknown) : Share
 {

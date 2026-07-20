@@ -1,12 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Constants Barrel
+// Public Link Constants
+//
+// The token width for anonymous direct links (entropy >= 128 bits, no auth on /d/:token). 32 random bytes is 256 bits
+// -- comfortably above the floor -- and base64url-encodes to a 43-char URL-safe token.
 //----------------------------------------------------------------------------------------------------------------------
 
-export * from './blob.ts';
-export * from './config.ts';
-export * from './pagination.ts';
-export * from './publicLink.ts';
-export * from './time.ts';
-export * from './tree.ts';
+export const PUBLIC_LINK_TOKEN_BYTES = 32;
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -7,6 +7,9 @@ import { z } from 'zod';
 // Models
 import { type PublicLink, publicLinkDispositions, publicLinkModes } from '../publicLink.ts';
 
+// Utils
+import { type Equals, typeAssert } from '../../utils/typeAssert.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export const publicLinkCodec = z.strictObject({
@@ -18,6 +21,8 @@ export const publicLinkCodec = z.strictObject({
     createdAt: z.date(),
     revokedAt: z.date().nullable(),
 });
+
+typeAssert<Equals<z.output<typeof publicLinkCodec>, PublicLink>>();
 
 export function parsePublicLink(data : unknown) : PublicLink
 {

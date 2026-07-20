@@ -7,6 +7,9 @@ import { z } from 'zod';
 // Models
 import type { DeletionOffer } from '../deletionOffer.ts';
 
+// Utils
+import { type Equals, typeAssert } from '../../utils/typeAssert.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export const deletionOfferCodec = z.strictObject({
@@ -20,6 +23,8 @@ export const deletionOfferCodec = z.strictObject({
     createdAt: z.date(),
     expiresAt: z.date(),
 });
+
+typeAssert<Equals<z.output<typeof deletionOfferCodec>, DeletionOffer>>();
 
 export function parseDeletionOffer(data : unknown) : DeletionOffer
 {

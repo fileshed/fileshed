@@ -1,31 +1,40 @@
 //----------------------------------------------------------------------------------------------------------------------
-// User Profile Codec
+// Me API Codec
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';
 
 // Models
-import { type UserProfile, userRoles } from '../userProfile.ts';
+import { userRoles } from '../../userProfile.ts';
+
+// Requests
+import type { MeResponse } from '../me.ts';
+
+// Request Schemas
+import { isoDateTimeCodec } from './common.ts';
 
 // Utils
-import { type Equals, typeAssert } from '../../utils/typeAssert.ts';
+import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export const userProfileCodec = z.strictObject({
+export const meResponseCodec = z.strictObject({
     id: z.string(),
     email: z.string(),
     name: z.string().optional(),
     role: z.enum(userRoles),
-    quotaLimit: z.number().nullable(),
-    createdAt: z.date(),
+    quota: z.strictObject({
+        used: z.number()
+            .int()
+            .nonnegative(),
+        limit: z.number()
+            .int()
+            .nonnegative()
+            .nullable(),
+    }),
+    createdAt: isoDateTimeCodec,
 });
 
-typeAssert<Equals<z.output<typeof userProfileCodec>, UserProfile>>();
-
-export function parseUserProfile(data : unknown) : UserProfile
-{
-    return userProfileCodec.parse(data);
-}
+typeAssert<Equals<z.output<typeof meResponseCodec>, MeResponse>>();
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -11,6 +11,9 @@ import { z } from 'zod';
 // Models
 import type { Node } from '../node.ts';
 
+// Utils
+import { type Equals, typeAssert } from '../../utils/typeAssert.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 const nodeBaseShape = {
@@ -50,6 +53,8 @@ const linkNodeCodec = z.strictObject({
 //----------------------------------------------------------------------------------------------------------------------
 
 export const nodeCodec = z.discriminatedUnion('type', [ fileNodeCodec, folderNodeCodec, linkNodeCodec ]);
+
+typeAssert<Equals<z.output<typeof nodeCodec>, Node>>();
 
 export function parseNode(data : unknown) : Node
 {

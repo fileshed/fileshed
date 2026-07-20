@@ -6,8 +6,16 @@
 
 // Models
 export type { Node, FileNode, FolderNode, LinkNode } from './models/node.ts';
-export { type NodeType, nodeTypes } from './models/node.ts';
-export { type Role, type ShareRole, roles, shareRoles } from './models/role.ts';
+export { type NodeType, nodeTypes, isDirectOwner } from './models/node.ts';
+export {
+    type Role,
+    type ShareRole,
+    roles,
+    shareRoles,
+    roleRank,
+    maxRole,
+    isRoleAtLeast,
+} from './models/role.ts';
 export type { Share } from './models/share.ts';
 export type { ShareRequest, PendingShareRequest, ResolvedShareRequest } from './models/shareRequest.ts';
 export {
@@ -40,45 +48,95 @@ export { storageBackendCodec, parseStorageBackend } from './models/schemas/stora
 export { userProfileCodec, parseUserProfile } from './models/schemas/userProfile.ts';
 
 // Requests
-export { isoDateTimeCodec } from './models/requests/common.ts';
 export {
     type CreateFolderRequest,
     type CreateLinkRequest,
     type CreateNodeRequest,
-    createFolderRequestCodec,
-    createLinkRequestCodec,
-    createNodeRequestCodec,
     type RenameRequest,
     type MoveRequest,
     type PatchNodeRequest,
-    renameRequestCodec,
-    moveRequestCodec,
-    patchNodeRequestCodec,
     type NodeSortKey,
     nodeSortKeys,
     type SortDirection,
     sortDirections,
     type ChildrenQuery,
-    childrenQueryCodec,
     type LinkTarget,
-    linkTargetCodec,
     type NodeResponse,
-    nodeResponseCodec,
     type NodeListResponse,
-    nodeListResponseCodec,
-    toNodeResponse,
 } from './models/requests/nodes.ts';
 export {
     type ClaimRequest,
-    claimRequestCodec,
     type ClaimResponse,
-    claimResponseCodec,
     type UploadCommitMetadata,
-    uploadCommitMetadataCodec,
     type ChallengeAnswerRequest,
-    challengeAnswerRequestCodec,
 } from './models/requests/blobs.ts';
-export { type MeResponse, meResponseCodec } from './models/requests/me.ts';
+export { type MeResponse } from './models/requests/me.ts';
+export {
+    type CreatePublicLinkRequest,
+    type PublicLinkResponse,
+    type PublicLinkListResponse,
+} from './models/requests/publicLinks.ts';
+export {
+    type GrantShareRequest,
+    type ShareResponse,
+    type ShareListResponse,
+    type SharedTarget,
+    type SharedWithMeEntry,
+    type SharedWithMeResponse,
+} from './models/requests/shares.ts';
+export {
+    type CreateAccessRequest,
+    type AccessRequestResponse,
+    type AccessRequestListResponse,
+} from './models/requests/accessRequests.ts';
+
+// Request Schemas
+export { isoDateTimeCodec } from './models/requests/schemas/common.ts';
+export {
+    createFolderRequestCodec,
+    createLinkRequestCodec,
+    createNodeRequestCodec,
+    renameRequestCodec,
+    moveRequestCodec,
+    patchNodeRequestCodec,
+    childrenQueryCodec,
+    linkTargetCodec,
+    nodeResponseCodec,
+    nodeListResponseCodec,
+    toNodeResponse,
+} from './models/requests/schemas/nodes.ts';
+export {
+    claimRequestCodec,
+    claimResponseCodec,
+    uploadCommitMetadataCodec,
+    challengeAnswerRequestCodec,
+} from './models/requests/schemas/blobs.ts';
+export { meResponseCodec } from './models/requests/schemas/me.ts';
+export {
+    createPublicLinkRequestCodec,
+    publicLinkResponseCodec,
+    publicLinkListResponseCodec,
+    toPublicLinkResponse,
+    toPublicLinkListResponse,
+} from './models/requests/schemas/publicLinks.ts';
+export {
+    grantShareRequestCodec,
+    shareResponseCodec,
+    shareListResponseCodec,
+    sharedTargetCodec,
+    sharedWithMeEntryCodec,
+    sharedWithMeResponseCodec,
+    toShareResponse,
+} from './models/requests/schemas/shares.ts';
+export {
+    createAccessRequestCodec,
+    accessRequestResponseCodec,
+    accessRequestListResponseCodec,
+    toAccessRequestResponse,
+} from './models/requests/schemas/accessRequests.ts';
+
+// Utils
+export { type Equals, typeAssert } from './utils/typeAssert.ts';
 
 // Constants
 export * from './constants/index.ts';

@@ -3,7 +3,7 @@
 //
 // Drives NodeRA against a real in-memory SQLite database (production factory + migrator, zero mocks), so the recursive
 // CTEs, the FK cascades, and the derived aggregates are exercised as they run in a deployment. Every expectation is
-// derived from requirements.md (secs 3.2/3.2b/4.2/4.4/5/7), not from what the queries happen to return.
+// derived by hand from the required behavior, not from what the queries happen to return.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -71,7 +71,7 @@ async function trashedFlags(ids : string[]) : Promise<boolean[]>
 const byName = { pagination: { limit: 100, offset: 0 }, sort: { key: 'name' as const, direction: 'asc' as const } };
 
 //----------------------------------------------------------------------------------------------------------------------
-// children (requirements.md secs 3.2/4.4/7)
+// children
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('NodeRA.children', () =>
@@ -100,18 +100,23 @@ describe('NodeRA.children', () =>
         expect(children.map((node) => node.id)).toEqual([ 'root-a' ]);
     });
 
-    it('excludes nodes owned by another user under the same parent (sec 3.3 cross-owner contributions)', async () =>
+    // A contribution belongs to its creator but travels with the folder -- a folder's listing includes every
+    // child regardless of owner. Only the root listing (parentID null) is per-owner, where the per-user trees begin.
+    it('includes cross-owner contributions under a folder, while the root listing stays per-owner', async () =>
     {
         await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
         await ra.insert(file('mine', { parentID: 'p' }));
         await ra.insert(file('theirs', { parentID: 'p', ownerID: 'u2' }));
+        await ra.insert(folderNode({ id: 'other-root', ownerID: 'u2', parentID: null }));
 
         const children = await ra.children({ parentID: 'p', ownerID: 'u1' }, byName);
+        const roots = await ra.children({ parentID: null, ownerID: 'u1' }, byName);
 
-        expect(children.map((node) => node.id)).toEqual([ 'mine' ]);
+        expect(children.map((node) => node.id)).toEqual([ 'mine', 'theirs' ]);
+        expect(roots.map((node) => node.id)).toEqual([ 'p' ]);
     });
 
-    it('excludes trashed nodes from the normal listing (sec 4.4)', async () =>
+    it('excludes trashed nodes from the normal listing', async () =>
     {
         await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
         await ra.insert(file('live', { parentID: 'p' }));
@@ -191,7 +196,7 @@ describe('NodeRA.children', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// ancestorIDs (requirements.md secs 3.2/3.2b)
+// ancestorIDs
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('NodeRA.ancestorIDs', () =>
@@ -232,7 +237,7 @@ describe('NodeRA.ancestorIDs', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// trash / restore / hardDelete (requirements.md secs 3.2b/4.4)
+// trash / restore / hardDelete
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('NodeRA.setTrashed', () =>
@@ -254,7 +259,7 @@ describe('NodeRA.setTrashed', () =>
         await ra.setTrashed('f', new Date('2026-04-01T00:00:00.000Z'));
 
         expect(await trashedFlags([ 'f', 'cf', 'sf', 'sff' ])).toEqual([ true, true, true, true ]);
-        // The link inside the trashed folder keeps trashed_at NULL (the variant CHECK forbids it, sec 3.2b); it hides
+        // The link inside the trashed folder keeps trashed_at NULL (the variant CHECK forbids it); it hides
         // transitively via its trashed ancestor.
         expect(await trashedFlags([ 'lk' ])).toEqual([ false ]);
     });
@@ -287,7 +292,7 @@ describe('NodeRA.hardDelete', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// ownedBytes (requirements.md sec 5)
+// ownedBytes
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('NodeRA.ownedBytes', () =>
