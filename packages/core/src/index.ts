@@ -39,4 +39,68 @@ export { deletionOfferCodec, parseDeletionOffer } from './models/schemas/deletio
 export { storageBackendCodec, parseStorageBackend } from './models/schemas/storageBackend.ts';
 export { userProfileCodec, parseUserProfile } from './models/schemas/userProfile.ts';
 
+// Requests
+export { isoDateTimeCodec } from './models/requests/common.ts';
+export {
+    type CreateFolderRequest,
+    type CreateLinkRequest,
+    type CreateNodeRequest,
+    createFolderRequestCodec,
+    createLinkRequestCodec,
+    createNodeRequestCodec,
+    type RenameRequest,
+    type MoveRequest,
+    type PatchNodeRequest,
+    renameRequestCodec,
+    moveRequestCodec,
+    patchNodeRequestCodec,
+    type NodeSortKey,
+    nodeSortKeys,
+    type SortDirection,
+    sortDirections,
+    type ChildrenQuery,
+    childrenQueryCodec,
+    type LinkTarget,
+    linkTargetCodec,
+    type NodeResponse,
+    nodeResponseCodec,
+    type NodeListResponse,
+    nodeListResponseCodec,
+    toNodeResponse,
+} from './models/requests/nodes.ts';
+export {
+    type ClaimRequest,
+    claimRequestCodec,
+    type ClaimResponse,
+    claimResponseCodec,
+    type UploadCommitMetadata,
+    uploadCommitMetadataCodec,
+    type ChallengeAnswerRequest,
+    challengeAnswerRequestCodec,
+} from './models/requests/blobs.ts';
+export { type MeResponse, meResponseCodec } from './models/requests/me.ts';
+
+// Errors
+export {
+    UnauthorizedError,
+    ForbiddenError,
+    BadRequestError,
+    NotFoundError,
+    PayloadTooLargeError,
+    TooManyRequestsError,
+    type RegulationCode,
+    type RegulationViolation,
+    RegulationError,
+    type BlobBackendErrorCode,
+    BlobBackendError,
+    BlobNotFoundError,
+    HashMismatchError,
+    SizeMismatchError,
+    InvalidSha256Error,
+    BackendNotFoundError,
+    NoDefaultBackendError,
+    UnsupportedBackendError,
+    NodeRowCorruptionError,
+} from './errors.ts';
+
 //----------------------------------------------------------------------------------------------------------------------

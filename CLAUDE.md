@@ -153,6 +153,9 @@ Key principles:
 - Managers coordinate between Engines and Resource Access
 - Engines contain pure logic, easily testable
 - Resource Access handles all I/O operations
+- **One RA per concern; implementations are facades behind it.** Pluggable machinery (storage backends, external
+  vendors) is instantiated and selected *inside* the RA — managers never import an implementation type. The
+  reference shape is `src/server/resource-access/blob/index.ts`.
 
 Good candidates for the split: permission resolution (effective role, cycle checks) and quota math are **engine** logic — pure, no I/O, exhaustively testable. Blob backends and the Kysely queries behind them are **resource access**. The claim/proof-of-possession dance and share/link lifecycle live in **managers**.
 

@@ -240,6 +240,10 @@ export default [
                         group: [ '**/engines/**', '**/resource-access/**' ],
                         message: 'Routes call managers only -- see the iDesign section in CLAUDE.md.',
                     },
+                    {
+                        group: [ '**/blob/fsBackend*' ],
+                        message: 'consume BlobRA -- backends are facades behind the RA.',
+                    },
                 ],
             } ],
         },
@@ -266,6 +270,10 @@ export default [
                     {
                         group: [ '**/routes/**' ],
                         message: 'Managers may not import routes -- see the iDesign section in CLAUDE.md.',
+                    },
+                    {
+                        group: [ '**/blob/fsBackend*' ],
+                        message: 'consume BlobRA -- backends are facades behind the RA.',
                     },
                 ],
             } ],
