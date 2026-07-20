@@ -9,7 +9,13 @@ import type { FileNode, FolderNode, LinkNode } from '@fileshed/core';
 
 // Regulation
 import type { RegulationResult } from '@server/engines/regulation/types.ts';
-import { judgeLinkCreation, judgeMove, judgeParentEdge, judgeTrash } from '@server/engines/regulation/node.ts';
+import {
+    judgeCopy,
+    judgeLinkCreation,
+    judgeMove,
+    judgeParentEdge,
+    judgeTrash,
+} from '@server/engines/regulation/node.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -340,6 +346,37 @@ describe('judgeTrash', () =>
 
         expect(result.ok).toBe(false);
         expect(codes(result)).toEqual(expect.arrayContaining([ 'trash.linkNotTrashable', 'trash.notOwner' ]));
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('judgeCopy', () =>
+{
+    // save-a-copy is a file operation: a file references exactly one blob to point the copy at.
+    it('admits copying a file', () =>
+    {
+        const result = judgeCopy({ source: file() });
+
+        expect(result.ok).toBe(true);
+    });
+
+    // a folder roots a subtree with no single blob to copy.
+    it('rejects copying a folder', () =>
+    {
+        const result = judgeCopy({ source: folder() });
+
+        expect(result.ok).toBe(false);
+        expect(codes(result)).toEqual([ 'copy.sourceNotFile' ]);
+    });
+
+    // a link is an inert pointer carrying no bytes of its own.
+    it('rejects copying a link', () =>
+    {
+        const result = judgeCopy({ source: link() });
+
+        expect(result.ok).toBe(false);
+        expect(codes(result)).toEqual([ 'copy.sourceNotFile' ]);
     });
 });
 

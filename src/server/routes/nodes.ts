@@ -12,7 +12,13 @@ import { type Context, Hono } from 'hono';
 import type { ZodType } from 'zod';
 
 // Models
-import { BadRequestError, childrenQueryCodec, createNodeRequestCodec, patchNodeRequestCodec } from '@fileshed/core';
+import {
+    BadRequestError,
+    childrenQueryCodec,
+    copyNodeRequestCodec,
+    createNodeRequestCodec,
+    patchNodeRequestCodec,
+} from '@fileshed/core';
 
 // Managers
 import type { NodeManager } from '../managers/node.ts';
@@ -93,6 +99,14 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await nodes.restore(actor, ctx.req.param('id')));
+    });
+
+    router.post('/nodes/:id/copy', async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+        const request = await readJsonBody(ctx, copyNodeRequestCodec);
+
+        return ctx.json(await nodes.copy(actor, ctx.req.param('id'), request), 201);
     });
 
     router.delete('/nodes/:id', async (ctx) =>

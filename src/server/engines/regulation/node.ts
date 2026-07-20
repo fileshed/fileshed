@@ -222,3 +222,29 @@ export function judgeTrash(facts : TrashFacts) : RegulationResult
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Copy Legality
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface CopyFacts
+{
+    source : Node;
+}
+
+// Only a file may be saved as a copy: a folder roots a subtree with no single blob to reference, and a link is an inert
+// pointer that carries no bytes. Ownership is not asked here -- a viewer may copy a file shared to them; the copy is
+// charged to and owned by the caller, judged by quota and the parent edge separately.
+export function judgeCopy(facts : CopyFacts) : RegulationResult
+{
+    if(facts.source.type !== 'file')
+    {
+        return resultOf([ {
+            code: 'copy.sourceNotFile',
+            message: 'Only a file may be saved as a copy.',
+            nodeID: facts.source.id,
+        } ]);
+    }
+
+    return resultOf([]);
+}
+
+//----------------------------------------------------------------------------------------------------------------------

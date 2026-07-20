@@ -91,6 +91,7 @@ export type RegulationCode
     | 'move.intoDescendant'
     | 'trash.linkNotTrashable'
     | 'trash.notOwner'
+    | 'copy.sourceNotFile'
     | 'share.linkNotShareable'
     | 'share.notOwner'
     | 'share.granteeIsOwner'

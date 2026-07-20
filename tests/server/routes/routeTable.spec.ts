@@ -60,6 +60,7 @@ const EXPECTED_ROUTES = [
     'PATCH /api/nodes/:id',
     'POST /api/nodes/:id/trash',
     'POST /api/nodes/:id/restore',
+    'POST /api/nodes/:id/copy',
     'DELETE /api/nodes/:id',
 
     // Shares

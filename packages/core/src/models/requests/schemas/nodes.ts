@@ -15,6 +15,7 @@ import { roleCodec } from '../../schemas/role.ts';
 // Requests
 import {
     type ChildrenQuery,
+    type CopyNodeRequest,
     type CreateFolderRequest,
     type CreateLinkRequest,
     type CreateNodeRequest,
@@ -92,6 +93,20 @@ export const patchNodeRequestCodec = z.strictObject({
 );
 
 typeAssert<Equals<z.output<typeof patchNodeRequestCodec>, PatchNodeRequest>>();
+
+//----------------------------------------------------------------------------------------------------------------------
+
+export const copyNodeRequestCodec = z.strictObject({
+    parentID: z.string()
+        .nullable()
+        .optional()
+        .default(null),
+    name: z.string()
+        .min(1)
+        .optional(),
+});
+
+typeAssert<Equals<z.output<typeof copyNodeRequestCodec>, CopyNodeRequest>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 // Query strings arrive as strings, so limit/offset are coerced; an over-max limit is rejected rather than silently

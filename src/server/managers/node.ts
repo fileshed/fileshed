@@ -19,8 +19,10 @@ import { createId } from '@paralleldrive/cuid2';
 // Models
 import {
     type ChildrenQuery,
+    type CopyNodeRequest,
     type CreateFolderRequest,
     type CreateLinkRequest,
+    type FileNode,
     ForbiddenError,
     type MeResponse,
     type Node,
@@ -56,9 +58,21 @@ export interface OrphanedBlobs
     graveyardUnreferenced(shas : string[], executor ?: DatabaseHandle['db']) : Promise<void>;
 }
 
+// The file facts a copy materializes into a fresh node the caller owns -- everything a file node needs except identity,
+// owner, and placement. A save-a-copy builds this from a live source file; the deletion-offer accept path will build
+// the same shape from a graveyarded blob's stored snapshot, so the admit-and-insert seam takes this, not a source Node.
+interface FileCopySnapshot
+{
+    name : string;
+    mimeType : string;
+    size : number;
+    blobID : string;
+}
+
 export class NodeManager
 {
     readonly #db : DatabaseHandle['db'];
+    readonly #kind : DatabaseHandle['kind'];
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
     readonly #orphanedBlobs : OrphanedBlobs;
@@ -66,6 +80,7 @@ export class NodeManager
     constructor(handle : DatabaseHandle, nodes : NodeRA, orphanedBlobs : OrphanedBlobs)
     {
         this.#db = handle.db;
+        this.#kind = handle.kind;
         this.#nodes = nodes;
         this.#shares = new ShareRA(handle);
         this.#orphanedBlobs = orphanedBlobs;
@@ -231,6 +246,50 @@ export class NodeManager
     }
 
     //------------------------------------------------------------------------------------------------------------------
+    // Copy
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Save a copy: a new file node owned by the caller, referencing the SAME blob as the source (content-addressed
+    // dedup -- zero bytes move), charged to the caller's quota at copy time and fully independent of the source
+    // afterward. Gather the source as the caller sees it (read-as-absent -- a source they cannot resolve is a 404,
+    // viewer suffices to copy); a trashed source reads as absent to everyone but its direct owner, mirroring the
+    // download exemption -- the owner can already download trashed bytes and re-claim them, so blocking the direct
+    // copy would only add friction. The copy lands live; the source stays trashed. Judge the source is a file and the
+    // parent edge is legal for the caller (owning the parent or editor+ on it), then admit-and-insert charges quota
+    // and lands the node.
+    async copy(actor : SessionUser, nodeID : string, request : CopyNodeRequest) : Promise<NodeResponse>
+    {
+        const source = await this.#requireReadable(actor, nodeID);
+        if(source.type !== 'link' && source.trashedAt !== null && !isDirectOwner(source, actor.id))
+        {
+            throw new NotFoundError(`No node ${ nodeID }.`);
+        }
+
+        const parent = await this.#gatherParent(request.parentID);
+
+        this.#enforce(regulation.combine([
+            regulation.node.copy({ source }),
+            await this.#judgeParentEdge(actor, parent),
+        ]));
+
+        // Unreachable: judgeCopy rejects a non-file source above. The guard narrows the union so the snapshot reads the
+        // file-only fields; a folder or link reaching here would mean the judge and this build disagree.
+        if(source.type !== 'file')
+        {
+            throw new Error(`copy admitted a non-file source ${ source.id }`);
+        }
+
+        const snapshot : FileCopySnapshot = {
+            name: request.name ?? source.name,
+            mimeType: source.mimeType,
+            size: source.size,
+            blobID: source.blobID,
+        };
+
+        return this.#insertCopy(actor, snapshot, request.parentID);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
     // Update
     //------------------------------------------------------------------------------------------------------------------
 
@@ -368,6 +427,80 @@ export class NodeManager
         if(!isDirectOwner(node, actor.id)) { throw new ForbiddenError('Only the owner may modify this node.'); }
 
         return node;
+    }
+
+    // Fetch a node the caller may read: any resolvable role (viewer suffices). A missing node or one the caller cannot
+    // resolve reads as absent -- a 404 that never confirms the node exists -- the same read-as-absent doctrine `get`
+    // applies. Unlike `#requireOwned`, this is access, not authority: a viewer of a shared file resolves it here.
+    async #requireReadable(actor : SessionUser, id : string) : Promise<Node>
+    {
+        const node = await this.#nodes.get(id);
+        if(node === undefined) { throw new NotFoundError(`No node ${ id }.`); }
+
+        const role = await this.#shares.effectiveRole(actor.id, node.id);
+        if(role === null) { throw new NotFoundError(`No node ${ id }.`); }
+
+        return node;
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Quota admission & copy insertion
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Land a copy as a fresh file node owned by the caller. An early quota gate rejects before a write is opened, then
+    // the insert re-judges quota against usage read INSIDE the transaction: the early gate admits each copy in
+    // isolation, so a batch of concurrent copies could jointly overshoot; the in-transaction re-check is the
+    // authoritative one (it fully closes the window on SQLite's serialized writes, and narrows it on Postgres). The
+    // blob is already live -- the source references it -- so no blob write is needed here; the deletion-offer accept
+    // path, which resurrects a graveyarded blob, will build the same snapshot and add that step.
+    async #insertCopy(actor : SessionUser, snapshot : FileCopySnapshot, parentID : string | null)
+    : Promise<NodeResponse>
+    {
+        await this.#admitQuota(actor, snapshot.size);
+
+        const now = new Date();
+        const node : FileNode = {
+            type: 'file',
+            id: createId(),
+            name: snapshot.name,
+            ownerID: actor.id,
+            parentID,
+            blobID: snapshot.blobID,
+            size: snapshot.size,
+            mimeType: snapshot.mimeType,
+            createdAt: now,
+            updatedAt: now,
+            trashedAt: null,
+        };
+
+        await this.#db.transaction().execute(async (trx) =>
+        {
+            const nodes = new NodeRA({ db: trx, kind: this.#kind });
+            this.#enforceQuota(actor, await nodes.ownedBytes(actor.id), snapshot.size);
+            await nodes.insert(node);
+        });
+
+        return toNodeResponse(node, 'owner');
+    }
+
+    async #admitQuota(actor : SessionUser, incomingBytes : number) : Promise<void>
+    {
+        this.#enforceQuota(actor, await this.#nodes.ownedBytes(actor.id), incomingBytes);
+    }
+
+    #enforceQuota(actor : SessionUser, usedBytes : number, incomingBytes : number) : void
+    {
+        const verdict = regulation.quota.admit({
+            ownerID: actor.id,
+            usedBytes,
+            limitBytes: actor.quotaLimit ?? null,
+            incomingBytes,
+        });
+
+        if(!verdict.ok)
+        {
+            throw new ForbiddenError(verdict.violations[0]?.message ?? 'This write would exceed the storage quota.');
+        }
     }
 
     async #parentIsGoneOrTrashed(node : Node) : Promise<boolean>

@@ -58,6 +58,18 @@ export interface PatchNodeRequest
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Copy (POST /api/nodes/:id/copy) -- save a file shared to you (or your own) as a new node you own, referencing the
+// same blob. name is optional: an unnamed copy takes the source's current name, resolved server-side. parentID null
+// lands the copy in the caller's root.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface CopyNodeRequest
+{
+    parentID : string | null;
+    name ?: string;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Children listing (GET /api/nodes/:id/children) -- pagination plus the sort-key vocabulary.
 //----------------------------------------------------------------------------------------------------------------------
 
