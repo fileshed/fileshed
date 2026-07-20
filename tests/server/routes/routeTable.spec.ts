@@ -37,6 +37,7 @@ const EXPECTED_ROUTES = [
 
     // Admin
     'GET /api/admin/users',
+    'PATCH /api/admin/users/:id',
 
     // Health
     'GET /api/health',

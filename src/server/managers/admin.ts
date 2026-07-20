@@ -10,10 +10,13 @@
 // its purpose. The check is a single condition, enforced once, at the manager boundary.
 //----------------------------------------------------------------------------------------------------------------------
 
+import { isAPIError } from 'better-auth/api';
+
 import {
     DEFAULT_LIST_USERS_LIMIT,
     ForbiddenError,
     MAX_LIST_USERS_LIMIT,
+    NotFoundError,
     type UserProfile,
     parseUserProfile,
 } from '@fileshed/core';
@@ -94,6 +97,41 @@ export class AdminManager
         const { users, total } = await this.#auth.api.listUsers({ query: { limit, offset }, headers });
 
         return { users: users.map(toUserProfile), total, limit, offset };
+    }
+
+    // Set (or clear, with null) a user's byte quota. The write goes through the admin plugin's update-user endpoint --
+    // input:false keeps quota_limit out of the sign-up payload but does not block this admin path, which maps the field
+    // straight to its column. better-auth answers an unknown user id with a 404 APIError; it becomes our NotFoundError
+    // so the route maps it like every other missing resource.
+    async setQuota(
+        actor : SessionUser,
+        headers : Headers,
+        userID : string,
+        quotaLimit : number | null
+    ) : Promise<UserProfile>
+    {
+        if(actor.role !== 'admin')
+        {
+            throw new ForbiddenError('Admin access is required.');
+        }
+
+        try
+        {
+            const updated = await this.#auth.api.adminUpdateUser({
+                body: { userId: userID, data: { quotaLimit } },
+                headers,
+            });
+
+            return toUserProfile(updated);
+        }
+        catch(error)
+        {
+            if(isAPIError(error) && error.statusCode === 404)
+            {
+                throw new NotFoundError(`No user ${ userID }.`);
+            }
+            throw error;
+        }
     }
 }
 

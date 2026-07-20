@@ -89,6 +89,7 @@ export {
     type AccessRequestResponse,
     type AccessRequestListResponse,
 } from './models/requests/accessRequests.ts';
+export { type SetQuotaRequest } from './models/requests/admin.ts';
 
 // Request Schemas
 export { isoDateTimeCodec } from './models/requests/schemas/common.ts';
@@ -134,6 +135,7 @@ export {
     accessRequestListResponseCodec,
     toAccessRequestResponse,
 } from './models/requests/schemas/accessRequests.ts';
+export { setQuotaRequestCodec } from './models/requests/schemas/admin.ts';
 
 // Utils
 export { type Equals, typeAssert } from './utils/typeAssert.ts';

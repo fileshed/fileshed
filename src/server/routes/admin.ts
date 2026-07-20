@@ -9,9 +9,15 @@
 
 import { Hono } from 'hono';
 
+// Models
+import { setQuotaRequestCodec } from '@fileshed/core';
+
 // Managers
 import type { AdminManager } from '../managers/admin.ts';
 import type { SessionManager } from '../managers/session.ts';
+
+// Routes
+import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -41,6 +47,16 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
         });
 
         return ctx.json(page);
+    });
+
+    router.patch('/admin/users/:id', async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+        const body = await readJsonBody(ctx, setQuotaRequestCodec);
+
+        const profile = await admins.setQuota(actor, ctx.req.raw.headers, ctx.req.param('id'), body.quotaLimit);
+
+        return ctx.json(profile);
     });
 
     return router;
