@@ -29,11 +29,25 @@ const authorizationCodes : ReadonlySet<RegulationCode> = new Set<RegulationCode>
     'parent.crossOwner',
     'link.noAccess',
     'trash.notOwner',
+    'share.notOwner',
+    'shareRequest.notOwner',
 ]);
 
 export function regulationHttpStatus(violations : readonly RegulationViolation[]) : 403 | 422
 {
     return violations.some((violation) => authorizationCodes.has(violation.code)) ? 403 : 422;
+}
+
+// The wire form of a violation: the identity of OTHER users is dropped. A violation tells the caller which rule blocked
+// them, never who else is involved -- an authorization failure that named the owner would hand any authenticated user
+// the owner of a node they cannot even read, contradicting the read-as-absent doctrine the node manager applies to
+// reads. The resource ids (node/parent/target/request) stay: the caller supplied them. The full violation, ids
+// included, is untouched on the RegulationError itself, so server-side logging still has everything.
+function toWireViolation(violation : RegulationViolation) : RegulationViolation
+{
+    const { ownerID, actorID, ...wire } = violation;
+
+    return wire;
 }
 
 export type ErrorStatus = 400 | 401 | 403 | 404 | 413 | 422 | 429;
@@ -60,7 +74,7 @@ export function mapManagerError(error : unknown) : MappedError | undefined
     {
         return {
             status: regulationHttpStatus(error.violations),
-            body: { error: error.message, violations: error.violations },
+            body: { error: error.message, violations: error.violations.map(toWireViolation) },
         };
     }
 

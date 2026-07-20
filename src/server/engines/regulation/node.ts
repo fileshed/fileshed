@@ -1,24 +1,29 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Regulation
 //
-// Cross-record legality for node placement: link creation (sec 3.2b), parent-edge legality (secs 3.2/3.3), cycle
-// prevention on real parent edges (sec 3.2), and trash legality (sec 4.4). Pure -- every fact the judgement needs is
-// passed in; the manager gathers, the engine judges (requirements.md sec 3.6).
+// Cross-record legality for node placement: link creation, parent-edge legality, cycle prevention on real parent
+// edges, and trash legality. Pure -- every fact the judgement needs is passed in; the manager gathers, the engine
+// judges.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { Node, NodeType, RegulationViolation, Role } from '@fileshed/core';
+import {
+    type Node,
+    type NodeType,
+    type RegulationViolation,
+    type Role,
+    isDirectOwner,
+    isRoleAtLeast,
+} from '@fileshed/core';
 
 // Regulation
 import { type RegulationResult, resultOf } from './types.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const roleRank : Record<Role, number> = { viewer: 1, editor: 2, owner: 3 };
-
 function isAtLeastEditor(role : Role | null) : boolean
 {
-    return role !== null && roleRank[role] >= roleRank.editor;
+    return isRoleAtLeast(role, 'editor');
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -26,7 +31,7 @@ function isAtLeastEditor(role : Role | null) : boolean
 //----------------------------------------------------------------------------------------------------------------------
 
 // The creator's effective role on the target, or null when they have no access -- gathered by the manager against the
-// target's real ancestor chain, since links never conduct permissions (sec 3.2b).
+// target's real ancestor chain, since links never conduct permissions.
 export interface LinkCreationFacts
 {
     linkID : string;
@@ -35,9 +40,9 @@ export interface LinkCreationFacts
     creatorRoleOnTarget : Role | null;
 }
 
-// sec 3.2b: a link's target must be a file or folder (never a link), a link may not point at itself, and creating one
-// requires ownership of or an active share on the target. Self-links onto a node you own are fine -- ownership shows up
-// as a non-null role -- so no special casing beyond the self-target guard.
+// A link's target must be a file or folder (never a link), a link may not point at itself, and creating one requires
+// ownership of or an active share on the target. Self-links onto a node you own are fine -- ownership shows up as a
+// non-null role -- so no special casing beyond the self-target guard.
 export function judgeLinkCreation(facts : LinkCreationFacts) : RegulationResult
 {
     const violations : RegulationViolation[] = [];
@@ -77,7 +82,7 @@ export function judgeLinkCreation(facts : LinkCreationFacts) : RegulationResult
 //----------------------------------------------------------------------------------------------------------------------
 
 // `parent` is null for root-level placement. `creatorRoleOnParent` is the creator's effective role on the parent
-// folder, gathered by the manager -- it authorizes the one sanctioned cross-owner edge (sec 3.3).
+// folder, gathered by the manager -- it authorizes the one sanctioned cross-owner edge.
 export interface ParentEdgeFacts
 {
     creatorID : string;
@@ -85,9 +90,9 @@ export interface ParentEdgeFacts
     creatorRoleOnParent : Role | null;
 }
 
-// secs 3.2/3.3: a parent must be a folder that is not trashed, and owned by the creator -- with the single exception
-// that an editor on a shared folder may create inside it (owner differs from parent's owner, the sanctioned
-// cross-owner edge). Root placement (no parent) is always structurally legal.
+// A parent must be a folder that is not trashed, and owned by the creator -- with the single exception that an editor
+// on a shared folder may create inside it (owner differs from parent's owner, the sanctioned cross-owner edge). Root
+// placement (no parent) is always structurally legal.
 export function judgeParentEdge(facts : ParentEdgeFacts) : RegulationResult
 {
     const { parent } = facts;
@@ -114,7 +119,8 @@ export function judgeParentEdge(facts : ParentEdgeFacts) : RegulationResult
         });
     }
 
-    if(parent.ownerID !== facts.creatorID && !isAtLeastEditor(facts.creatorRoleOnParent))
+    // The two authorities side by side: owning the parent outright, or holding a resolved editor+ role on it.
+    if(!isDirectOwner(parent, facts.creatorID) && !isAtLeastEditor(facts.creatorRoleOnParent))
     {
         violations.push({
             code: 'parent.crossOwner',
@@ -141,9 +147,9 @@ export interface MoveFacts
     parentAncestorIDs : string[];
 }
 
-// sec 3.2: cycle prevention on real parent edges. A move is illegal if the node would become its own parent, or if it
-// already sits above the destination (the moved node appears in the destination's ancestor chain). A move to the root
-// can never form a cycle.
+// Cycle prevention on real parent edges. A move is illegal if the node would become its own parent, or if it already
+// sits above the destination (the moved node appears in the destination's ancestor chain). A move to the root can
+// never form a cycle.
 export function judgeMove(facts : MoveFacts) : RegulationResult
 {
     if(facts.newParentID === null) { return resultOf([]); }
@@ -183,8 +189,8 @@ export interface TrashFacts
     actorID : string;
 }
 
-// sec 4.4: links are deleted directly, never trashed, and only a node's owner may trash it (recipients delete their
-// link instead). Both conditions are reported so a recipient trashing someone else's link learns of each.
+// Links are deleted directly, never trashed, and only a node's owner may trash it (recipients delete their link
+// instead). Both conditions are reported so a recipient trashing someone else's link learns of each.
 export function judgeTrash(facts : TrashFacts) : RegulationResult
 {
     const { node } = facts;
@@ -199,7 +205,9 @@ export function judgeTrash(facts : TrashFacts) : RegulationResult
         });
     }
 
-    if(node.ownerID !== facts.actorID)
+    // Trashing is authority over the node, so it asks direct ownership -- an ancestor owner resolves 'owner' on a
+    // cross-owner contribution and may read it, but the contributor's item stays theirs to trash.
+    if(!isDirectOwner(node, facts.actorID))
     {
         violations.push({
             code: 'trash.notOwner',

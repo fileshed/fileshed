@@ -1,11 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob Manager
 //
-// The claim / proof-of-possession / upload flow (requirements.md sec 4.3). A claim is admitted against the owner's
-// quota first (sec 5), then routed: an unknown blob gets a single-use upload ticket; a known blob (graveyarded or not)
-// that is worth the round trip gets a proof-of-possession challenge instead of re-uploading the bytes. Answering a
-// challenge or completing an upload creates the caller's file node -- for a known blob, resurrecting the record if it
-// was graveyarded -- in one transaction (secs 4.2/4.3).
+// The claim / proof-of-possession / upload flow. A claim is admitted against the owner's quota first, then routed: an
+// unknown blob gets a single-use upload ticket; a known blob (graveyarded or not) that is worth the round trip gets a
+// proof-of-possession challenge instead of re-uploading the bytes. Answering a challenge or completing an upload
+// creates the caller's file node -- for a known blob, resurrecting the record if it was graveyarded -- in one
+// transaction.
 //
 // Tickets, challenges, and the failed-proof counter are in-memory: a single-node deployment, and losing them on
 // restart only forces a client to re-claim. Expiry is enforced lazily on use (an expired entry is never honoured) and
@@ -53,6 +53,7 @@ import type { SessionUser } from '../resource-access/auth.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { type BlobLocation, BlobRA } from '../resource-access/blob/index.ts';
 import { NodeRA } from '../resource-access/nodes/node.ts';
+import { ShareRA } from '../resource-access/shares/index.ts';
 
 // Utils
 import { getLogger } from '../utils/logger.ts';
@@ -70,7 +71,7 @@ interface Ticket
     expiresAt : number;
 }
 
-// Single-use upload tickets. consume deletes on first use (sec 4.3) and refuses an expired one.
+// Single-use upload tickets. consume deletes on first use and refuses an expired one.
 class TicketStore
 {
     readonly #tickets = new Map<string, Ticket>();
@@ -113,7 +114,7 @@ interface Challenge
     expiresAt : number;
 }
 
-// Single-use proof-of-possession challenges. Same consume-once, expire-fast contract as tickets (sec 4.3).
+// Single-use proof-of-possession challenges. Same consume-once, expire-fast contract as tickets.
 class ChallengeStore
 {
     readonly #challenges = new Map<string, Challenge>();
@@ -144,7 +145,7 @@ class ChallengeStore
     }
 }
 
-// Per-user sliding count of recent failed proofs (sec 4.3). Timestamps older than the window are pruned on each touch.
+// Per-user sliding count of recent failed proofs. Timestamps older than the window are pruned on each touch.
 class FailedProofTracker
 {
     readonly #failures = new Map<string, number[]>();
@@ -182,7 +183,7 @@ class FailedProofTracker
 // Proof-of-possession primitives
 //----------------------------------------------------------------------------------------------------------------------
 
-// sec 4.3: crypto-random offsets AND lengths, each window inside [0, size). offset in [0, size) then length in
+// Crypto-random offsets AND lengths, each window inside [0, size). offset in [0, size) then length in
 // [1, min(size - offset, cap)] keeps every window in bounds without a rejection loop. Challenges only issue for blobs
 // at or above the 1 MiB threshold, so there is always room for a non-trivial window.
 function randomRanges(size : number) : [ number, number ][]
@@ -201,7 +202,7 @@ function randomRanges(size : number) : [ number, number ][]
 }
 
 // The expected answer: read the same windows the challenge named, in order, and HMAC-SHA256 their concatenation keyed
-// by the nonce (sec 4.3). Keying by the per-challenge nonce is what stops an answer captured on one challenge from
+// by the nonce. Keying by the per-challenge nonce is what stops an answer captured on one challenge from
 // satisfying another.
 async function computeProof(
     blob : BlobRA,
@@ -218,7 +219,7 @@ async function computeProof(
     return hmac.digest('hex');
 }
 
-// Constant-time comparison of two hex digests (sec 4.3). timingSafeEqual needs equal-length buffers, so a malformed or
+// Constant-time comparison of two hex digests. timingSafeEqual needs equal-length buffers, so a malformed or
 // wrong-length answer is rejected up front -- its length is not the secret, so the early return leaks nothing useful.
 function proofMatches(expected : string, provided : string) : boolean
 {
@@ -230,7 +231,7 @@ function proofMatches(expected : string, provided : string) : boolean
     return timingSafeEqual(expectedBytes, providedBytes);
 }
 
-// Caps the streamed byte count at the claimed size while an upload is in flight (secs 4.3/9): a client that streams
+// Caps the streamed byte count at the claimed size while an upload is in flight: a client that streams
 // more than it claimed is aborted at the first excess byte, which rejects the put pipeline and cleans its staging file,
 // so a size lie can never push gigabytes onto disk. Exceeding the claimed size is the same size mismatch the store
 // would catch after the fact (400), so the limiter raises it as one.
@@ -270,6 +271,7 @@ export class BlobManager
     readonly #uploadMaxBytes : number;
 
     readonly #nodes : NodeRA;
+    readonly #shares : ShareRA;
 
     readonly #tickets = new TicketStore();
     readonly #challenges = new ChallengeStore();
@@ -284,6 +286,7 @@ export class BlobManager
         this.#uploadMaxBytes = deps.uploadMaxBytes;
 
         this.#nodes = new NodeRA(deps.handle);
+        this.#shares = new ShareRA(deps.handle);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -291,7 +294,7 @@ export class BlobManager
     //------------------------------------------------------------------------------------------------------------------
 
     // POST /api/blobs/claim. The blob is resolved first so quota and the ticket/challenge routing decide against the
-    // authoritative size, not a size the client invented (sec 5): unknown -> upload ticket; known and large ->
+    // authoritative size, not a size the client invented: unknown -> upload ticket; known and large ->
     // proof-of-possession challenge; known but small -> ticket (round trips cost more than the bytes).
     async claim(caller : SessionUser, request : ClaimRequest) : Promise<ClaimResponse>
     {
@@ -341,8 +344,8 @@ export class BlobManager
     //------------------------------------------------------------------------------------------------------------------
 
     // POST /api/blobs/claim/:challengeID. Recompute the proof over the challenge's ranges, compare in constant time,
-    // and on success create the node (resurrecting a graveyarded blob) with zero bytes moved (sec 4.3 step 5). A failed
-    // proof is logged and counted toward the per-user rate limit (a failure is probing, sec 4.3).
+    // and on success create the node (resurrecting a graveyarded blob) with zero bytes moved. A failed
+    // proof is logged and counted toward the per-user rate limit (a failure is probing).
     async answerChallenge(caller : SessionUser, challengeID : string, answer : string, metadata : UploadCommitMetadata)
     : Promise<FileNode>
     {
@@ -363,8 +366,8 @@ export class BlobManager
         catch(error)
         {
             // The bytes vanished under the challenge -- GC hard-deleted them inside the window. That is a server-side
-            // race, not the client probing a hash it lacks, so it is NOT counted toward the failed-proof rate limit
-            // (sec 4.3). The blob is simply gone; the client must re-claim.
+            // race, not the client probing a hash it lacks, so it is NOT counted toward the failed-proof rate limit.
+            // The blob is simply gone; the client must re-claim.
             if(error instanceof BlobNotFoundError)
             {
                 this.#logger.info({ userID: caller.id, sha256: challenge.sha256 }, 'Challenge blob vanished mid-proof');
@@ -382,7 +385,7 @@ export class BlobManager
 
         await this.#assertParentEdge(caller.id, metadata.parentID);
 
-        // Known blob: the record already exists, so the commit only clears its graveyard marker (sec 4.2). If GC
+        // Known blob: the record already exists, so the commit only clears its graveyard marker. If GC
         // hard-deleted the record in the challenge window, resurrect touches nothing and the node insert fails the FK.
         return this.#commitFileNode(caller, challenge.sha256, challenge.size, metadata, (blob) =>
             blob.resurrect(challenge.sha256));
@@ -392,8 +395,8 @@ export class BlobManager
     // Upload commit
     //------------------------------------------------------------------------------------------------------------------
 
-    // PUT /api/uploads/:ticket. Stream the body through the store (which verifies hash + size and rejects a liar,
-    // sec 4.3), enforcing the byte ceiling as it goes, then create the node in one transaction (insert-or-resurrect the
+    // PUT /api/uploads/:ticket. Stream the body through the store (which verifies hash + size and rejects a liar),
+    // enforcing the byte ceiling as it goes, then create the node in one transaction (insert-or-resurrect the
     // record, insert the file node). The ticket is single-use: consumed here whether or not the upload succeeds.
     async commitUpload(
         caller : SessionUser,
@@ -458,7 +461,7 @@ export class BlobManager
         this.#enforceQuota(caller, usedBytes, incomingBytes);
     }
 
-    // Judge one write against the owner's quota and throw the sec 5 message on refusal. usedBytes is passed in so
+    // Judge one write against the owner's quota and throw the quota message on refusal. usedBytes is passed in so
     // the caller controls whether it was read outside the commit (the early gate) or inside it (the authoritative
     // re-check).
     #enforceQuota(caller : SessionUser, usedBytes : number, incomingBytes : number) : void
@@ -478,7 +481,7 @@ export class BlobManager
 
     // Stream the body through the storage RA (onto the default backend), capping the byte count at the claimed size in
     // flight, and return the pin the record will store. Integrity failures the store raises become 400s with their
-    // typed codes (sec 4.3).
+    // typed codes.
     async #putBytes(sha256 : string, size : number, body : Readable) : Promise<BlobLocation>
     {
         const limiter = byteLimiter(size);
@@ -502,10 +505,10 @@ export class BlobManager
         }
     }
 
-    // Parent-edge legality, decided by the shared regulation judge (sec 3.6) rather than a private rule, so the upload
+    // Parent-edge legality, decided by the shared regulation judge rather than a private rule, so the upload
     // and node-creation paths reject the same placements: a non-folder parent, a trashed parent, or a parent the caller
-    // has no editor+ role on (v1 pre-shares: ownership or nothing). The sec 3.3 cross-owner editor case lands when
-    // shares extend effectiveRole below; nothing here fakes more than ownership until then.
+    // has no editor+ role on. The share resolver supplies the real role, so an editor on a folder shared to them may
+    // upload into it -- the created file is owned by the uploader and charged to their quota.
     async #assertParentEdge(ownerID : string, parentID : string | null) : Promise<void>
     {
         const parent = await this.#gatherParent(parentID);
@@ -513,7 +516,7 @@ export class BlobManager
         const verdict = regulation.node.parentEdge({
             creatorID: ownerID,
             parent,
-            creatorRoleOnParent: parent === null ? null : this.#effectiveRole(ownerID, parent),
+            creatorRoleOnParent: parent === null ? null : await this.#shares.effectiveRole(ownerID, parent.id),
         });
 
         if(!verdict.ok) { throw new RegulationError(verdict.violations); }
@@ -529,15 +532,8 @@ export class BlobManager
         return parent;
     }
 
-    // The caller's effective role on a node. v1 pre-shares: 'owner' if they own it, otherwise null -- the same seam the
-    // node manager derives, kept local rather than imported so the two managers stay uncoupled until shares land.
-    #effectiveRole(actorID : string, node : Node) : 'owner' | null
-    {
-        return node.ownerID === actorID ? 'owner' : null;
-    }
-
     // One transaction: persist the blob record (insert-or-resurrect for an upload, resurrect for a proven dedup) and
-    // insert the file node, so the reference and any resurrection commit together (sec 4.2). The tx-bound RA instances
+    // insert the file node, so the reference and any resurrection commit together. The tx-bound RA instances
     // share the transaction's executor; persistBlob is the record write the caller's path dictates.
     async #commitFileNode(
         caller : SessionUser,
@@ -568,9 +564,8 @@ export class BlobManager
             const blob = new BlobRA(txHandle);
             const nodes = new NodeRA(txHandle);
 
-            // Re-judge quota against usage read inside the transaction (sec 5). The claim-time gate admits each
-            // claim in isolation, so a batch of concurrent claims could jointly overshoot; this is the authoritative
-            // check. On
+            // Re-judge quota against usage read inside the transaction. The claim-time gate admits each claim in
+            // isolation, so a batch of concurrent claims could jointly overshoot; this is the authoritative check. On
             // SQLite (serialized writes) it closes the window; on Postgres READ COMMITTED it narrows it to concurrent
             // uncommitted claims -- full serialization (row locks / SERIALIZABLE) is out of v1 scope.
             this.#enforceQuota(caller, await nodes.ownedBytes(caller.id), size);

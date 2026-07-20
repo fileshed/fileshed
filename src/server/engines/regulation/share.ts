@@ -1,12 +1,12 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Regulation
 //
-// Cross-record legality for permission grants (secs 3.4/3.5): who may create a share and on what, plus the authority to
-// resolve a share request. Pure -- the manager gathers ownership facts, the engine judges (requirements.md sec 3.6).
+// Cross-record legality for permission grants: who may create a share and on what, plus the authority to resolve a
+// share request. Pure -- the manager gathers ownership facts, the engine judges.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { Node, RegulationViolation, ShareRequest, ShareRole } from '@fileshed/core';
+import { type Node, type RegulationViolation, type ShareRequest, type ShareRole, isDirectOwner } from '@fileshed/core';
 
 // Regulation
 import { type RegulationResult, resultOf } from './types.ts';
@@ -16,6 +16,11 @@ import { type RegulationResult, resultOf } from './types.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 // `role` is a ShareRole by type -- an owner grant is unrepresentable, so the engine never re-checks it.
+//
+// Granting authority is DIRECT ownership of the node, which is why this takes the node and the granter's id rather than
+// the granter's resolved role. Do not substitute one: the resolver also answers 'owner' for a user who owns an
+// ANCESTOR, and a folder owner must not be able to re-share a file another user contributed into their folder. When
+// re-sharing lands, an editor's authority is a separate, clamped fact -- not a relaxation of this one.
 export interface GrantFacts
 {
     node : Node;
@@ -24,8 +29,8 @@ export interface GrantFacts
     role : ShareRole;
 }
 
-// secs 3.2b/3.4: only a node's owner may create a share in v1, a link carries no ACL and so cannot be shared, and the
-// owner cannot grant themselves access. Every applicable condition is reported.
+// Only a node's owner may create a share in v1, a link carries no ACL and so cannot be shared, and the owner cannot
+// grant themselves access. Every applicable condition is reported.
 export function judgeGrant(facts : GrantFacts) : RegulationResult
 {
     const { node } = facts;
@@ -40,7 +45,7 @@ export function judgeGrant(facts : GrantFacts) : RegulationResult
         });
     }
 
-    if(facts.granterID !== node.ownerID)
+    if(!isDirectOwner(node, facts.granterID))
     {
         violations.push({
             code: 'share.notOwner',
@@ -70,7 +75,7 @@ export function judgeGrant(facts : GrantFacts) : RegulationResult
 //----------------------------------------------------------------------------------------------------------------------
 
 // `targetOwnerID` is the owner of the requested node, gathered by the manager -- share requests route to the target's
-// owner, never the folder sharer who has no granting authority in v1 (sec 3.5).
+// owner, never the folder sharer who has no granting authority in v1.
 export interface ShareRequestResolutionFacts
 {
     request : ShareRequest;
@@ -78,9 +83,9 @@ export interface ShareRequestResolutionFacts
     actorID : string;
 }
 
-// sec 3.5: only the target's owner may grant or decline, and only a pending request can be resolved. Legality is the
-// same for grant and decline; a granted request mints an ordinary share carrying the request's requestedRole, which is
-// the manager's to create once this passes.
+// Only the target's owner may grant or decline, and only a pending request can be resolved. Legality is the same for
+// grant and decline; a granted request mints an ordinary share carrying the request's requestedRole, which is the
+// manager's to create once this passes.
 export function judgeShareRequestResolution(facts : ShareRequestResolutionFacts) : RegulationResult
 {
     const { request } = facts;

@@ -1,11 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Routes
 //
-// The /api/nodes surface (requirements.md sec 7): read a node, list a folder's children (or the root), create folders
-// and links, rename/move, trash, restore, and permanently delete. Every handler resolves the caller through the session
-// manager (401 when absent) and validates the body/query against the core DTO codecs (400 on a shape mismatch); all
-// other outcomes -- not found, forbidden, regulation violations -- bubble as typed manager errors that onError maps.
-// The route composes managers and carries no error-shape or business logic of its own.
+// The /api/nodes surface: read a node, list a folder's children (or the root), create folders and links, rename/move,
+// trash, restore, and permanently delete. Every handler resolves the caller through the session manager (401 when
+// absent) and validates the body/query against the core DTO codecs (400 on a shape mismatch); all other outcomes -- not
+// found, forbidden, regulation violations -- bubble as typed manager errors that onError maps. The route composes
+// managers and carries no error-shape or business logic of its own.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Context, Hono } from 'hono';
@@ -18,19 +18,10 @@ import { BadRequestError, childrenQueryCodec, createNodeRequestCodec, patchNodeR
 import type { NodeManager } from '../managers/node.ts';
 import type { SessionManager } from '../managers/session.ts';
 
+// Routes
+import { readJsonBody } from './readJsonBody.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
-
-async function readJsonBody<T>(ctx : Context, codec : ZodType<T>) : Promise<T>
-{
-    let raw : unknown;
-    try { raw = await ctx.req.json(); }
-    catch { throw new BadRequestError('Request body must be valid JSON.'); }
-
-    const result = codec.safeParse(raw);
-    if(!result.success) { throw new BadRequestError('The request body does not match the expected shape.'); }
-
-    return result.data;
-}
 
 function parseQuery<T>(ctx : Context, codec : ZodType<T>) : T
 {
