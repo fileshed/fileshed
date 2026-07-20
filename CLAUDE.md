@@ -153,6 +153,9 @@ Key principles:
 - Managers coordinate between Engines and Resource Access
 - Engines contain pure logic, easily testable
 - Resource Access handles all I/O operations
+- **All fixed values live in `packages/core/src/constants/`** (responsibility-grouped files behind a barrel) — no
+  magic numbers, no module-local tunables. Env-driven values stay in the config schema; their *defaults* come from
+  `constants/config.ts`.
 - **One RA per concern; implementations are facades behind it.** Pluggable machinery (storage backends, external
   vendors) is instantiated and selected *inside* the RA — managers never import an implementation type. The
   reference shape is `src/server/resource-access/blob/index.ts`.

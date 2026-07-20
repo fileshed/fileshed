@@ -8,6 +8,9 @@
 
 import { z } from 'zod';
 
+// Constants
+import { DEFAULT_CHILDREN_LIMIT, MAX_CHILDREN_LIMIT } from '../../constants/index.ts';
+
 // Models
 import { type Node, nodeTypes } from '../node.ts';
 import type { Role } from '../role.ts';
@@ -97,15 +100,12 @@ export type NodeSortKey = typeof nodeSortKeys[number];
 export const sortDirections = [ 'asc', 'desc' ] as const;
 export type SortDirection = typeof sortDirections[number];
 
-const defaultChildrenLimit = 50;
-const maxChildrenLimit = 200;
-
 export const childrenQueryCodec = z.strictObject({
     limit: z.coerce.number()
         .int()
         .min(1)
-        .max(maxChildrenLimit)
-        .default(defaultChildrenLimit),
+        .max(MAX_CHILDREN_LIMIT)
+        .default(DEFAULT_CHILDREN_LIMIT),
     offset: z.coerce.number()
         .int()
         .min(0)

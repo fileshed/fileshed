@@ -10,18 +10,22 @@
 // its purpose. The check is a single condition, enforced once, at the manager boundary.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { ForbiddenError, type UserProfile, parseUserProfile } from '@fileshed/core';
+import {
+    DEFAULT_LIST_USERS_LIMIT,
+    ForbiddenError,
+    MAX_LIST_USERS_LIMIT,
+    type UserProfile,
+    parseUserProfile,
+} from '@fileshed/core';
 
 // Resource Access
 import type { Auth, SessionUser } from '../resource-access/auth.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// Bounds for listUsers pagination: a caller-supplied limit is clamped into [1, maxListUsersLimit] rather than
+// Bounds for listUsers pagination: a caller-supplied limit is clamped into [1, MAX_LIST_USERS_LIMIT] rather than
 // rejected -- pagination is a convenience the caller doesn't have to get exactly right, not a wire-contract violation
-// worth a 400. A missing limit gets defaultListUsersLimit; offset just floors at 0.
-const defaultListUsersLimit = 50;
-const maxListUsersLimit = 100;
+// worth a 400. A missing limit gets DEFAULT_LIST_USERS_LIMIT; offset just floors at 0.
 
 function clamp(value : number, min : number, max : number) : number
 {
@@ -82,7 +86,7 @@ export class AdminManager
             throw new ForbiddenError('Admin access is required.');
         }
 
-        const limit = clamp(pagination.limit ?? defaultListUsersLimit, 1, maxListUsersLimit);
+        const limit = clamp(pagination.limit ?? DEFAULT_LIST_USERS_LIMIT, 1, MAX_LIST_USERS_LIMIT);
         const offset = Math.max(pagination.offset ?? 0, 0);
 
         // Forward the caller's headers: better-auth's own admin guard re-checks the session, and the caller is the
