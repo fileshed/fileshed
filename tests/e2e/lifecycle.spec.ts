@@ -1,12 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // E2E — Node lifecycle: trash, restore, hard delete, and the lying-sha rejection
 //
-// The trash/delete semantics of requirements.md sec 4.4 walked end to end over real sockets, with the database and the
-// blob store inspected at each step: a file uploaded into a folder is trashed (hidden from the listing but still
-// charged, sec 4.4/5), restored (back in the listing), then hard-deleted -- its node row gone and its now-unreferenced
-// blob graveyarded (deleted_at set) with the bytes still on disk pending GC (sec 4.2). A separate lying-sha upload
-// proves the store rejects mismatched bytes and leaves nothing behind: no blob row, no node, no file, no staging
-// orphan (sec 4.3).
+// The trash/delete semantics walked end to end over real sockets, with the database and the blob store inspected at
+// each step: a file uploaded into a folder is trashed (hidden from the listing but still charged), restored (back in
+// the listing), then hard-deleted -- its node row gone and its now-unreferenced blob graveyarded (deleted_at set) with
+// the bytes still on disk pending GC. A separate lying-sha upload proves the store rejects mismatched bytes and leaves
+// nothing behind: no blob row, no node, no file, no staging orphan.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -84,7 +83,7 @@ afterAll(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// The trash lifecycle, walked in order on one file (requirements.md sec 4.4)
+// The trash lifecycle, walked in order on one file
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('trash, restore, hard delete', () =>
@@ -105,10 +104,10 @@ describe('trash, restore, hard delete', () =>
         const res = await user.post(`/api/nodes/${ fileNodeID }/trash`, {});
         expect(res.status).toBe(200);
 
-        // Trashed items drop out of the normal listing (sec 4.4)...
+        // Trashed items drop out of the normal listing...
         expect(await childIDs(folderID)).not.toContain(fileNodeID);
 
-        // ...but a trashed file still counts against the owner's quota -- trash is not free storage (sec 4.4/5).
+        // ...but a trashed file still counts against the owner's quota -- trash is not free storage.
         expect(await quotaUsed()).toBe(data.length);
     });
 
@@ -133,7 +132,7 @@ describe('trash, restore, hard delete', () =>
         expect(node).toBeUndefined();
 
         // Last reference gone -> the blob is graveyarded (deleted_at set), not yet purged: the bytes survive the grace
-        // window for possible resurrection, and GC removes them later (sec 4.2).
+        // window for possible resurrection, and GC removes them later.
         const blob = await withDb(server, (db) => db
             .selectFrom('blob')
             .select([ 'sha256', 'deleted_at' ])
@@ -148,7 +147,7 @@ describe('trash, restore, hard delete', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// A lying client cannot poison the store (requirements.md sec 4.3)
+// A lying client cannot poison the store
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('lying-sha upload', () =>

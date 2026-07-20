@@ -1,11 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Filesystem Blob Backend
 //
-// The `fs` backend (requirements.md secs 4.1/4.3): blobs live at root/ab/cd/<sha256>, sharded by the first two
-// byte-pairs of the hash. A put streams to a staging file under the same root -- so committing is a same-filesystem
-// rename, which is atomic -- while hashing and counting bytes; a claimed sha256 or size the bytes disagree with is
-// rejected and the staging file removed, so a lying client can never poison the store (sec 4.3). Nothing here
-// ever buffers a whole blob: reads are ranged or streamed.
+// The `fs` backend: blobs live at root/ab/cd/<sha256>, sharded by the first two byte-pairs of the hash. A put streams
+// to a staging file under the same root -- so committing is a same-filesystem rename, which is atomic -- while hashing
+// and counting bytes; a claimed sha256 or size the bytes disagree with is rejected and the staging file removed, so a
+// lying client can never poison the store. Nothing here ever buffers a whole blob: reads are ranged or streamed.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomUUID } from 'node:crypto';

@@ -27,7 +27,7 @@ describe('deletionOfferCodec', () =>
         expect(deletionOfferCodec.safeParse(offer).success).toBe(true);
     });
 
-    // requirements.md sec 4.4: expiresAt is the blob GC grace deadline that bounds the offer -- an offer without it has
+    // expiresAt is the blob GC grace deadline that bounds the offer -- an offer without it has
     // no window to accept within, so the codec must require it.
     it('rejects a deletion offer missing its expiresAt', () =>
     {

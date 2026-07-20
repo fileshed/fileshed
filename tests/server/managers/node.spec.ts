@@ -3,8 +3,7 @@
 //
 // Drives the manager directly against a real NodeRA over in-memory SQLite (zero mocks below the RA seam), with only the
 // blob-graveyard collaborator as a recording double. Covers what the route specs can't stage without the upload flow:
-// quota usage over seeded file nodes (sec 5), and the orphaned-blob handoff a hard delete performs (secs 4.2/4.4).
-// Expectations come from the requirements, not the implementation.
+// quota usage over seeded file nodes, and the orphaned-blob handoff a hard delete performs.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -59,7 +58,7 @@ afterEach(async () =>
 
 describe('NodeManager.me', () =>
 {
-    it('charges owned file nodes including trashed, excluding folders and links (sec 5)', async () =>
+    it('charges owned file nodes including trashed, excluding folders and links', async () =>
     {
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
         await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', blobID: 'sha-a', size: 500, trashedAt: new Date() }));
@@ -73,8 +72,8 @@ describe('NodeManager.me', () =>
         expect(me.quota.limit).toBe(1_000_000);
     });
 
-    // requirements.md sec 5: a 0 limit is a real block-all quota, distinct from null (unlimited). The manager must
-    // report it verbatim rather than collapsing it to null.
+    // a 0 limit is a real block-all quota, distinct from null (unlimited). The manager must report it verbatim rather
+    // than collapsing it to null.
     it('reports a zero quota limit as a real limit, not unlimited', async () =>
     {
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
@@ -88,7 +87,7 @@ describe('NodeManager.me', () =>
 
 describe('NodeManager.hardDelete', () =>
 {
-    it('hands the subtree\'s file blob shas to the graveyard after deleting (secs 4.2/4.4)', async () =>
+    it('hands the subtree\'s file blob shas to the graveyard after deleting', async () =>
     {
         await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', blobID: 'sha-a', parentID: 'dir' }));
@@ -104,7 +103,7 @@ describe('NodeManager.hardDelete', () =>
         expect(new Set(orphaned.calls[0])).toEqual(new Set([ 'sha-a', 'sha-b' ]));
     });
 
-    it('removes a link without reporting any orphaned blobs and leaves its target (sec 3.2b)', async () =>
+    it('removes a link without reporting any orphaned blobs and leaves its target', async () =>
     {
         await ra.insert(folderNode({ id: 'target', ownerID: 'alice' }));
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'target' }));
@@ -119,7 +118,7 @@ describe('NodeManager.hardDelete', () =>
         expect(orphaned.calls).toHaveLength(0);
     });
 
-    it('rolls the subtree delete back when the graveyard handoff fails, stranding nothing (secs 4.2/4.4)', async () =>
+    it('rolls the subtree delete back when the graveyard handoff fails, stranding nothing', async () =>
     {
         await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', blobID: 'sha-a', parentID: 'dir' }));

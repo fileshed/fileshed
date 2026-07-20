@@ -63,8 +63,7 @@ export class PayloadTooLargeError extends Error
     }
 }
 
-// The caller has tripped a per-user rate limit (a run of failed proofs is someone probing hashes they don't hold,
-// requirements.md sec 4.3).
+// The caller has tripped a per-user rate limit (a run of failed proofs is someone probing hashes they don't hold).
 export class TooManyRequestsError extends Error
 {
     constructor(message : string)
@@ -77,9 +76,8 @@ export class TooManyRequestsError extends Error
 //----------------------------------------------------------------------------------------------------------------------
 // Regulation
 //
-// The typed result of a legality judgement (requirements.md sec 3.6, layer 2). A code is stable and machine-readable so
-// managers and clients can branch on it without parsing the human message. The engine returns violations; a manager
-// turns them into a RegulationError.
+// The typed result of a legality judgement. A code is stable and machine-readable so managers and clients can branch on
+// it without parsing the human message. The engine returns violations; a manager turns them into a RegulationError.
 //----------------------------------------------------------------------------------------------------------------------
 
 export type RegulationCode
@@ -113,8 +111,8 @@ export interface RegulationViolation
     requestID ?: string;
 }
 
-// One or more regulation violations blocked a mutation (requirements.md sec 3.6 layer 2). Carries the typed violations
-// so the client receives their stable codes, not just a message.
+// One or more regulation violations blocked a mutation. Carries the typed violations so the client receives their
+// stable codes, not just a message.
 export class RegulationError extends Error
 {
     readonly violations : RegulationViolation[];
@@ -229,7 +227,7 @@ export class BackendNotFoundError extends Error
     }
 }
 
-// No backend is marked default, so a write has nowhere to land (requirements.md sec 4.1: one default per deployment).
+// No backend is marked default, so a write has nowhere to land (one default per deployment).
 export class NoDefaultBackendError extends Error
 {
     constructor()

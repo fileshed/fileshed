@@ -10,7 +10,7 @@ import { roleCodec, shareRoleCodec } from '@fileshed/core';
 
 describe('shareRoleCodec', () =>
 {
-    // requirements.md sec 3.4: shares grant viewer or editor only -- ownership is never conferred by a share.
+    // shares grant viewer or editor only -- ownership is never conferred by a share.
     it('rejects the owner role', () =>
     {
         expect(shareRoleCodec.safeParse('owner').success).toBe(false);
@@ -25,7 +25,7 @@ describe('shareRoleCodec', () =>
 
 describe('roleCodec', () =>
 {
-    // requirements.md sec 3.4: owner is a real effective role (via ownership), just not a grantable one.
+    // owner is a real effective role (via ownership), just not a grantable one.
     it('accepts owner alongside viewer and editor', () =>
     {
         expect(roleCodec.safeParse('owner').success).toBe(true);

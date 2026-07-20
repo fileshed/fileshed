@@ -17,7 +17,7 @@ import {
 
 describe('childrenQueryCodec', () =>
 {
-    // The sortKey vocabulary is a closed set -- name, size, createdAt, updatedAt (sec 7) -- not an arbitrary column
+    // The sortKey vocabulary is a closed set -- name, size, createdAt, updatedAt -- not an arbitrary column
     // name a client could use to probe the schema.
     it('rejects a sort key outside the published vocabulary', () =>
     {
@@ -54,8 +54,8 @@ describe('nodeResponseCodec', () =>
         updatedAt: '2026-01-01T00:00:00.000Z',
     };
 
-    // requirements.md sec 7: every node-returning endpoint includes the caller's effective role, and it must be a
-    // real Role ('owner' | 'editor' | 'viewer'), not an arbitrary string a handler forgot to compute correctly.
+    // every node-returning endpoint includes the caller's effective role, and it must be a real Role ('owner' |
+    // 'editor' | 'viewer'), not an arbitrary string a handler forgot to compute correctly.
     it('requires role to be a valid Role', () =>
     {
         const valid = nodeResponseCodec.safeParse({ ...base, role: 'editor' });
@@ -75,8 +75,8 @@ describe('nodeResponseCodec', () =>
 
 describe('createNodeRequestCodec', () =>
 {
-    // requirements.md sec 7: links are plain node CRUD through the same POST /api/nodes as folders, discriminated by
-    // type -- a folder create must not admit link-only fields.
+    // links are plain node CRUD through the same POST /api/nodes as folders, discriminated by type -- a folder create
+    // must not admit link-only fields.
     it('discriminates a folder create from a link create by type', () =>
     {
         const folder = createNodeRequestCodec.safeParse({ type: 'folder', name: 'Photos', parentID: null });
@@ -112,7 +112,7 @@ describe('createNodeRequestCodec', () =>
 
 describe('patchNodeRequestCodec', () =>
 {
-    // The rename/move PATCH shares one endpoint (sec 7); a patch that does neither isn't a request.
+    // The rename/move PATCH shares one endpoint; a patch that does neither isn't a request.
     it('rejects a patch with neither a name nor a parentID', () =>
     {
         const result = patchNodeRequestCodec.safeParse({});
@@ -135,8 +135,8 @@ describe('toNodeResponse', () =>
     const createdAt = new Date('2026-02-03T04:05:06.000Z');
     const updatedAt = new Date('2026-02-03T04:05:07.000Z');
 
-    // requirements.md secs 2/7: dates cross the boundary as ISO strings, and the caller's effective role rides every
-    // node payload. The serializer is the single place both happen, and its output must satisfy the wire codec.
+    // dates cross the boundary as ISO strings, and the caller's effective role rides every node payload. The serializer
+    // is the single place both happen, and its output must satisfy the wire codec.
     it('attaches the effective role and serializes dates to ISO strings', () =>
     {
         const folder : Node = {
@@ -162,7 +162,7 @@ describe('toNodeResponse', () =>
         expect(nodeResponseCodec.safeParse(response).success).toBe(true);
     });
 
-    // requirements.md sec 3.2: a link resolves its target for display -- id, type, name, and for a file target its size
+    // a link resolves its target for display -- id, type, name, and for a file target its size
     // and mime type, so the client can render it without a second fetch.
     it('resolves a link\'s file target to id, type, name, size, and mime type', () =>
     {
@@ -205,8 +205,7 @@ describe('toNodeResponse', () =>
         }
     });
 
-    // requirements.md sec 3.2b: an unresolvable link (target gone, or access lost) carries a null target so the client
-    // renders it as a stub.
+    // an unresolvable link (target gone, or access lost) carries a null target so the client renders it as a stub.
     it('serializes a link with a null target when the target is unresolved', () =>
     {
         const link : Node = {

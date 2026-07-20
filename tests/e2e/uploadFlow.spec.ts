@@ -1,12 +1,12 @@
 //----------------------------------------------------------------------------------------------------------------------
 // E2E — Upload, proof-of-possession dedup, and quota
 //
-// The claim/PoP/upload story of requirements.md sec 4.3 driven over real sockets and asserted against real state: user
+// The claim/PoP/upload story driven over real sockets and asserted against real state: user
 // A claims an unknown blob, gets a ticket, and PUTs the bytes; the database shows the blob pinned to the default fs
 // backend and A's file node under a folder A owns; the sharded store holds bytes that hash back to the claimed sha; A's
 // quota grows by the logical size. Then user B claims the same (now known, >1 MiB) blob, is challenged, computes the
 // HMAC proof from the local bytes, and dedups: one blob row, two file nodes, and -- dedup being invisible to quotas
-// (sec 5) -- both owners charged the full size.
+// -- both owners charged the full size.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -90,7 +90,7 @@ afterAll(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// A fresh upload (requirements.md sec 4.3, step 3 — unknown blob)
+// A fresh upload (unknown blob)
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('fresh upload by the first owner', () =>
@@ -170,7 +170,7 @@ describe('fresh upload by the first owner', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Proof-of-possession dedup (requirements.md sec 4.3, steps 3-5 — known blob; sec 5 — quota invisible to dedup)
+// Proof-of-possession dedup (known blob; quota invisible to dedup)
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('proof-of-possession dedup by a second owner', () =>
@@ -184,7 +184,7 @@ describe('proof-of-possession dedup by a second owner', () =>
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
         // Structural assertion for randomized output: 2-4 ranges, each in-bounds. Never assert exact offsets/lengths --
-        // fixed ranges would be harvest-and-replay-able, the exact property the challenge exists to defeat (sec 4.3).
+        // fixed ranges would be harvest-and-replay-able, the exact property the challenge exists to defeat.
         expect(challenge.challengeID.length).toBeGreaterThan(0);
         expect(challenge.nonce.length).toBeGreaterThan(0);
         expect(challenge.ranges.length).toBeGreaterThanOrEqual(2);
@@ -228,7 +228,7 @@ describe('proof-of-possession dedup by a second owner', () =>
             .execute());
         expect(owners.map((row) => row.owner_id).sort()).toEqual([ aliceID, bobID ].sort());
 
-        // Dedup is invisible to quotas: each owner is charged the full logical size (sec 5).
+        // Dedup is invisible to quotas: each owner is charged the full logical size.
         const aliceUsed = (await (await alice.get('/api/me')).json() as MeResponse).quota.used;
         const bobUsed = (await (await bob.get('/api/me')).json() as MeResponse).quota.used;
         expect(aliceUsed).toBe(data.length);

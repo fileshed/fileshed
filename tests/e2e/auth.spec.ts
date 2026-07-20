@@ -2,9 +2,9 @@
 // E2E — Auth, sessions, and the admin gate
 //
 // Real sign-up/sign-in over a real socket with real Set-Cookie/Cookie round-trips, then the admin surface end to end:
-// the /api/admin/users authn/authz ladder (requirements.md sec 7) and the gate that refuses better-auth's own admin
-// endpoints externally even to a valid admin (app.ts). The admin account is planted by first-run bootstrap through the
-// FILESHED_ADMIN_EMAIL/PASSWORD env pair (requirements.md sec 9), so a successful admin session also proves bootstrap.
+// the /api/admin/users authn/authz ladder and the gate that refuses better-auth's own admin endpoints externally even
+// to a valid admin (app.ts). The admin account is planted by first-run bootstrap through the
+// FILESHED_ADMIN_EMAIL/PASSWORD env pair, so a successful admin session also proves bootstrap.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -86,7 +86,7 @@ describe('sign-up / sign-in / session', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// First-run admin bootstrap (requirements.md sec 9)
+// First-run admin bootstrap
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('bootstrapped admin', () =>
@@ -108,7 +108,7 @@ describe('bootstrapped admin', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Admin surface: the authn/authz ladder and the external gate (requirements.md sec 7, app.ts)
+// Admin surface: the authn/authz ladder and the external gate (app.ts)
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('GET /api/admin/users', () =>

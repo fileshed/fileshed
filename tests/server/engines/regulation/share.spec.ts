@@ -85,7 +85,7 @@ function codes(result : RegulationResult) : string[]
 
 describe('judgeGrant', () =>
 {
-    // requirements.md sec 3.4: shares can only be created by the node's owner (v1), granting access to another user.
+    // shares can only be created by the node's owner (v1), granting access to another user.
     it('admits an owner granting a viewer share to another user', () =>
     {
         const result = judgeGrant({
@@ -98,7 +98,7 @@ describe('judgeGrant', () =>
         expect(result.ok).toBe(true);
     });
 
-    // requirements.md sec 3.4: only the owner creates shares in v1 -- editors cannot re-share.
+    // only the owner creates shares in v1 -- editors cannot re-share.
     it('rejects a grant created by someone who is not the owner', () =>
     {
         const result = judgeGrant({
@@ -112,8 +112,7 @@ describe('judgeGrant', () =>
         expect(codes(result)).toContain('share.notOwner');
     });
 
-    // requirements.md sec 3.2b: links carry no ACL of their own; every check resolves against the target, so a link is
-    // not shareable.
+    // links carry no ACL of their own; every check resolves against the target, so a link is not shareable.
     it('rejects a grant on a link node', () =>
     {
         const result = judgeGrant({
@@ -127,8 +126,7 @@ describe('judgeGrant', () =>
         expect(codes(result)).toContain('share.linkNotShareable');
     });
 
-    // requirements.md sec 3.4: a share confers access, not ownership; granting the owner a share on their own node is
-    // meaningless and rejected.
+    // a share confers access, not ownership; granting the owner a share on their own node is meaningless and rejected.
     it('rejects the owner granting a share to themselves', () =>
     {
         const result = judgeGrant({
@@ -147,7 +145,7 @@ describe('judgeGrant', () =>
 
 describe('judgeShareRequestResolution', () =>
 {
-    // requirements.md sec 3.5: requests route to the target's owner, who grants or declines them.
+    // requests route to the target's owner, who grants or declines them.
     it('admits the target owner resolving a pending request', () =>
     {
         const result = judgeShareRequestResolution({
@@ -159,7 +157,7 @@ describe('judgeShareRequestResolution', () =>
         expect(result.ok).toBe(true);
     });
 
-    // requirements.md sec 3.5: resolution authority belongs to the target's owner, never the folder sharer.
+    // resolution authority belongs to the target's owner, never the folder sharer.
     it('rejects resolution by someone other than the target owner', () =>
     {
         const result = judgeShareRequestResolution({
@@ -172,8 +170,7 @@ describe('judgeShareRequestResolution', () =>
         expect(codes(result)).toContain('shareRequest.notOwner');
     });
 
-    // requirements.md sec 3.5: granting/declining resolves a request; an already-resolved request cannot be resolved
-    // again.
+    // granting/declining resolves a request; an already-resolved request cannot be resolved again.
     it('rejects resolving an already-resolved request', () =>
     {
         const result = judgeShareRequestResolution({

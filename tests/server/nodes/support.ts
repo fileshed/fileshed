@@ -92,7 +92,7 @@ export async function userIDByEmail(booted : BootedApp, email : string) : Promis
 }
 
 // Inserts a link row directly, bypassing the manager's regulation gate. The only way to stage a link whose target the
-// placer cannot resolve (a dead link, sec 3.2b): createLink would reject a foreign, unshared target, but such a link is
+// placer cannot resolve (a dead link): createLink would reject a foreign, unshared target, but such a link is
 // exactly what a revoked share leaves behind. The target and owner rows must already exist (FKs).
 export async function seedLinkRow(
     booted : BootedApp,

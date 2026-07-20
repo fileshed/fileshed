@@ -11,7 +11,7 @@ import { judgeQuotaAdmission } from '@server/engines/regulation/quota.ts';
 
 describe('judgeQuotaAdmission', () =>
 {
-    // requirements.md sec 5: a write is admitted while used + incoming stays within the limit.
+    // a write is admitted while used + incoming stays within the limit.
     it('admits a write that stays under the limit', () =>
     {
         const result = judgeQuotaAdmission({
@@ -24,8 +24,7 @@ describe('judgeQuotaAdmission', () =>
         expect(result.ok).toBe(true);
     });
 
-    // requirements.md sec 5: rejection is only when used + size exceeds the limit -- landing exactly on the limit is
-    // admitted.
+    // rejection is only when used + size exceeds the limit -- landing exactly on the limit is admitted.
     it('admits a write that lands exactly on the limit', () =>
     {
         const result = judgeQuotaAdmission({
@@ -38,7 +37,7 @@ describe('judgeQuotaAdmission', () =>
         expect(result.ok).toBe(true);
     });
 
-    // requirements.md sec 5: reject when used + size exceeds the limit -- one byte over is over.
+    // reject when used + size exceeds the limit -- one byte over is over.
     it('rejects a write one byte over the limit', () =>
     {
         const result = judgeQuotaAdmission({
@@ -52,7 +51,7 @@ describe('judgeQuotaAdmission', () =>
         expect(result.ok ? [] : result.violations.map((violation) => violation.code)).toEqual([ 'quota.exceeded' ]);
     });
 
-    // requirements.md sec 5: a null limit is unlimited and admits any write.
+    // a null limit is unlimited and admits any write.
     it('admits any write under an unlimited (null) quota', () =>
     {
         const result = judgeQuotaAdmission({

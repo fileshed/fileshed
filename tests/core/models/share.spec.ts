@@ -24,7 +24,7 @@ describe('shareCodec', () =>
         expect(shareCodec.safeParse(share).success).toBe(true);
     });
 
-    // requirements.md secs 3.1/3.4: a share's role is viewer or editor -- a share never grants ownership.
+    // a share's role is viewer or editor -- a share never grants ownership.
     it('rejects a share granting the owner role', () =>
     {
         const ownerGrant = {
@@ -39,7 +39,7 @@ describe('shareCodec', () =>
         expect(shareCodec.safeParse(ownerGrant).success).toBe(false);
     });
 
-    // requirements.md sec 3.6: codecs reject wrong-shape input rather than stripping it.
+    // codecs reject wrong-shape input rather than stripping it.
     it('rejects a share carrying an unknown field', () =>
     {
         const foreign = {

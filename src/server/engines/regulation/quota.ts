@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Quota Regulation
 //
-// Admission control for a write against the owner's storage quota (requirements.md sec 5). Pure -- the manager gathers
+// Admission control for a write against the owner's storage quota. Pure -- the manager gathers
 // the charged usage and limit, the engine judges the numbers it is handed. Dedup and trashed-vs-live semantics are
 // already baked into `usedBytes` upstream; this layer only compares.
 //----------------------------------------------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ export interface QuotaFacts
     incomingBytes : number;
 }
 
-// sec 5: reject when used + incoming exceeds the limit. Exactly at the limit is admitted; a null limit admits anything.
+// Reject when used + incoming exceeds the limit. Exactly at the limit is admitted; a null limit admits anything.
 export function judgeQuotaAdmission(facts : QuotaFacts) : RegulationResult
 {
     if(facts.limitBytes === null) { return resultOf([]); }

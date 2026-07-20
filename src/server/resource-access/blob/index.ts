@@ -62,7 +62,7 @@ export interface BlobRow
     deletedAt : Date | null;
 }
 
-// Enough of a graveyarded record for GC to delete its bytes and route to the right backend (sec 4.1: records pin their
+// Enough of a graveyarded record for GC to delete its bytes and route to the right backend (records pin their
 // backend).
 export interface GcCandidate
 {
@@ -98,8 +98,8 @@ export class BlobRA
     // Bytes
     //------------------------------------------------------------------------------------------------------------------
 
-    // Stream bytes onto the default backend, which verifies them against the claimed sha256 and size while writing
-    // (sec 4.3). Returns the pin the blob record stores; the key is the sha256, content-addressed.
+    // Stream bytes onto the default backend, which verifies them against the claimed sha256 and size while writing.
+    // Returns the pin the blob record stores; the key is the sha256, content-addressed.
     async put(sha256 : string, stream : Readable, size : number) : Promise<BlobLocation>
     {
         const backendID = await this.#defaultBackend();
@@ -110,7 +110,7 @@ export class BlobRA
         return { backendID, storageKey: sha256 };
     }
 
-    // Read exactly one window for a proof-of-possession challenge (sec 4.3), routed to the record's own backend.
+    // Read exactly one window for a proof-of-possession challenge, routed to the record's own backend.
     async read(location : BlobLocation, offset : number, length : number) : Promise<Buffer>
     {
         return (await this.#facade(location.backendID)).read(location.storageKey, offset, length);
@@ -131,7 +131,7 @@ export class BlobRA
     //------------------------------------------------------------------------------------------------------------------
 
     // The record for a sha256, graveyarded or not -- the claim path reads this to tell an unknown blob (mint a ticket)
-    // from a known one (challenge or resurrect). A graveyarded record is still "known" (sec 4.3).
+    // from a known one (challenge or resurrect). A graveyarded record is still "known".
     async get(sha256 : string) : Promise<BlobRow | undefined>
     {
         const row = await this.#db
@@ -151,7 +151,7 @@ export class BlobRA
         };
     }
 
-    // The records eligible for hard deletion: graveyarded and past the grace cutoff (sec 4.2). deleted_at is written as
+    // The records eligible for hard deletion: graveyarded and past the grace cutoff. deleted_at is written as
     // an ISO string on both dialects, so the comparison is against the cutoff's ISO form; a null deleted_at never
     // satisfies `< cutoff`, so live records are excluded without a separate guard.
     async gcCandidates(cutoff : Date) : Promise<GcCandidate[]>
@@ -173,11 +173,11 @@ export class BlobRA
     // Row writes
     //------------------------------------------------------------------------------------------------------------------
 
-    // Insert the record, or if it already exists, clear its graveyard marker (sec 4.2 resurrection). One race-safe
+    // Insert the record, or if it already exists, clear its graveyard marker (resurrection). One race-safe
     // statement: two writers committing the same new blob concurrently both succeed, and a graveyarded record comes
     // back to life. The conflict path only touches deleted_at -- backend_id/storage_key are never clobbered, since the
     // existing bytes already live wherever the record says they do. Run inside the same transaction as the node insert
-    // so the reference and the resurrection commit together (sec 4.2).
+    // so the reference and the resurrection commit together.
     async insertOrResurrect(blob : BlobRowInsert) : Promise<void>
     {
         await this.#db
@@ -194,7 +194,7 @@ export class BlobRA
             .execute();
     }
 
-    // Clear the graveyard marker on an existing record (sec 4.2 resurrection) without touching anything else. Updates
+    // Clear the graveyard marker on an existing record (resurrection) without touching anything else. Updates
     // nothing when the sha256 is absent -- a record GC already hard-deleted cannot be resurrected, and the caller's
     // node insert then fails the blob_id FK, which is the correct outcome.
     async resurrect(sha256 : string) : Promise<void>
@@ -206,7 +206,7 @@ export class BlobRA
             .execute();
     }
 
-    // Graveyard every listed sha256 whose last file-node reference is gone (sec 4.2: ref count is derived, never a
+    // Graveyard every listed sha256 whose last file-node reference is gone (ref count is derived, never a
     // stored counter). One statement, so a concurrent claim that adds a reference either lands before this -- the
     // NOT EXISTS then sees it and the record is left live -- or after, on an already-graveyarded record it resurrects.
     // The `deleted_at IS NULL` guard keeps a re-sweep from resetting an already-graveyarded record's grace clock.
@@ -230,7 +230,7 @@ export class BlobRA
             .execute();
     }
 
-    // Hard-delete one record, but only if it is still graveyarded past the cutoff at delete time (sec 4.2). The
+    // Hard-delete one record, but only if it is still graveyarded past the cutoff at delete time. The
     // re-checked predicate is the GC half of the concurrency rule: a claim that resurrected the record (deleted_at
     // cleared) between candidacy and here no longer matches, so GC removes nothing and the resurrected blob survives.
     // Returns whether a row was actually removed, so the caller only deletes the bytes when the record is truly gone.
@@ -250,7 +250,7 @@ export class BlobRA
     //
     // Facades are built lazily from their storage_backend row and cached per backend id. An fs row becomes an
     // FsBackend; any other kind is a typed UnsupportedBackendError, not a placeholder -- the schema admits db/s3/azure,
-    // but v1 ships fs only (sec 10, remaining backends are later work).
+    // but v1 ships fs only (remaining backends are later work).
     //------------------------------------------------------------------------------------------------------------------
 
     async #facade(backendID : string) : Promise<BlobBackend>

@@ -18,8 +18,7 @@ function codes(result : RegulationResult) : string[]
 
 describe('regulation facade', () =>
 {
-    // requirements.md sec 3.6: the per-domain engines compose into one regulation layer -- node placement judgements
-    // route through the facade.
+    // the per-domain engines compose into one regulation layer -- node placement judgements route through the facade.
     it('routes node placement judgements through regulation.node', () =>
     {
         const result = regulation.node.move({ nodeID: 'a', newParentID: 'a', parentAncestorIDs: [] });
@@ -27,7 +26,7 @@ describe('regulation facade', () =>
         expect(codes(result)).toContain('move.intoSelf');
     });
 
-    // requirements.md sec 3.6: quota admission is part of the same regulation layer.
+    // quota admission is part of the same regulation layer.
     it('routes quota admission through regulation.quota', () =>
     {
         const result = regulation.quota.admit({
@@ -45,8 +44,7 @@ describe('regulation facade', () =>
 
 describe('regulation.combine', () =>
 {
-    // requirements.md sec 3.6: a manager gathers facts for one operation and needs a single verdict; combining
-    // all-passing judgements passes.
+    // a manager gathers facts for one operation and needs a single verdict; combining all-passing judgements passes.
     it('passes when every judgement passes', () =>
     {
         const passing = regulation.quota.admit({

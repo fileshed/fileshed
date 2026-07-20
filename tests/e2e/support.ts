@@ -35,8 +35,8 @@ import { SMALL_FILE_THRESHOLD_BYTES } from '@fileshed/core';
 // Database row schema (types only -- the inspector reads the same tables the server writes)
 import type { Database } from '@server/resource-access/database/database.ts';
 
-// The proof-of-possession answer, computed the way a possessing client would. Single source of truth for the HMAC
-// (requirements.md sec 4.3) -- shared with the in-process blob-flow specs rather than reimplemented here.
+// The proof-of-possession answer, computed the way a possessing client would. Single source of truth for the HMAC,
+// shared with the in-process blob-flow specs rather than reimplemented here.
 export { computeAnswer } from '../server/blobs/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -377,13 +377,13 @@ function deterministicBytes(size : number, seed : string) : Buffer
     return buffer;
 }
 
-// A small file (well under the sec 4.3 threshold): a known blob at this size is re-uploaded, never challenged.
+// A small file (well under the threshold): a known blob at this size is re-uploaded, never challenged.
 export function smallFixture(seed = 'fileshed-e2e-small') : Buffer
 {
     return deterministicBytes(64 * 1024, seed);
 }
 
-// A large file (over the sec 4.3 threshold): a known blob at this size triggers a proof-of-possession challenge.
+// A large file (over the threshold): a known blob at this size triggers a proof-of-possession challenge.
 export function largeFixture(seed = 'fileshed-e2e-large') : Buffer
 {
     return deterministicBytes(SMALL_FILE_THRESHOLD_BYTES + 4096, seed);
@@ -451,7 +451,7 @@ export async function readBlobFile(storageRoot : string, sha256 : string) : Prom
 }
 
 // The names left in the fs backend's staging directory. Empty after any completed or rejected upload -- a lingering
-// staging file is orphaned bytes (requirements.md sec 4.3).
+// staging file is orphaned bytes.
 export async function stagedFiles(storageRoot : string) : Promise<string[]>
 {
     return readdir(join(storageRoot, '.staging')).catch(() => []);

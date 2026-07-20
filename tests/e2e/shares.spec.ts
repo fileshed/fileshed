@@ -1,14 +1,13 @@
 //----------------------------------------------------------------------------------------------------------------------
 // E2E — Shares, permission inheritance, contributions, requests, and leave
 //
-// Two (then three) users over real sockets exercise the sharing lifecycle of requirements.md secs 3.2a/3.3/3.4/3.5:
-// an owner grants viewer on a folder -> the grantee reads its contents with the inherited role on every node but cannot
-// create inside (parent.crossOwner -> 403); upgraded to editor, the grantee uploads INTO the shared folder and that
-// contribution -- owned by the grantee, parented in the owner's subtree (sec 3.3) -- lists and reads as 'owner' for the
-// folder owner while a stranger cannot resolve it at all, and is charged to the grantee's quota, not the owner's;
-// Shared with me lists the grant; a third user's access request is granted by the owner and unlocks their read;
-// revoking the contributor's grant costs them the folder but never their own contribution (sec 3.3); and leaving a
-// share drops access (sec 3.2a).
+// Two (then three) users over real sockets exercise the sharing lifecycle: an owner grants viewer on a folder -> the
+// grantee reads its contents with the inherited role on every node but cannot create inside (parent.crossOwner -> 403);
+// upgraded to editor, the grantee uploads INTO the shared folder and that contribution -- owned by the grantee,
+// parented in the owner's subtree -- lists and reads as 'owner' for the folder owner while a stranger cannot resolve it
+// at all, and is charged to the grantee's quota, not the owner's; Shared with me lists the grant; a third user's access
+// request is granted by the owner and unlocks their read; revoking the contributor's grant costs them the folder but
+// never their own contribution; and leaving a share drops access.
 //
 // The scenario is a sequence of state transitions on one server, so beforeAll runs the whole script and records what
 // each step observed. Anything whose answer CHANGES as the script advances (the viewer-only reads, the stranger's
@@ -144,7 +143,7 @@ beforeAll(async () =>
         parentID: folderID,
     })).status;
 
-    // Editor: the grantee may now contribute into the owner's folder (sec 3.3).
+    // Editor: the grantee may now contribute into the owner's folder.
     const editorGrantRes = await grantShare(folderID, granteeID, 'editor');
     editorGrantStatus = editorGrantRes.status;
     editorGrant = await editorGrantRes.json() as ShareResponse;
@@ -176,7 +175,7 @@ afterAll(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Viewer: inherited read, but no write (requirements.md sec 3.4)
+// Viewer: inherited read, but no write
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('viewer grant', () =>
@@ -195,7 +194,7 @@ describe('viewer grant', () =>
         const file = viewerListing.nodes.find((node) => node.name === 'brief.bin');
 
         expect(file?.type).toBe('file');
-        // The folder's viewer grant is inherited by every child (sec 3.4).
+        // The folder's viewer grant is inherited by every child.
         expect(file?.role).toBe('viewer');
     });
 
@@ -206,7 +205,7 @@ describe('viewer grant', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Editor: contribution into a shared folder (requirements.md sec 3.3)
+// Editor: contribution into a shared folder
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('editor contribution', () =>
@@ -226,7 +225,7 @@ describe('editor contribution', () =>
         expect(contribution.parentID).toBe(folderID);
     });
 
-    it('places the contribution as a cross-owner node in the owner\'s subtree (sec 3.3)', async () =>
+    it('places the contribution as a cross-owner node in the owner\'s subtree', async () =>
     {
         const row = await withDb(server, (db) => db
             .selectFrom('node')
@@ -240,14 +239,14 @@ describe('editor contribution', () =>
             .executeTakeFirstOrThrow());
 
         // The contribution is owned by the grantee but parented in the owner's folder -- the one sanctioned cross-owner
-        // parent edge (sec 3.3), which no HTTP response states outright.
+        // parent edge, which no HTTP response states outright.
         expect(row.owner_id).toBe(granteeID);
         expect(row.parent_id).toBe(folderID);
         expect(folder.owner_id).toBe(ownerID);
         expect(row.owner_id).not.toBe(folder.owner_id);
     });
 
-    it('shows the contribution to the folder owner in the folder listing (sec 3.3)', async () =>
+    it('shows the contribution to the folder owner in the folder listing', async () =>
     {
         const res = await owner.get(`/api/nodes/${ folderID }/children`);
         const listing = await res.json() as NodeListResponse;
@@ -270,11 +269,11 @@ describe('editor contribution', () =>
         expect(res.status).toBe(200);
         expect(node.role).toBe('owner');
 
-        // No ownership anywhere in its chain and no grant: the node reads as absent (sec 3.4).
+        // No ownership anywhere in its chain and no grant: the node reads as absent.
         expect(strangerContributionStatus).toBe(404);
     });
 
-    it('charges the contribution to the grantee\'s quota, not the owner\'s (sec 3.3/5)', async () =>
+    it('charges the contribution to the grantee\'s quota, not the owner\'s', async () =>
     {
         // The owner is charged only for their own file; the grantee is charged for the contribution they own.
         expect(await quotaUsed(owner)).toBe(ownerFile.length);
@@ -292,7 +291,7 @@ describe('editor contribution', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Shared with me (requirements.md sec 3.2a)
+// Shared with me
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('shared with me', () =>
@@ -304,13 +303,13 @@ describe('shared with me', () =>
 
         expect(entry).toBeDefined();
         expect(entry?.target.ownerID).toBe(ownerID);
-        // Placement is independent of the grant: the grantee has not created a link to the shared folder (sec 3.2a).
+        // Placement is independent of the grant: the grantee has not created a link to the shared folder.
         expect(entry?.placed).toBe(false);
     });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Access requests (requirements.md sec 3.5)
+// Access requests
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('access request lifecycle', () =>
@@ -351,7 +350,7 @@ describe('access request lifecycle', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Revoking a contributor (requirements.md sec 3.3)
+// Revoking a contributor
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('revoking a contributor', () =>
@@ -364,7 +363,7 @@ describe('revoking a contributor', () =>
         // They lose access to the folder like anyone else...
         expect((await grantee.get(`/api/nodes/${ folderID }`)).status).toBe(404);
 
-        // ...but the item they contributed remains theirs, still in the folder, still charged to them (sec 3.3).
+        // ...but the item they contributed remains theirs, still in the folder, still charged to them.
         const res = await grantee.get(`/api/nodes/${ contributionID }`);
         const node = await res.json() as NodeResponse;
 
@@ -376,7 +375,7 @@ describe('revoking a contributor', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Leave (requirements.md sec 3.2a)
+// Leave
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('leave', () =>

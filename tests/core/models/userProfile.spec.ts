@@ -10,7 +10,7 @@ import { userProfileCodec } from '@fileshed/core';
 
 describe('userProfileCodec', () =>
 {
-    // requirements.md secs 3.1/5: quotaLimit null means unlimited, and name is optional.
+    // quotaLimit null means unlimited, and name is optional.
     it('parses a profile with a null quota and no name', () =>
     {
         const profile = {
@@ -38,7 +38,7 @@ describe('userProfileCodec', () =>
         expect(userProfileCodec.safeParse(profile).success).toBe(true);
     });
 
-    // requirements.md sec 3.1: the account role is admin or user.
+    // the account role is admin or user.
     it('rejects a profile with an unknown role', () =>
     {
         const profile = {

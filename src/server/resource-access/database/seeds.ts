@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Database Seeds
 //
-// One default backend per deployment (requirements.md sec 4.1). The upload/claim flow needs a storage_backend row for
+// One default backend per deployment. The upload/claim flow needs a storage_backend row for
 // BlobRA to resolve and pin blob records to; this brings that row into being at boot from config, and is idempotent --
 // an existing default fs backend is reused as-is, so restarts and the STORAGE_ROOT already recorded in the row win over
 // a changed env value. v1 seeds the fs backend only; other kinds (db/s3/azure) are admin tooling.

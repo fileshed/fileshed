@@ -2,7 +2,7 @@
 // Shared Error Vocabulary
 //
 // The error classes are plain and portable; what matters on the wire is their stable `code` strings and the violations
-// a RegulationError carries (requirements.md sec 3.6/4.3). These assert that contract, not the class plumbing.
+// a RegulationError carries. These assert that contract, not the class plumbing.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';

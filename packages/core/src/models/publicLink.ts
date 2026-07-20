@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Public Link Domain Model
 //
-// Tokened anonymous access to a node (requirements.md secs 3.1/6). revokedAt is the kill switch: null while the link is
-// live, set once revoked. Links are revoked, not deleted, so a revoked token still resolves -- to a dead link.
+// Tokened anonymous access to a node. revokedAt is the kill switch: null while the link is live, set once revoked.
+// Links are revoked, not deleted, so a revoked token still resolves -- to a dead link.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const publicLinkModes = [ 'view', 'download' ] as const;

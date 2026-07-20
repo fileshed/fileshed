@@ -2,9 +2,9 @@
 // Filesystem Blob Backend
 //
 // Exercises the fs backend against a real temp filesystem (per-test mkdtemp, zero mocks) because the whole contract is
-// about bytes on disk: hash-sharded layout, integrity-checked commits, ranged reads. Expectations come from
-// requirements.md secs 4.1/4.3 -- content addressing means the address IS the sha256 of the bytes, so every expected
-// value is hand-derived from the input, never read back from the code.
+// about bytes on disk: hash-sharded layout, integrity-checked commits, ranged reads. Content addressing means the
+// address IS the sha256 of the bytes, so every expected value is hand-derived from the input, never read back from
+// the code.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomBytes } from 'node:crypto';
@@ -90,7 +90,7 @@ afterEach(async () =>
 
 describe('FsBackend', () =>
 {
-    it('stores bytes under the hash-sharded path and streams them back byte-for-byte (sec 4.1)', async () =>
+    it('stores bytes under the hash-sharded path and streams them back byte-for-byte', async () =>
     {
         const bytes = Buffer.from('content-addressed storage keeps one copy per hash');
         const sha256 = sha256Of(bytes);
@@ -101,7 +101,7 @@ describe('FsBackend', () =>
         expect(await collect(await store.getStream(sha256))).toEqual(bytes);
     });
 
-    it('rejects a put whose bytes do not hash to the claimed sha256 and stores nothing (sec 4.3)', async () =>
+    it('rejects a put whose bytes do not hash to the claimed sha256 and stores nothing', async () =>
     {
         const bytes = Buffer.from('the real payload');
         const claimed = sha256Of(Buffer.from('a different payload the client is lying about'));
@@ -116,7 +116,7 @@ describe('FsBackend', () =>
         expect(await readdir(join(root, '.staging'))).toEqual([]);
     });
 
-    it('rejects a put whose byte count differs from the claimed size and stores nothing (sec 4.3)', async () =>
+    it('rejects a put whose byte count differs from the claimed size and stores nothing', async () =>
     {
         const bytes = Buffer.from('twenty-ish bytes here');
         const sha256 = sha256Of(bytes);
@@ -127,7 +127,7 @@ describe('FsBackend', () =>
         expect(await readdir(join(root, '.staging'))).toEqual([]);
     });
 
-    it('returns exactly the requested window from both getStream(range) and read (sec 4.1 ranged reads)', async () =>
+    it('returns exactly the requested window from both getStream(range) and read', async () =>
     {
         const bytes = randomBytes(1000);
         const sha256 = sha256Of(bytes);
@@ -144,7 +144,7 @@ describe('FsBackend', () =>
         expect(window).toEqual(expected);
     });
 
-    it('reports existence before and after put, and delete removes the blob (secs 4.1/4.2)', async () =>
+    it('reports existence before and after put, and delete removes the blob', async () =>
     {
         const bytes = Buffer.from('deletable');
         const sha256 = sha256Of(bytes);
@@ -158,14 +158,14 @@ describe('FsBackend', () =>
         expect(await store.exists(sha256)).toBe(false);
     });
 
-    it('treats delete of an absent blob as a no-op (sec 4.2 GC may race an already-gone blob)', async () =>
+    it('treats delete of an absent blob as a no-op (GC may race an already-gone blob)', async () =>
     {
         const sha256 = sha256Of(Buffer.from('never stored'));
 
         await expect(store.delete(sha256)).resolves.toBeUndefined();
     });
 
-    it('throws BlobNotFoundError when getStream or read target a blob that is not stored (sec 4.1)', async () =>
+    it('throws BlobNotFoundError when getStream or read target a blob that is not stored', async () =>
     {
         const sha256 = sha256Of(Buffer.from('absent'));
 
@@ -187,7 +187,7 @@ describe('FsBackend', () =>
         expect(roundTripped.equals(bytes)).toBe(true);
     });
 
-    it('rejects a malformed sha256 address instead of deriving a filesystem path (sec 4.3)', async () =>
+    it('rejects a malformed sha256 address instead of deriving a filesystem path', async () =>
     {
         // A traversal-shaped address must never reach the filesystem.
         await expect(store.exists('../../etc/passwd')).rejects.toBeInstanceOf(InvalidSha256Error);

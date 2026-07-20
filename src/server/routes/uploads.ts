@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Upload Routes
 //
-// PUT /api/uploads/:ticket (requirements.md secs 4.3/7). The body is the raw byte stream, so the placement metadata the
-// committed node needs (name, parentID, mimeType) rides the query string -- the one wire slot the DTO left open. The
-// ticket authorizes the write; the manager verifies it belongs to the caller, streams the bytes through the store, and
-// creates the node. Thin over the manager: onError maps the typed errors (managers/errors.ts).
+// PUT /api/uploads/:ticket. The body is the raw byte stream, so the placement metadata the committed node needs (name,
+// parentID, mimeType) rides the query string -- the one wire slot the DTO left open. The ticket authorizes the write;
+// the manager verifies it belongs to the caller, streams the bytes through the store, and creates the node. Thin over
+// the manager: onError maps the typed errors (managers/errors.ts).
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Context, Hono } from 'hono';

@@ -2,10 +2,10 @@
 // Blob Claim / PoP / Upload Flow — end to end
 //
 // Drives the real routes -> BlobManager -> real fs store + in-memory database with app.request (zero mocks). Every
-// expectation is derived from requirements.md sec 4.3 (the claim/PoP/upload flow and its security rules) and sec 5
-// (quota admission), not from what the code happens to return. Proof answers are computed locally from the fixture
-// bytes the way a possessing client would, and randomised challenge output is asserted structurally (count, bounds,
-// presence) -- never against exact values.
+// expectation is derived from the claim/PoP/upload flow with its security rules and from quota admission, not from
+// what the code happens to return. Proof answers are computed locally from the fixture bytes the way a possessing
+// client would, and randomised challenge output is asserted structurally (count, bounds, presence) -- never against
+// exact values.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomBytes } from 'node:crypto';
@@ -45,7 +45,7 @@ function sha256Of(data : Buffer) : string
         .digest('hex');
 }
 
-// Just over 1 MiB -- the sec 4.3 threshold above which a known blob is challenged rather than re-uploaded.
+// Just over 1 MiB -- the threshold above which a known blob is challenged rather than re-uploaded.
 function largeFixture() : Buffer
 {
     return randomBytes((1024 * 1024) + 777);
@@ -116,7 +116,7 @@ describe('POST /api/blobs/claim + PUT /api/uploads/:ticket', () =>
         expect(await fileNodesForBlob(booted.handle, sha256)).toHaveLength(0);
         expect(await bytesExist(booted, sha256)).toBe(false);
 
-        // The store cleans its staging file on a rejected put -- a lying client leaves no orphan bytes (sec 4.3).
+        // The store cleans its staging file on a rejected put -- a lying client leaves no orphan bytes.
         const staged = await readdir(join(booted.storageRoot, '.staging')).catch(() => []);
         expect(staged).toHaveLength(0);
     });
@@ -339,7 +339,7 @@ describe('proof-of-possession dedup', () =>
                 .json() as ClaimResponse;
             if(challenge.upload !== false) { throw new Error('expected a challenge'); }
 
-            // sec 4.3: challenges live 60s. Jump just past that; the session cookie (minted before, ~5 min) is still
+            // Challenges live 60s. Jump just past that; the session cookie (minted before, ~5 min) is still
             // valid, so only the challenge has expired.
             vi.setSystemTime(new Date(Date.now() + 61_000));
             const answer = computeAnswer(challenge.nonce, challenge.ranges, data);
@@ -371,7 +371,7 @@ describe('proof-of-possession dedup', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Quota admission at claim time (sec 5).
+// Quota admission at claim time.
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('quota admission', () =>
@@ -390,7 +390,7 @@ describe('quota admission', () =>
 
     // A content-addressed store admits no size disagreement: same sha means same bytes means same size, so a claim
     // for a known blob at any other size is a lying client -- and admitting the lie would let a small claimed size
-    // pass quota admission for a large real blob (sec 4.3 / sec 5).
+    // pass quota admission for a large real blob.
     it('rejects a known-blob claim whose size disagrees with the stored blob', async () =>
     {
         const owner = await makeUser(booted, 'owner-of-known@example.com', null);
@@ -408,7 +408,7 @@ describe('quota admission', () =>
     });
 
     // The claim-time gate admits each claim in isolation, so a batch of claims can jointly overshoot -- the
-    // authoritative re-check inside the commit transaction is what actually holds the sec 5 line.
+    // authoritative re-check inside the commit transaction is what actually holds the quota line.
     it('rejects the second commit of a batch whose claims jointly overshoot the quota', async () =>
     {
         const user = await makeUser(booted, 'batcher@example.com', 4096);
@@ -441,7 +441,7 @@ describe('quota admission', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Graveyard resurrection through the claim path (sec 4.2).
+// Graveyard resurrection through the claim path.
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('graveyard resurrection', () =>
@@ -477,7 +477,7 @@ describe('graveyard resurrection', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Failed-proof rate limiting (sec 4.3).
+// Failed-proof rate limiting.
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('failed-proof rate limiting', () =>

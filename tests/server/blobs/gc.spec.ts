@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob GC — runGcOnce
 //
-// Drives the GC sweep against a real BlobRA (fs facade under a per-run temp dir) and a real in-memory database,
-// zero mocks. Expectations come from requirements.md sec 4.2: a blob graveyarded past the grace window loses both row
-// and bytes; one still inside the window, and one still live, are untouched. Byte deletion is checked through the RA.
+// Drives the GC sweep against a real BlobRA (fs facade under a per-run temp dir) and a real in-memory database, zero
+// mocks. Expectations: a blob graveyarded past the grace window loses both row and bytes; one still inside the window,
+// and one still live, are untouched. Byte deletion is checked through the RA.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- seed helpers build snake_case DB rows (house convention for Kysely inserts) */

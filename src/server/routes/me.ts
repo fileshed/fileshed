@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Me Route
 //
-// GET /api/me (requirements.md sec 7): the caller's own profile plus live quota usage. Behind the session gate like
-// every authenticated route (401 when there is no session); the node manager assembles the profile and computes usage
-// fresh from owned file nodes (sec 5).
+// GET /api/me: the caller's own profile plus live quota usage. Behind the session gate like every authenticated route
+// (401 when there is no session); the node manager assembles the profile and computes usage fresh from owned file
+// nodes.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { Hono } from 'hono';

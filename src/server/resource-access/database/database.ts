@@ -3,17 +3,17 @@
 //
 // Builds the Kysely instance for the deployment's chosen dialect and declares the row shapes of every table. These row
 // types are a resource-access implementation detail -- the on-disk representation, snake_case and all -- and never
-// enter @fileshed/core, which owns the canonical domain types (requirements.md sec 2). The row <-> domain transforms
-// live alongside this file in the resource-access layer.
+// enter @fileshed/core, which owns the canonical domain types. The row <-> domain transforms live alongside this file
+// in the resource-access layer.
 //
-// Dual-dialect notes (Postgres is primary; SQLite is the convenience deployment, requirements.md sec 2):
+// Dual-dialect notes (Postgres is primary; SQLite is the convenience deployment):
 //   - Timestamps: `timestamptz` on Postgres, ISO-8601 `text` on SQLite. pg hands back a Date, better-sqlite3 a string,
 //     so a stored timestamp reads as `Date | string`; the row->domain transform normalizes with `new Date(...)`. Writes
 //     are ISO strings, which both dialects accept.
 //   - Booleans: `boolean` on Postgres, `integer` 0/1 on SQLite (better-sqlite3 cannot bind a JS boolean). Selects read
 //     back as `boolean | number`; binds must be dialect-appropriate (true/false on Postgres, 1/0 on SQLite).
 //   - bigint columns (size, quota_limit): `bigint` on Postgres, `integer` on SQLite. The Postgres driver is configured
-//     below to parse int8 as a JS number, so both dialects yield `number` (requirements.md: quota is a JS number; a
+//     below to parse int8 as a JS number, so both dialects yield `number` (quota is a JS number; a
 //     file exceeding 2^53 bytes is not a v1 concern).
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -59,15 +59,15 @@ export interface UserTable
     name : string;
     email : string;
 
-    // role gates admin tooling; quota_limit is the per-user byte cap (null = unlimited, requirements.md secs 3.1/5).
-    // The role enum is enforced at the codec and regulation layers (requirements.md sec 3.6 layers 1-2). role is a
-    // nullable column upstream, but the admin plugin's create hook always populates it, so the app treats it as set.
+    // role gates admin tooling; quota_limit is the per-user byte cap (null = unlimited). The role enum is enforced at
+    // the codec and regulation layers. role is a nullable column upstream, but the admin plugin's create hook always
+    // populates it, so the app treats it as set.
     role : 'admin' | 'user';
     quota_limit : number | null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// App tables (requirements.md sec 3.1)
+// App tables
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface StorageBackendTable
@@ -183,7 +183,7 @@ export interface DatabaseHandle
 //----------------------------------------------------------------------------------------------------------------------
 
 // node-postgres returns int8 (bigint) as a string to avoid precision loss. FileShed treats sizes and quotas as JS
-// numbers (requirements.md sec 5), so parse int8 to a number and match what better-sqlite3 already returns for INTEGER
+// numbers, so parse int8 to a number and match what better-sqlite3 already returns for INTEGER
 // columns. Scoped to this pool's `types` option rather than pg's global parser table, and left narrow -- timestamptz
 // and boolean keep their native pg parsing so the shared BetterAuth connection reads Dates and booleans as it expects.
 const INT8_OID = 20;

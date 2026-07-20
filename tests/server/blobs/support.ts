@@ -197,7 +197,7 @@ export function putUpload(
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Client-side proof, computed from the fixture bytes the way a possessing client would (sec 4.3).
+// Client-side proof, computed from the fixture bytes the way a possessing client would.
 //----------------------------------------------------------------------------------------------------------------------
 
 export function computeAnswer(nonce : string, ranges : [ number, number ][], data : Buffer) : string

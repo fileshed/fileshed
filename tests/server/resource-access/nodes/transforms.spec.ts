@@ -4,8 +4,8 @@
 // rowFromNode/nodeFromRow are the boundary between the node table and the Node union (@fileshed/core). The round-trip
 // tests drive real columns -- insert the row rowFromNode produces, read it back, and require nodeFromRow to reconstruct
 // the exact domain node -- so the column mapping and the dialect timestamp normalization both get exercised. The
-// corruption tests hand nodeFromRow rows the CHECK constraint would never allow (requirements.md sec 3.6) and require a
-// typed throw rather than a silent coercion.
+// corruption tests hand nodeFromRow rows the CHECK constraint would never allow and require a typed throw rather than a
+// silent coercion.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- corruption fixtures build snake_case DB rows directly */

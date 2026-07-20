@@ -6,10 +6,10 @@
 // nodeFromRow reads, rowFromNode writes.
 //
 // The row shape carries every variant's columns as nullable, so a single row could -- structurally -- claim to be a
-// file with a target, or a link with a size. The per-type CHECK of migration 001 (requirements.md sec 3.6 layer 3)
-// makes such a row unrepresentable, so nodeFromRow treats a violation as store corruption and throws a typed error
-// rather than silently coercing it away. rowFromNode goes the other way: it nulls out the columns a variant forbids and
-// serializes timestamps to ISO-8601 strings, which both dialects accept on write (see database.ts).
+// file with a target, or a link with a size. The per-type CHECK of migration 001 makes such a row unrepresentable, so
+// nodeFromRow treats a violation as store corruption and throws a typed error rather than silently coercing it away.
+// rowFromNode goes the other way: it nulls out the columns a variant forbids and serializes timestamps to ISO-8601
+// strings, which both dialects accept on write (see database.ts).
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- rowFromNode builds snake_case DB rows (house convention for Kysely inserts) */

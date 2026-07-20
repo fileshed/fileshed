@@ -1,14 +1,14 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Initial Schema Migration — app tables
 //
-// The FileShed app tables of requirements.md sec 3.1, created in FK-dependency order and dropped in reverse. The
+// The FileShed app tables, created in FK-dependency order and dropped in reverse. The
 // BetterAuth identity tables (user/session/account/verification) are NOT touched here -- BetterAuth's own migrator
 // owns them and runs first at boot, including the role (admin plugin) and quota_limit (additionalField) columns on
 // user. The app tables carry real FKs to user.id.
 //
-// This migration is where the statically-expressible invariants of requirements.md sec 3.6 layer 3 live: the per-type
-// node CHECK constraints, the real target_node_id and deletion_offer.sha256 ON DELETE CASCADE edges, and the paired
-// share_request status/resolved_at constraint. Everything here is plain boolean SQL, valid on both dialects.
+// This migration is where the statically-expressible invariants live: the per-type node CHECK constraints, the real
+// target_node_id and deletion_offer.sha256 ON DELETE CASCADE edges, and the paired share_request status/resolved_at
+// constraint. Everything here is plain boolean SQL, valid on both dialects.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Kysely, type RawBuilder, sql } from 'kysely';
@@ -90,7 +90,7 @@ export async function up(db : Kysely<unknown>, kind : DatabaseKind) : Promise<vo
         .execute();
 
     // A blob pins its backend (records carry their storage location); RESTRICT so a backend still holding content
-    // cannot be dropped out from under it. deleted_at is the GC graveyard marker (requirements.md sec 4.2).
+    // cannot be dropped out from under it. deleted_at is the GC graveyard marker.
     await db.schema
         .createTable('blob')
         .addColumn('sha256', 'text', (col) => col.primaryKey())
@@ -105,8 +105,8 @@ export async function up(db : Kysely<unknown>, kind : DatabaseKind) : Promise<vo
 
     // node is the heart of the schema. owner_id and parent_id cascade so deleting a user or a folder takes its subtree
     // with it; blob_id RESTRICTs so a referenced blob cannot vanish; target_node_id CASCADEs so hard-deleting a target
-    // removes every link to it, transactionally, across all trees (requirements.md sec 3.2b). The per-type CHECK is the
-    // point of this migration -- see node_variant_fields_check below (requirements.md sec 3.6).
+    // removes every link to it, transactionally, across all trees. The per-type CHECK is the point of this migration --
+    // see node_variant_fields_check below.
     await db.schema
         .createTable('node')
         .addColumn('id', 'text', (col) => col.primaryKey())
@@ -149,8 +149,8 @@ export async function up(db : Kysely<unknown>, kind : DatabaseKind) : Promise<vo
         `)
         .execute();
 
-    // A grant is never for the owner -- owner authority is ownership, not a share row (requirements.md sec 3.4) -- so
-    // role is viewer|editor only. One grant per (node, grantee).
+    // A grant is never for the owner -- owner authority is ownership, not a share row -- so role is viewer|editor only.
+    // One grant per (node, grantee).
     await db.schema
         .createTable('share')
         .addColumn('id', 'text', (col) => col.primaryKey())
@@ -169,7 +169,7 @@ export async function up(db : Kysely<unknown>, kind : DatabaseKind) : Promise<vo
         .execute();
 
     // resolved_at is set exactly when status leaves 'pending' -- the paired CHECK makes "pending with a resolution" and
-    // "resolved without one" unrepresentable (requirements.md sec 3.5).
+    // "resolved without one" unrepresentable.
     await db.schema
         .createTable('share_request')
         .addColumn('id', 'text', (col) => col.primaryKey())
@@ -208,7 +208,7 @@ export async function up(db : Kysely<unknown>, kind : DatabaseKind) : Promise<vo
         .execute();
 
     // The offer's bytes ride the blob's GC grace window, so it CASCADEs off the blob: when GC hard-deletes the blob,
-    // pending offers vanish with it (requirements.md secs 3.1/4.4). name/mime_type/size snapshot the deleted node.
+    // pending offers vanish with it. name/mime_type/size snapshot the deleted node.
     await db.schema
         .createTable('deletion_offer')
         .addColumn('id', 'text', (col) => col.primaryKey())

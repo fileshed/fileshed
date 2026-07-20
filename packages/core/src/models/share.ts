@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Domain Model
 //
-// A permission grant on a node. Its role is a ShareRole -- never 'owner' (requirements.md secs 3.1/3.4).
+// A permission grant on a node. Its role is a ShareRole -- never 'owner'.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

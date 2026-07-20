@@ -10,7 +10,7 @@ import { storageBackendCodec } from '@fileshed/core';
 
 describe('storageBackendCodec', () =>
 {
-    // requirements.md secs 3.1/4.1: config is backend-specific JSON, opaque at this boundary -- any object passes.
+    // config is backend-specific JSON, opaque at this boundary -- any object passes.
     it('parses a backend with an arbitrary config object', () =>
     {
         const backend = {
@@ -23,7 +23,7 @@ describe('storageBackendCodec', () =>
         expect(storageBackendCodec.safeParse(backend).success).toBe(true);
     });
 
-    // requirements.md sec 3.1: kind is one of fs|db|s3|azure.
+    // kind is one of fs|db|s3|azure.
     it('rejects a backend of an unknown kind', () =>
     {
         const backend = {

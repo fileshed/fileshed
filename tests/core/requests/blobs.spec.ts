@@ -10,7 +10,7 @@ import { claimRequestCodec, claimResponseCodec } from '@fileshed/core';
 
 describe('claimResponseCodec', () =>
 {
-    // requirements.md sec 4.3: an unknown blob answers with an upload ticket; a known one answers with a challenge.
+    // an unknown blob answers with an upload ticket; a known one answers with a challenge.
     // The two shapes must be distinguishable by the `upload` literal alone.
     it('parses the upload-ticket variant', () =>
     {
@@ -49,7 +49,7 @@ describe('claimResponseCodec', () =>
         expect(result.success).toBe(false);
     });
 
-    // sec 4.3: 2-4 random ranges per challenge -- fewer defeats the point of a multi-range proof, more is unbounded
+    // 2-4 random ranges per challenge -- fewer defeats the point of a multi-range proof, more is unbounded
     // work for no security benefit.
     it('rejects a challenge with fewer than 2 ranges or more than 4', () =>
     {
@@ -73,7 +73,7 @@ describe('claimResponseCodec', () =>
 
 describe('claimRequestCodec', () =>
 {
-    // sec 4.3: sha256 identifies the blob; anything other than 64 lowercase hex characters isn't a sha256.
+    // sha256 identifies the blob; anything other than 64 lowercase hex characters isn't a sha256.
     it('rejects a sha256 that is not 64 lowercase hex characters', () =>
     {
         const tooShort = claimRequestCodec.safeParse({ sha256: 'abc123', size: 10 });

@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // E2E — Direct links and authed downloads
 //
-// The direct-link surface of requirements.md secs 6/7 over real sockets. An owner mints two public links on one file --
-// an inline hotlink and an attachment download -- and the database holds two public_link rows with distinct, >=128-bit
-// tokens. Anonymous fetches of /d/:token (no cookies, the token is the whole capability) serve 200 with the right
+// The direct-link surface over real sockets. An owner mints two public links on one file -- an inline hotlink and an
+// attachment download -- and the database holds two public_link rows with distinct, >=128-bit tokens. Anonymous fetches
+// of /d/:token (no cookies, the token is the whole capability) serve 200 with the right
 // Content-Type/Content-Disposition and bytes that hash back to the fixture; a Range yields 206 with exactly those bytes
 // and a Content-Range; a matching If-None-Match yields 304. Revoking a link 404s its token permanently while the other
 // still serves; trashing the file kills the live link, and restoring heals it (a revoked link stays dead -- revocation
@@ -113,7 +113,7 @@ afterAll(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Link creation (requirements.md sec 6)
+// Link creation
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('link creation', () =>
@@ -142,14 +142,14 @@ describe('link creation', () =>
         expect(new Set(tokens).size).toBe(2);
         for(const token of tokens)
         {
-            // base64url of >=16 raw bytes carries >=128 bits of entropy (sec 6).
+            // base64url of >=16 raw bytes carries >=128 bits of entropy.
             expect(Buffer.from(token, 'base64url').length).toBeGreaterThanOrEqual(16);
         }
     });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Anonymous byte serving (requirements.md sec 6)
+// Anonymous byte serving
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('anonymous /d/:token', () =>
@@ -203,7 +203,7 @@ describe('anonymous /d/:token', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Revocation and trash healing (requirements.md secs 6/4.4)
+// Revocation and trash healing
 //----------------------------------------------------------------------------------------------------------------------
 
 // One test, because these are the steps of a single state machine: each step's expected answer only means anything
@@ -212,12 +212,12 @@ describe('revocation and trash', () =>
 {
     it('kills a revoked link permanently and a trashed one only until restore', async () =>
     {
-        // Revoking one link leaves the other serving (sec 6: multiple links per node, independently revocable).
+        // Revoking one link leaves the other serving -- multiple links per node, independently revocable.
         expect((await owner.del(`/api/links/${ attachmentLink.id }`)).status).toBe(204);
         expect(await directStatus(attachmentLink.token)).toBe(404);
         expect(await directStatus(inlineLink.token)).toBe(200);
 
-        // Trashing the file takes the still-live link down with it (sec 4.4: trashed nodes are hidden from everyone).
+        // Trashing the file takes the still-live link down with it -- trashed nodes are hidden from everyone.
         expect((await owner.post(`/api/nodes/${ fileID }/trash`, {})).status).toBe(200);
         expect(await directStatus(inlineLink.token)).toBe(404);
         expect(await directStatus(attachmentLink.token)).toBe(404);
@@ -231,7 +231,7 @@ describe('revocation and trash', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Authed download ladder (requirements.md secs 3.4/7)
+// Authed download ladder
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('GET /api/nodes/:id/download', () =>
@@ -241,7 +241,7 @@ describe('GET /api/nodes/:id/download', () =>
         await owner.post(`/api/nodes/${ fileID }/shares`, { granteeUserID: viewerID, role: 'viewer' });
 
         expect(await downloadStatus(owner)).toBe(200);
-        // The download authorization is the share-aware resolver, so a viewer downloads (sec 3.4).
+        // The download authorization is the share-aware resolver, so a viewer downloads.
         expect(await downloadStatus(viewer)).toBe(200);
         // No access reads as absent, never confirming the file exists.
         expect(await downloadStatus(stranger)).toBe(404);

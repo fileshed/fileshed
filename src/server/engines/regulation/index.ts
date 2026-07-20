@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Regulation Engine
 //
-// The cross-record legality layer (requirements.md sec 3.6): managers gather facts, this engine judges them and returns
-// typed violations -- never throwing, never touching I/O. Per-domain engines are composed into one facade grouped the
-// way the requirements are (node placement, sharing, quota), so a manager reaches for `regulation.node.link`,
-// `regulation.share.grant`, `regulation.quota.admit`, and combines verdicts with `regulation.combine`.
+// The cross-record legality layer: managers gather facts, this engine judges them and returns typed violations --
+// never throwing, never touching I/O. Per-domain engines are composed into one facade grouped by domain (node
+// placement, sharing, quota), so a manager reaches for `regulation.node.link`, `regulation.share.grant`,
+// `regulation.quota.admit`, and combines verdicts with `regulation.combine`.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Regulation

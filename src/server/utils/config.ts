@@ -36,9 +36,9 @@ const configSchema = z.object({
 
     BASE_URL: z.url().default(DEFAULT_BASE_URL),
 
-    // Blob storage + GC (requirements.md secs 4.2/9). STORAGE_ROOT is both the fs backend's root and the config the
-    // default storage_backend row is seeded with. GC_GRACE_DAYS is the graveyard window before a dereferenced blob is
-    // hard-deleted; 0 collects immediately (useful in tests). UPLOAD_MAX_BYTES caps a single upload's byte count.
+    // Blob storage + GC. STORAGE_ROOT is both the fs backend's root and the config the default storage_backend row is
+    // seeded with. GC_GRACE_DAYS is the graveyard window before a dereferenced blob is hard-deleted; 0 collects
+    // immediately (useful in tests). UPLOAD_MAX_BYTES caps a single upload's byte count.
     STORAGE_ROOT: z.string()
         .min(1)
         .default(DEFAULT_STORAGE_ROOT),
@@ -55,8 +55,8 @@ const configSchema = z.object({
         .positive()
         .default(DEFAULT_UPLOAD_MAX_BYTES),
 
-    // First-run admin bootstrap (requirements.md sec 9). Both-or-neither: setting one without the other is a
-    // misconfiguration, caught below. When both are present and no user owns the email yet, boot creates the admin.
+    // First-run admin bootstrap. Both-or-neither: setting one without the other is a misconfiguration, caught below.
+    // When both are present and no user owns the email yet, boot creates the admin.
     FILESHED_ADMIN_EMAIL: z.email().optional(),
     FILESHED_ADMIN_PASSWORD: z.string().min(8, 'FILESHED_ADMIN_PASSWORD must be at least 8 characters')
         .optional(),

@@ -2,7 +2,7 @@
 // Migration 001 — schema invariants
 //
 // Runs migration 001 against a fresh in-memory SQLite database (via the real factory, so PRAGMA foreign_keys is wired
-// exactly as production) and asserts the requirements.md sec 3.6 layer-3 invariants actually BEHAVE: the per-type node
+// exactly as production) and asserts the layer-3 invariants actually BEHAVE: the per-type node
 // CHECK constraints, the share/share_request domain CHECKs, the ON DELETE CASCADE edges, and full reversibility of the
 // migration. Every expectation is derived from the requirement, not from what the DDL happens to do.
 //----------------------------------------------------------------------------------------------------------------------
@@ -157,7 +157,7 @@ afterEach(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Node per-type CHECK constraints (requirements.md sec 3.6)
+// Node per-type CHECK constraints
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('migration 001 — node variant constraints', () =>
@@ -249,7 +249,7 @@ describe('migration 001 — node variant constraints', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Share & share-request CHECK constraints (requirements.md secs 3.4/3.5)
+// Share & share-request CHECK constraints
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('migration 001 — share and share_request constraints', () =>
@@ -333,7 +333,7 @@ describe('migration 001 — share and share_request constraints', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// Foreign keys & cascades (requirements.md secs 3.2b/4.4)
+// Foreign keys & cascades
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('migration 001 — foreign keys and cascades', () =>

@@ -24,7 +24,7 @@ describe('blobCodec', () =>
         expect(blobCodec.safeParse(blob).success).toBe(true);
     });
 
-    // requirements.md sec 4.2: deletedAt is the graveyard marker set when the last reference drops.
+    // deletedAt is the graveyard marker set when the last reference drops.
     it('parses a graveyarded blob with a deletedAt', () =>
     {
         const blob = {
@@ -39,8 +39,8 @@ describe('blobCodec', () =>
         expect(blobCodec.safeParse(blob).success).toBe(true);
     });
 
-    // requirements.md sec 4.2: the ref count is derived, never stored on the blob. A persisted refCount is a
-    // wrong-shape field a strict codec must reject rather than absorb.
+    // the ref count is derived, never stored on the blob. A persisted refCount is a wrong-shape field a strict codec
+    // must reject rather than absorb.
     it('rejects a blob carrying a stored refCount field', () =>
     {
         const blob = {

@@ -67,8 +67,8 @@ describe('nodeCodec', () =>
         expect(result.success).toBe(true);
     });
 
-    // requirements.md sec 3.1: blobID is files-only. A link substituting a file's exclusive field for its own
-    // required one (targetNodeID) must not validate as either variant.
+    // blobID is files-only. A link substituting a file's exclusive field for its own required one (targetNodeID) must
+    // not validate as either variant.
     it('rejects a link node carrying a blobID instead of a targetNodeID', () =>
     {
         const malformedLink = {
@@ -87,7 +87,7 @@ describe('nodeCodec', () =>
         expect(result.success).toBe(false);
     });
 
-    // requirements.md sec 3.1: size is files-only. A folder is never charged a size of its own.
+    // size is files-only. A folder is never charged a size of its own.
     it('rejects a folder node carrying a size field', () =>
     {
         const malformedFolder = {
@@ -107,8 +107,7 @@ describe('nodeCodec', () =>
         expect(result.success).toBe(false);
     });
 
-    // requirements.md sec 3.1: mime_type is files-only. A folder's type is structural; a link's derives from its
-    // target at resolution time.
+    // mime_type is files-only. A folder's type is structural; a link's derives from its target at resolution time.
     it('rejects a folder node carrying a mimeType', () =>
     {
         const malformedFolder = {
@@ -128,8 +127,8 @@ describe('nodeCodec', () =>
         expect(result.success).toBe(false);
     });
 
-    // requirements.md secs 3.2b/4.4: links are deleted directly, never trashed -- dead links persist as stubs, not
-    // trash entries. A trashed link is an unrepresentable state.
+    // links are deleted directly, never trashed -- dead links persist as stubs, not trash entries. A trashed link is an
+    // unrepresentable state.
     it('rejects a link node carrying a trashedAt', () =>
     {
         const malformedLink = {
@@ -149,7 +148,7 @@ describe('nodeCodec', () =>
         expect(result.success).toBe(false);
     });
 
-    // requirements.md sec 3.1: type is one of file|folder|link -- no other variant exists.
+    // type is one of file|folder|link -- no other variant exists.
     it('rejects a node whose type falls outside file, folder, and link', () =>
     {
         const unknownTypeNode = {

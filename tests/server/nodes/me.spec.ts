@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Me Route — GET /api/me
 //
-// The caller's own profile plus quota (requirements.md secs 5/7). A fresh account owns no files, so its charged usage
-// is zero and, with no cap configured, its limit is null (unlimited). The usage-under-load case (owned files, including
-// trashed) lives in the manager spec where files can be seeded directly.
+// The caller's own profile plus quota. A fresh account owns no files, so its charged usage is zero and, with no cap
+// configured, its limit is null (unlimited). The usage-under-load case (owned files, including trashed) lives in the
+// manager spec where files can be seeded directly.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -16,7 +16,7 @@ import { composeNodeApp, userIDByEmail } from './support.ts';
 
 describe('GET /api/me', () =>
 {
-    it('returns the caller\'s profile with an empty, unlimited quota for a fresh account (secs 5/7)', async () =>
+    it('returns the caller\'s profile with an empty, unlimited quota for a fresh account', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);

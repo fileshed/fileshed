@@ -3,8 +3,7 @@
 //
 // Brings the database from empty to ready, then plants the first-run admin. The order is a hard constraint:
 // better-auth's own migrator must create the identity tables (user/session/account/verification + the role and
-// quota_limit columns it owns) BEFORE the app migrations run, because the app tables carry FKs to user.id
-// (requirements.md sec 3.6).
+// quota_limit columns it owns) BEFORE the app migrations run, because the app tables carry FKs to user.id.
 //
 // server.ts calls initialize() before serving; the specs call it against an in-memory database.
 //----------------------------------------------------------------------------------------------------------------------
@@ -38,7 +37,7 @@ export async function runMigrations(handle : DatabaseHandle, auth : Auth) : Prom
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// First-run admin (requirements.md sec 9). Idempotent across restarts: an existing account for the configured email is
+// First-run admin. Idempotent across restarts: an existing account for the configured email is
 // promoted if it is not already admin and otherwise left alone, so a crash between the sign-up and the promotion heals
 // on the next boot. Role is set with a direct Kysely update -- explicit and readable, and it keeps the auth config free
 // of bootstrap-specific databaseHooks. No env pair configured means no bootstrap.

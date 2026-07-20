@@ -25,6 +25,8 @@ If you cannot state what the spec requires for a case, **stop and ask**. Do not 
 
 **Never** run the code and paste its output back as the assertion. That enshrines current behavior — bugs and all — as the "correct" answer.
 
+Derivation is a step in your process, never a footnote in the artifact. The finished test names and comments state the behavior in plain language; they do not cite the requirements doc or a section number — those rot and nothing verifies them.
+
 ```typescript
 // BAD — expectation lifted from whatever the code currently returns
 it('computes usage', () =>
@@ -33,7 +35,7 @@ it('computes usage', () =>
     expect(used).toBe(4_294_967_296);  // where did this number come from? the code.
 });
 
-// GOOD — expectation derived from requirements §5: charged usage is the sum of
+// GOOD — expectation derived by hand from the requirement: charged usage is the sum of
 // logical size of owned, non-purged file nodes, including trashed.
 it('charges owned file nodes including trashed, excluding purged', () =>
 {

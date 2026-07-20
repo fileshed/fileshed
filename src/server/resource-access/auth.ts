@@ -63,14 +63,14 @@ const authOptionsShape = {
     },
     plugins: [ admin() ],
     advanced: {
-        // cuid2 everywhere, matching the app's own ids (requirements.md sec 3).
+        // cuid2 everywhere, matching the app's own ids.
         database: { generateId: () => createId() },
     },
     user: {
         additionalFields: {
-            // The per-user byte cap (requirements.md sec 5). bigint:true makes better-auth emit a real bigint column
-            // on Postgres (and 64-bit INTEGER on SQLite) so quotas above 2^31 bytes are representable. input:false
-            // keeps it out of the sign-up payload -- quota is admin-set, never self-served.
+            // The per-user byte cap. bigint:true makes better-auth emit a real bigint column on Postgres (and 64-bit
+            // INTEGER on SQLite) so quotas above 2^31 bytes are representable. input:false keeps it out of the sign-up
+            // payload -- quota is admin-set, never self-served.
             quotaLimit: { type: 'number', required: false, input: false, bigint: true, fieldName: 'quota_limit' },
         },
     },

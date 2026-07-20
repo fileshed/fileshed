@@ -3,8 +3,8 @@
 //
 // Drives BlobRA's row surface against a real in-memory database (production factory + migrator, zero mocks), so the
 // derived ref-count NOT EXISTS, the ON CONFLICT resurrection, and the conditional GC delete run exactly as deployed.
-// Every expectation comes from requirements.md sec 4.2 (graveyard on last-reference-removed, resurrection clears the
-// marker, GC deletes only records still past-cutoff at delete time), never from what a query happens to return.
+// Every expectation comes from the graveyard rules -- last-reference-removed graveyards a blob, resurrection clears
+// the marker, GC deletes only records still past-cutoff at delete time -- never from what a query happens to return.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- seed helpers build snake_case DB rows (house convention for Kysely inserts) */
@@ -150,7 +150,7 @@ describe('BlobRA GC selection', () =>
 
     it('does not delete a record resurrected since it became a candidate', async () =>
     {
-        // Resurrected (deleted_at cleared) between candidacy and here: the conditional delete must miss (sec 4.2).
+        // Resurrected (deleted_at cleared) between candidacy and here: the conditional delete must miss.
         await seedBlobRow('sha-saved', null);
 
         const removed = await ra.hardDeleteRow('sha-saved', new Date());

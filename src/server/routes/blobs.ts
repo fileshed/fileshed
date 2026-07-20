@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob Routes
 //
-// The claim and proof-of-possession endpoints (requirements.md secs 4.3/7). Thin over the BlobManager: authenticate,
-// validate the DTO, delegate. A malformed body or DTO is raised as a BadRequestError; every other HTTP-shaped outcome
-// is a typed manager error. onError maps them all through mapManagerError (managers/errors.ts), so the routes carry no
-// status logic of their own.
+// The claim and proof-of-possession endpoints. Thin over the BlobManager: authenticate, validate the DTO, delegate. A
+// malformed body or DTO is raised as a BadRequestError; every other HTTP-shaped outcome is a typed manager error.
+// onError maps them all through mapManagerError (managers/errors.ts), so the routes carry no status logic of their own.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Context, Hono } from 'hono';

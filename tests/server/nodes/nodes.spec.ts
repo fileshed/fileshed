@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Routes — /api/nodes
 //
-// The HTTP contract of the tree surface (requirements.md secs 3.2/3.2b/4.4/7), driven end to end through the real
-// stack: create/read/list/rename/move/trash/restore/delete, the effective role that rides every node payload, link
-// target resolution (live and dead), and the regulation rejections that reach the wire as 403/422. Expectations come
-// from the requirements, not the implementation.
+// The HTTP contract of the tree surface, driven end to end through the real stack:
+// create/read/list/rename/move/trash/restore/delete, the effective role that rides every node payload, link target
+// resolution (live and dead), and the regulation rejections that reach the wire as 403/422.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -96,7 +95,7 @@ describe('POST /api/nodes (folders)', () =>
         expect(body.parentID).toBe(parent.id);
     });
 
-    it('rejects creating a folder inside a folder owned by another user (sec 3.3)', async () =>
+    it('rejects creating a folder inside a folder owned by another user', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -116,7 +115,7 @@ describe('POST /api/nodes (folders)', () =>
 
 describe('POST /api/nodes (links)', () =>
 {
-    it('defaults an unnamed link to the target name and resolves the target for display (sec 3.2)', async () =>
+    it('defaults an unnamed link to the target name and resolves the target for display', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -131,7 +130,7 @@ describe('POST /api/nodes (links)', () =>
         expect(body.target).toMatchObject({ id: target.id, type: 'folder', name: 'Photos' });
     });
 
-    it('rejects a link that targets another link (sec 3.2b)', async () =>
+    it('rejects a link that targets another link', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -184,7 +183,7 @@ describe('GET /api/nodes/:id', () =>
 
 describe('GET /api/nodes children listing', () =>
 {
-    it('lists the caller\'s root nodes with role and a resolved live link target (secs 3.2/7)', async () =>
+    it('lists the caller\'s root nodes with role and a resolved live link target', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -204,7 +203,7 @@ describe('GET /api/nodes children listing', () =>
         expect(link?.target).toMatchObject({ id: folder.id, type: 'folder', name: 'Photos' });
     });
 
-    it('lists a dead link with a null target (sec 3.2b)', async () =>
+    it('lists a dead link with a null target', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -239,7 +238,7 @@ describe('GET /api/nodes children listing', () =>
         expect(body.nodes[0].id).toBe(child.id);
     });
 
-    it('excludes trashed nodes from the listing (sec 4.4)', async () =>
+    it('excludes trashed nodes from the listing', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -291,7 +290,7 @@ describe('PATCH /api/nodes/:id', () =>
         expect(body.parentID).toBe(to.id);
     });
 
-    it('rejects moving a folder into its own descendant (sec 3.2)', async () =>
+    it('rejects moving a folder into its own descendant', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -325,7 +324,7 @@ describe('PATCH /api/nodes/:id', () =>
 
 describe('POST /api/nodes/:id/trash', () =>
 {
-    it('rejects trashing a link (sec 4.4)', async () =>
+    it('rejects trashing a link', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -341,7 +340,7 @@ describe('POST /api/nodes/:id/trash', () =>
         expect(body.violations.map((violation) => violation.code)).toContain('trash.linkNotTrashable');
     });
 
-    it('rejects trashing a node owned by another user with 403 (sec 4.4)', async () =>
+    it('rejects trashing a node owned by another user with 403', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -378,7 +377,7 @@ describe('POST /api/nodes/:id/restore', () =>
         expect(body.parentID).toBe(parent.id);
     });
 
-    it('restores to the root when the original parent is still trashed (sec 4.4)', async () =>
+    it('restores to the root when the original parent is still trashed', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -402,7 +401,7 @@ describe('POST /api/nodes/:id/restore', () =>
 
 describe('DELETE /api/nodes/:id', () =>
 {
-    it('removes a link from the caller\'s drive while leaving its target (sec 3.2b)', async () =>
+    it('removes a link from the caller\'s drive while leaving its target', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);
@@ -436,7 +435,7 @@ describe('DELETE /api/nodes/:id', () =>
 
 describe('node route authentication', () =>
 {
-    it('rejects every node and me route without a session with 401 (sec 7)', async () =>
+    it('rejects every node and me route without a session with 401', async () =>
     {
         const booted = await bootTestApp();
         const app = composeNodeApp(booted);

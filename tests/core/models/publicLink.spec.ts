@@ -40,7 +40,7 @@ describe('publicLinkCodec', () =>
         expect(publicLinkCodec.safeParse(link).success).toBe(true);
     });
 
-    // requirements.md sec 6: disposition is inline or attachment -- hotlink vs forced download.
+    // disposition is inline or attachment -- hotlink vs forced download.
     it('rejects a disposition outside inline and attachment', () =>
     {
         const link = {

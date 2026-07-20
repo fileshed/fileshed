@@ -99,9 +99,10 @@ status, or what the file will become — comments describe the code that exists,
 
 No AI slop comments anywhere: nothing that narrates the next line, restates a signature, explains language
 features, duplicates a type in JSDoc, or talks to a reviewer ("updated to...", "now uses..."). No process residue:
-task numbers, review findings, spec amendment history ("as amended"), or references to how the code got built —
-the code and the current docs are the only context a reader has. If deleting a comment loses nothing but word
-count, delete it.
+task numbers, review findings, spec amendment history ("as amended"), references to the requirements/design doc or
+its section numbers, or references to how the code got built — a comment must stand on its own; section numbers are
+unverifiable and rot, and the code and the current docs are the only context a reader has. If deleting a comment
+loses nothing but word count, delete it.
 
 ### Import Organization
 
