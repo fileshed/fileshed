@@ -18,6 +18,7 @@ import { createDatabase } from '@server/resource-access/database/database.ts';
 
 // Managers
 import { BlobManager } from '@server/managers/blob.ts';
+import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { PublicLinkManager } from '@server/managers/publicLink.ts';
 import { ShareManager } from '@server/managers/share.ts';
@@ -79,6 +80,11 @@ const EXPECTED_ROUTES = [
     // Downloads (authenticated)
     'GET /api/nodes/:id/download',
 
+    // Deletion offers
+    'GET /api/deletion-offers',
+    'POST /api/deletion-offers/:id/accept',
+    'POST /api/deletion-offers/:id/decline',
+
     // Public links (management)
     'POST /api/nodes/:id/links',
     'GET /api/nodes/:id/links',
@@ -100,12 +106,15 @@ const blob = new BlobRA(handle);
 const nodeRA = new NodeRA(handle);
 const shareRA = new ShareRA(handle);
 
+const nodes = new NodeManager(handle, nodeRA, blob);
+
 const app = createApp(auth, {
     blobs: new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES }),
-    nodes: new NodeManager(handle, nodeRA, blob),
+    nodes,
     shares: new ShareManager(handle, nodeRA, shareRA),
     publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
         shareRA.effectiveRole(userID, nodeID)),
+    deletionOffers: new DeletionOfferManager(handle, nodes),
 });
 
 afterAll(async () =>

@@ -61,6 +61,7 @@ export {
     type SortDirection,
     sortDirections,
     type ChildrenQuery,
+    type DeleteNodeQuery,
     type LinkTarget,
     type NodeResponse,
     type NodeListResponse,
@@ -91,6 +92,11 @@ export {
     type AccessRequestListResponse,
 } from './models/requests/accessRequests.ts';
 export { type SetQuotaRequest } from './models/requests/admin.ts';
+export {
+    type DeletionOfferResponse,
+    type DeletionOfferListResponse,
+    type AcceptDeletionOfferRequest,
+} from './models/requests/deletionOffers.ts';
 
 // Request Schemas
 export { isoDateTimeCodec } from './models/requests/schemas/common.ts';
@@ -103,6 +109,7 @@ export {
     moveRequestCodec,
     patchNodeRequestCodec,
     childrenQueryCodec,
+    deleteNodeQueryCodec,
     linkTargetCodec,
     nodeResponseCodec,
     nodeListResponseCodec,
@@ -138,6 +145,13 @@ export {
     toAccessRequestResponse,
 } from './models/requests/schemas/accessRequests.ts';
 export { setQuotaRequestCodec } from './models/requests/schemas/admin.ts';
+export {
+    acceptDeletionOfferRequestCodec,
+    deletionOfferResponseCodec,
+    deletionOfferListResponseCodec,
+    toDeletionOfferResponse,
+    toDeletionOfferListResponse,
+} from './models/requests/schemas/deletionOffers.ts';
 
 // Utils
 export { type Equals, typeAssert } from './utils/typeAssert.ts';

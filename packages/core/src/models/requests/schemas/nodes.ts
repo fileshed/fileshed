@@ -19,6 +19,7 @@ import {
     type CreateFolderRequest,
     type CreateLinkRequest,
     type CreateNodeRequest,
+    type DeleteNodeQuery,
     type LinkTarget,
     type MoveRequest,
     type NodeListResponse,
@@ -107,6 +108,13 @@ export const copyNodeRequestCodec = z.strictObject({
 });
 
 typeAssert<Equals<z.output<typeof copyNodeRequestCodec>, CopyNodeRequest>>();
+
+export const deleteNodeQueryCodec = z.strictObject({
+    offerCopies: z.stringbool()
+        .default(false),
+});
+
+typeAssert<Equals<z.output<typeof deleteNodeQueryCodec>, DeleteNodeQuery>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 // Query strings arrive as strings, so limit/offset are coerced; an over-max limit is rejected rather than silently

@@ -19,6 +19,7 @@ import { createAdminRoutes } from './routes/admin.ts';
 import { createBlobRoutes } from './routes/blobs.ts';
 import { createMeRoutes } from './routes/me.ts';
 import { createAccessRequestRoutes } from './routes/accessRequests.ts';
+import { createDeletionOfferRoutes } from './routes/deletionOffers.ts';
 import { createDirectRoutes } from './routes/direct.ts';
 import { createDownloadRoutes } from './routes/downloads.ts';
 import { createNodeRoutes } from './routes/nodes.ts';
@@ -39,6 +40,7 @@ import { ShareRA } from './resource-access/shares/index.ts';
 // Managers
 import { AdminManager } from './managers/admin.ts';
 import { BlobManager } from './managers/blob.ts';
+import { DeletionOfferManager } from './managers/deletionOffer.ts';
 import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
@@ -81,6 +83,7 @@ export interface AppServices
     nodes : NodeManager;
     shares : ShareManager;
     publicLinks : PublicLinkManager;
+    deletionOffers : DeletionOfferManager;
 }
 
 export function createApp(auth ?: Auth, services ?: AppServices) : Hono
@@ -124,6 +127,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
             app.route('/api', createAccessRequestRoutes(sessions, services.shares));
             app.route('/api', createDownloadRoutes(sessions, services.publicLinks));
             app.route('/api', createPublicLinkRoutes(sessions, services.publicLinks));
+            app.route('/api', createDeletionOfferRoutes(sessions, services.deletionOffers));
             app.route('/d', createDirectRoutes(services.publicLinks));
         }
     }
@@ -172,8 +176,9 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const nodeRA = new NodeRA(handle);
     const shareRA = new ShareRA(handle);
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
-    const nodes = new NodeManager(handle, nodeRA, blob);
+    const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY);
     const shares = new ShareManager(handle, nodeRA, shareRA);
+    const deletionOffers = new DeletionOfferManager(handle, nodes);
     const publicLinks = new PublicLinkManager(
         nodeRA,
         blob,
@@ -193,7 +198,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         stopSweeps();
     };
 
-    return { app: createApp(auth, { blobs, nodes, shares, publicLinks }), config, shutdown };
+    return { app: createApp(auth, { blobs, nodes, shares, publicLinks, deletionOffers }), config, shutdown };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

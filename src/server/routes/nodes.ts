@@ -17,6 +17,7 @@ import {
     childrenQueryCodec,
     copyNodeRequestCodec,
     createNodeRequestCodec,
+    deleteNodeQueryCodec,
     patchNodeRequestCodec,
 } from '@fileshed/core';
 
@@ -112,7 +113,8 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
     router.delete('/nodes/:id', async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
-        await nodes.hardDelete(actor, ctx.req.param('id'));
+        const query = parseQuery(ctx, deleteNodeQueryCodec);
+        await nodes.hardDelete(actor, ctx.req.param('id'), { offerCopies: query.offerCopies });
 
         return ctx.body(null, 204);
     });

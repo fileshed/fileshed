@@ -26,6 +26,7 @@ import { ShareRA } from '@server/resource-access/shares/index.ts';
 
 // Managers
 import { BlobManager } from '@server/managers/blob.ts';
+import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { ShareManager } from '@server/managers/share.ts';
 import { SessionManager } from '@server/managers/session.ts';
@@ -34,6 +35,7 @@ import { mapManagerError } from '@server/managers/errors.ts';
 // Routes
 import { createAccessRequestRoutes } from '@server/routes/accessRequests.ts';
 import { createBlobRoutes } from '@server/routes/blobs.ts';
+import { createDeletionOfferRoutes } from '@server/routes/deletionOffers.ts';
 import { createMeRoutes } from '@server/routes/me.ts';
 import { createNodeRoutes } from '@server/routes/nodes.ts';
 import { createShareRoutes } from '@server/routes/shares.ts';
@@ -66,6 +68,7 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes });
     const nodes = new NodeManager(handle, nodesRA, blob);
     const shares = new ShareManager(handle, nodesRA, sharesRA);
+    const deletionOffers = new DeletionOfferManager(handle, nodes);
 
     const app = new Hono();
 
@@ -76,6 +79,7 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
     app.route('/api', createUploadRoutes(sessions, blobs));
     app.route('/api', createShareRoutes(sessions, shares));
     app.route('/api', createAccessRequestRoutes(sessions, shares));
+    app.route('/api', createDeletionOfferRoutes(sessions, deletionOffers));
 
     app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
     app.onError((error, ctx) =>

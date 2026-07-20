@@ -22,8 +22,11 @@ import {
     type CopyNodeRequest,
     type CreateFolderRequest,
     type CreateLinkRequest,
+    DEFAULT_GC_GRACE_DAYS,
+    type DeletionOffer,
     type FileNode,
     ForbiddenError,
+    MS_PER_DAY,
     type MeResponse,
     type Node,
     type NodeListResponse,
@@ -43,6 +46,7 @@ import { type RegulationResult, regulation } from '../engines/regulation/index.t
 // Resource Access
 import type { SessionUser } from '../resource-access/auth.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
+import { DeletionOfferRA } from '../resource-access/deletionOffers/index.ts';
 import { type ChildrenOptions, type ChildrenQuery as NodeLocation, NodeRA } from '../resource-access/nodes/node.ts';
 import { ShareRA } from '../resource-access/shares/index.ts';
 
@@ -59,9 +63,9 @@ export interface OrphanedBlobs
 }
 
 // The file facts a copy materializes into a fresh node the caller owns -- everything a file node needs except identity,
-// owner, and placement. A save-a-copy builds this from a live source file; the deletion-offer accept path will build
-// the same shape from a graveyarded blob's stored snapshot, so the admit-and-insert seam takes this, not a source Node.
-interface FileCopySnapshot
+// owner, and placement. A save-a-copy builds this from a live source file; the deletion-offer accept path builds the
+// same shape from an offer's stored snapshot, so the admit-and-insert seam takes this, not a source Node.
+export interface FileCopySnapshot
 {
     name : string;
     mimeType : string;
@@ -75,15 +79,24 @@ export class NodeManager
     readonly #kind : DatabaseHandle['kind'];
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
+    readonly #offers : DeletionOfferRA;
     readonly #orphanedBlobs : OrphanedBlobs;
+    readonly #offerGraceMs : number;
 
-    constructor(handle : DatabaseHandle, nodes : NodeRA, orphanedBlobs : OrphanedBlobs)
+    constructor(
+        handle : DatabaseHandle,
+        nodes : NodeRA,
+        orphanedBlobs : OrphanedBlobs,
+        offerGraceMs : number = DEFAULT_GC_GRACE_DAYS * MS_PER_DAY
+    )
     {
         this.#db = handle.db;
         this.#kind = handle.kind;
         this.#nodes = nodes;
         this.#shares = new ShareRA(handle);
+        this.#offers = new DeletionOfferRA(handle);
         this.#orphanedBlobs = orphanedBlobs;
+        this.#offerGraceMs = offerGraceMs;
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -347,7 +360,7 @@ export class NodeManager
     // Permanent delete
     //------------------------------------------------------------------------------------------------------------------
 
-    async hardDelete(actor : SessionUser, id : string) : Promise<void>
+    async hardDelete(actor : SessionUser, id : string, options : { offerCopies ?: boolean } = {}) : Promise<void>
     {
         const node = await this.#requireOwned(actor, id);
 
@@ -359,18 +372,53 @@ export class NodeManager
             return;
         }
 
+        // The recipients-may-copy opt-in applies to a single file's delete; a folder delete ignores it (offering
+        // per-file copies across a subtree is not modeled). Recipients and the snapshot are gathered BEFORE the
+        // delete removes the rows the queries need.
+        const offers = options.offerCopies === true && node.type === 'file'
+            ? await this.#mintableOffers(actor, node)
+            : [];
+
         // Collect the subtree's blob shas BEFORE the delete removes the rows (read-only), then delete the subtree and
         // hand the shas to the graveyard in ONE transaction: a crash between them would strand the now-unreferenced
         // blobs (row gone, no graveyard marker, GC blind to them). graveyardUnreferenced re-derives each blob's
         // reference count against the post-delete rows, so a sha still referenced elsewhere stays live. The delete
-        // cascades the whole subtree and every link pointing into it.
+        // cascades the whole subtree and every link pointing into it. Offers commit atomically with the delete that
+        // justifies them -- a crash cannot leave the file gone but its recipients uninvited.
         const shas = await this.#nodes.subtreeFileBlobIDs(id);
 
         await this.#db.transaction().execute(async (trx) =>
         {
             await this.#nodes.hardDelete(id, trx);
             await this.#orphanedBlobs.graveyardUnreferenced(shas, trx);
+            await this.#offers.insertMany(offers, trx);
         });
+    }
+
+    // One offer per user who can currently see the file through a share -- a grant on the file itself or on any
+    // ancestor folder. The owner is excluded (they are the deleter), and the expiry is the blob's GC grace deadline:
+    // the graveyard keeps the bytes exactly that long, so an unexpired offer is always materializable.
+    async #mintableOffers(actor : SessionUser, node : FileNode) : Promise<DeletionOffer[]>
+    {
+        const chain = [ node.id, ...await this.#nodes.ancestorIDs(node.id) ];
+        const granteeIDs = await this.#shares.granteeIDsFor(chain);
+
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + this.#offerGraceMs);
+
+        return granteeIDs
+            .filter((granteeID) => granteeID !== node.ownerID)
+            .map((granteeID) => ({
+                id: createId(),
+                sha256: node.blobID,
+                offereeID: granteeID,
+                name: node.name,
+                mimeType: node.mimeType,
+                size: node.size,
+                createdBy: actor.id,
+                createdAt: now,
+                expiresAt,
+            }));
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -447,14 +495,34 @@ export class NodeManager
     // Quota admission & copy insertion
     //------------------------------------------------------------------------------------------------------------------
 
+    // The deletion-offer accept path: the same admit-and-insert a copy runs, but from a stored snapshot with no live
+    // source node, so only the parent edge needs judging here. `prepare` runs inside the insert transaction --
+    // the caller consumes its offer row and resurrects the blob atomically with the node that references them.
+    async materializeSnapshot(
+        actor : SessionUser,
+        snapshot : FileCopySnapshot,
+        parentID : string | null,
+        prepare ?: (trx : DatabaseHandle['db']) => Promise<void>
+    ) : Promise<NodeResponse>
+    {
+        const parent = await this.#gatherParent(parentID);
+        this.#enforce(await this.#judgeParentEdge(actor, parent));
+
+        return this.#insertCopy(actor, snapshot, parentID, prepare);
+    }
+
     // Land a copy as a fresh file node owned by the caller. An early quota gate rejects before a write is opened, then
     // the insert re-judges quota against usage read INSIDE the transaction: the early gate admits each copy in
     // isolation, so a batch of concurrent copies could jointly overshoot; the in-transaction re-check is the
     // authoritative one (it fully closes the window on SQLite's serialized writes, and narrows it on Postgres). The
-    // blob is already live -- the source references it -- so no blob write is needed here; the deletion-offer accept
-    // path, which resurrects a graveyarded blob, will build the same snapshot and add that step.
-    async #insertCopy(actor : SessionUser, snapshot : FileCopySnapshot, parentID : string | null)
-    : Promise<NodeResponse>
+    // copy path needs no blob write -- the live source keeps the blob referenced; the accept path's resurrection
+    // arrives through `prepare`, inside the same transaction, and a quota rejection rolls it back offer and all.
+    async #insertCopy(
+        actor : SessionUser,
+        snapshot : FileCopySnapshot,
+        parentID : string | null,
+        prepare ?: (trx : DatabaseHandle['db']) => Promise<void>
+    ) : Promise<NodeResponse>
     {
         await this.#admitQuota(actor, snapshot.size);
 
@@ -475,6 +543,8 @@ export class NodeManager
 
         await this.#db.transaction().execute(async (trx) =>
         {
+            if(prepare !== undefined) { await prepare(trx); }
+
             const nodes = new NodeRA({ db: trx, kind: this.#kind });
             this.#enforceQuota(actor, await nodes.ownedBytes(actor.id), snapshot.size);
             await nodes.insert(node);

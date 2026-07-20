@@ -70,6 +70,16 @@ export interface CopyNodeRequest
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Delete (DELETE /api/nodes/:id) -- the recipients-may-copy opt-in rides the query string, since DELETE bodies are
+// stripped by enough intermediaries to be unreliable. Absent means delete for everyone, the default.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface DeleteNodeQuery
+{
+    offerCopies : boolean;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Children listing (GET /api/nodes/:id/children) -- pagination plus the sort-key vocabulary.
 //----------------------------------------------------------------------------------------------------------------------
 

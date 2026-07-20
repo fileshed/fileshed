@@ -168,6 +168,23 @@ export class ShareRA
         return grants;
     }
 
+    // Every distinct user holding a grant on ANY of the given nodes -- pass a node plus its ancestor chain and this
+    // answers "who can currently see this node through a share". One flat lookup, no walk; the caller supplies the
+    // chain (NodeRA.ancestorIDs) precisely because grants on ancestors reach everything beneath them.
+    async granteeIDsFor(nodeIDs : readonly string[]) : Promise<string[]>
+    {
+        if(nodeIDs.length === 0) { return []; }
+
+        const rows = await this.#db
+            .selectFrom('share')
+            .select('grantee_user_id')
+            .distinct()
+            .where('node_id', 'in', nodeIDs)
+            .execute();
+
+        return rows.map((row) => row.grantee_user_id);
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Share rows
     //------------------------------------------------------------------------------------------------------------------
