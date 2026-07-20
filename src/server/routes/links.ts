@@ -3,8 +3,7 @@
 //
 // The owner's link-management surface: POST /api/nodes/:id/links (mint), GET /api/nodes/:id/links (list), and DELETE
 // /api/links/:id (revoke). Every handler resolves the caller through the session manager (401 when absent); owner-only
-// and file-only enforcement is the manager's. The two path shapes share the /api mount, so this router owns both
-// /nodes/:id/links and /links/:id.
+// and file-only enforcement is the manager's.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { Hono } from 'hono';

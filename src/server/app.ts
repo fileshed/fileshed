@@ -112,14 +112,14 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
         const sessions = new SessionManager(auth);
 
         app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-        app.route('/api/admin', createAdminRoutes(sessions, new AdminManager(auth)));
+        app.route('/api', createAdminRoutes(sessions, new AdminManager(auth)));
 
         if(services)
         {
-            app.route('/api/blobs', createBlobRoutes(sessions, services.blobs));
-            app.route('/api/uploads', createUploadRoutes(sessions, services.blobs));
-            app.route('/api/nodes', createNodeRoutes(sessions, services.nodes));
-            app.route('/api/me', createMeRoutes(sessions, services.nodes));
+            app.route('/api', createBlobRoutes(sessions, services.blobs));
+            app.route('/api', createUploadRoutes(sessions, services.blobs));
+            app.route('/api', createNodeRoutes(sessions, services.nodes));
+            app.route('/api', createMeRoutes(sessions, services.nodes));
             app.route('/api', createShareRoutes(sessions, services.shares));
             app.route('/api', createAccessRequestRoutes(sessions, services.shares));
             app.route('/api', createDownloadRoutes(sessions, services.publicLinks));
@@ -128,7 +128,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
         }
     }
 
-    app.route('/api/health', health);
+    app.route('/api', health);
 
     //------------------------------------------------------------------------------------------------------------------
     // Error Handling

@@ -59,8 +59,8 @@ function composeApp(auth : Auth, blobs : BlobManager) : Hono
     const sessions = new SessionManager(auth);
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-    app.route('/api/blobs', createBlobRoutes(sessions, blobs));
-    app.route('/api/uploads', createUploadRoutes(sessions, blobs));
+    app.route('/api', createBlobRoutes(sessions, blobs));
+    app.route('/api', createUploadRoutes(sessions, blobs));
 
     app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
     app.onError((error, ctx) =>

@@ -63,8 +63,8 @@ export function composeNodeApp(booted : BootedApp, orphanedBlobs : OrphanedBlobs
     const app = new Hono();
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => booted.auth.handler(ctx.req.raw));
-    app.route('/api/nodes', createNodeRoutes(sessions, nodes));
-    app.route('/api/me', createMeRoutes(sessions, nodes));
+    app.route('/api', createNodeRoutes(sessions, nodes));
+    app.route('/api', createMeRoutes(sessions, nodes));
 
     app.onError((error, ctx) =>
     {

@@ -2,10 +2,10 @@
 // Share Routes
 //
 // The sharing surface: grant a share on a node, list a node's grants, revoke a grant, leave a share granted to you, and
-// the Shared with me listing. These paths straddle two roots -- /nodes/:id/shares and /shares/:id -- so the router
-// carries full paths and is mounted at /api. Every handler resolves the caller through the session manager (401 when
-// absent) and validates the grant body against the core codec (400 on a shape mismatch); all other outcomes -- not
-// found, forbidden, regulation violations -- bubble as typed manager errors that onError maps.
+// the Shared with me listing, across two roots -- /nodes/:id/shares and /shares/:id. Every handler resolves the caller
+// through the session manager (401 when absent) and validates the grant body against the core codec (400 on a shape
+// mismatch); all other outcomes -- not found, forbidden, regulation violations -- bubble as typed manager errors that
+// onError maps.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { Hono } from 'hono';

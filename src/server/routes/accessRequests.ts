@@ -2,10 +2,10 @@
 // Access Request Routes
 //
 // The share-request surface: a user asks the target's owner for access to a stub, an owner or requester lists their
-// requests, and the owner grants or declines. Paths straddle /nodes/:id/access-requests and /access-requests/:id, so
-// the router carries full paths and is mounted at /api. Every handler resolves the caller through the session manager
-// (401 when absent) and validates the create body against the core codec (400 on a shape mismatch); not-found,
-// forbidden, and regulation outcomes bubble as typed manager errors that onError maps.
+// requests, and the owner grants or declines, across /nodes/:id/access-requests and /access-requests/:id. Every handler
+// resolves the caller through the session manager (401 when absent) and validates the create body against the core
+// codec (400 on a shape mismatch); not-found, forbidden, and regulation outcomes bubble as typed manager errors that
+// onError maps.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { Hono } from 'hono';

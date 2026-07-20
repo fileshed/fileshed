@@ -92,9 +92,9 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     const app = new Hono();
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-    app.route('/api/blobs', createBlobRoutes(sessions, blobs));
-    app.route('/api/uploads', createUploadRoutes(sessions, blobs));
-    app.route('/api/nodes', createNodeRoutes(sessions, nodes));
+    app.route('/api', createBlobRoutes(sessions, blobs));
+    app.route('/api', createUploadRoutes(sessions, blobs));
+    app.route('/api', createNodeRoutes(sessions, nodes));
     app.route('/api', createShareRoutes(sessions, shares));
     app.route('/api', createDownloadRoutes(sessions, links));
     app.route('/api', createPublicLinkRoutes(sessions, links));

@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 
 const router = new Hono();
 
-router.get('/', (ctx) => ctx.json({ status: 'ok' }));
+router.get('/health', (ctx) => ctx.json({ status: 'ok' }));
 
 //----------------------------------------------------------------------------------------------------------------------
 

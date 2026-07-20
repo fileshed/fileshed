@@ -37,7 +37,7 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
 {
     const router = new Hono();
 
-    router.post('/claim', async (ctx) =>
+    router.post('/blobs/claim', async (ctx) =>
     {
         const caller = await sessions.requireUser(ctx.req.raw.headers);
 
@@ -47,7 +47,7 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
         return ctx.json(await blobs.claim(caller, parsed.data));
     });
 
-    router.post('/claim/:challengeID', async (ctx) =>
+    router.post('/blobs/claim/:challengeID', async (ctx) =>
     {
         const caller = await sessions.requireUser(ctx.req.raw.headers);
 

@@ -18,7 +18,7 @@ export function createMeRoutes(sessions : SessionManager, nodes : NodeManager) :
 {
     const router = new Hono();
 
-    router.get('/', async (ctx) =>
+    router.get('/me', async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 

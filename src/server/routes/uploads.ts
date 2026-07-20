@@ -55,7 +55,7 @@ export function createUploadRoutes(sessions : SessionManager, blobs : BlobManage
 {
     const router = new Hono();
 
-    router.put('/:ticket', async (ctx) =>
+    router.put('/uploads/:ticket', async (ctx) =>
     {
         const caller = await sessions.requireUser(ctx.req.raw.headers);
 

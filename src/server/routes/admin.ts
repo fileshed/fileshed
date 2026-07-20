@@ -31,7 +31,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
 {
     const router = new Hono();
 
-    router.get('/users', async (ctx) =>
+    router.get('/admin/users', async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
