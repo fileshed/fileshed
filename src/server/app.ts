@@ -18,7 +18,12 @@ import health from './routes/health.ts';
 import { createAdminRoutes } from './routes/admin.ts';
 import { createBlobRoutes } from './routes/blobs.ts';
 import { createMeRoutes } from './routes/me.ts';
+import { createAccessRequestRoutes } from './routes/accessRequests.ts';
+import { createDirectRoutes } from './routes/direct.ts';
+import { createDownloadRoutes } from './routes/downloads.ts';
 import { createNodeRoutes } from './routes/nodes.ts';
+import { createPublicLinkRoutes } from './routes/links.ts';
+import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
 
 // Resource Access
@@ -28,11 +33,15 @@ import { initialize } from './resource-access/boot.ts';
 import { seedDefaultBackend } from './resource-access/database/seeds.ts';
 import { BlobRA } from './resource-access/blob/index.ts';
 import { NodeRA } from './resource-access/nodes/node.ts';
+import { PublicLinkRA } from './resource-access/publicLinks/index.ts';
+import { ShareRA } from './resource-access/shares/index.ts';
 
 // Managers
 import { AdminManager } from './managers/admin.ts';
 import { BlobManager } from './managers/blob.ts';
 import { NodeManager } from './managers/node.ts';
+import { PublicLinkManager } from './managers/publicLink.ts';
+import { ShareManager } from './managers/share.ts';
 import { SessionManager } from './managers/session.ts';
 import { mapManagerError } from './managers/errors.ts';
 import { startGcTimer } from './managers/gc.ts';
@@ -70,6 +79,8 @@ export interface AppServices
 {
     blobs : BlobManager;
     nodes : NodeManager;
+    shares : ShareManager;
+    publicLinks : PublicLinkManager;
 }
 
 export function createApp(auth ?: Auth, services ?: AppServices) : Hono
@@ -109,6 +120,11 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
             app.route('/api/uploads', createUploadRoutes(sessions, services.blobs));
             app.route('/api/nodes', createNodeRoutes(sessions, services.nodes));
             app.route('/api/me', createMeRoutes(sessions, services.nodes));
+            app.route('/api', createShareRoutes(sessions, services.shares));
+            app.route('/api', createAccessRequestRoutes(sessions, services.shares));
+            app.route('/api', createDownloadRoutes(sessions, services.publicLinks));
+            app.route('/api', createPublicLinkRoutes(sessions, services.publicLinks));
+            app.route('/d', createDirectRoutes(services.publicLinks));
         }
     }
 
@@ -153,8 +169,17 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     await seedDefaultBackend(handle, config);
 
     const blob = new BlobRA(handle);
+    const nodeRA = new NodeRA(handle);
+    const shareRA = new ShareRA(handle);
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
-    const nodes = new NodeManager(handle, new NodeRA(handle), blob);
+    const nodes = new NodeManager(handle, nodeRA, blob);
+    const shares = new ShareManager(handle, nodeRA, shareRA);
+    const publicLinks = new PublicLinkManager(
+        nodeRA,
+        blob,
+        new PublicLinkRA(handle),
+        (userID, nodeID) => shareRA.effectiveRole(userID, nodeID)
+    );
 
     const stopGc = startGcTimer(
         { handle, blob, graceMs: config.GC_GRACE_DAYS * MS_PER_DAY },
@@ -168,7 +193,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         stopSweeps();
     };
 
-    return { app: createApp(auth, { blobs, nodes }), config, shutdown };
+    return { app: createApp(auth, { blobs, nodes, shares, publicLinks }), config, shutdown };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
