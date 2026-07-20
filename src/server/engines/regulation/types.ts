@@ -1,49 +1,15 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Regulation Violation Vocabulary
+// Regulation Result
 //
 // The typed result of a legality judgement (requirements.md sec 3.6, layer 2). Engines RETURN these results and never
-// throw -- turning a violation into an HTTP-facing error is a manager's job. A code is stable and machine-readable so
-// managers and clients can branch on it without parsing the human message.
+// throw -- turning a violation into an HTTP-facing error is a manager's job. The violation vocabulary itself (codes and
+// shape) is the wire contract and lives in @fileshed/core; this file owns only the pass/fail result the engines build.
 //----------------------------------------------------------------------------------------------------------------------
 
-//----------------------------------------------------------------------------------------------------------------------
-// Codes
-//----------------------------------------------------------------------------------------------------------------------
-
-export type RegulationCode
-    = | 'link.targetIsLink'
-    | 'link.selfTarget'
-    | 'link.noAccess'
-    | 'parent.notFolder'
-    | 'parent.trashed'
-    | 'parent.crossOwner'
-    | 'move.intoSelf'
-    | 'move.intoDescendant'
-    | 'trash.linkNotTrashable'
-    | 'trash.notOwner'
-    | 'share.linkNotShareable'
-    | 'share.notOwner'
-    | 'share.granteeIsOwner'
-    | 'shareRequest.notPending'
-    | 'shareRequest.notOwner'
-    | 'quota.exceeded';
+// Models
+import type { RegulationViolation } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
-// Violation & Result
-//----------------------------------------------------------------------------------------------------------------------
-
-export interface RegulationViolation
-{
-    code : RegulationCode;
-    message : string;
-    nodeID ?: string;
-    parentID ?: string;
-    targetNodeID ?: string;
-    actorID ?: string;
-    ownerID ?: string;
-    granteeID ?: string;
-    requestID ?: string;
-}
 
 export type RegulationResult
     = | { ok : true }

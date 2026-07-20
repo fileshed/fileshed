@@ -6,10 +6,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { Node, ShareRequest, ShareRole } from '@fileshed/core';
+import type { Node, RegulationViolation, ShareRequest, ShareRole } from '@fileshed/core';
 
 // Regulation
-import { type RegulationResult, type RegulationViolation, resultOf } from './types.ts';
+import { type RegulationResult, resultOf } from './types.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Grant Legality

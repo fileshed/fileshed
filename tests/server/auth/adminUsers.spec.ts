@@ -13,9 +13,12 @@ import { ORIGIN, bootTestApp, cookieFrom, makeAdmin, signUp } from './support.ts
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function listUsers(app : Hono, cookie ?: string) : Promise<Response>
+function listUsers(app : Hono, cookie ?: string, query : Record<string, string> = {}) : Promise<Response>
 {
-    return app.request(`${ ORIGIN }/api/admin/users`, cookie ? { headers: { cookie } } : undefined);
+    const search = new URLSearchParams(query).toString();
+    const url = `${ ORIGIN }/api/admin/users${ search ? `?${ search }` : '' }`;
+
+    return app.request(url, cookie ? { headers: { cookie } } : undefined);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -57,6 +60,32 @@ describe('GET /api/admin/users', () =>
         const emails = body.users.map((user : { email : string }) => user.email);
         expect(emails).toContain('root@example.com');
         expect(emails).toContain('member@example.com');
+    });
+
+    it('reports the total user count and the applied default page bounds', async () =>
+    {
+        const booted = await bootTestApp();
+        await signUp(booted.app, 'member@example.com', 'correct-horse-battery');
+        const adminCookie = await makeAdmin(booted, 'root@example.com', 'correct-horse-battery');
+
+        const res = await listUsers(booted.app, adminCookie);
+        const body = await res.json();
+
+        expect(body.total).toBe(2);
+        expect(body.limit).toBe(50);
+        expect(body.offset).toBe(0);
+    });
+
+    it('clamps a limit over the manager bound instead of rejecting the request', async () =>
+    {
+        const booted = await bootTestApp();
+        const adminCookie = await makeAdmin(booted, 'root@example.com', 'correct-horse-battery');
+
+        const res = await listUsers(booted.app, adminCookie, { limit: '99999' });
+        const body = await res.json();
+
+        expect(res.status).toBe(200);
+        expect(body.limit).toBe(100);
     });
 });
 

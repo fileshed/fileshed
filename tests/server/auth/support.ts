@@ -35,6 +35,10 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         BASE_URL: ORIGIN,
         FILESHED_ADMIN_EMAIL: undefined,
         FILESHED_ADMIN_PASSWORD: undefined,
+        STORAGE_ROOT: './data/blobs',
+        GC_GRACE_DAYS: 7,
+        GC_INTERVAL_MINUTES: 60,
+        UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
         ...overrides,
     };
 }

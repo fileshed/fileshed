@@ -36,11 +36,7 @@ export const regulation = {
 // Re-exports
 //----------------------------------------------------------------------------------------------------------------------
 
-export type {
-    RegulationCode,
-    RegulationViolation,
-    RegulationResult,
-} from './types.ts';
+export type { RegulationResult } from './types.ts';
 export { combine, resultOf } from './types.ts';
 
 export type { LinkCreationFacts, ParentEdgeFacts, MoveFacts, TrashFacts } from './node.ts';

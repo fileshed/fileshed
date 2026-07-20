@@ -10,15 +10,37 @@
 // its purpose. The check is a single condition, enforced once, at the manager boundary.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type UserProfile, parseUserProfile } from '@fileshed/core';
+import { ForbiddenError, type UserProfile, parseUserProfile } from '@fileshed/core';
 
 // Resource Access
 import type { Auth, SessionUser } from '../resource-access/auth.ts';
 
-// Managers
-import { ForbiddenError } from './errors.ts';
-
 //----------------------------------------------------------------------------------------------------------------------
+
+// Bounds for listUsers pagination: a caller-supplied limit is clamped into [1, maxListUsersLimit] rather than
+// rejected -- pagination is a convenience the caller doesn't have to get exactly right, not a wire-contract violation
+// worth a 400. A missing limit gets defaultListUsersLimit; offset just floors at 0.
+const defaultListUsersLimit = 50;
+const maxListUsersLimit = 100;
+
+function clamp(value : number, min : number, max : number) : number
+{
+    return Math.min(Math.max(value, min), max);
+}
+
+export interface ListUsersPagination
+{
+    limit ?: number;
+    offset ?: number;
+}
+
+export interface UserProfilePage
+{
+    users : UserProfile[];
+    total : number;
+    limit : number;
+    offset : number;
+}
 
 // listUsers types its rows as the admin plugin's UserWithRole, which does not statically carry app-level
 // additionalFields; quota_limit is present at runtime (it is a real column), so the type is widened to admit it.
@@ -49,18 +71,25 @@ export class AdminManager
         this.#auth = auth;
     }
 
-    async listUsers(actor : SessionUser, headers : Headers) : Promise<UserProfile[]>
+    async listUsers(
+        actor : SessionUser,
+        headers : Headers,
+        pagination : ListUsersPagination = {}
+    ) : Promise<UserProfilePage>
     {
         if(actor.role !== 'admin')
         {
             throw new ForbiddenError('Admin access is required.');
         }
 
+        const limit = clamp(pagination.limit ?? defaultListUsersLimit, 1, maxListUsersLimit);
+        const offset = Math.max(pagination.offset ?? 0, 0);
+
         // Forward the caller's headers: better-auth's own admin guard re-checks the session, and the caller is the
         // admin we just authorized, so it passes -- the gated capability executing through the one sanctioned surface.
-        const { users } = await this.#auth.api.listUsers({ query: { limit: 500 }, headers });
+        const { users, total } = await this.#auth.api.listUsers({ query: { limit, offset }, headers });
 
-        return users.map(toUserProfile);
+        return { users: users.map(toUserProfile), total, limit, offset };
     }
 }
 

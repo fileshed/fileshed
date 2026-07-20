@@ -7,10 +7,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { Node, NodeType, Role } from '@fileshed/core';
+import type { Node, NodeType, RegulationViolation, Role } from '@fileshed/core';
 
 // Regulation
-import { type RegulationResult, type RegulationViolation, resultOf } from './types.ts';
+import { type RegulationResult, resultOf } from './types.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
