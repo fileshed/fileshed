@@ -51,6 +51,7 @@ npm run lint:types       # Type-check without emitting
 npm run test             # Run tests
 npm run test:watch       # Run tests in watch mode
 npm run test:coverage    # Run tests with coverage
+npm run test:e2e         # Run the end-to-end suite (spawns a real server; not part of npm test)
 ```
 
 ## Code Style
@@ -280,6 +281,7 @@ When working with Nuxt UI components, fetch the LLM docs from the URLs above rat
 - Tests live in the top-level `tests/` tree, mirroring source: `tests/server/`, `tests/client/`, `tests/core/`
 - Test files are named **`*.spec.ts`** (not `*.test.ts`)
 - Run with `npm run test`; use Vitest
+- **End-to-end** tests live in `tests/e2e/` and run via `npm run test:e2e` (separate `vitest.e2e.config.ts`, not in `npm test`). Each file spawns the real server as a child process and drives it over real HTTP; suites whose flow touches persistence also assert against the SQLite database, and those that move bytes against the on-disk blob store. Run them before presenting a changeset.
 
 **Writing or changing tests requires the `writing-tests` skill** (`.claude/skills/writing-tests/`). It is not optional. Tests are derived from the requirements and the unit's contract — not reverse-engineered from the implementation. Read it before you write a single assertion.
 
