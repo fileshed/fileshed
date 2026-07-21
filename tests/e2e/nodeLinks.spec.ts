@@ -13,7 +13,14 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { ClaimResponse, MeResponse, NodeListResponse, NodeResponse, ShareResponse } from '@fileshed/core';
+import type {
+    ClaimResponse,
+    MeResponse,
+    NodeListResponse,
+    NodeResponse,
+    PurgeBrokenLinksResponse,
+    ShareResponse,
+} from '@fileshed/core';
 
 // Support
 import { ApiClient, type ServerHandle, sha256Of, smallFixture, spawnServer, withDb } from './support.ts';
@@ -94,6 +101,22 @@ async function placeLinkIntoSharedFolder(seed : string, role : 'viewer' | 'edito
     })).json() as NodeResponse;
 
     return { folderID: folder.id, childID: child.id, share, linkID: link.id };
+}
+
+// A link placed by `client` inside `parentID`, pointing at `targetNodeID`.
+async function placeLink(client : ApiClient, parentID : string | null, targetNodeID : string) : Promise<NodeResponse>
+{
+    return await (await client.post('/api/nodes', { type: 'link', parentID, targetNodeID })).json() as NodeResponse;
+}
+
+// The node row for `id`, or undefined once a purge (or a cascade) has removed it.
+function nodeRowByID(id : string) : Promise<{ id : string } | undefined>
+{
+    return withDb(server, (db) => db
+        .selectFrom('node')
+        .select('id')
+        .where('id', '=', id)
+        .executeTakeFirst());
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -277,6 +300,80 @@ describe('link creation regulation', () =>
         expect(link.type).toBe('link');
         if(link.type !== 'link') { throw new Error('expected a link node'); }
         expect(link.targetNodeID).toBe(folder.id);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Purging broken links
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('purging broken links', () =>
+{
+    it('removes only the caller\'s dead link, leaving the live one, and reports the count', async () =>
+    {
+        // Two folders the owner shares to the recipient, who links to both from a folder they own.
+        const liveTarget = await makeFolder(owner, 'purge-live-target');
+        const deadTarget = await makeFolder(owner, 'purge-dead-target');
+        expect((await grantShare(liveTarget.id, recipientID, 'viewer')).status).toBe(201);
+        const deadShare = await (await grantShare(deadTarget.id, recipientID, 'viewer')).json() as ShareResponse;
+
+        const bin = await makeFolder(recipient, 'purge-bin');
+        const liveLink = await placeLink(recipient, bin.id, liveTarget.id);
+        const deadLink = await placeLink(recipient, bin.id, deadTarget.id);
+
+        // Revoking the dead target's share is what strands its link; the live target's link still resolves.
+        expect((await owner.del(`/api/shares/${ deadShare.id }`)).status).toBe(204);
+
+        const res = await recipient.post(`/api/nodes/${ bin.id }/purge-broken-links`, {});
+        const body = await res.json() as PurgeBrokenLinksResponse;
+
+        expect(res.status).toBe(200);
+        expect(body.purged).toBe(1);
+        expect(await nodeRowByID(deadLink.id)).toBeUndefined();
+        expect((await nodeRowByID(liveLink.id))?.id).toBe(liveLink.id);
+    });
+
+    it('refuses to purge a folder the caller cannot resolve, answering 404', async () =>
+    {
+        const priv = await makeFolder(owner, 'purge-private');
+
+        expect((await stranger.post(`/api/nodes/${ priv.id }/purge-broken-links`, {})).status).toBe(404);
+    });
+
+    it('never removes a second user\'s dead link when the folder owner purges', async () =>
+    {
+        const ownerID = await callerID(owner);
+
+        // A folder the owner shares editor to the recipient, so both may place links inside it.
+        const shared = await makeFolder(owner, 'purge-shared-folder');
+        expect((await grantShare(shared.id, recipientID, 'editor')).status).toBe(201);
+
+        // A target both resolve at creation, owned by neither, then revoked out from under both.
+        const target = await makeFolder(stranger, 'purge-shared-target');
+        const ownerGrant = await (await stranger.post(
+            `/api/nodes/${ target.id }/shares`,
+            { granteeUserID: ownerID, role: 'viewer' }
+        )).json() as ShareResponse;
+        const recipientGrant = await (await stranger.post(
+            `/api/nodes/${ target.id }/shares`,
+            { granteeUserID: recipientID, role: 'viewer' }
+        )).json() as ShareResponse;
+
+        const ownerLink = await placeLink(owner, shared.id, target.id);
+        const recipientLink = await placeLink(recipient, shared.id, target.id);
+
+        // Both grants gone: neither link resolves its target, so both are dead.
+        expect((await stranger.del(`/api/shares/${ ownerGrant.id }`)).status).toBe(204);
+        expect((await stranger.del(`/api/shares/${ recipientGrant.id }`)).status).toBe(204);
+
+        const res = await owner.post(`/api/nodes/${ shared.id }/purge-broken-links`, {});
+        const body = await res.json() as PurgeBrokenLinksResponse;
+
+        // The owner's cleanup prunes only the owner's dead link; the recipient's is not the owner's to remove.
+        expect(res.status).toBe(200);
+        expect(body.purged).toBe(1);
+        expect(await nodeRowByID(ownerLink.id)).toBeUndefined();
+        expect((await nodeRowByID(recipientLink.id))?.id).toBe(recipientLink.id);
     });
 });
 
