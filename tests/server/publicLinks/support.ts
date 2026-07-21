@@ -253,8 +253,8 @@ export async function shareWith(
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// A zero-byte file. The upload flow refuses size 0 (a claim's size must be positive), so the only way to stage the
-// empty-blob edge case is to write the bytes and rows directly.
+// A zero-byte file, staged straight to the blob store and node rows -- a serving test wants the empty-blob edge case
+// in place without the ceremony of a claim/upload round trip.
 //----------------------------------------------------------------------------------------------------------------------
 
 const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';

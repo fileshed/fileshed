@@ -60,11 +60,14 @@ export {
     nodeSortKeys,
     type SortDirection,
     sortDirections,
+    type NodeTypeFamily,
+    nodeTypeFamilies,
     type ChildrenQuery,
     type DeleteNodeQuery,
     type LinkTarget,
     type NodeResponse,
     type NodeListResponse,
+    type UserSummary,
     type PurgeBrokenLinksResponse,
 } from './models/requests/nodes.ts';
 export { type SearchQuery } from './models/requests/search.ts';
@@ -126,6 +129,7 @@ export {
     linkTargetCodec,
     nodeResponseCodec,
     nodeListResponseCodec,
+    userSummaryCodec,
     toNodeResponse,
 } from './models/requests/schemas/nodes.ts';
 export { searchQueryCodec } from './models/requests/schemas/search.ts';

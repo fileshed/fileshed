@@ -50,7 +50,12 @@ import { type RegulationResult, regulation } from '../engines/regulation/index.t
 import type { SessionUser } from '../resource-access/auth.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { DeletionOfferRA } from '../resource-access/deletionOffers/index.ts';
-import { type ChildrenOptions, type ChildrenQuery as NodeLocation, NodeRA } from '../resource-access/nodes/node.ts';
+import {
+    type ChildrenOptions,
+    type NodeFilters,
+    type ChildrenQuery as NodeLocation,
+    NodeRA,
+} from '../resource-access/nodes/node.ts';
 import { ShareRA } from '../resource-access/shares/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -161,10 +166,19 @@ export class NodeManager
             pagination: { limit: query.limit, offset: query.offset },
             sort: { key: query.sortKey, direction: query.sortDirection },
         };
+        const filters : NodeFilters = {
+            types: query.types,
+            ownerID: query.ownerID,
+            updatedAfter: query.updatedAfter === undefined ? undefined : new Date(query.updatedAfter),
+            updatedBefore: query.updatedBefore === undefined ? undefined : new Date(query.updatedBefore),
+        };
 
-        const [ page, total ] = await Promise.all([
-            this.#nodes.children(location, options),
-            this.#nodes.countChildren(location),
+        // The page and its total carry the filters; the owner facet does NOT -- it faces the whole folder so the filter
+        // menu can always switch owners.
+        const [ page, total, owners ] = await Promise.all([
+            this.#nodes.children(location, options, filters),
+            this.#nodes.countChildren(location, filters),
+            this.#nodes.ownersOf(location),
         ]);
 
         const [ grants, targets ] = await Promise.all([
@@ -192,7 +206,7 @@ export class NodeManager
             return toNodeResponse(node, role, targets.get(node.targetNodeID) ?? null);
         });
 
-        return { nodes, total, limit: query.limit, offset: query.offset };
+        return { nodes, total, limit: query.limit, offset: query.offset, owners };
     }
 
     // Name search scoped to the nodes the caller can see. A name-match superset comes back from the RA (case-
@@ -222,7 +236,8 @@ export class NodeManager
             return toNodeResponse(node, role, targets.get(node.targetNodeID) ?? null);
         });
 
-        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset };
+        // A search envelope faces no single folder, so it carries no owner facet.
+        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset, owners: [] };
     }
 
     async me(actor : SessionUser) : Promise<MeResponse>

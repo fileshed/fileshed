@@ -90,21 +90,36 @@ export interface PurgeBrokenLinksResponse
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Children listing (GET /api/nodes/:id/children) -- pagination plus the sort-key vocabulary.
+// Children listing (GET /api/nodes/:id/children) -- pagination, the sort-key vocabulary, and the filter facets.
 //----------------------------------------------------------------------------------------------------------------------
 
-export const nodeSortKeys = [ 'name', 'size', 'createdAt', 'updatedAt' ] as const;
+export const nodeSortKeys = [ 'name', 'size', 'createdAt', 'updatedAt', 'kind' ] as const;
 export type NodeSortKey = typeof nodeSortKeys[number];
 
 export const sortDirections = [ 'asc', 'desc' ] as const;
 export type SortDirection = typeof sortDirections[number];
 
+// The curated node-type families a listing can be filtered by. A family is broader than a raw mime type -- 'documents'
+// is every text/* type, 'archives' a fixed set of archive mimes (ARCHIVE_MIME_TYPES) -- so the client filters by an
+// intent ("images") rather than enumerating mimes. 'folders' and 'links' select by node type; the rest select file
+// nodes by mime. Multi-select ORs the chosen families together.
+export const nodeTypeFamilies
+    = [ 'folders', 'documents', 'pdfs', 'images', 'video', 'audio', 'archives', 'links' ] as const;
+export type NodeTypeFamily = typeof nodeTypeFamilies[number];
+
+// The filters ride the query string alongside pagination and sort, AND-combined. `types` is always present (empty =
+// unfiltered); ownerID and the date window are absent when their filter is off. The date bounds are ISO instants:
+// updatedAfter is an inclusive lower bound, updatedBefore an exclusive upper bound (a half-open window).
 export interface ChildrenQuery
 {
     limit : number;
     offset : number;
     sortKey : NodeSortKey;
     sortDirection : SortDirection;
+    types : NodeTypeFamily[];
+    ownerID ?: string;
+    updatedAfter ?: string;
+    updatedBefore ?: string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -160,12 +175,28 @@ interface LinkNodeResponse extends NodeResponseBase
 
 export type NodeResponse = FileNodeResponse | FolderNodeResponse | LinkNodeResponse;
 
+// A user reduced to what a listing needs to render and filter by owner: identity, display name, email, and avatar
+// image (null when the account has none). No account role or quota rides here -- this is a display summary, not the
+// caller's own profile.
+export interface UserSummary
+{
+    id : string;
+    name : string;
+    email : string;
+    image : string | null;
+}
+
 export interface NodeListResponse
 {
     nodes : NodeResponse[];
     total : number;
     limit : number;
     offset : number;
+
+    // The distinct owners of the nodes in the listed folder -- the WHOLE folder, not just the returned page, and
+    // unfiltered by the query's own filters, so it doubles as the owner-filter menu's source. Empty for a search
+    // envelope, which has no single folder to face.
+    owners : UserSummary[];
 }
 
 //----------------------------------------------------------------------------------------------------------------------

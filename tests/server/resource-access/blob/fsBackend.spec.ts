@@ -12,6 +12,7 @@ import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -24,7 +25,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access (under test)
-import { FsBackend } from '@server/resource-access/blob/fsBackend.ts';
+import { FsBackend, resolveStorageRoot } from '@server/resource-access/blob/fsBackend.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Helpers
@@ -192,6 +193,28 @@ describe('FsBackend', () =>
         // A traversal-shaped address must never reach the filesystem.
         await expect(store.exists('../../etc/passwd')).rejects.toBeInstanceOf(InvalidSha256Error);
         await expect(store.getStream('not-a-real-hash')).rejects.toBeInstanceOf(InvalidSha256Error);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('resolveStorageRoot', () =>
+{
+    // A relative root must mean the same directory from every entry point -- the Vite dev server (cwd src/client)
+    // and the standalone server (cwd repo root) share one blob store. Anchoring to the repo root, derived from the
+    // module's own location, is what makes the result cwd-independent.
+    it('anchors a relative root to the repo root, independent of the working directory', () =>
+    {
+        const resolved = resolveStorageRoot('./data/blobs');
+
+        // This spec sits four directories below the repo root too, so the expectation derives its own anchor.
+        const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
+        expect(resolved).toBe(join(repoRoot, 'data/blobs'));
+    });
+
+    it('passes an absolute root through untouched', () =>
+    {
+        expect(resolveStorageRoot('/var/lib/fileshed/blobs')).toBe('/var/lib/fileshed/blobs');
     });
 });
 

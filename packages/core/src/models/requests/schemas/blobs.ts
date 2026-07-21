@@ -18,7 +18,7 @@ export const claimRequestCodec = z.strictObject({
     sha256: z.string().regex(sha256Pattern, 'sha256 must be 64 lowercase hex characters'),
     size: z.number()
         .int()
-        .positive(),
+        .nonnegative(),
 });
 
 typeAssert<Equals<z.output<typeof claimRequestCodec>, ClaimRequest>>();

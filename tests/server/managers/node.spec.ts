@@ -175,10 +175,39 @@ describe('NodeManager trashed visibility', () =>
     {
         await seedTrashedSharedFolder();
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
-        const query = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc' } as const;
+        const query = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         await expect(manager.children(testActor({ id: 'bob' }), 'dir', query)).rejects.toThrow(NotFoundError);
         await expect(manager.children(testActor({ id: 'alice' }), 'dir', query)).resolves.toBeDefined();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeManager.children owner facet', () =>
+{
+    // The owner facet the listing response carries must be the folder's whole set of owners, so the owner filter menu
+    // can always switch owners -- even while an owner filter has narrowed the page down to one of them.
+    it('carries every folder owner in the facet, unnarrowed by an active owner filter', async () =>
+    {
+        await seedUser(handle.db, 'bob');
+        await ra.insert(folderNode({ id: 'p', ownerID: 'alice' }));
+        await ra.insert(fileNode({ id: 'mine', ownerID: 'alice', blobID: 'sha-a', parentID: 'p' }));
+        await ra.insert(fileNode({ id: 'theirs', ownerID: 'bob', blobID: 'sha-a', parentID: 'p' }));
+
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+
+        const unfiltered = await manager.children(testActor({ id: 'alice' }), 'p', base);
+        const byBob = await manager.children(testActor({ id: 'alice' }), 'p', { ...base, ownerID: 'bob' });
+
+        // The facet lists both owners in both calls.
+        expect(new Set(unfiltered.owners.map((owner) => owner.id))).toEqual(new Set([ 'alice', 'bob' ]));
+        expect(new Set(byBob.owners.map((owner) => owner.id))).toEqual(new Set([ 'alice', 'bob' ]));
+
+        // But the owner filter narrows the page itself to bob's contribution.
+        expect(byBob.nodes.map((node) => node.id)).toEqual([ 'theirs' ]);
+        expect(byBob.total).toBe(1);
     });
 });
 

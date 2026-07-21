@@ -42,8 +42,17 @@ afterEach(async () =>
 });
 
 // A file owned by u1 referencing sha-a, with only the fields a test cares about spelled out.
-function file(id : string, extra : { parentID ?: string | null; size ?: number; ownerID ?: string; updatedAt ?: Date })
-: ReturnType<typeof fileNode>
+function file(
+    id : string,
+    extra : {
+        parentID ?: string | null;
+        size ?: number;
+        ownerID ?: string;
+        updatedAt ?: Date;
+        name ?: string;
+        mimeType ?: string;
+    }
+) : ReturnType<typeof fileNode>
 {
     return fileNode({ id, ownerID: extra.ownerID ?? 'u1', blobID: 'sha-a', ...extra });
 }
@@ -86,8 +95,84 @@ describe('NodeRA.children', () =>
 
         const children = await ra.children({ parentID: 'p', ownerID: 'u1' }, byName);
 
-        expect(children.map((node) => node.id)).toEqual([ 'cf', 'lk', 'sf' ]);
+        // Folder 'sf' leads whatever its name (folders sort above the file/link partition); 'cf' and 'lk' follow in
+        // name order, the link grouped with the file below the folders.
+        expect(children.map((node) => node.id)).toEqual([ 'sf', 'cf', 'lk' ]);
         expect(children.find((node) => node.id === 'lk')?.type).toBe('link');
+    });
+
+    // Folders always sort above non-folders in a listing, regardless of the sort key or its direction; files and links
+    // share the lower partition, which the sort key then orders. This is a server-side invariant because it must hold
+    // across paginated pages a client cannot re-partition.
+    it('pins folders above files and links, applying the sort key within each partition', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(folderNode({ id: 'tgt', ownerID: 'u1' }));
+        // Names chosen so folders would NOT lead on name alone -- 'yolk'/'zeta' sort after 'apple'/'berry'/'mango'.
+        await ra.insert(folderNode({ id: 'zeta', ownerID: 'u1', parentID: 'p' }));
+        await ra.insert(folderNode({ id: 'yolk', ownerID: 'u1', parentID: 'p' }));
+        await ra.insert(file('apple', { parentID: 'p' }));
+        await ra.insert(file('mango', { parentID: 'p' }));
+        await ra.insert(linkNode({ id: 'berry', ownerID: 'u1', parentID: 'p', targetNodeID: 'tgt' }));
+
+        const children = await ra.children({ parentID: 'p', ownerID: 'u1' }, byName);
+
+        expect(children.map((node) => node.id)).toEqual([ 'yolk', 'zeta', 'apple', 'berry', 'mango' ]);
+    });
+
+    it('keeps folders on top under descending order, flipping only the sort within each partition', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(folderNode({ id: 'dir-a', ownerID: 'u1', parentID: 'p', name: 'apple' }));
+        await ra.insert(folderNode({ id: 'dir-b', ownerID: 'u1', parentID: 'p', name: 'banana' }));
+        await ra.insert(file('file-x', { parentID: 'p', name: 'x-ray' }));
+        await ra.insert(file('file-y', { parentID: 'p', name: 'yellow' }));
+
+        const desc = await ra.children(
+            { parentID: 'p', ownerID: 'u1' },
+            { pagination: { limit: 100, offset: 0 }, sort: { key: 'name', direction: 'desc' } }
+        );
+
+        // The folders-first criterion is direction-independent: folders still lead. Only the within-partition name
+        // runs descending -- banana before apple, yellow before x-ray.
+        expect(desc.map((node) => node.id)).toEqual([ 'dir-b', 'dir-a', 'file-y', 'file-x' ]);
+    });
+
+    it('keeps folders on the first page across a page boundary, whatever their name', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        // Three files whose names all sort before the folder's, enough to fill the first page on their own.
+        await ra.insert(file('a', { parentID: 'p' }));
+        await ra.insert(file('b', { parentID: 'p' }));
+        await ra.insert(file('c', { parentID: 'p' }));
+        // A folder whose name sorts dead last -- naive name order would exile it to page 2.
+        await ra.insert(folderNode({ id: 'zzz', ownerID: 'u1', parentID: 'p' }));
+
+        const sort = { key: 'name' as const, direction: 'asc' as const };
+        const at = { parentID: 'p', ownerID: 'u1' };
+        const page1 = await ra.children(at, { pagination: { limit: 2, offset: 0 }, sort });
+        const page2 = await ra.children(at, { pagination: { limit: 2, offset: 2 }, sort });
+
+        expect(page1.map((node) => node.id)).toEqual([ 'zzz', 'a' ]);
+        expect(page2.map((node) => node.id)).toEqual([ 'b', 'c' ]);
+    });
+
+    it('sorts the lower partition by type then mime under the kind key, folders still on top', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'u1', parentID: 'p' }));
+        await ra.insert(file('aaa', { parentID: 'p', mimeType: 'text/plain' }));
+        await ra.insert(file('bbb', { parentID: 'p', mimeType: 'application/pdf' }));
+        await ra.insert(linkNode({ id: 'ccc', ownerID: 'u1', parentID: 'p', targetNodeID: 'dir' }));
+
+        const children = await ra.children(
+            { parentID: 'p', ownerID: 'u1' },
+            { pagination: { limit: 100, offset: 0 }, sort: { key: 'kind', direction: 'asc' } }
+        );
+
+        // 'dir' (folder) leads. Files order by mime -- application/pdf before text/plain -- so bbb precedes aaa though
+        // its name sorts later. The link trails the files: type 'file' sorts before 'link' within the lower partition.
+        expect(children.map((node) => node.id)).toEqual([ 'dir', 'bbb', 'aaa', 'ccc' ]);
     });
 
     it('lists root-level nodes when parentID is null', async () =>
@@ -192,6 +277,195 @@ describe('NodeRA.children', () =>
         );
 
         expect(children.map((node) => node.id)).toEqual([ 'oldest', 'middle', 'newest' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// children — type / owner / modified filters
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeRA.children filters', () =>
+{
+    // A folder 'p' with one node per type family (plus an unclassified binary), so a family filter's WHERE can be
+    // proven by exactly which ids survive.
+    async function seedFamilies() : Promise<void>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(folderNode({ id: 'target', ownerID: 'u1' }));
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'u1', parentID: 'p' }));
+        await ra.insert(linkNode({ id: 'lk', ownerID: 'u1', parentID: 'p', targetNodeID: 'target' }));
+        await ra.insert(file('doc', { parentID: 'p', mimeType: 'text/markdown' }));
+        await ra.insert(file('txt', { parentID: 'p', mimeType: 'text/plain' }));
+        await ra.insert(file('pdf', { parentID: 'p', mimeType: 'application/pdf' }));
+        await ra.insert(file('img', { parentID: 'p', mimeType: 'image/png' }));
+        await ra.insert(file('vid', { parentID: 'p', mimeType: 'video/mp4' }));
+        await ra.insert(file('aud', { parentID: 'p', mimeType: 'audio/mpeg' }));
+        await ra.insert(file('zip', { parentID: 'p', mimeType: 'application/zip' }));
+        await ra.insert(file('rar', { parentID: 'p', mimeType: 'application/x-rar-compressed' }));
+        await ra.insert(file('bin', { parentID: 'p', mimeType: 'application/octet-stream' }));
+    }
+
+    const at = { parentID: 'p', ownerID: 'u1' };
+
+    async function filtered(types : string[]) : Promise<string[]>
+    {
+        const rows = await ra.children(at, byName, { types });
+        return rows.map((node) => node.id);
+    }
+
+    it('selects folders and links by node type', async () =>
+    {
+        await seedFamilies();
+
+        expect(await filtered([ 'folders' ])).toEqual([ 'dir' ]);
+        expect(await filtered([ 'links' ])).toEqual([ 'lk' ]);
+    });
+
+    it('selects documents as every text/* file and pdfs as application/pdf exactly', async () =>
+    {
+        await seedFamilies();
+
+        expect(await filtered([ 'documents' ])).toEqual([ 'doc', 'txt' ]);
+        expect(await filtered([ 'pdfs' ])).toEqual([ 'pdf' ]);
+    });
+
+    it('selects the media families by mime prefix', async () =>
+    {
+        await seedFamilies();
+
+        expect(await filtered([ 'images' ])).toEqual([ 'img' ]);
+        expect(await filtered([ 'video' ])).toEqual([ 'vid' ]);
+        expect(await filtered([ 'audio' ])).toEqual([ 'aud' ]);
+    });
+
+    it('selects archives as the fixed archive-mime set, excluding an unclassified binary', async () =>
+    {
+        await seedFamilies();
+
+        expect(await filtered([ 'archives' ])).toEqual([ 'rar', 'zip' ]);
+        // The octet-stream binary belongs to no family, so no single-family filter ever returns it.
+        expect(await filtered([ 'archives', 'documents', 'images' ])).not.toContain('bin');
+    });
+
+    it('ORs multiple selected families together', async () =>
+    {
+        await seedFamilies();
+
+        expect(await filtered([ 'images', 'pdfs' ])).toEqual([ 'img', 'pdf' ]);
+        // Folders still lead the mixed result: the folders-first partition is independent of the filter.
+        expect(await filtered([ 'folders', 'images' ])).toEqual([ 'dir', 'img' ]);
+    });
+
+    it('filters a folder listing to one owner', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('mine', { parentID: 'p', ownerID: 'u1' }));
+        await ra.insert(file('theirs', { parentID: 'p', ownerID: 'u2' }));
+
+        const rows = await ra.children(at, byName, { types: [], ownerID: 'u2' });
+
+        expect(rows.map((node) => node.id)).toEqual([ 'theirs' ]);
+    });
+
+    // The modified window is half-open: updatedAfter includes a node stamped exactly at the bound, updatedBefore
+    // excludes one stamped exactly at it.
+    it('applies a half-open modified window — after inclusive, before exclusive', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('a', { parentID: 'p', updatedAt: new Date('2026-03-01T00:00:00.000Z') }));
+        await ra.insert(file('b', { parentID: 'p', updatedAt: new Date('2026-06-01T00:00:00.000Z') }));
+        await ra.insert(file('c', { parentID: 'p', updatedAt: new Date('2026-09-01T00:00:00.000Z') }));
+
+        const bound = new Date('2026-06-01T00:00:00.000Z');
+        const after = await ra.children(at, byName, { types: [], updatedAfter: bound });
+        const before = await ra.children(at, byName, { types: [], updatedBefore: bound });
+        const window = await ra.children(at, byName, {
+            types: [],
+            updatedAfter: bound,
+            updatedBefore: new Date('2026-09-01T00:00:00.000Z'),
+        });
+
+        expect(after.map((node) => node.id)).toEqual([ 'b', 'c' ]);
+        expect(before.map((node) => node.id)).toEqual([ 'a' ]);
+        expect(window.map((node) => node.id)).toEqual([ 'b' ]);
+    });
+
+    it('keeps folders-first ordering and pagination under a filter', async () =>
+    {
+        await seedFamilies();
+        const sort = { key: 'name' as const, direction: 'asc' as const };
+
+        const page1 = await ra.children(at, { pagination: { limit: 1, offset: 0 }, sort }, {
+            types: [ 'folders', 'documents' ],
+        });
+        const page2 = await ra.children(
+            at,
+            { pagination: { limit: 1, offset: 1 }, sort },
+            { types: [ 'folders', 'documents' ] }
+        );
+
+        // dir (folder) leads its filtered partition; doc/txt follow in name order across the page boundary.
+        expect(page1.map((node) => node.id)).toEqual([ 'dir' ]);
+        expect(page2.map((node) => node.id)).toEqual([ 'doc' ]);
+    });
+
+    it('counts the filtered listing, not the whole folder', async () =>
+    {
+        await seedFamilies();
+
+        const count = await ra.countChildren(at, { types: [ 'images' ] });
+        const page = await ra.children(at, byName, { types: [ 'images' ] });
+
+        expect(count).toBe(1);
+        expect(count).toBe(page.length);
+    });
+
+    it('treats an empty type selection with no owner or window as unfiltered', async () =>
+    {
+        await seedFamilies();
+
+        const all = await ra.children(at, byName, { types: [] });
+        const unfiltered = await ra.children(at, byName);
+
+        expect(all.map((node) => node.id)).toEqual(unfiltered.map((node) => node.id));
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// ownersOf — the owner facet
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeRA.ownersOf', () =>
+{
+    it('returns the folder\'s distinct owners as display summaries, ordered by name', async () =>
+    {
+        await seedUser(db, 'ada', { name: 'Ada', image: 'https://cdn/ada.png' });
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('mine', { parentID: 'p', ownerID: 'u1' }));
+        await ra.insert(file('mine2', { parentID: 'p', ownerID: 'u1' }));
+        await ra.insert(file('theirs', { parentID: 'p', ownerID: 'ada' }));
+
+        const owners = await ra.ownersOf({ parentID: 'p', ownerID: 'u1' });
+
+        // u1 collapses to one row despite two files; ordered by name, 'Ada' precedes 'u1'. The summary carries the
+        // joined display fields, with a null image when the account has none.
+        expect(owners.map((entry) => entry.id)).toEqual([ 'ada', 'u1' ]);
+        expect(owners.find((entry) => entry.id === 'u1')).toEqual({
+            id: 'u1', name: 'u1', email: 'u1@t.test', image: null,
+        });
+        expect(owners.find((entry) => entry.id === 'ada')?.image).toBe('https://cdn/ada.png');
+    });
+
+    it('excludes owners whose only nodes here are trashed', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('mine', { parentID: 'p', ownerID: 'u1' }));
+        await ra.insert(file('gone', { parentID: 'p', ownerID: 'u2' }));
+        await ra.setTrashed('gone', new Date('2026-04-01T00:00:00.000Z'));
+
+        const owners = await ra.ownersOf({ parentID: 'p', ownerID: 'u1' });
+
+        expect(owners.map((entry) => entry.id)).toEqual([ 'u1' ]);
     });
 });
 

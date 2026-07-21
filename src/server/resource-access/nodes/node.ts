@@ -13,18 +13,25 @@
 
 /* eslint-disable camelcase -- update sets and CTE column lists name snake_case DB columns (house convention) */
 
-import { type SqlBool, sql } from 'kysely';
+import { type Expression, type ExpressionBuilder, type SqlBool, sql } from 'kysely';
 
 // Models
-import { type LinkNode, MAX_TREE_DEPTH, type Node } from '@fileshed/core';
+import {
+    type LinkNode,
+    MAX_TREE_DEPTH,
+    MIME_FAMILY_SPECS,
+    type Node,
+    type NodeTypeFamily,
+    type UserSummary,
+} from '@fileshed/core';
 
 // Resource Access
-import type { DatabaseHandle } from '../database/database.ts';
+import type { Database, DatabaseHandle } from '../database/database.ts';
 import { nodeFromRow, rowFromNode } from './transforms.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export type NodeSortKey = 'name' | 'size' | 'createdAt' | 'updatedAt';
+export type NodeSortKey = 'name' | 'size' | 'createdAt' | 'updatedAt' | 'kind';
 export type SortDirection = 'asc' | 'desc';
 
 export interface NodeSort
@@ -52,12 +59,29 @@ export interface ChildrenOptions
     sort : NodeSort;
 }
 
-// Whitelists the sortable columns so a caller's sort key can never reach orderBy as raw SQL.
-const sortColumns : Record<NodeSortKey, 'name' | 'size' | 'created_at' | 'updated_at'> = {
-    name: 'name',
-    size: 'size',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
+// The listing filters, AND-combined. An empty `types` is unfiltered; a single-select owner and a half-open date
+// window (updatedAfter inclusive, updatedBefore exclusive) are absent when their filter is off. Distinct from the
+// listing's location: `ownerID` here narrows a folder to one contributor, where a location's ownerID only scopes the
+// root.
+export interface NodeFilters
+{
+    types : readonly NodeTypeFamily[];
+    ownerID ?: string;
+    updatedAfter ?: Date;
+    updatedBefore ?: Date;
+}
+
+// Whitelists the sortable columns so a caller's sort key can never reach orderBy as raw SQL. A key maps to the ordered
+// columns its partition sorts by: 'kind' widens to (type, mime type, name) so the file/link partition groups by type
+// and then by format; every other key is a single column. Folders are pinned above this ordering separately.
+type SortColumn = 'name' | 'size' | 'created_at' | 'updated_at' | 'type' | 'mime_type';
+
+const sortColumns : Record<NodeSortKey, readonly SortColumn[]> = {
+    name: [ 'name' ],
+    size: [ 'size' ],
+    createdAt: [ 'created_at' ],
+    updatedAt: [ 'updated_at' ],
+    kind: [ 'type', 'mime_type', 'name' ],
 };
 
 // Escape the LIKE metacharacters in a user's search term so "50%" or "a_b" match literally rather than as wildcards.
@@ -65,6 +89,58 @@ const sortColumns : Record<NodeSortKey, 'name' | 'size' | 'created_at' | 'update
 function escapeLikePattern(term : string) : string
 {
     return term.replace(/[\\%_]/g, (char) => `\\${ char }`);
+}
+
+type NodeExpressionBuilder = ExpressionBuilder<Database, 'node'>;
+
+// The WHERE fragment one type-family selects. 'folders' and 'links' select by node type outright; every other family
+// selects file nodes and narrows by mime, built from the same MIME_FAMILY_SPECS the client classifies with -- a LIKE
+// prefix per prefix spec (text/%, image/%) OR-ed with an IN over the exact mimes. The mime patterns are literal (no
+// user input), so no LIKE escaping is needed.
+function familyCondition(eb : NodeExpressionBuilder, family : NodeTypeFamily) : Expression<SqlBool>
+{
+    if(family === 'folders') { return eb('type', '=', 'folder'); }
+    if(family === 'links') { return eb('type', '=', 'link'); }
+
+    const spec = MIME_FAMILY_SPECS[family];
+    const mimeTerms : Expression<SqlBool>[] = spec.prefixes.map(
+        (prefix) => eb('mime_type', 'like', `${ prefix }%`)
+    );
+    if(spec.exact.length > 0) { mimeTerms.push(eb('mime_type', 'in', [ ...spec.exact ])); }
+
+    return eb.and([ eb('type', '=', 'file'), eb.or(mimeTerms) ]);
+}
+
+function hasFilters(filters : NodeFilters) : boolean
+{
+    return filters.types.length > 0
+        || filters.ownerID !== undefined
+        || filters.updatedAfter !== undefined
+        || filters.updatedBefore !== undefined;
+}
+
+// The AND of every active filter. Selected families OR together into one term; owner and the date bounds add their own.
+// updated_at is stored as an ISO string (SQLite) or a timestamp (Postgres) and both compare correctly against an ISO
+// bound, the same crossing expiredTrashRootIDs relies on.
+function filterConditions(eb : NodeExpressionBuilder, filters : NodeFilters) : Expression<SqlBool>[]
+{
+    const conditions : Expression<SqlBool>[] = [];
+
+    if(filters.types.length > 0)
+    {
+        conditions.push(eb.or(filters.types.map((family) => familyCondition(eb, family))));
+    }
+    if(filters.ownerID !== undefined) { conditions.push(eb('owner_id', '=', filters.ownerID)); }
+    if(filters.updatedAfter !== undefined)
+    {
+        conditions.push(eb('updated_at', '>=', filters.updatedAfter.toISOString()));
+    }
+    if(filters.updatedBefore !== undefined)
+    {
+        conditions.push(eb('updated_at', '<', filters.updatedBefore.toISOString()));
+    }
+
+    return conditions;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -112,10 +188,14 @@ export class NodeRA
     // The nodes directly under `parentID` (links included as-is; resolving targets is the manager's job via getMany),
     // excluding trashed items from the normal listing. A folder's listing is scoped by the folder alone: contributions
     // belong to another owner but travel with the folder, so owner_id only filters the ROOT listing (parentID null),
-    // where per-user trees begin. Authorization is the manager's job before this query runs. The id tiebreaker only
-    // makes pagination deterministic when the sort key ties -- ordering semantics stay the sort key's (cuid2 ids are
-    // non-monotonic and never stand in for insertion order).
-    async children(query : ChildrenQuery, options : ChildrenOptions) : Promise<Node[]>
+    // where per-user trees begin. Authorization is the manager's job before this query runs.
+    //
+    // Folders always sort above non-folders (files and links share the lower partition), whatever the sort key or its
+    // direction -- a fixed leading criterion the direction never flips. This lives in the query, not the client,
+    // because the partition has to hold across page boundaries a paginated client cannot re-partition. Within each
+    // partition the sort key applies, then the id tiebreaker makes pagination deterministic when the key ties (cuid2
+    // ids are non-monotonic and never stand in for insertion order).
+    async children(query : ChildrenQuery, options : ChildrenOptions, filters ?: NodeFilters) : Promise<Node[]>
     {
         const { pagination, sort } = options;
 
@@ -128,8 +208,21 @@ export class NodeRA
             ? builder.where('parent_id', 'is', null).where('owner_id', '=', query.ownerID)
             : builder.where('parent_id', '=', query.parentID);
 
+        if(filters !== undefined && hasFilters(filters))
+        {
+            builder = builder.where((eb) => eb.and(filterConditions(eb, filters)));
+        }
+
+        // 0 for a folder, 1 for anything else: a plain integer key that sorts folders first on both dialects. CASE is
+        // portable, and sql.ref quotes the `type` column so the SQL keyword can never be read as bare identifier.
+        builder = builder.orderBy(sql<number>`case when ${ sql.ref('type') } = 'folder' then 0 else 1 end`, 'asc');
+
+        for(const column of sortColumns[sort.key])
+        {
+            builder = builder.orderBy(column, sort.direction);
+        }
+
         const rows = await builder
-            .orderBy(sortColumns[sort.key], sort.direction)
             .orderBy('id', 'asc')
             .limit(pagination.limit)
             .offset(pagination.offset)
@@ -139,9 +232,9 @@ export class NodeRA
     }
 
     // The unpaginated child count for the same location `children` lists -- the grand total a page envelope reports so
-    // a client can size its pagination. Uses the identical filter as `children` so the count and the page can never
-    // describe different sets.
-    async countChildren(query : ChildrenQuery) : Promise<number>
+    // a client can size its pagination. Applies the identical location AND filters as `children` so the count and the
+    // page can never describe different sets: a filtered total reflects the filtered listing.
+    async countChildren(query : ChildrenQuery, filters ?: NodeFilters) : Promise<number>
     {
         let builder = this.#db
             .selectFrom('node')
@@ -152,9 +245,36 @@ export class NodeRA
             ? builder.where('parent_id', 'is', null).where('owner_id', '=', query.ownerID)
             : builder.where('parent_id', '=', query.parentID);
 
+        if(filters !== undefined && hasFilters(filters))
+        {
+            builder = builder.where((eb) => eb.and(filterConditions(eb, filters)));
+        }
+
         const row = await builder.executeTakeFirstOrThrow();
 
         return Number(row.count);
+    }
+
+    // The distinct owners of the nodes at a listing's location -- the whole (non-trashed) folder, NOT a page, and
+    // deliberately unfiltered by the type/owner/date filters so the owner-filter menu still lists every owner while an
+    // owner filter is active (otherwise a filter down to one owner would erase the way back). Joins user for the
+    // display summary; ordered by name for a stable menu.
+    async ownersOf(query : ChildrenQuery) : Promise<UserSummary[]>
+    {
+        let builder = this.#db
+            .selectFrom('node')
+            .innerJoin('user', 'user.id', 'node.owner_id')
+            .select([ 'user.id as id', 'user.name as name', 'user.email as email', 'user.image as image' ])
+            .distinct()
+            .where('node.trashed_at', 'is', null);
+
+        builder = query.parentID === null
+            ? builder.where('node.parent_id', 'is', null).where('node.owner_id', '=', query.ownerID)
+            : builder.where('node.parent_id', '=', query.parentID);
+
+        const rows = await builder.orderBy('user.name', 'asc').execute();
+
+        return rows.map((row) => ({ id: row.id, name: row.name, email: row.email, image: row.image }));
     }
 
     // The ancestor chain of `id` by parent edges, nearest parent first up to the root, excluding `id` itself -- the

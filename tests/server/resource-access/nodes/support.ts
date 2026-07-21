@@ -47,6 +47,7 @@ async function createUserStub(db : Kysely<Database>) : Promise<void>
         .addColumn('id', 'text', (col) => col.primaryKey())
         .addColumn('name', 'text', (col) => col.notNull())
         .addColumn('email', 'text', (col) => col.notNull())
+        .addColumn('image', 'text')
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
         .addColumn('quota_limit', 'integer')
         .execute();
@@ -67,11 +68,21 @@ export async function createTestDatabase() : Promise<DatabaseHandle>
 
 const isoNow = () : string => new Date().toISOString();
 
-export async function seedUser(db : Kysely<Database>, id : string) : Promise<void>
+export async function seedUser(
+    db : Kysely<Database>,
+    id : string,
+    extra : { name ?: string; image ?: string | null } = {}
+) : Promise<void>
 {
     await db
         .insertInto('user')
-        .values({ id, name: id, email: `${ id }@t.test`, role: 'user' })
+        .values({
+            id,
+            name: extra.name ?? id,
+            email: `${ id }@t.test`,
+            image: extra.image ?? null,
+            role: 'user',
+        })
         .execute();
 }
 

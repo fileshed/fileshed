@@ -99,6 +99,30 @@ describe('POST /api/blobs/claim + PUT /api/uploads/:ticket', () =>
         expect(await new NodeRA(booted.handle).ownedBytes(user.id)).toBe(data.length);
     });
 
+    it('creates an empty file end to end when the claim declares zero bytes', async () =>
+    {
+        const user = await makeUser(booted, 'empty@example.com');
+        const empty = Buffer.alloc(0);
+        const sha256 = sha256Of(empty);
+
+        const claimRes = await claim(booted.app, user.cookie, sha256, 0);
+        const claimBody = await claimRes.json() as ClaimResponse;
+
+        expect(claimRes.status).toBe(200);
+        if(claimBody.upload !== true) { throw new Error('expected an upload ticket'); }
+
+        const putRes = await putUpload(booted.app, user.cookie, claimBody.ticket, empty);
+        const node = await putRes.json() as NodeResponse;
+
+        expect(putRes.status).toBe(200);
+        if(node.type !== 'file') { throw new Error('expected a file node'); }
+        expect(node.size).toBe(0);
+
+        expect(await blobRowCount(booted.handle, sha256)).toBe(1);
+        expect(await storedBytes(booted, sha256)).toEqual(empty);
+        expect(await new NodeRA(booted.handle).ownedBytes(user.id)).toBe(0);
+    });
+
     it('rejects a lying upload whose bytes do not match the claimed hash, storing nothing', async () =>
     {
         const user = await makeUser(booted, 'liar@example.com');

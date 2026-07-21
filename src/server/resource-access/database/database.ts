@@ -59,6 +59,10 @@ export interface UserTable
     name : string;
     email : string;
 
+    // BetterAuth's standard avatar URL, null when the account has none. Read for the owner-summary facet a listing
+    // faces its owner filter with.
+    image : string | null;
+
     // role gates admin tooling; quota_limit is the per-user byte cap (null = unlimited). The role enum is enforced at
     // the codec and regulation layers. role is a nullable column upstream, but the admin plugin's create hook always
     // populates it, so the app treats it as set.

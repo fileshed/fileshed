@@ -27,7 +27,9 @@ import {
     type PatchNodeRequest,
     type PurgeBrokenLinksResponse,
     type RenameRequest,
+    type UserSummary,
     nodeSortKeys,
+    nodeTypeFamilies,
     sortDirections,
 } from '../nodes.ts';
 
@@ -127,8 +129,19 @@ typeAssert<Equals<z.output<typeof purgeBrokenLinksResponseCodec>, PurgeBrokenLin
 
 //----------------------------------------------------------------------------------------------------------------------
 // Query strings arrive as strings, so limit/offset are coerced; an over-max limit is rejected rather than silently
-// clamped, matching the strict-schema convention elsewhere in core.
+// clamped, matching the strict-schema convention elsewhere in core. The type families ride a single comma-separated
+// param ("images,pdfs") -- absent or empty yields an empty selection (unfiltered); any token outside the vocabulary is
+// rejected. The date bounds are full ISO instants.
 //----------------------------------------------------------------------------------------------------------------------
+
+const typeFamiliesParam = z.string()
+    .optional()
+    .transform((value) =>
+    {
+        if(value === undefined || value === '') { return []; }
+        return value.split(',');
+    })
+    .pipe(z.array(z.enum(nodeTypeFamilies)));
 
 export const childrenQueryCodec = z.strictObject({
     limit: z.coerce.number()
@@ -142,6 +155,10 @@ export const childrenQueryCodec = z.strictObject({
         .default(0),
     sortKey: z.enum(nodeSortKeys).default('name'),
     sortDirection: z.enum(sortDirections).default('asc'),
+    types: typeFamiliesParam,
+    ownerID: z.string().optional(),
+    updatedAfter: z.iso.datetime().optional(),
+    updatedBefore: z.iso.datetime().optional(),
 });
 
 typeAssert<Equals<z.output<typeof childrenQueryCodec>, ChildrenQuery>>();
@@ -200,6 +217,15 @@ export const nodeResponseCodec = z.discriminatedUnion(
 
 typeAssert<Equals<z.output<typeof nodeResponseCodec>, NodeResponse>>();
 
+export const userSummaryCodec = z.strictObject({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    image: z.string().nullable(),
+});
+
+typeAssert<Equals<z.output<typeof userSummaryCodec>, UserSummary>>();
+
 export const nodeListResponseCodec = z.strictObject({
     nodes: z.array(nodeResponseCodec),
     total: z.number()
@@ -211,6 +237,7 @@ export const nodeListResponseCodec = z.strictObject({
     offset: z.number()
         .int()
         .nonnegative(),
+    owners: z.array(userSummaryCodec),
 });
 
 typeAssert<Equals<z.output<typeof nodeListResponseCodec>, NodeListResponse>>();

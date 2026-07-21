@@ -4,6 +4,7 @@
 
 export * from './blob.ts';
 export * from './config.ts';
+export * from './nodeType.ts';
 export * from './pagination.ts';
 export * from './publicLink.ts';
 export * from './time.ts';

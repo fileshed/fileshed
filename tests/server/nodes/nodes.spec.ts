@@ -253,6 +253,60 @@ describe('GET /api/nodes children listing', () =>
         expect(body.total).toBe(0);
         expect(body.nodes).toHaveLength(0);
     });
+
+    it('filters the listing by type family from the query string', async () =>
+    {
+        const booted = await bootTestApp();
+        const app = composeNodeApp(booted);
+        const cookie = await signedUp(app, 'a@example.com');
+
+        const folder = await createFolder(app, cookie, 'Photos');
+        const link = await (await createLink(app, cookie, folder.id)).json() as Json;
+
+        const folders = await (await request(app, 'GET', '/api/nodes/children?types=folders', cookie))
+            .json() as { nodes : Json[]; total : number };
+        const links = await (await request(app, 'GET', '/api/nodes/children?types=links', cookie))
+            .json() as { nodes : Json[]; total : number };
+
+        expect(folders.nodes.map((node) => node.id)).toEqual([ folder.id ]);
+        expect(folders.total).toBe(1);
+        expect(links.nodes.map((node) => node.id)).toEqual([ link.id ]);
+    });
+
+    it('narrows the listing to a modified window from the query string', async () =>
+    {
+        const booted = await bootTestApp();
+        const app = composeNodeApp(booted);
+        const cookie = await signedUp(app, 'a@example.com');
+
+        await createFolder(app, cookie, 'Recent');
+
+        const future = '2999-01-01T00:00:00.000Z';
+        const past = '2000-01-01T00:00:00.000Z';
+        const afterFuture = await (await request(app, 'GET', `/api/nodes/children?updatedAfter=${ future }`, cookie))
+            .json() as { total : number };
+        const afterPast = await (await request(app, 'GET', `/api/nodes/children?updatedAfter=${ past }`, cookie))
+            .json() as { total : number };
+
+        expect(afterFuture.total).toBe(0);
+        expect(afterPast.total).toBe(1);
+    });
+
+    it('carries the owner facet on the listing envelope', async () =>
+    {
+        const booted = await bootTestApp();
+        const app = composeNodeApp(booted);
+        const cookie = await signedUp(app, 'a@example.com');
+        const ownerID = await userIDByEmail(booted, 'a@example.com');
+
+        await createFolder(app, cookie, 'Docs');
+
+        const res = await request(app, 'GET', '/api/nodes/children', cookie);
+        const body = await res.json() as { owners : { id : string; email : string }[] };
+
+        expect(body.owners).toHaveLength(1);
+        expect(body.owners[0]).toMatchObject({ id: ownerID, email: 'a@example.com' });
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

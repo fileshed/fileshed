@@ -8,16 +8,18 @@ import {
     type Node,
     childrenQueryCodec,
     createNodeRequestCodec,
+    nodeListResponseCodec,
     nodeResponseCodec,
     patchNodeRequestCodec,
     toNodeResponse,
+    userSummaryCodec,
 } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('childrenQueryCodec', () =>
 {
-    // The sortKey vocabulary is a closed set -- name, size, createdAt, updatedAt -- not an arbitrary column
+    // The sortKey vocabulary is a closed set -- name, size, createdAt, updatedAt, kind -- not an arbitrary column
     // name a client could use to probe the schema.
     it('rejects a sort key outside the published vocabulary', () =>
     {
@@ -26,11 +28,21 @@ describe('childrenQueryCodec', () =>
         expect(result.success).toBe(false);
     });
 
-    it('defaults limit, offset, and sort when the query supplies none of them', () =>
+    // 'kind' joins the vocabulary alongside name/size/createdAt/updatedAt so a listing can sort by node kind.
+    it('accepts kind as a sort key', () =>
+    {
+        const result = childrenQueryCodec.safeParse({ sortKey: 'kind' });
+
+        expect(result.success).toBe(true);
+    });
+
+    // An empty query is the unfiltered default: page one, name-ascending, and no type selection (types is present but
+    // empty, not absent -- an empty selection means "no type filter").
+    it('defaults limit, offset, sort, and an empty type selection when the query supplies none of them', () =>
     {
         const result = childrenQueryCodec.parse({});
 
-        expect(result).toEqual({ limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc' });
+        expect(result).toEqual({ limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] });
     });
 
     it('rejects a limit above the page-size ceiling rather than silently truncating it', () =>
@@ -38,6 +50,92 @@ describe('childrenQueryCodec', () =>
         const result = childrenQueryCodec.safeParse({ limit: '500' });
 
         expect(result.success).toBe(false);
+    });
+
+    // Type families ride one comma-separated param, so it must parse back into the family array the server filters on.
+    it('parses a comma-separated types param into the family array', () =>
+    {
+        const result = childrenQueryCodec.parse({ types: 'images,pdfs' });
+
+        expect(result.types).toEqual([ 'images', 'pdfs' ]);
+    });
+
+    it('reads an empty types param as an unfiltered (empty) selection', () =>
+    {
+        expect(childrenQueryCodec.parse({ types: '' }).types).toEqual([]);
+    });
+
+    // The families are a closed vocabulary; a token outside it is rejected, not silently dropped, so a typo never
+    // quietly widens the listing.
+    it('rejects a type family outside the published vocabulary', () =>
+    {
+        const result = childrenQueryCodec.safeParse({ types: 'images,spreadsheets' });
+
+        expect(result.success).toBe(false);
+    });
+
+    it('accepts every published type family', () =>
+    {
+        const all = 'folders,documents,pdfs,images,video,audio,archives,links';
+        const result = childrenQueryCodec.safeParse({ types: all });
+
+        expect(result.success).toBe(true);
+    });
+
+    it('accepts an owner filter and an ISO-instant modified window', () =>
+    {
+        const result = childrenQueryCodec.safeParse({
+            ownerID: 'user_1',
+            updatedAfter: '2026-01-01T00:00:00.000Z',
+            updatedBefore: '2026-02-01T00:00:00.000Z',
+        });
+
+        expect(result.success).toBe(true);
+    });
+
+    it('rejects a modified bound that is not an ISO instant', () =>
+    {
+        const result = childrenQueryCodec.safeParse({ updatedAfter: 'last tuesday' });
+
+        expect(result.success).toBe(false);
+    });
+});
+
+describe('userSummaryCodec', () =>
+{
+    const base = { id: 'user_1', name: 'Ada Lovelace', email: 'ada@example.com' };
+
+    // The avatar image is required but nullable -- an account with no avatar carries an explicit null, never an absent
+    // key, so a consumer never has to distinguish undefined from null.
+    it('accepts a summary with an avatar image and one with a null image', () =>
+    {
+        expect(userSummaryCodec.safeParse({ ...base, image: 'https://cdn/ada.png' }).success).toBe(true);
+        expect(userSummaryCodec.safeParse({ ...base, image: null }).success).toBe(true);
+    });
+
+    it('rejects a summary that omits the image field entirely', () =>
+    {
+        expect(userSummaryCodec.safeParse(base).success).toBe(false);
+    });
+});
+
+describe('nodeListResponseCodec', () =>
+{
+    const envelope = { nodes: [], total: 0, limit: 50, offset: 0 };
+
+    // Every listing envelope carries the owner facet, even when empty; a response without owners is not a valid list.
+    it('requires the owners facet on the envelope', () =>
+    {
+        expect(nodeListResponseCodec.safeParse(envelope).success).toBe(false);
+        expect(nodeListResponseCodec.safeParse({ ...envelope, owners: [] }).success).toBe(true);
+    });
+
+    it('carries owners as user summaries', () =>
+    {
+        const owner = { id: 'user_1', name: 'Ada', email: 'ada@example.com', image: null };
+        const result = nodeListResponseCodec.safeParse({ ...envelope, owners: [ owner ] });
+
+        expect(result.success).toBe(true);
     });
 });
 

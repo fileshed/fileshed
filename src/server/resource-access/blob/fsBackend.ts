@@ -10,9 +10,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { type FileHandle, access, mkdir, open, rename, rm } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { type Readable, Transform, type TransformCallback } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
@@ -40,6 +41,16 @@ export function parseFsBackendConfig(config : unknown) : FsBackendConfig
     return fsBackendConfigCodec.parse(config);
 }
 
+// A relative root resolves against the REPO ROOT, not process.cwd() -- the Vite dev server runs with src/client as
+// its cwd while the standalone entry runs at the root, and cwd-relative resolution silently splits the blob store
+// across two directories (the same asymmetry database.ts resolves for DATABASE_PATH). This file sits four
+// directories below the root.
+export function resolveStorageRoot(root : string) : string
+{
+    const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
+    return isAbsolute(root) ? root : resolve(repoRoot, root);
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // A canonical, lowercase sha256 hex digest. Enforcing the form keeps the same blob from landing under two shard
@@ -63,8 +74,8 @@ export class FsBackend implements BlobBackend
 
     constructor(config : FsBackendConfig)
     {
-        this.#root = config.root;
-        this.#staging = join(config.root, STAGING_DIR);
+        this.#root = resolveStorageRoot(config.root);
+        this.#staging = join(this.#root, STAGING_DIR);
     }
 
     async exists(sha256 : string) : Promise<boolean>
