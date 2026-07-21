@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@hono/vite-dev-server": "^0.26.1",
+    "@iconify-json/lucide": "^1.2.118",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
     "tailwindcss": "^4.3.3",
