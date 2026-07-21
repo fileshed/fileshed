@@ -24,6 +24,18 @@ import type { NodeManager } from '../managers/node.ts';
 import type { SessionManager } from '../managers/session.ts';
 
 // Routes
+import {
+    childrenSpec,
+    copyNodeSpec,
+    createNodeSpec,
+    deleteNodeSpec,
+    getNodeSpec,
+    patchNodeSpec,
+    purgeBrokenLinksSpec,
+    restoreNodeSpec,
+    rootChildrenSpec,
+    trashNodeSpec,
+} from './nodes.openapi.ts';
 import { parseQuery } from './parseQuery.ts';
 import { readJsonBody } from './readJsonBody.ts';
 
@@ -34,7 +46,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
     const router = new Hono();
 
     // Root listing (parentID null). A static segment, so it resolves ahead of GET /nodes/:id for the literal path.
-    router.get('/nodes/children', async (ctx) =>
+    router.get('/nodes/children', rootChildrenSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const query = parseQuery(ctx, childrenQueryCodec);
@@ -42,7 +54,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         return ctx.json(await nodes.children(actor, null, query));
     });
 
-    router.get('/nodes/:id/children', async (ctx) =>
+    router.get('/nodes/:id/children', childrenSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const query = parseQuery(ctx, childrenQueryCodec);
@@ -50,14 +62,14 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         return ctx.json(await nodes.children(actor, ctx.req.param('id'), query));
     });
 
-    router.get('/nodes/:id', async (ctx) =>
+    router.get('/nodes/:id', getNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await nodes.get(actor, ctx.req.param('id')));
     });
 
-    router.post('/nodes', async (ctx) =>
+    router.post('/nodes', createNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const request = await readJsonBody(ctx, createNodeRequestCodec);
@@ -69,7 +81,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         return ctx.json(created, 201);
     });
 
-    router.patch('/nodes/:id', async (ctx) =>
+    router.patch('/nodes/:id', patchNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const patch = await readJsonBody(ctx, patchNodeRequestCodec);
@@ -77,21 +89,21 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         return ctx.json(await nodes.patch(actor, ctx.req.param('id'), patch));
     });
 
-    router.post('/nodes/:id/trash', async (ctx) =>
+    router.post('/nodes/:id/trash', trashNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await nodes.trash(actor, ctx.req.param('id')));
     });
 
-    router.post('/nodes/:id/restore', async (ctx) =>
+    router.post('/nodes/:id/restore', restoreNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await nodes.restore(actor, ctx.req.param('id')));
     });
 
-    router.post('/nodes/:id/copy', async (ctx) =>
+    router.post('/nodes/:id/copy', copyNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const request = await readJsonBody(ctx, copyNodeRequestCodec);
@@ -99,14 +111,14 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         return ctx.json(await nodes.copy(actor, ctx.req.param('id'), request), 201);
     });
 
-    router.post('/nodes/:id/purge-broken-links', async (ctx) =>
+    router.post('/nodes/:id/purge-broken-links', purgeBrokenLinksSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await nodes.purgeBrokenLinks(actor, ctx.req.param('id')));
     });
 
-    router.delete('/nodes/:id', async (ctx) =>
+    router.delete('/nodes/:id', deleteNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const query = parseQuery(ctx, deleteNodeQueryCodec);

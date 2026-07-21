@@ -19,6 +19,13 @@ import type { ShareManager } from '../managers/share.ts';
 
 // Routes
 import { readJsonBody } from './readJsonBody.ts';
+import {
+    grantShareSpec,
+    leaveShareSpec,
+    listNodeSharesSpec,
+    revokeShareSpec,
+    sharedWithMeSpec,
+} from './shares.openapi.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -26,7 +33,7 @@ export function createShareRoutes(sessions : SessionManager, shares : ShareManag
 {
     const router = new Hono();
 
-    router.post('/nodes/:id/shares', async (ctx) =>
+    router.post('/nodes/:id/shares', grantShareSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const request = await readJsonBody(ctx, grantShareRequestCodec);
@@ -34,21 +41,21 @@ export function createShareRoutes(sessions : SessionManager, shares : ShareManag
         return ctx.json(await shares.grant(actor, ctx.req.param('id'), request), 201);
     });
 
-    router.get('/nodes/:id/shares', async (ctx) =>
+    router.get('/nodes/:id/shares', listNodeSharesSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await shares.listForNode(actor, ctx.req.param('id')));
     });
 
-    router.get('/shared-with-me', async (ctx) =>
+    router.get('/shared-with-me', sharedWithMeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await shares.sharedWithMe(actor));
     });
 
-    router.post('/shares/:id/leave', async (ctx) =>
+    router.post('/shares/:id/leave', leaveShareSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         await shares.leave(actor, ctx.req.param('id'));
@@ -56,7 +63,7 @@ export function createShareRoutes(sessions : SessionManager, shares : ShareManag
         return ctx.body(null, 204);
     });
 
-    router.delete('/shares/:id', async (ctx) =>
+    router.delete('/shares/:id', revokeShareSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         await shares.revoke(actor, ctx.req.param('id'));

@@ -18,6 +18,7 @@ import type { SessionManager } from '../managers/session.ts';
 
 // Routes
 import { parseQuery } from './parseQuery.ts';
+import { searchSpec } from './search.openapi.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -25,7 +26,7 @@ export function createSearchRoutes(sessions : SessionManager, nodes : NodeManage
 {
     const router = new Hono();
 
-    router.get('/search', async (ctx) =>
+    router.get('/search', searchSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const query = parseQuery(ctx, searchQueryCodec);

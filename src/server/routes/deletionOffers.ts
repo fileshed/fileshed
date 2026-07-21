@@ -16,6 +16,11 @@ import type { DeletionOfferManager } from '../managers/deletionOffer.ts';
 import type { SessionManager } from '../managers/session.ts';
 
 // Routes
+import {
+    acceptDeletionOfferSpec,
+    declineDeletionOfferSpec,
+    listDeletionOffersSpec,
+} from './deletionOffers.openapi.ts';
 import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -24,14 +29,14 @@ export function createDeletionOfferRoutes(sessions : SessionManager, offers : De
 {
     const router = new Hono();
 
-    router.get('/deletion-offers', async (ctx) =>
+    router.get('/deletion-offers', listDeletionOffersSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await offers.list(actor));
     });
 
-    router.post('/deletion-offers/:id/accept', async (ctx) =>
+    router.post('/deletion-offers/:id/accept', acceptDeletionOfferSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const request = await readJsonBody(ctx, acceptDeletionOfferRequestCodec);
@@ -39,7 +44,7 @@ export function createDeletionOfferRoutes(sessions : SessionManager, offers : De
         return ctx.json(await offers.accept(actor, ctx.req.param('id'), request), 201);
     });
 
-    router.post('/deletion-offers/:id/decline', async (ctx) =>
+    router.post('/deletion-offers/:id/decline', declineDeletionOfferSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         await offers.decline(actor, ctx.req.param('id'));

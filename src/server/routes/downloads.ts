@@ -17,6 +17,7 @@ import type { PublicLinkManager } from '../managers/publicLink.ts';
 import type { SessionManager } from '../managers/session.ts';
 
 // Routes
+import { downloadSpec } from './downloads.openapi.ts';
 import { streamResponse } from './streamResponse.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -34,7 +35,7 @@ export function createDownloadRoutes(sessions : SessionManager, links : PublicLi
 {
     const router = new Hono();
 
-    router.get('/nodes/:id/download', async (ctx) =>
+    router.get('/nodes/:id/download', downloadSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 

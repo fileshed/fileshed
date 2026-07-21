@@ -19,6 +19,9 @@ import { BadRequestError, type UploadCommitMetadata, toNodeResponse, uploadCommi
 import type { BlobManager } from '../managers/blob.ts';
 import type { SessionManager } from '../managers/session.ts';
 
+// Routes
+import { uploadSpec } from './uploads.openapi.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // The commit metadata off the query string. An absent parentID is root placement (null); name and mimeType are
@@ -55,7 +58,7 @@ export function createUploadRoutes(sessions : SessionManager, blobs : BlobManage
 {
     const router = new Hono();
 
-    router.put('/uploads/:ticket', async (ctx) =>
+    router.put('/uploads/:ticket', uploadSpec, async (ctx) =>
     {
         const caller = await sessions.requireUser(ctx.req.raw.headers);
 

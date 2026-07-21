@@ -16,6 +16,7 @@ import type { PublicLinkManager } from '../managers/publicLink.ts';
 import type { SessionManager } from '../managers/session.ts';
 
 // Routes
+import { createLinkSpec, listLinksSpec, revokeLinkSpec } from './links.openapi.ts';
 import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -24,7 +25,7 @@ export function createPublicLinkRoutes(sessions : SessionManager, links : Public
 {
     const router = new Hono();
 
-    router.post('/nodes/:id/links', async (ctx) =>
+    router.post('/nodes/:id/links', createLinkSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const request = await readJsonBody(ctx, createPublicLinkRequestCodec);
@@ -34,7 +35,7 @@ export function createPublicLinkRoutes(sessions : SessionManager, links : Public
         return ctx.json(toPublicLinkResponse(link), 201);
     });
 
-    router.get('/nodes/:id/links', async (ctx) =>
+    router.get('/nodes/:id/links', listLinksSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
@@ -43,7 +44,7 @@ export function createPublicLinkRoutes(sessions : SessionManager, links : Public
         return ctx.json(toPublicLinkListResponse(list));
     });
 
-    router.delete('/links/:id', async (ctx) =>
+    router.delete('/links/:id', revokeLinkSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         await links.revoke(actor, ctx.req.param('id'));

@@ -23,6 +23,7 @@ import { createDeletionOfferRoutes } from './routes/deletionOffers.ts';
 import { createDirectRoutes } from './routes/direct.ts';
 import { createDownloadRoutes } from './routes/downloads.ts';
 import { createNodeRoutes } from './routes/nodes.ts';
+import { mountOpenApiDocs } from './routes/openapi.ts';
 import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
 import { createShareRoutes } from './routes/shares.ts';
@@ -137,6 +138,8 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
             app.route('/api', createDeletionOfferRoutes(sessions, services.deletionOffers));
             app.route('/d', createDirectRoutes(services.publicLinks));
         }
+
+        mountOpenApiDocs(app);
     }
 
     app.route('/api', health);

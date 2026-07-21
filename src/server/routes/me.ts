@@ -12,13 +12,16 @@ import { Hono } from 'hono';
 import type { NodeManager } from '../managers/node.ts';
 import type { SessionManager } from '../managers/session.ts';
 
+// Routes
+import { meSpec } from './me.openapi.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export function createMeRoutes(sessions : SessionManager, nodes : NodeManager) : Hono
 {
     const router = new Hono();
 
-    router.get('/me', async (ctx) =>
+    router.get('/me', meSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 

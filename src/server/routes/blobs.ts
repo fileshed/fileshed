@@ -15,6 +15,9 @@ import { BadRequestError, challengeAnswerRequestCodec, claimRequestCodec, toNode
 import type { BlobManager } from '../managers/blob.ts';
 import type { SessionManager } from '../managers/session.ts';
 
+// Routes
+import { answerChallengeSpec, claimSpec } from './blobs.openapi.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // A JSON body, or a BadRequestError -- ctx.req.json throws a SyntaxError on malformed input, which would otherwise fall
@@ -37,7 +40,7 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
 {
     const router = new Hono();
 
-    router.post('/blobs/claim', async (ctx) =>
+    router.post('/blobs/claim', claimSpec, async (ctx) =>
     {
         const caller = await sessions.requireUser(ctx.req.raw.headers);
 
@@ -47,7 +50,7 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
         return ctx.json(await blobs.claim(caller, parsed.data));
     });
 
-    router.post('/blobs/claim/:challengeID', async (ctx) =>
+    router.post('/blobs/claim/:challengeID', answerChallengeSpec, async (ctx) =>
     {
         const caller = await sessions.requireUser(ctx.req.raw.headers);
 

@@ -1,20 +1,27 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Health Route
+// Health Route OpenAPI Spec
 //----------------------------------------------------------------------------------------------------------------------
 
-import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
+import { z } from 'zod';
 
 // Routes
-import { healthSpec } from './health.openapi.ts';
+import { jsonResponse } from './docSchema.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const router = new Hono();
-
-router.get('/health', healthSpec, (ctx) => ctx.json({ status: 'ok' }));
+const healthResponseCodec = z.object({ status: z.literal('ok') });
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export default router;
+export const healthSpec = describeRoute({
+    tags: [ 'Health' ],
+    summary: 'Liveness check',
+    description: 'An unauthenticated liveness probe. Always 200 while the process is serving.',
+    security: [],
+    responses: {
+        200: jsonResponse('The server is up.', healthResponseCodec),
+    },
+});
 
 //----------------------------------------------------------------------------------------------------------------------

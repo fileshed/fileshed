@@ -13,6 +13,7 @@ import { Hono } from 'hono';
 import type { PublicLinkManager } from '../managers/publicLink.ts';
 
 // Routes
+import { directSpec } from './direct.openapi.ts';
 import { streamResponse } from './streamResponse.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -21,7 +22,7 @@ export function createDirectRoutes(links : PublicLinkManager) : Hono
 {
     const router = new Hono();
 
-    router.get('/:token', async (ctx) =>
+    router.get('/:token', directSpec, async (ctx) =>
     {
         const result = await links.resolveByToken(ctx.req.param('token'), {
             rangeHeader: ctx.req.header('range'),

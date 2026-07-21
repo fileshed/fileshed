@@ -18,6 +18,7 @@ import type { SessionManager } from '../managers/session.ts';
 import type { StatusManager } from '../managers/status.ts';
 
 // Routes
+import { adminStatusSpec, listUsersSpec, setQuotaSpec } from './admin.openapi.ts';
 import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -38,7 +39,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
 {
     const router = new Hono();
 
-    router.get('/admin/users', async (ctx) =>
+    router.get('/admin/users', listUsersSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
@@ -50,7 +51,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
         return ctx.json(page);
     });
 
-    router.patch('/admin/users/:id', async (ctx) =>
+    router.patch('/admin/users/:id', setQuotaSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const body = await readJsonBody(ctx, setQuotaRequestCodec);
@@ -72,7 +73,7 @@ export function createAdminStatusRoutes(sessions : SessionManager, status : Stat
 {
     const router = new Hono();
 
-    router.get('/admin/status', async (ctx) =>
+    router.get('/admin/status', adminStatusSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 

@@ -18,6 +18,12 @@ import type { SessionManager } from '../managers/session.ts';
 import type { ShareManager } from '../managers/share.ts';
 
 // Routes
+import {
+    declineAccessRequestSpec,
+    grantAccessRequestSpec,
+    listAccessRequestsSpec,
+    requestAccessSpec,
+} from './accessRequests.openapi.ts';
 import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -26,7 +32,7 @@ export function createAccessRequestRoutes(sessions : SessionManager, shares : Sh
 {
     const router = new Hono();
 
-    router.post('/nodes/:id/access-requests', async (ctx) =>
+    router.post('/nodes/:id/access-requests', requestAccessSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const request = await readJsonBody(ctx, createAccessRequestCodec);
@@ -34,21 +40,21 @@ export function createAccessRequestRoutes(sessions : SessionManager, shares : Sh
         return ctx.json(await shares.requestAccess(actor, ctx.req.param('id'), request), 201);
     });
 
-    router.get('/access-requests', async (ctx) =>
+    router.get('/access-requests', listAccessRequestsSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await shares.listAccessRequests(actor));
     });
 
-    router.post('/access-requests/:id/grant', async (ctx) =>
+    router.post('/access-requests/:id/grant', grantAccessRequestSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await shares.resolveRequest(actor, ctx.req.param('id'), 'grant'));
     });
 
-    router.post('/access-requests/:id/decline', async (ctx) =>
+    router.post('/access-requests/:id/decline', declineAccessRequestSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
