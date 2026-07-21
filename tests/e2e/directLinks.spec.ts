@@ -13,7 +13,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { ClaimResponse, NodeResponse, PublicLinkResponse } from '@fileshed/core';
+import type { ClaimResponse, NodeResponse, PublicLinkListResponse, PublicLinkResponse } from '@fileshed/core';
 
 // Support
 import { ApiClient, type ServerHandle, largeFixture, readBlobFile, sha256Of, spawnServer, withDb } from './support.ts';
@@ -200,6 +200,17 @@ describe('anonymous /d/:token', () =>
 
         expect(res.status).toBe(304);
     });
+
+    it('answers an unsatisfiable range with 416 and a Content-Range of the full size', async () =>
+    {
+        // first-byte-pos at the blob size is past the last byte -- a valid but unsatisfiable range.
+        const res = await direct(inlineLink.token, { range: `bytes=${ data.length }-` });
+        await res.arrayBuffer();
+
+        expect(res.status).toBe(416);
+        expect(res.headers.get('content-range')).toBe(`bytes */${ data.length }`);
+        expect(res.headers.get('accept-ranges')).toBe('bytes');
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -249,6 +260,32 @@ describe('GET /api/nodes/:id/download', () =>
         const anon = await fetch(`${ server.baseURL }/api/nodes/${ fileID }/download`);
         await anon.arrayBuffer();
         expect(anon.status).toBe(401);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Link management authority
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('GET /api/nodes/:id/links', () =>
+{
+    it('lists a file\'s links to its owner and refuses a non-owner minting one with 403', async () =>
+    {
+        const res = await owner.get(`/api/nodes/${ fileID }/links`);
+        const list = await res.json() as PublicLinkListResponse;
+
+        expect(res.status).toBe(200);
+        // Both minted links list for the owner (a revoked link still lists so the owner sees it is dead).
+        const ids = list.links.map((link) => link.id);
+        expect(ids).toContain(inlineLink.id);
+        expect(ids).toContain(attachmentLink.id);
+
+        // Minting a link is the owner's authority; a stranger cannot publish content they do not own.
+        const strangerMint = await stranger.post(`/api/nodes/${ fileID }/links`, {
+            mode: 'view',
+            disposition: 'inline',
+        });
+        expect(strangerMint.status).toBe(403);
     });
 });
 

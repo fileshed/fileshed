@@ -11,7 +11,13 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { ClaimResponse, MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
+import {
+    type ClaimResponse,
+    MAX_FAILED_PROOFS,
+    type MeResponse,
+    type NodeListResponse,
+    type NodeResponse,
+} from '@fileshed/core';
 
 // Support
 import {
@@ -22,6 +28,7 @@ import {
     largeFixture,
     readBlobFile,
     sha256Of,
+    smallFixture,
     spawnServer,
     withDb,
 } from './support.ts';
@@ -233,6 +240,223 @@ describe('proof-of-possession dedup by a second owner', () =>
         const bobUsed = (await (await bob.get('/api/me')).json() as MeResponse).quota.used;
         expect(aliceUsed).toBe(data.length);
         expect(bobUsed).toBe(data.length);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Quota enforcement at claim time
+//
+// A dedicated server: the quota is set by the bootstrap admin, and sessions snapshot the quota at sign-in, so the user
+// signs in AFTER the set to carry the new limit. A claim that would push usage over the limit is refused at claim time
+// -- no ticket, no blob, no node -- while a claim that lands exactly at the limit is admitted and commits.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('quota enforcement over the wire', () =>
+{
+    const ADMIN_EMAIL = 'quota-admin@fileshed.test';
+    const ADMIN_PASSWORD = 'admin-password-e2e';
+
+    // A single small fixture is the user's entire allowance; a second, larger payload cannot fit alongside it.
+    const allowance = smallFixture('quota-exact');
+    const LIMIT = allowance.length;
+
+    let quotaServer : ServerHandle;
+    let user : ApiClient;
+
+    beforeAll(async () =>
+    {
+        quotaServer = await spawnServer({
+            env: { FILESHED_ADMIN_EMAIL: ADMIN_EMAIL, FILESHED_ADMIN_PASSWORD: ADMIN_PASSWORD },
+        });
+
+        const registrant = new ApiClient(quotaServer.baseURL);
+        await registrant.signUp('quota-user@example.com', PASSWORD);
+        const userID = (await (await registrant.get('/api/me')).json() as MeResponse).id;
+
+        const admin = new ApiClient(quotaServer.baseURL);
+        await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+        const setQuota = await admin.patch(`/api/admin/users/${ userID }`, { quotaLimit: LIMIT });
+        if(setQuota.status !== 200) { throw new Error('setup: expected the admin to set the quota'); }
+
+        // Sign in AFTER the set so the session carries the new limit.
+        user = new ApiClient(quotaServer.baseURL);
+        await user.signIn('quota-user@example.com', PASSWORD);
+    });
+
+    afterAll(async () =>
+    {
+        await quotaServer?.stop();
+    });
+
+    it('refuses a claim that would exceed the quota, storing no blob and no node', async () =>
+    {
+        const oversize = Buffer.concat([ smallFixture('quota-over-a'), smallFixture('quota-over-b') ]);
+        const oversizeSha = sha256Of(oversize);
+
+        const res = await user.post('/api/blobs/claim', { sha256: oversizeSha, size: oversize.length });
+        expect(res.status).toBe(403);
+
+        const blob = await withDb(quotaServer, (db) => db
+            .selectFrom('blob')
+            .select('sha256')
+            .where('sha256', '=', oversizeSha)
+            .executeTakeFirst());
+        expect(blob).toBeUndefined();
+
+        const nodes = await withDb(quotaServer, (db) => db
+            .selectFrom('node')
+            .select('id')
+            .where('blob_id', '=', oversizeSha)
+            .execute());
+        expect(nodes).toHaveLength(0);
+    });
+
+    it('admits a claim that lands exactly at the quota and commits the upload', async () =>
+    {
+        const exactSha = sha256Of(allowance);
+
+        const claim = await (await user.post('/api/blobs/claim', { sha256: exactSha, size: allowance.length }))
+            .json() as ClaimResponse;
+        expect(claim.upload).toBe(true);
+        if(claim.upload !== true) { throw new Error('expected an upload ticket at exactly the limit'); }
+
+        const params = new URLSearchParams({ name: 'exact.bin', mimeType: 'application/octet-stream' });
+        const put = await user.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, allowance);
+        expect(put.status).toBe(200);
+
+        const me = await (await user.get('/api/me')).json() as MeResponse;
+        expect(me.quota.used).toBe(LIMIT);
+        expect(me.quota.limit).toBe(LIMIT);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Failed proof-of-possession and the per-user rate limit
+//
+// A user who does not possess a known blob's bytes cannot answer its challenge: a wrong proof is forbidden and commits
+// nothing. Repeated failures are a hash-probing signal, so they are counted per user and, past MAX_FAILED_PROOFS,
+// rate-limited -- the next attempt is refused before the proof is even evaluated.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('failed proof-of-possession', () =>
+{
+    let carl : ApiClient;
+    let carlID : string;
+
+    beforeAll(async () =>
+    {
+        carl = new ApiClient(server.baseURL);
+        await carl.signUp('carl@example.com', PASSWORD);
+        carlID = await callerID(carl);
+    });
+
+    // Claim the known large blob (a challenge, since it is >= 1 MiB), then answer with a corrupted -- and so certainly
+    // wrong -- proof. Corrupting the correct answer's first hex digit guarantees a mismatch of the right length.
+    async function submitWrongProof() : Promise<number>
+    {
+        const challenge = await (await carl.post('/api/blobs/claim', { sha256: sha, size: data.length }))
+            .json() as ClaimResponse;
+        if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
+
+        const correct = computeAnswer(challenge.nonce, challenge.ranges, data);
+        const wrong = (correct.startsWith('0') ? 'f' : '0') + correct.slice(1);
+
+        const res = await carl.post(`/api/blobs/claim/${ challenge.challengeID }`, {
+            answer: wrong,
+            name: 'stolen.bin',
+            parentID: null,
+            mimeType: 'application/octet-stream',
+        });
+        return res.status;
+    }
+
+    async function carlNodeCount() : Promise<number>
+    {
+        const rows = await withDb(server, (db) => db
+            .selectFrom('node')
+            .select('id')
+            .where('owner_id', '=', carlID)
+            .where('blob_id', '=', sha)
+            .execute());
+        return rows.length;
+    }
+
+    // Sequential failures via recursion rather than a loop (no-await-in-loop); each lands before the next is judged.
+    async function exhaustProofs(remaining : number) : Promise<void>
+    {
+        if(remaining <= 0) { return; }
+        expect(await submitWrongProof()).toBe(403);
+        return exhaustProofs(remaining - 1);
+    }
+
+    it('forbids a wrong proof, commits no node, and rate-limits after repeated failures', async () =>
+    {
+        // The first wrong proof is forbidden and creates nothing for the prober.
+        expect(await submitWrongProof()).toBe(403);
+        expect(await carlNodeCount()).toBe(0);
+
+        // Burn the rest of the per-user allowance; every failure is still a 403.
+        await exhaustProofs(MAX_FAILED_PROOFS - 1);
+
+        // The next attempt is rejected by the rate limit before the proof is evaluated.
+        expect(await submitWrongProof()).toBe(429);
+        expect(await carlNodeCount()).toBe(0);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Ticket and challenge misuse
+//
+// The single-use, per-user nature of the upload ticket, and the not-found handling for an unknown challenge id.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('upload ticket and challenge misuse', () =>
+{
+    it('404s a reuse of a consumed upload ticket', async () =>
+    {
+        const uploader = new ApiClient(server.baseURL);
+        await uploader.signUp('ticket-reuse@example.com', PASSWORD);
+
+        const bytes = smallFixture('ticket-reuse');
+        const claim = await (await uploader.post('/api/blobs/claim', { sha256: sha256Of(bytes), size: bytes.length }))
+            .json() as ClaimResponse;
+        if(claim.upload !== true) { throw new Error('expected an upload ticket'); }
+
+        const params = new URLSearchParams({ name: 'once.bin', mimeType: 'application/octet-stream' });
+        expect((await uploader.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, bytes)).status).toBe(200);
+
+        // The ticket is single-use: a second PUT with it finds nothing to consume.
+        expect((await uploader.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, bytes)).status).toBe(404);
+    });
+
+    it('403s a PUT of a ticket issued to a different user', async () =>
+    {
+        const holder = new ApiClient(server.baseURL);
+        const intruder = new ApiClient(server.baseURL);
+        await holder.signUp('ticket-holder@example.com', PASSWORD);
+        await intruder.signUp('ticket-intruder@example.com', PASSWORD);
+
+        const bytes = smallFixture('ticket-crossuser');
+        const claim = await (await holder.post('/api/blobs/claim', { sha256: sha256Of(bytes), size: bytes.length }))
+            .json() as ClaimResponse;
+        if(claim.upload !== true) { throw new Error('expected an upload ticket'); }
+
+        const params = new URLSearchParams({ name: 'theirs.bin', mimeType: 'application/octet-stream' });
+        expect((await intruder.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, bytes)).status).toBe(403);
+    });
+
+    it('404s an answer to an unknown challenge id', async () =>
+    {
+        const prober = new ApiClient(server.baseURL);
+        await prober.signUp('challenge-unknown@example.com', PASSWORD);
+
+        const res = await prober.post('/api/blobs/claim/nonexistent-challenge', {
+            answer: '0'.repeat(64),
+            name: 'nope.bin',
+            parentID: null,
+            mimeType: 'application/octet-stream',
+        });
+        expect(res.status).toBe(404);
     });
 });
 

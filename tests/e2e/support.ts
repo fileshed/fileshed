@@ -306,6 +306,14 @@ export class ApiClient
         });
     }
 
+    async patch(path : string, body : unknown) : Promise<Response>
+    {
+        return this.#request('PATCH', path, {
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    }
+
     async put(path : string, bytes : Uint8Array, contentType = 'application/octet-stream') : Promise<Response>
     {
         return this.#request('PUT', path, {

@@ -25,12 +25,21 @@ import type {
     MeResponse,
     NodeListResponse,
     NodeResponse,
+    ShareListResponse,
     ShareResponse,
     SharedWithMeResponse,
 } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, sha256Of, smallFixture, spawnServer, withDb } from './support.ts';
+import {
+    ApiClient,
+    type ServerHandle,
+    blobFileExists,
+    sha256Of,
+    smallFixture,
+    spawnServer,
+    withDb,
+} from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -390,6 +399,128 @@ describe('leave', () =>
         expect(leaveRes.status).toBe(204);
 
         expect((await grantee.get(`/api/nodes/${ folderID }`)).status).toBe(404);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Declining an access request
+//
+// Declining resolves the request without granting anything: the requester still cannot read the node, the request is no
+// longer pending, and -- because a decline grants nothing -- the requester may ask again.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('declining an access request', () =>
+{
+    it('resolves without access, and permits a fresh request afterward', async () =>
+    {
+        const seeker = new ApiClient(server.baseURL);
+        await seeker.signUp('seeker@example.com', PASSWORD);
+
+        const requestRes = await seeker.post(`/api/nodes/${ folderID }/access-requests`, { requestedRole: 'viewer' });
+        const request = await requestRes.json() as AccessRequestResponse;
+        expect(requestRes.status).toBe(201);
+        expect(request.status).toBe('pending');
+
+        const declineRes = await owner.post(`/api/access-requests/${ request.id }/decline`, {});
+        const declined = await declineRes.json() as AccessRequestResponse;
+        expect(declineRes.status).toBe(200);
+        expect(declined.status).toBe('declined');
+        expect(declined.resolvedAt).not.toBeNull();
+
+        // A decline grants nothing: the requester still reads the node as absent.
+        expect((await seeker.get(`/api/nodes/${ folderID }`)).status).toBe(404);
+
+        // The request has left the pending state.
+        const row = await withDb(server, (db) => db
+            .selectFrom('share_request')
+            .select('status')
+            .where('id', '=', request.id)
+            .executeTakeFirstOrThrow());
+        expect(row.status).toBe('declined');
+
+        // No pending request stands, so the requester may ask again.
+        const reRequest = await seeker.post(`/api/nodes/${ folderID }/access-requests`, { requestedRole: 'viewer' });
+        expect(reRequest.status).toBe(201);
+        expect((await reRequest.json() as AccessRequestResponse).status).toBe('pending');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// The owner's grant list
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('GET /api/nodes/:id/shares', () =>
+{
+    it('lists a node\'s grants to its owner and refuses a non-owner with 403', async () =>
+    {
+        const folder = (await (await owner.post('/api/nodes', { type: 'folder', name: 'grant-list', parentID: null }))
+            .json() as NodeResponse).id;
+        await grantShare(folder, granteeID, 'viewer');
+
+        const ownerView = await owner.get(`/api/nodes/${ folder }/shares`);
+        const list = await ownerView.json() as ShareListResponse;
+
+        expect(ownerView.status).toBe(200);
+        expect(list.shares.map((entry) => entry.granteeUserID)).toContain(granteeID);
+
+        // Listing grants is the owner's authority; a non-owner is refused.
+        expect((await stranger.get(`/api/nodes/${ folder }/shares`)).status).toBe(403);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Save a copy of a shared file
+//
+// A viewer of a shared file saves an independent copy referencing the same blob (zero bytes moved), charged to and
+// owned by the viewer.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('save a copy', () =>
+{
+    it('copies a shared file into a node the viewer owns, charged to the viewer, sharing the blob', async () =>
+    {
+        const copyOwner = new ApiClient(server.baseURL);
+        const copyViewer = new ApiClient(server.baseURL);
+        await copyOwner.signUp('copy-owner@example.com', PASSWORD);
+        await copyViewer.signUp('copy-viewer@example.com', PASSWORD);
+        const copyOwnerID = await callerID(copyOwner);
+        const copyViewerID = await callerID(copyViewer);
+
+        const bytes = smallFixture('save-a-copy-file');
+        const copySha = sha256Of(bytes);
+        const source = await upload(copyOwner, null, 'original.bin', bytes);
+        await copyOwner.post(`/api/nodes/${ source.id }/shares`, { granteeUserID: copyViewerID, role: 'viewer' });
+
+        const copyRes = await copyViewer.post(`/api/nodes/${ source.id }/copy`, { parentID: null });
+        const copy = await copyRes.json() as NodeResponse;
+
+        expect(copyRes.status).toBe(201);
+        expect(copy.type).toBe('file');
+        if(copy.type !== 'file') { throw new Error('expected a file node'); }
+        expect(copy.ownerID).toBe(copyViewerID);
+        expect(copy.blobID).toBe(copySha);
+        expect(copy.id).not.toBe(source.id);
+
+        // One blob, two file nodes owned by the two users -- dedup by design.
+        const blobRows = await withDb(server, (db) => db
+            .selectFrom('blob')
+            .select('sha256')
+            .where('sha256', '=', copySha)
+            .execute());
+        expect(blobRows).toHaveLength(1);
+        expect(await blobFileExists(server.storageRoot, copySha)).toBe(true);
+
+        const owners = await withDb(server, (db) => db
+            .selectFrom('node')
+            .select('owner_id')
+            .where('blob_id', '=', copySha)
+            .where('type', '=', 'file')
+            .execute());
+        expect(owners.map((node) => node.owner_id).sort()).toEqual([ copyOwnerID, copyViewerID ].sort());
+
+        // The copy is charged to the viewer; the owner's usage is unchanged.
+        expect(await quotaUsed(copyOwner)).toBe(bytes.length);
+        expect(await quotaUsed(copyViewer)).toBe(bytes.length);
     });
 });
 
