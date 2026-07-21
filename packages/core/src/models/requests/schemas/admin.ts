@@ -4,8 +4,14 @@
 
 import { z } from 'zod';
 
+// Models
+import { storageBackendKinds } from '../../storageBackend.ts';
+
 // Requests
-import type { SetQuotaRequest } from '../admin.ts';
+import type { AdminStatusResponse, SetQuotaRequest } from '../admin.ts';
+
+// Request Schemas
+import { isoDateTimeCodec } from './common.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
@@ -22,5 +28,44 @@ export const setQuotaRequestCodec = z.strictObject({
 });
 
 typeAssert<Equals<z.output<typeof setQuotaRequestCodec>, SetQuotaRequest>>();
+
+//----------------------------------------------------------------------------------------------------------------------
+
+const wholeCount = z.number()
+    .int()
+    .nonnegative();
+
+const storageBackendStatusCodec = z.strictObject({
+    id: z.string(),
+    kind: z.enum(storageBackendKinds),
+    isDefault: z.boolean(),
+});
+
+const gcRunStatusCodec = z.strictObject({
+    ranAt: isoDateTimeCodec,
+    summary: z.strictObject({
+        candidates: wholeCount,
+        deleted: wholeCount,
+        kept: wholeCount,
+        bytesFailed: wholeCount,
+    }),
+});
+
+const trashPurgeRunStatusCodec = z.strictObject({
+    ranAt: isoDateTimeCodec,
+    summary: z.strictObject({
+        candidates: wholeCount,
+        purged: wholeCount,
+        failed: wholeCount,
+    }),
+});
+
+export const adminStatusResponseCodec = z.strictObject({
+    backends: z.array(storageBackendStatusCodec),
+    gc: gcRunStatusCodec.nullable(),
+    trashPurge: trashPurgeRunStatusCodec.nullable(),
+});
+
+typeAssert<Equals<z.output<typeof adminStatusResponseCodec>, AdminStatusResponse>>();
 
 //----------------------------------------------------------------------------------------------------------------------

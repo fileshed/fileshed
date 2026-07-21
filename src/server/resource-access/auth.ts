@@ -44,6 +44,29 @@ function resolveTrustedOrigins(config : Config) : string[]
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// The social sign-in providers better-auth should offer, derived entirely from config: a provider is included only
+// when BOTH halves of its env pair are present (the config schema enforces both-or-neither, so a single half is a boot
+// failure long before here). No pair configured yields undefined, so better-auth sees no social providers at all --
+// email/password stays the only sign-in surface unless a deployment opts one in.
+export function socialProvidersFromConfig(config : Config) : BetterAuthOptions['socialProviders']
+{
+    const providers : NonNullable<BetterAuthOptions['socialProviders']> = {};
+
+    if(config.GITHUB_CLIENT_ID && config.GITHUB_CLIENT_SECRET)
+    {
+        providers.github = { clientId: config.GITHUB_CLIENT_ID, clientSecret: config.GITHUB_CLIENT_SECRET };
+    }
+
+    if(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET)
+    {
+        providers.google = { clientId: config.GOOGLE_CLIENT_ID, clientSecret: config.GOOGLE_CLIENT_SECRET };
+    }
+
+    return Object.keys(providers).length > 0 ? providers : undefined;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 // A representative of the auth options, present only to give createAuth a nameable return type. better-auth's instance
 // type is a deep inference over the enabled plugins and additionalFields (it carries $Infer), with no hand-writable
 // annotation that preserves it. The runtime values below are placeholders -- only the shape and its type-bearing parts
@@ -55,6 +78,9 @@ const authOptionsShape = {
     baseURL: '',
     trustedOrigins: [] as string[],
     emailAndPassword: { enabled: true },
+    // Placeholder for the type only: createAuth supplies the config-derived value. Carried here so the Auth type
+    // reflects that social providers may be configured.
+    socialProviders: undefined as BetterAuthOptions['socialProviders'],
     session: {
         // Serve the session from a short-lived signed cookie so getSession on hot paths skips a DB round-trip.
         // Conscious tradeoff: role changes and bans lag until the cookie refreshes (~5 min) -- a just-demoted admin
@@ -88,6 +114,7 @@ export function createAuth(handle : DatabaseHandle, config : Config) : Auth
         secret: config.AUTH_SECRET,
         baseURL: config.BASE_URL,
         trustedOrigins: resolveTrustedOrigins(config),
+        socialProviders: socialProvidersFromConfig(config),
         // Fresh plugin instances per auth instance; the shape above supplies only their type.
         plugins: [ admin() ],
     });

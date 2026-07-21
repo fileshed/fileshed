@@ -81,12 +81,19 @@ export async function runGcOnce(deps : GcDeps) : Promise<GcSummary>
 //----------------------------------------------------------------------------------------------------------------------
 
 // Runs runGcOnce on a fixed interval. Pure wiring: it owns no policy beyond the cadence, swallows a failed sweep with a
-// log so one bad run never kills the timer, and unrefs so it does not hold the process open. Returns a stop handle.
-export function startGcTimer(deps : GcDeps, intervalMs : number) : () => void
+// log so one bad run never kills the timer, unrefs so it does not hold the process open, and reports each completed
+// sweep's summary to `onComplete` (the status tracker). Returns a stop handle.
+export function startGcTimer(
+    deps : GcDeps,
+    intervalMs : number,
+    onComplete ?: (summary : GcSummary) => void
+) : () => void
 {
     const timer = setInterval(() =>
     {
-        runGcOnce(deps).catch((error) => logger.error({ err: error }, 'GC sweep failed'));
+        runGcOnce(deps)
+            .then((summary) => onComplete?.(summary))
+            .catch((error) => logger.error({ err: error }, 'GC sweep failed'));
     }, intervalMs);
 
     timer.unref?.();

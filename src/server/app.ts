@@ -15,7 +15,7 @@ import { MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
 
 // Routes
 import health from './routes/health.ts';
-import { createAdminRoutes } from './routes/admin.ts';
+import { createAdminRoutes, createAdminStatusRoutes } from './routes/admin.ts';
 import { createBlobRoutes } from './routes/blobs.ts';
 import { createMeRoutes } from './routes/me.ts';
 import { createAccessRequestRoutes } from './routes/accessRequests.ts';
@@ -46,8 +46,11 @@ import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
 import { SessionManager } from './managers/session.ts';
+import { StatusManager } from './managers/status.ts';
+import { LastRunTracker } from './managers/lastRun.ts';
 import { mapManagerError } from './managers/errors.ts';
 import { startGcTimer } from './managers/gc.ts';
+import { startTrashPurgeTimer } from './managers/trashPurge.ts';
 
 // Utils
 import { type Config, loadConfig } from './utils/config.ts';
@@ -85,6 +88,7 @@ export interface AppServices
     shares : ShareManager;
     publicLinks : PublicLinkManager;
     deletionOffers : DeletionOfferManager;
+    adminStatus : StatusManager;
 }
 
 export function createApp(auth ?: Auth, services ?: AppServices) : Hono
@@ -120,6 +124,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
 
         if(services)
         {
+            app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
             app.route('/api', createBlobRoutes(sessions, services.blobs));
             app.route('/api', createUploadRoutes(sessions, services.blobs));
             app.route('/api', createNodeRoutes(sessions, services.nodes));
@@ -177,10 +182,12 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const blob = new BlobRA(handle);
     const nodeRA = new NodeRA(handle);
     const shareRA = new ShareRA(handle);
+    const tracker = new LastRunTracker();
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
     const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY);
     const shares = new ShareManager(handle, nodeRA, shareRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
+    const adminStatus = new StatusManager(blob, tracker);
     const publicLinks = new PublicLinkManager(
         nodeRA,
         blob,
@@ -188,19 +195,29 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         (userID, nodeID) => shareRA.effectiveRole(userID, nodeID)
     );
 
+    const sweepIntervalMs = config.GC_INTERVAL_MINUTES * MS_PER_MINUTE;
     const stopGc = startGcTimer(
         { handle, blob, graceMs: config.GC_GRACE_DAYS * MS_PER_DAY },
-        config.GC_INTERVAL_MINUTES * MS_PER_MINUTE
+        sweepIntervalMs,
+        (summary) => tracker.recordGc(summary)
+    );
+    const stopTrashPurge = startTrashPurgeTimer(
+        { nodes: nodeRA, purger: nodes, graceMs: config.TRASH_PURGE_DAYS * MS_PER_DAY },
+        sweepIntervalMs,
+        (summary) => tracker.recordTrashPurge(summary)
     );
     const stopSweeps = blobs.startSweeps();
 
     const shutdown = () : void =>
     {
         stopGc();
+        stopTrashPurge();
         stopSweeps();
     };
 
-    return { app: createApp(auth, { blobs, nodes, shares, publicLinks, deletionOffers }), config, shutdown };
+    const services = { blobs, nodes, shares, publicLinks, deletionOffers, adminStatus };
+
+    return { app: createApp(auth, services), config, shutdown };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

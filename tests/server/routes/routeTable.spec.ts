@@ -22,6 +22,8 @@ import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { PublicLinkManager } from '@server/managers/publicLink.ts';
 import { ShareManager } from '@server/managers/share.ts';
+import { StatusManager } from '@server/managers/status.ts';
+import { LastRunTracker } from '@server/managers/lastRun.ts';
 
 // App
 import { createApp } from '@server/app.ts';
@@ -39,6 +41,7 @@ const EXPECTED_ROUTES = [
     // Admin
     'GET /api/admin/users',
     'PATCH /api/admin/users/:id',
+    'GET /api/admin/status',
 
     // Health
     'GET /api/health',
@@ -119,6 +122,7 @@ const app = createApp(auth, {
     publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
         shareRA.effectiveRole(userID, nodeID)),
     deletionOffers: new DeletionOfferManager(handle, nodes),
+    adminStatus: new StatusManager(blob, new LastRunTracker()),
 });
 
 afterAll(async () =>

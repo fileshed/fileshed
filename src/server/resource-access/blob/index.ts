@@ -10,7 +10,13 @@
 import type { Readable } from 'node:stream';
 
 // Models
-import { BackendNotFoundError, NoDefaultBackendError, UnsupportedBackendError } from '@fileshed/core';
+import {
+    BackendNotFoundError,
+    NoDefaultBackendError,
+    type StorageBackendKind,
+    UnsupportedBackendError,
+    storageBackendKinds,
+} from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
@@ -71,12 +77,28 @@ export interface GcCandidate
     storageKey : string;
 }
 
+// A configured backend as the admin status readout names it: identity, kind, and default flag -- never the config
+// blob, which can hold credentials.
+export interface BackendListing
+{
+    id : string;
+    kind : StorageBackendKind;
+    isDefault : boolean;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // A stored timestamp reads back as a Date (Postgres) or an ISO string (SQLite); new Date normalizes both (database.ts).
 function toNullableDate(value : Date | string | null) : Date | null
 {
     return value === null ? null : new Date(value);
+}
+
+// Narrows the storage_backend.kind text column to the domain enum. The column is app-written, so an unknown value is
+// corruption, not an expected input -- listBackends refuses it rather than widening the status readout's kind.
+function isStorageBackendKind(value : string) : value is StorageBackendKind
+{
+    return (storageBackendKinds as readonly string[]).includes(value);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -167,6 +189,27 @@ export class BlobRA
             backendID: row.backend_id,
             storageKey: row.storage_key,
         }));
+    }
+
+    // The configured backends for the admin status readout: id, kind, and default flag only. The config column is
+    // deliberately never selected -- it can hold backend credentials that no status view should surface. is_default
+    // reads back as 1/0 on SQLite and a boolean on Postgres, normalized to a boolean here.
+    async listBackends() : Promise<BackendListing[]>
+    {
+        const rows = await this.#db
+            .selectFrom('storage_backend')
+            .select([ 'id', 'kind', 'is_default' ])
+            .execute();
+
+        return rows.map((row) =>
+        {
+            if(!isStorageBackendKind(row.kind))
+            {
+                throw new Error(`storage backend ${ row.id } has an unknown kind ${ row.kind }`);
+            }
+
+            return { id: row.id, kind: row.kind, isDefault: Boolean(row.is_default) };
+        });
     }
 
     //------------------------------------------------------------------------------------------------------------------

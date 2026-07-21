@@ -13,6 +13,7 @@ import {
     DEFAULT_HOST,
     DEFAULT_PORT,
     DEFAULT_STORAGE_ROOT,
+    DEFAULT_TRASH_PURGE_DAYS,
     DEFAULT_UPLOAD_MAX_BYTES,
 } from '@fileshed/core';
 
@@ -38,7 +39,8 @@ const configSchema = z.object({
 
     // Blob storage + GC. STORAGE_ROOT is both the fs backend's root and the config the default storage_backend row is
     // seeded with. GC_GRACE_DAYS is the graveyard window before a dereferenced blob is hard-deleted; 0 collects
-    // immediately (useful in tests). UPLOAD_MAX_BYTES caps a single upload's byte count.
+    // immediately (useful in tests). TRASH_PURGE_DAYS is the window a trashed item survives before the sweeper
+    // permanently deletes it; 0 purges on the next sweep. UPLOAD_MAX_BYTES caps a single upload's byte count.
     STORAGE_ROOT: z.string()
         .min(1)
         .default(DEFAULT_STORAGE_ROOT),
@@ -50,6 +52,10 @@ const configSchema = z.object({
         .int()
         .positive()
         .default(DEFAULT_GC_INTERVAL_MINUTES),
+    TRASH_PURGE_DAYS: z.coerce.number()
+        .int()
+        .nonnegative()
+        .default(DEFAULT_TRASH_PURGE_DAYS),
     UPLOAD_MAX_BYTES: z.coerce.number()
         .int()
         .positive()
@@ -60,6 +66,13 @@ const configSchema = z.object({
     FILESHED_ADMIN_EMAIL: z.email().optional(),
     FILESHED_ADMIN_PASSWORD: z.string().min(8, 'FILESHED_ADMIN_PASSWORD must be at least 8 characters')
         .optional(),
+
+    // OAuth social providers are config, not code: each activates only when BOTH halves of its env pair are present.
+    // Setting one half without the other is a misconfiguration, caught below (both-or-neither, like the admin pair).
+    GITHUB_CLIENT_ID: z.string().optional(),
+    GITHUB_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
 }).superRefine((config, ctx) =>
 {
     if(config.DATABASE_KIND === 'postgres' && !config.DATABASE_URL)
@@ -77,6 +90,24 @@ const configSchema = z.object({
             code: 'custom',
             path: [ 'FILESHED_ADMIN_EMAIL' ],
             message: 'FILESHED_ADMIN_EMAIL and FILESHED_ADMIN_PASSWORD must be set together, or not at all',
+        });
+    }
+
+    if(Boolean(config.GITHUB_CLIENT_ID) !== Boolean(config.GITHUB_CLIENT_SECRET))
+    {
+        ctx.addIssue({
+            code: 'custom',
+            path: [ 'GITHUB_CLIENT_ID' ],
+            message: 'GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set together, or not at all',
+        });
+    }
+
+    if(Boolean(config.GOOGLE_CLIENT_ID) !== Boolean(config.GOOGLE_CLIENT_SECRET))
+    {
+        ctx.addIssue({
+            code: 'custom',
+            path: [ 'GOOGLE_CLIENT_ID' ],
+            message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together, or not at all',
         });
     }
 });

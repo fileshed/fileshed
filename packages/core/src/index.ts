@@ -93,7 +93,15 @@ export {
     type AccessRequestResponse,
     type AccessRequestListResponse,
 } from './models/requests/accessRequests.ts';
-export { type SetQuotaRequest } from './models/requests/admin.ts';
+export {
+    type SetQuotaRequest,
+    type StorageBackendStatus,
+    type GcRunSummary,
+    type TrashPurgeRunSummary,
+    type GcRunStatus,
+    type TrashPurgeRunStatus,
+    type AdminStatusResponse,
+} from './models/requests/admin.ts';
 export {
     type DeletionOfferResponse,
     type DeletionOfferListResponse,
@@ -148,7 +156,7 @@ export {
     accessRequestListResponseCodec,
     toAccessRequestResponse,
 } from './models/requests/schemas/accessRequests.ts';
-export { setQuotaRequestCodec } from './models/requests/schemas/admin.ts';
+export { setQuotaRequestCodec, adminStatusResponseCodec } from './models/requests/schemas/admin.ts';
 export {
     acceptDeletionOfferRequestCodec,
     deletionOfferResponseCodec,

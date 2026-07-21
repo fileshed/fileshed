@@ -15,6 +15,7 @@ import { setQuotaRequestCodec } from '@fileshed/core';
 // Managers
 import type { AdminManager } from '../managers/admin.ts';
 import type { SessionManager } from '../managers/session.ts';
+import type { StatusManager } from '../managers/status.ts';
 
 // Routes
 import { readJsonBody } from './readJsonBody.ts';
@@ -57,6 +58,25 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
         const profile = await admins.setQuota(actor, ctx.req.raw.headers, ctx.req.param('id'), body.quotaLimit);
 
         return ctx.json(profile);
+    });
+
+    return router;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// The status readout is admin surface too, but unlike user management it needs the full runtime graph (the blob RA and
+// the sweep tracker), so it composes separately -- mounted only alongside the feature services, never in the auth-only
+// smoke app. Same session gate (401) then admin gate (403), both manager-produced and mapped by onError.
+export function createAdminStatusRoutes(sessions : SessionManager, status : StatusManager) : Hono
+{
+    const router = new Hono();
+
+    router.get('/admin/status', async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+
+        return ctx.json(await status.status(actor));
     });
 
     return router;

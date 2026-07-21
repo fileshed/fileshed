@@ -255,6 +255,28 @@ export class NodeRA
         return rows.map(nodeFromRow);
     }
 
+    // The ids of trashed subtree ROOTS whose grace window has lapsed -- the set the auto-purge sweep permanently
+    // deletes. A root is a trashed node whose parent is NOT itself trashed (or which sits at root level). setTrashed
+    // stamps a whole subtree in one shot, so every node inside a trashed folder also carries a trashed_at; selecting
+    // only the roots -- and letting the parent_id cascade take their descendants -- is what keeps the sweep from
+    // trying to delete a child that its own root already removed. trashed_at is stored as an ISO string on both
+    // dialects, so the cutoff is compared in its ISO form (a null trashed_at never satisfies `< cutoff`).
+    async expiredTrashRootIDs(cutoff : Date) : Promise<string[]>
+    {
+        const rows = await this.#db
+            .selectFrom('node as n')
+            .leftJoin('node as parent', 'parent.id', 'n.parent_id')
+            .select('n.id as id')
+            .where('n.trashed_at', '<', cutoff.toISOString())
+            .where((eb) => eb.or([
+                eb('n.parent_id', 'is', null),
+                eb('parent.trashed_at', 'is', null),
+            ]))
+            .execute();
+
+        return rows.map((row) => row.id);
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Writes
     //------------------------------------------------------------------------------------------------------------------

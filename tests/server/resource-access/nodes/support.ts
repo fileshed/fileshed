@@ -34,6 +34,7 @@ const testConfig : Config = {
     STORAGE_ROOT: './data/blobs',
     GC_GRACE_DAYS: 7,
     GC_INTERVAL_MINUTES: 60,
+    TRASH_PURGE_DAYS: 30,
     UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
 };
 

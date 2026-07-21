@@ -421,25 +421,24 @@ export class NodeManager
 
         // The recipients-may-copy opt-in applies to a single file's delete; a folder delete ignores it (offering
         // per-file copies across a subtree is not modeled). Recipients and the snapshot are gathered BEFORE the
-        // delete removes the rows the queries need.
+        // delete removes the rows the queries need. The offers commit atomically with the delete that justifies them
+        // -- a crash cannot leave the file gone but its recipients uninvited -- so they ride the delete's transaction.
         const offers = options.offerCopies === true && node.type === 'file'
             ? await this.#mintableOffers(actor, node)
             : [];
 
-        // Collect the subtree's blob shas BEFORE the delete removes the rows (read-only), then delete the subtree and
-        // hand the shas to the graveyard in ONE transaction: a crash between them would strand the now-unreferenced
-        // blobs (row gone, no graveyard marker, GC blind to them). graveyardUnreferenced re-derives each blob's
-        // reference count against the post-delete rows, so a sha still referenced elsewhere stays live. The delete
-        // cascades the whole subtree and every link pointing into it. Offers commit atomically with the delete that
-        // justifies them -- a crash cannot leave the file gone but its recipients uninvited.
-        const shas = await this.#nodes.subtreeFileBlobIDs(id);
+        await this.#deleteSubtree(id, (trx) => this.#offers.insertMany(offers, trx));
+    }
 
-        await this.#db.transaction().execute(async (trx) =>
-        {
-            await this.#nodes.hardDelete(id, trx);
-            await this.#orphanedBlobs.graveyardUnreferenced(shas, trx);
-            await this.#offers.insertMany(offers, trx);
-        });
+    // The trash-purge sweep's per-root exit: permanently delete one expired trashed subtree by its root, with NO actor
+    // and NO ownership gate -- a system sweep answers to no user. It reuses the same subtree-delete + graveyard
+    // transaction as hardDelete but mints NO deletion offers: an automatic purge is not an owner choosing "let
+    // recipients save a copy," so recipients are never invited. The sweep hands only expired ROOTS
+    // (NodeRA.expiredTrashRootIDs), so the parent_id cascade takes each subtree whole and no descendant is processed
+    // twice.
+    async purgeTrashedRoot(rootID : string) : Promise<void>
+    {
+        await this.#deleteSubtree(rootID);
     }
 
     // One offer per user who can currently see the file through a share -- a grant on the file itself or on any
@@ -466,6 +465,26 @@ export class NodeManager
                 createdAt: now,
                 expiresAt,
             }));
+    }
+
+    // The ownerless core of a permanent delete, shared by the owner-gated hardDelete and the system trash-purge sweep.
+    // Collect the subtree's blob shas BEFORE the delete removes the rows (read-only), then delete the subtree and hand
+    // the shas to the graveyard in ONE transaction: a crash between them would strand the now-unreferenced blobs (row
+    // gone, no graveyard marker, GC blind to them). graveyardUnreferenced re-derives each blob's reference count
+    // against the post-delete rows, so a sha still referenced elsewhere stays live. The delete cascades the whole
+    // subtree and every link pointing into it. The optional `within` hook runs inside the same transaction for a
+    // caller that must commit related rows atomically with the delete (hardDelete mints deletion offers there); the
+    // sweep passes none.
+    async #deleteSubtree(id : string, within ?: (trx : DatabaseHandle['db']) => Promise<void>) : Promise<void>
+    {
+        const shas = await this.#nodes.subtreeFileBlobIDs(id);
+
+        await this.#db.transaction().execute(async (trx) =>
+        {
+            await this.#nodes.hardDelete(id, trx);
+            await this.#orphanedBlobs.graveyardUnreferenced(shas, trx);
+            if(within !== undefined) { await within(trx); }
+        });
     }
 
     //------------------------------------------------------------------------------------------------------------------
