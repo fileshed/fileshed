@@ -33,8 +33,11 @@ import {
     type NodeResponse,
     NotFoundError,
     type PatchNodeRequest,
+    type PurgeBrokenLinksResponse,
     RegulationError,
     type Role,
+    SEARCH_CANDIDATE_LIMIT,
+    type SearchQuery,
     isDirectOwner,
     maxRole,
     toNodeResponse,
@@ -111,8 +114,14 @@ export class NodeManager
         const role = await this.#shares.effectiveRole(actor.id, node.id);
 
         // A read of a node the caller has no access to reads as absent -- a 404 that never confirms the node exists. A
-        // viewer or editor resolves to a non-null role and reads it.
+        // viewer or editor resolves to a non-null role and reads it. A trashed node is likewise absent to everyone but
+        // its direct owner: the resolver deliberately ignores trash state (a pure ancestor walk), so this guard is
+        // where recipients lose sight of trashed items -- the same doctrine download and copy apply.
         if(role === null) { throw new NotFoundError(`No node ${ id }.`); }
+        if(node.type !== 'link' && node.trashedAt !== null && !isDirectOwner(node, actor.id))
+        {
+            throw new NotFoundError(`No node ${ id }.`);
+        }
 
         return this.#respondNode(actor, node, role);
     }
@@ -135,6 +144,14 @@ export class NodeManager
             const parent = await this.#nodes.get(parentID);
             parentRole = parent === undefined ? null : await this.#shares.effectiveRole(actor.id, parent.id);
             if(parentRole === null) { throw new NotFoundError(`No node ${ parentID }.`); }
+
+            // A trashed folder is absent to everyone but its direct owner -- recipients get a 404, not an empty
+            // listing that confirms the folder still exists. The owner keeps listing it: that is the trash view.
+            if(parent !== undefined && parent.type !== 'link' && parent.trashedAt !== null
+                && !isDirectOwner(parent, actor.id))
+            {
+                throw new NotFoundError(`No node ${ parentID }.`);
+            }
         }
 
         // ownerID scopes the ROOT listing only -- that is where per-user trees begin. A folder's listing is scoped by
@@ -176,6 +193,36 @@ export class NodeManager
         });
 
         return { nodes, total, limit: query.limit, offset: query.offset };
+    }
+
+    // Name search scoped to the nodes the caller can see. A name-match superset comes back from the RA (case-
+    // insensitive on both dialects, trashed excluded, capped); every candidate's effective role resolves in ONE batch,
+    // the ones that resolve to null (a stranger's files) drop out, and the survivors carry the role the caller earned.
+    // Pagination runs over those survivors -- accessibility can't be pushed into the SQL pagination, so `total` is the
+    // count the caller may actually reach, and a page never leaks a node they cannot resolve.
+    async search(actor : SessionUser, query : SearchQuery) : Promise<NodeListResponse>
+    {
+        const candidates = await this.#nodes.searchByName(query.q, SEARCH_CANDIDATE_LIMIT);
+
+        const roles = await this.#shares.effectiveRoles(actor.id, candidates.map((node) => node.id));
+        const accessible = candidates.filter((node) => (roles.get(node.id) ?? null) !== null);
+
+        const page = accessible.slice(query.offset, query.offset + query.limit);
+        const targets = await this.#resolveTargets(actor, page);
+
+        const nodes = page.map((node) =>
+        {
+            const role = roles.get(node.id) ?? null;
+
+            // Unreachable: `accessible` already dropped every null-role node. A null here means the filter and this
+            // map disagree, so refuse loudly rather than stamp a role the resolver never granted.
+            if(role === null) { throw new Error(`search returned node ${ node.id } without a resolvable role`); }
+
+            if(node.type !== 'link') { return toNodeResponse(node, role); }
+            return toNodeResponse(node, role, targets.get(node.targetNodeID) ?? null);
+        });
+
+        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset };
     }
 
     async me(actor : SessionUser) : Promise<MeResponse>
@@ -419,6 +466,33 @@ export class NodeManager
                 createdAt: now,
                 expiresAt,
             }));
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Broken-link cleanup
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Purge the caller's dead links inside a folder. Authority is read access to the folder: one the caller cannot
+    // resolve reads as absent (404), and nothing below touches a node they do not own, so read access is enough --
+    // the purge only ever prunes the caller's own placements, never a contributor's links in a shared folder.
+    //
+    // "Dead" is derived here at purge time, never a stored flag: the same target resolution the listings use keeps a
+    // target only if it exists AND the caller resolves a non-null role on it, so a link whose target is absent from
+    // that set is dead FOR THE CALLER -- its share was revoked, or the target moved beyond their reach. A live link
+    // (target still resolvable) survives, so a transient revocation that later heals never loses the placement.
+    async purgeBrokenLinks(actor : SessionUser, folderID : string) : Promise<PurgeBrokenLinksResponse>
+    {
+        await this.#requireReadable(actor, folderID);
+
+        const links = await this.#nodes.linkChildrenOwnedBy(folderID, actor.id);
+        const resolved = await this.#resolveTargets(actor, links);
+        const deadIDs = links
+            .filter((link) => !resolved.has(link.targetNodeID))
+            .map((link) => link.id);
+
+        await this.#nodes.hardDeleteMany(deadIDs);
+
+        return { purged: deadIDs.length };
     }
 
     //------------------------------------------------------------------------------------------------------------------

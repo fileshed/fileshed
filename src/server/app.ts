@@ -24,6 +24,7 @@ import { createDirectRoutes } from './routes/direct.ts';
 import { createDownloadRoutes } from './routes/downloads.ts';
 import { createNodeRoutes } from './routes/nodes.ts';
 import { createPublicLinkRoutes } from './routes/links.ts';
+import { createSearchRoutes } from './routes/search.ts';
 import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
 
@@ -122,6 +123,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
             app.route('/api', createBlobRoutes(sessions, services.blobs));
             app.route('/api', createUploadRoutes(sessions, services.blobs));
             app.route('/api', createNodeRoutes(sessions, services.nodes));
+            app.route('/api', createSearchRoutes(sessions, services.nodes));
             app.route('/api', createMeRoutes(sessions, services.nodes));
             app.route('/api', createShareRoutes(sessions, services.shares));
             app.route('/api', createAccessRequestRoutes(sessions, services.shares));

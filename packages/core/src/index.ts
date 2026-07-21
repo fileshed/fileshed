@@ -65,7 +65,9 @@ export {
     type LinkTarget,
     type NodeResponse,
     type NodeListResponse,
+    type PurgeBrokenLinksResponse,
 } from './models/requests/nodes.ts';
+export { type SearchQuery } from './models/requests/search.ts';
 export {
     type ClaimRequest,
     type ClaimResponse,
@@ -110,11 +112,13 @@ export {
     patchNodeRequestCodec,
     childrenQueryCodec,
     deleteNodeQueryCodec,
+    purgeBrokenLinksResponseCodec,
     linkTargetCodec,
     nodeResponseCodec,
     nodeListResponseCodec,
     toNodeResponse,
 } from './models/requests/schemas/nodes.ts';
+export { searchQueryCodec } from './models/requests/schemas/search.ts';
 export {
     claimRequestCodec,
     claimResponseCodec,

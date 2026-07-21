@@ -80,6 +80,16 @@ export interface DeleteNodeQuery
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Broken-link cleanup (POST /api/nodes/:id/purge-broken-links) -- the count of the caller's dead links removed from
+// the folder. "Dead" is derived at purge time (the caller cannot resolve the link's target), never a stored flag.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface PurgeBrokenLinksResponse
+{
+    purged : number;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Children listing (GET /api/nodes/:id/children) -- pagination plus the sort-key vocabulary.
 //----------------------------------------------------------------------------------------------------------------------
 

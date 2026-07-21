@@ -23,6 +23,7 @@ import { mapManagerError } from '@server/managers/errors.ts';
 
 // Routes
 import { createNodeRoutes } from '@server/routes/nodes.ts';
+import { createSearchRoutes } from '@server/routes/search.ts';
 import { createMeRoutes } from '@server/routes/me.ts';
 
 // Support
@@ -64,6 +65,7 @@ export function composeNodeApp(booted : BootedApp, orphanedBlobs : OrphanedBlobs
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => booted.auth.handler(ctx.req.raw));
     app.route('/api', createNodeRoutes(sessions, nodes));
+    app.route('/api', createSearchRoutes(sessions, nodes));
     app.route('/api', createMeRoutes(sessions, nodes));
 
     app.onError((error, ctx) =>

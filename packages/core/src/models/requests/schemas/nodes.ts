@@ -25,6 +25,7 @@ import {
     type NodeListResponse,
     type NodeResponse,
     type PatchNodeRequest,
+    type PurgeBrokenLinksResponse,
     type RenameRequest,
     nodeSortKeys,
     sortDirections,
@@ -115,6 +116,14 @@ export const deleteNodeQueryCodec = z.strictObject({
 });
 
 typeAssert<Equals<z.output<typeof deleteNodeQueryCodec>, DeleteNodeQuery>>();
+
+export const purgeBrokenLinksResponseCodec = z.strictObject({
+    purged: z.number()
+        .int()
+        .nonnegative(),
+});
+
+typeAssert<Equals<z.output<typeof purgeBrokenLinksResponseCodec>, PurgeBrokenLinksResponse>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 // Query strings arrive as strings, so limit/offset are coerced; an over-max limit is rejected rather than silently

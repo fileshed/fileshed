@@ -8,12 +8,10 @@
 // managers and carries no error-shape or business logic of its own.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type Context, Hono } from 'hono';
-import type { ZodType } from 'zod';
+import { Hono } from 'hono';
 
 // Models
 import {
-    BadRequestError,
     childrenQueryCodec,
     copyNodeRequestCodec,
     createNodeRequestCodec,
@@ -26,17 +24,8 @@ import type { NodeManager } from '../managers/node.ts';
 import type { SessionManager } from '../managers/session.ts';
 
 // Routes
+import { parseQuery } from './parseQuery.ts';
 import { readJsonBody } from './readJsonBody.ts';
-
-//----------------------------------------------------------------------------------------------------------------------
-
-function parseQuery<T>(ctx : Context, codec : ZodType<T>) : T
-{
-    const result = codec.safeParse(ctx.req.query());
-    if(!result.success) { throw new BadRequestError('The query parameters are invalid.'); }
-
-    return result.data;
-}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -108,6 +97,13 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         const request = await readJsonBody(ctx, copyNodeRequestCodec);
 
         return ctx.json(await nodes.copy(actor, ctx.req.param('id'), request), 201);
+    });
+
+    router.post('/nodes/:id/purge-broken-links', async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+
+        return ctx.json(await nodes.purgeBrokenLinks(actor, ctx.req.param('id')));
     });
 
     router.delete('/nodes/:id', async (ctx) =>

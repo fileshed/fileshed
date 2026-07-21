@@ -6,7 +6,12 @@
 // quota usage over seeded file nodes, and the orphaned-blob handoff a hard delete performs.
 //----------------------------------------------------------------------------------------------------------------------
 
+/* eslint-disable camelcase -- the share seed builds a snake_case DB row (house convention for Kysely inserts) */
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+// Models
+import { NotFoundError } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -130,6 +135,50 @@ describe('NodeManager.hardDelete', () =>
         // The delete and the failed handoff share one transaction, so the rollback leaves the whole subtree in place.
         expect(await ra.get('dir')).toBeDefined();
         expect(await ra.get('f1')).toBeDefined();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeManager trashed visibility', () =>
+{
+    // A live grant on a trashed folder still resolves a role -- the resolver deliberately ignores trash state -- so
+    // the manager guard is the single place recipients lose sight of trashed items, while the owner keeps their
+    // trash readable.
+    async function seedTrashedSharedFolder() : Promise<void>
+    {
+        await seedUser(handle.db, 'bob');
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', trashedAt: new Date() }));
+        await handle.db.insertInto('share').values({
+            id: 'share_dir_bob',
+            node_id: 'dir',
+            grantee_user_id: 'bob',
+            role: 'viewer',
+            created_by: 'alice',
+            created_at: new Date().toISOString(),
+        })
+            .execute();
+    }
+
+    it('reads a trashed shared folder as absent for the recipient, but not for its owner', async () =>
+    {
+        await seedTrashedSharedFolder();
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+
+        await expect(manager.get(testActor({ id: 'bob' }), 'dir')).rejects.toThrow(NotFoundError);
+
+        const owned = await manager.get(testActor({ id: 'alice' }), 'dir');
+        expect(owned).toMatchObject({ id: 'dir', role: 'owner' });
+    });
+
+    it('lists a trashed folder\'s children only for its owner', async () =>
+    {
+        await seedTrashedSharedFolder();
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const query = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc' } as const;
+
+        await expect(manager.children(testActor({ id: 'bob' }), 'dir', query)).rejects.toThrow(NotFoundError);
+        await expect(manager.children(testActor({ id: 'alice' }), 'dir', query)).resolves.toBeDefined();
     });
 });
 

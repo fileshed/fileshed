@@ -62,7 +62,11 @@ const EXPECTED_ROUTES = [
     'POST /api/nodes/:id/trash',
     'POST /api/nodes/:id/restore',
     'POST /api/nodes/:id/copy',
+    'POST /api/nodes/:id/purge-broken-links',
     'DELETE /api/nodes/:id',
+
+    // Search
+    'GET /api/search',
 
     // Shares
     'POST /api/nodes/:id/shares',

@@ -13,10 +13,10 @@
 
 /* eslint-disable camelcase -- update sets and CTE column lists name snake_case DB columns (house convention) */
 
-import { sql } from 'kysely';
+import { type SqlBool, sql } from 'kysely';
 
 // Models
-import { MAX_TREE_DEPTH, type Node } from '@fileshed/core';
+import { type LinkNode, MAX_TREE_DEPTH, type Node } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
@@ -60,15 +60,24 @@ const sortColumns : Record<NodeSortKey, 'name' | 'size' | 'created_at' | 'update
     updatedAt: 'updated_at',
 };
 
+// Escape the LIKE metacharacters in a user's search term so "50%" or "a_b" match literally rather than as wildcards.
+// Backslash is the escape character (declared with ESCAPE in the query), so escape it first to avoid double-escaping.
+function escapeLikePattern(term : string) : string
+{
+    return term.replace(/[\\%_]/g, (char) => `\\${ char }`);
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export class NodeRA
 {
     readonly #db : DatabaseHandle['db'];
+    readonly #kind : DatabaseHandle['kind'];
 
     constructor(handle : DatabaseHandle)
     {
         this.#db = handle.db;
+        this.#kind = handle.kind;
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -204,6 +213,48 @@ export class NodeRA
         return [ ...shas ];
     }
 
+    // The link children directly under `parentID` that `ownerID` placed -- the candidate set a broken-link purge
+    // resolves and prunes. Scoped to the caller's own links because a purge removes only their placements, never a
+    // contributor's links in a shared folder; scoped to direct children because "clean up broken links" acts on the
+    // folder the caller is looking at, not its whole subtree.
+    async linkChildrenOwnedBy(parentID : string, ownerID : string) : Promise<LinkNode[]>
+    {
+        const rows = await this.#db
+            .selectFrom('node')
+            .selectAll()
+            .where('parent_id', '=', parentID)
+            .where('owner_id', '=', ownerID)
+            .where('type', '=', 'link')
+            .execute();
+
+        return rows.map(nodeFromRow).filter((node) : node is LinkNode => node.type === 'link');
+    }
+
+    // A case-insensitive substring match on node name, capped at `limit`, excluding trashed nodes. The match is
+    // dialect-aware: Postgres LIKE is case-sensitive so it needs ILIKE, while SQLite LIKE is already case-insensitive
+    // for ASCII; both take an explicit ESCAPE so the pattern's escaped metacharacters behave identically. This is a
+    // name-only superset -- the caller resolves and filters these to the nodes it may actually see.
+    async searchByName(term : string, limit : number) : Promise<Node[]>
+    {
+        const pattern = `%${ escapeLikePattern(term) }%`;
+        const nameColumn = sql.ref('name');
+        const condition = this.#kind === 'postgres'
+            ? sql<SqlBool>`${ nameColumn } ilike ${ pattern } escape '\\'`
+            : sql<SqlBool>`${ nameColumn } like ${ pattern } escape '\\'`;
+
+        const rows = await this.#db
+            .selectFrom('node')
+            .selectAll()
+            .where('trashed_at', 'is', null)
+            .where(condition)
+            .orderBy('name', 'asc')
+            .orderBy('id', 'asc')
+            .limit(limit)
+            .execute();
+
+        return rows.map(nodeFromRow);
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Writes
     //------------------------------------------------------------------------------------------------------------------
@@ -269,6 +320,18 @@ export class NodeRA
         await executor
             .deleteFrom('node')
             .where('id', '=', id)
+            .execute();
+    }
+
+    // Delete a set of nodes by id in one statement -- the broken-link purge's exit. Every id it is handed is a link,
+    // which carries no blob and roots no subtree, so there is nothing to gather or graveyard first: the rows simply go.
+    async hardDeleteMany(ids : readonly string[]) : Promise<void>
+    {
+        if(ids.length === 0) { return; }
+
+        await this.#db
+            .deleteFrom('node')
+            .where('id', 'in', ids)
             .execute();
     }
 
