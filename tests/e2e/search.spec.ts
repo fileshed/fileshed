@@ -64,7 +64,6 @@ function grantShare(nodeID : string, granteeUserID : string, role : 'viewer' | '
 
 function search(client : ApiClient, term : string) : Promise<Response>
 {
-    // eslint-disable-next-line id-length -- `q` is the wire query-string parameter name for GET /api/search
     const params = new URLSearchParams({ q: term });
     return client.get(`/api/search?${ params.toString() }`);
 }

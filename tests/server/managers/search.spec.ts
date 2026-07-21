@@ -78,7 +78,6 @@ function manager() : NodeManager
 
 function search(actorID : string, term : string, limit = 50, offset = 0) : Promise<NodeListResponse>
 {
-    // eslint-disable-next-line id-length -- `q` is the search DTO's wire field name
     return manager().search(testActor({ id: actorID }), { q: term, limit, offset });
 }
 

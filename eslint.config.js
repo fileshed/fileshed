@@ -62,7 +62,7 @@ export default [
             // Style
             'consistent-this': [ 'error', 'self' ],
             'func-style': [ 'error', 'declaration', { allowArrowFunctions: true } ],
-            'id-length': [ 'error', { min: 2, exceptions: [ '$', '_', 'i', 'x', 'y', 'z' ] } ],
+            'id-length': [ 'error', { min: 2, exceptions: [ '$', '_', 'i', 'q', 'x', 'y', 'z' ] } ],
             'no-duplicate-imports': 'error',
             'no-lonely-if': 'error',
             'no-multi-assign': 'error',

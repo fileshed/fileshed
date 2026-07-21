@@ -19,7 +19,6 @@ import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 // scan. Query strings arrive as strings, so limit/offset are coerced; an over-max limit is rejected, not clamped,
 // matching the children query.
 export const searchQueryCodec = z.strictObject({
-    // eslint-disable-next-line id-length -- `q` is the wire query-string parameter name for GET /api/search
     q: z.string()
         .trim()
         .min(1),

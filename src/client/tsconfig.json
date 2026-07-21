@@ -6,5 +6,5 @@
         "noEmit": true,
         "allowImportingTsExtensions": true
     },
-    "include": ["src"]
+    "include": ["src", "components.d.ts", "auto-imports.d.ts"]
 }
