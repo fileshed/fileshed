@@ -1,14 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
-  -- Search View
+  -- Admin Page
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <section>
         <h1 class="text-2xl font-bold">
-            Search
+            Admin
         </h1>
         <p class="mt-2 text-muted">
-            Search across your files and folders by name.
+            User management, quotas, and backend status will live here.
         </p>
     </section>
 </template>

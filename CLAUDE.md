@@ -228,6 +228,14 @@ house style.
 
 ## Vue Guidelines
 
+### Component Size
+
+Route components compose small components; they don't accrete logic. **~100 lines is the soft target for a
+component** — multiple hundreds of lines means the concerns are scoped wrong and want extracting into focused children.
+A route-level page should read as thin composition plus the orchestration that genuinely belongs at route level
+(selection, navigation, the store); self-contained pieces (a toolbar, a surface, a dialog host) live in their own
+components under `components/`.
+
 ### Component Structure
 
 ```
@@ -288,7 +296,7 @@ The client uses **Nuxt UI v4** in standalone Vue mode (via its Vite plugin, **no
 
 When working with Nuxt UI components, fetch the LLM docs from the URLs above rather than guessing at the API. Use `llms.txt` for a quick overview, `llms-full.txt` or the per-component `.md` for full props/slots/usage.
 
-**Styling: Tailwind utilities first.** No custom styles unless utilities genuinely can't express it (complex selectors, keyframe animations, deep third-party overrides). A component with no custom styles omits the `<style>` block entirely — don't leave an empty one.
+**Styling: Tailwind utilities first.** No custom styles unless utilities genuinely can't express it (complex selectors, keyframe animations, deep third-party overrides). A component with no custom styles omits the `<style>` block entirely — don't leave an empty one. **Never `lang="scss"`** — sass is not installed in this project and the global Vue template's scss example does not apply here; the rare justified style block is plain CSS `<style scoped>`.
 
 ### Component Naming
 
@@ -320,7 +328,7 @@ fileshed/
 │   │       ├── router/      # vue-router setup
 │   │       ├── stores/      # Pinia stores
 │   │       ├── styles/      # Global CSS (Tailwind + Nuxt UI imports)
-│   │       └── views/       # Route-level views (<name>View.vue)
+│   │       └── pages/       # Route-level pages (<name>Page.vue)
 │   └── server/              # @fileshed/server — Hono API (files at workspace root, no nested src/)
 │       ├── app.ts               # Hono app definition (default export)
 │       ├── server.ts            # Node entry point

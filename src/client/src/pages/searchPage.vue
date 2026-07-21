@@ -1,14 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
-  -- Account View
+  -- Search Page
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <section>
         <h1 class="text-2xl font-bold">
-            Account
+            Search
         </h1>
         <p class="mt-2 text-muted">
-            Your profile and account settings will appear here.
+            Search across your files and folders by name.
         </p>
     </section>
 </template>

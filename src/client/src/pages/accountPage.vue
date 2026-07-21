@@ -1,14 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
-  -- Trash View
+  -- Account Page
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <section>
         <h1 class="text-2xl font-bold">
-            Trash
+            Account
         </h1>
         <p class="mt-2 text-muted">
-            Trashed items rest here until you restore or purge them.
+            Your profile and account settings will appear here.
         </p>
     </section>
 </template>

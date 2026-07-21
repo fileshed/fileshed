@@ -1,14 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
-  -- Admin View
+  -- Trash Page
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <section>
         <h1 class="text-2xl font-bold">
-            Admin
+            Trash
         </h1>
         <p class="mt-2 text-muted">
-            User management, quotas, and backend status will live here.
+            Trashed items rest here until you restore or purge them.
         </p>
     </section>
 </template>

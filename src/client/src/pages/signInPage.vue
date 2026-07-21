@@ -1,5 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
-  -- Sign Up View
+  -- Sign In Page
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -10,7 +10,7 @@
                     {{ app.name }}
                 </h1>
                 <p class="mt-1 text-sm text-muted">
-                    Create your account.
+                    {{ app.tagline }}
                 </p>
             </template>
 
@@ -27,14 +27,6 @@
                     :description="errorMessage"
                 />
 
-                <UFormField label="Name" name="name">
-                    <UInput
-                        v-model="state.name"
-                        autocomplete="name"
-                        class="w-full"
-                    />
-                </UFormField>
-
                 <UFormField label="Email" name="email">
                     <UInput
                         v-model="state.email"
@@ -48,7 +40,7 @@
                     <UInput
                         v-model="state.password"
                         type="password"
-                        autocomplete="new-password"
+                        autocomplete="current-password"
                         class="w-full"
                     />
                 </UFormField>
@@ -57,15 +49,15 @@
                     type="submit"
                     block
                     :loading="session.pending"
-                    label="Create account"
+                    label="Sign in"
                 />
             </UForm>
 
             <template #footer>
                 <p class="text-sm text-muted">
-                    Already have an account?
-                    <RouterLink to="/signin" class="font-medium text-primary">
-                        Sign in
+                    Need an account?
+                    <RouterLink to="/signup" class="font-medium text-primary">
+                        Sign up
                     </RouterLink>
                 </p>
             </template>
@@ -77,7 +69,7 @@
 
 <script setup lang="ts">
     import { reactive, ref } from 'vue';
-    import { RouterLink, useRouter } from 'vue-router';
+    import { RouterLink, useRoute, useRouter } from 'vue-router';
     import { z } from 'zod';
     import type { FormSubmitEvent } from '@nuxt/ui';
 
@@ -91,31 +83,39 @@
 
     const app = useAppStore();
     const session = useSessionStore();
+    const route = useRoute();
     const router = useRouter();
 
     const schema = z.object({
-        name: z.string().min(1, 'Enter your name.'),
         email: z.email('Enter a valid email address.'),
-        password: z.string().min(8, 'Use at least 8 characters.'),
+        password: z.string().min(1, 'Enter your password.'),
     });
 
-    type SignUpFields = z.output<typeof schema>;
+    type SignInFields = z.output<typeof schema>;
 
-    const state = reactive({ name: '', email: '', password: '' });
+    const state = reactive({ email: '', password: '' });
     const errorMessage = ref<string | null>(null);
 
     //------------------------------------------------------------------------------------------------------------------
     // Submit
     //------------------------------------------------------------------------------------------------------------------
 
-    async function onSubmit(event : FormSubmitEvent<SignUpFields>) : Promise<void>
+    // Only same-origin absolute paths are honoured, so a crafted ?redirect can't bounce a fresh sign-in off-site.
+    function redirectTarget() : string
+    {
+        const target = route.query.redirect;
+
+        return typeof target === 'string' && target.startsWith('/') ? target : '/';
+    }
+
+    async function onSubmit(event : FormSubmitEvent<SignInFields>) : Promise<void>
     {
         errorMessage.value = null;
 
         try
         {
-            await session.signUp(event.data.name, event.data.email, event.data.password);
-            await router.push({ path: '/' });
+            await session.signIn(event.data.email, event.data.password);
+            await router.push(redirectTarget());
         }
         catch(error)
         {

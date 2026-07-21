@@ -7,15 +7,15 @@ import { createRouter, createWebHistory } from 'vue-router';
 // Layouts
 import MainLayout from '../layouts/mainLayout.vue';
 
-// Views
-import SignInView from '../views/signInView.vue';
-import SignUpView from '../views/signUpView.vue';
-import DriveView from '../views/driveView.vue';
-import SharedView from '../views/sharedView.vue';
-import TrashView from '../views/trashView.vue';
-import SearchView from '../views/searchView.vue';
-import AccountView from '../views/accountView.vue';
-import AdminView from '../views/adminView.vue';
+// Pages
+import SignInPage from '../pages/signInPage.vue';
+import SignUpPage from '../pages/signUpPage.vue';
+import DrivePage from '../pages/drivePage.vue';
+import SharedPage from '../pages/sharedPage.vue';
+import TrashPage from '../pages/trashPage.vue';
+import SearchPage from '../pages/searchPage.vue';
+import AccountPage from '../pages/accountPage.vue';
+import AdminPage from '../pages/adminPage.vue';
 
 // Stores
 import { useSessionStore } from '../stores/session.ts';
@@ -28,18 +28,19 @@ import { createAuthGuard } from './guard.ts';
 export const router = createRouter({
     history: createWebHistory(),
     routes: [
-        { path: '/signin', name: 'signin', component: SignInView, meta: { public: true } },
-        { path: '/signup', name: 'signup', component: SignUpView, meta: { public: true } },
+        { path: '/signin', name: 'signin', component: SignInPage, meta: { public: true } },
+        { path: '/signup', name: 'signup', component: SignUpPage, meta: { public: true } },
         {
             path: '/',
             component: MainLayout,
             children: [
-                { path: '', name: 'drive', component: DriveView },
-                { path: 'shared', name: 'shared', component: SharedView },
-                { path: 'trash', name: 'trash', component: TrashView },
-                { path: 'search', name: 'search', component: SearchView },
-                { path: 'account', name: 'account', component: AccountView },
-                { path: 'admin', name: 'admin', component: AdminView, meta: { admin: true } },
+                { path: '', name: 'drive', component: DrivePage },
+                { path: 'folder/:id', name: 'folder', component: DrivePage },
+                { path: 'shared', name: 'shared', component: SharedPage },
+                { path: 'trash', name: 'trash', component: TrashPage },
+                { path: 'search', name: 'search', component: SearchPage },
+                { path: 'account', name: 'account', component: AccountPage },
+                { path: 'admin', name: 'admin', component: AdminPage, meta: { admin: true } },
             ],
         },
     ],
