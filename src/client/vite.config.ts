@@ -32,7 +32,14 @@ export default defineConfig(({ mode }) =>
                 },
             }),
             vue(),
-            ui(),
+            ui({
+                ui: {
+                    colors: {
+                        primary: 'shed',
+                        neutral: 'zinc',
+                    },
+                },
+            }),
             devServer({
                 entry: '../server/server.ts',
                 exclude: [

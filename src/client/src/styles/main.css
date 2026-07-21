@@ -6,3 +6,22 @@
 @import "@nuxt/ui";
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/* Brand palette — "shed" is the FileShed orange, #ff9900 at its 500 anchor, with a warm ramp hand-tuned around it.  */
+/* Nuxt UI's `primary` alias points here (vite.config.ts); the chrome greys come from zinc via the `neutral` alias.  */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+@theme static {
+    --color-shed-50: #fff8eb;
+    --color-shed-100: #ffedcc;
+    --color-shed-200: #ffd999;
+    --color-shed-300: #ffc266;
+    --color-shed-400: #ffab33;
+    --color-shed-500: #ff9900;
+    --color-shed-600: #db7c00;
+    --color-shed-700: #b76200;
+    --color-shed-800: #934b00;
+    --color-shed-900: #7a3d03;
+    --color-shed-950: #421f00;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
