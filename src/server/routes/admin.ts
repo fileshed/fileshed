@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 
 // Models
-import { setQuotaRequestCodec } from '@fileshed/core';
+import { setQuotaRequestCodec, toAdminUserPageResponse, toAdminUserResponse } from '@fileshed/core';
 
 // Managers
 import type { AdminManager } from '../managers/admin.ts';
@@ -48,7 +48,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
             offset: paginationParam(ctx.req.query('offset')),
         });
 
-        return ctx.json(page);
+        return ctx.json(toAdminUserPageResponse(page));
     });
 
     router.patch('/admin/users/:id', setQuotaSpec, async (ctx) =>
@@ -58,7 +58,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
 
         const profile = await admins.setQuota(actor, ctx.req.raw.headers, ctx.req.param('id'), body.quotaLimit);
 
-        return ctx.json(profile);
+        return ctx.json(toAdminUserResponse(profile));
     });
 
     return router;

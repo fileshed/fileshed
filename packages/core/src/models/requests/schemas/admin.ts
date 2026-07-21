@@ -6,9 +6,13 @@ import { z } from 'zod';
 
 // Models
 import { storageBackendKinds } from '../../storageBackend.ts';
+import type { UserProfile } from '../../userProfile.ts';
+
+// Schemas
+import { userProfileCodec } from '../../schemas/userProfile.ts';
 
 // Requests
-import type { AdminStatusResponse, SetQuotaRequest } from '../admin.ts';
+import type { AdminStatusResponse, AdminUserPageResponse, AdminUserResponse, SetQuotaRequest } from '../admin.ts';
 
 // Request Schemas
 import { isoDateTimeCodec } from './common.ts';
@@ -28,6 +32,53 @@ export const setQuotaRequestCodec = z.strictObject({
 });
 
 typeAssert<Equals<z.output<typeof setQuotaRequestCodec>, SetQuotaRequest>>();
+
+//----------------------------------------------------------------------------------------------------------------------
+
+export const adminUserResponseCodec = userProfileCodec.extend({ createdAt: isoDateTimeCodec });
+
+typeAssert<Equals<z.output<typeof adminUserResponseCodec>, AdminUserResponse>>();
+
+export const adminUserPageResponseCodec = z.strictObject({
+    users: z.array(adminUserResponseCodec),
+    total: z.number()
+        .int()
+        .nonnegative(),
+    limit: z.number()
+        .int()
+        .positive(),
+    offset: z.number()
+        .int()
+        .nonnegative(),
+});
+
+typeAssert<Equals<z.output<typeof adminUserPageResponseCodec>, AdminUserPageResponse>>();
+
+//----------------------------------------------------------------------------------------------------------------------
+
+export function toAdminUserResponse(profile : UserProfile) : AdminUserResponse
+{
+    return {
+        id: profile.id,
+        email: profile.email,
+        ...profile.name === undefined ? {} : { name: profile.name },
+        role: profile.role,
+        quotaLimit: profile.quotaLimit,
+        createdAt: profile.createdAt.toISOString(),
+    };
+}
+
+export function toAdminUserPageResponse(
+    page : { users : UserProfile[]; total : number; limit : number; offset : number }
+) : AdminUserPageResponse
+{
+    return {
+        users: page.users.map(toAdminUserResponse),
+        total: page.total,
+        limit: page.limit,
+        offset: page.offset,
+    };
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -101,6 +101,8 @@ export {
     type GcRunStatus,
     type TrashPurgeRunStatus,
     type AdminStatusResponse,
+    type AdminUserResponse,
+    type AdminUserPageResponse,
 } from './models/requests/admin.ts';
 export {
     type DeletionOfferResponse,
@@ -156,7 +158,14 @@ export {
     accessRequestListResponseCodec,
     toAccessRequestResponse,
 } from './models/requests/schemas/accessRequests.ts';
-export { setQuotaRequestCodec, adminStatusResponseCodec } from './models/requests/schemas/admin.ts';
+export {
+    setQuotaRequestCodec,
+    adminStatusResponseCodec,
+    adminUserResponseCodec,
+    adminUserPageResponseCodec,
+    toAdminUserResponse,
+    toAdminUserPageResponse,
+} from './models/requests/schemas/admin.ts';
 export {
     acceptDeletionOfferRequestCodec,
     deletionOfferResponseCodec,

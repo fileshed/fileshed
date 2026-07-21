@@ -7,6 +7,7 @@
 
 // Models
 import type { StorageBackendKind } from '../storageBackend.ts';
+import type { UserRole } from '../userProfile.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Set quota (PATCH /api/admin/users/:id)
@@ -15,6 +16,31 @@ import type { StorageBackendKind } from '../storageBackend.ts';
 export interface SetQuotaRequest
 {
     quotaLimit : number | null;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// User rows (GET /api/admin/users, PATCH /api/admin/users/:id)
+//
+// The wire form of a UserProfile: the same fields with createdAt as an ISO string. Both the listing page and the
+// set-quota response carry this shape, so neither side of the wire composes it ad hoc.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface AdminUserResponse
+{
+    id : string;
+    email : string;
+    name ?: string;
+    role : UserRole;
+    quotaLimit : number | null;
+    createdAt : string;
+}
+
+export interface AdminUserPageResponse
+{
+    users : AdminUserResponse[];
+    total : number;
+    limit : number;
+    offset : number;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

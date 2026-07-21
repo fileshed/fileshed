@@ -1,37 +1,19 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin Route OpenAPI Specs
-//
-// The admin user-management endpoints serialize the domain UserProfile straight to the wire, and UserProfile models
-// createdAt as a Date -- unrepresentable in JSON Schema. The wire form is that profile with createdAt as the ISO string
-// JSON serialization produces, so the response schemas are the core codec with that one field re-typed. There is no
-// core wire DTO for the paginated user page; it is composed here from the same profile shape.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describeRoute } from 'hono-openapi';
-import { z } from 'zod';
 
 // Models
-import { adminStatusResponseCodec, isoDateTimeCodec, setQuotaRequestCodec, userProfileCodec } from '@fileshed/core';
+import {
+    adminStatusResponseCodec,
+    adminUserPageResponseCodec,
+    adminUserResponseCodec,
+    setQuotaRequestCodec,
+} from '@fileshed/core';
 
 // Routes
 import { errorResponse, jsonBody, jsonResponse, pathParam } from './docSchema.ts';
-
-//----------------------------------------------------------------------------------------------------------------------
-
-const userProfileWireCodec = userProfileCodec.extend({ createdAt: isoDateTimeCodec });
-
-const userProfilePageCodec = z.strictObject({
-    users: z.array(userProfileWireCodec),
-    total: z.number()
-        .int()
-        .nonnegative(),
-    limit: z.number()
-        .int()
-        .positive(),
-    offset: z.number()
-        .int()
-        .nonnegative(),
-});
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -57,7 +39,7 @@ export const listUsersSpec = describeRoute({
         },
     ],
     responses: {
-        200: jsonResponse('A page of user profiles.', userProfilePageCodec),
+        200: jsonResponse('A page of user profiles.', adminUserPageResponseCodec),
         401: errorResponse('No session.'),
         403: errorResponse('The caller is not an admin.'),
     },
@@ -71,7 +53,7 @@ export const setQuotaSpec = describeRoute({
     parameters: [ pathParam('id', 'The target user ID.') ],
     requestBody: jsonBody(setQuotaRequestCodec),
     responses: {
-        200: jsonResponse('The updated user profile.', userProfileWireCodec),
+        200: jsonResponse('The updated user profile.', adminUserResponseCodec),
         400: errorResponse('The request body does not match the expected shape.'),
         401: errorResponse('No session.'),
         403: errorResponse('The caller is not an admin.'),
