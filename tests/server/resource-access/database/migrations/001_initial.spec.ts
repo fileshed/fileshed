@@ -56,6 +56,7 @@ const createUserStub = async (db : Kysely<Database>) : Promise<void> =>
         .addColumn('email', 'text', (col) => col.notNull())
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
         .addColumn('quota_limit', 'integer')
+        .addColumn('preferences', 'text')
         .execute();
 };
 

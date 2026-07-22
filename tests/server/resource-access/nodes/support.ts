@@ -50,6 +50,7 @@ async function createUserStub(db : Kysely<Database>) : Promise<void>
         .addColumn('image', 'text')
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
         .addColumn('quota_limit', 'integer')
+        .addColumn('preferences', 'text')
         .execute();
 }
 

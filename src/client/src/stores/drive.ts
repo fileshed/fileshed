@@ -324,24 +324,20 @@ export const useDriveStore = defineStore('drive', () =>
         await refresh();
     }
 
-    // A new empty file in the current folder. Zero-byte content claims a universal digest, so the claim answers with a
-    // ticket whether the blob is new or already known (it is always below the small-file threshold); the challenge
-    // branch is here for completeness only.
-    async function createEmptyFile(name : string, mimeType : string) : Promise<void>
+    // A new empty file in the current folder, returned so a caller can navigate straight into it. Zero-byte content
+    // claims a universal digest, so the claim answers with a ticket whether the blob is new or already known (it is
+    // always below the small-file threshold); the challenge branch is here for completeness only.
+    async function createEmptyFile(name : string, mimeType : string) : Promise<NodeResponse>
     {
         const claim = await claimBlob({ sha256: EMPTY_BLOB_SHA256, size: 0 });
         const placement = { name, parentID: folderID.value, mimeType };
 
-        if(claim.upload)
-        {
-            await uploadTicket(claim.ticket, new Uint8Array(0), placement);
-        }
-        else
-        {
-            await answerChallenge(claim.challengeID, { answer: await emptyBlobProof(claim.nonce), ...placement });
-        }
+        const created = claim.upload
+            ? await uploadTicket(claim.ticket, new Uint8Array(0), placement)
+            : await answerChallenge(claim.challengeID, { answer: await emptyBlobProof(claim.nonce), ...placement });
 
         await refresh();
+        return created;
     }
 
     async function removeDeadLink(id : string) : Promise<void>

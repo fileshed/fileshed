@@ -38,12 +38,15 @@ import {
     type Role,
     SEARCH_CANDIDATE_LIMIT,
     type SearchQuery,
+    type UpdatePreferencesRequest,
     isDirectOwner,
     maxRole,
     toNodeResponse,
+    toUserPreferences,
 } from '@fileshed/core';
 
 // Engines
+import { applyPreferencesPatch } from '../engines/preferences.ts';
 import { type RegulationResult, regulation } from '../engines/regulation/index.ts';
 
 // Resource Access
@@ -57,6 +60,7 @@ import {
     NodeRA,
 } from '../resource-access/nodes/node.ts';
 import { ShareRA } from '../resource-access/shares/index.ts';
+import { UserRA } from '../resource-access/users/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -88,6 +92,7 @@ export class NodeManager
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
     readonly #offers : DeletionOfferRA;
+    readonly #users : UserRA;
     readonly #orphanedBlobs : OrphanedBlobs;
     readonly #offerGraceMs : number;
 
@@ -103,6 +108,7 @@ export class NodeManager
         this.#nodes = nodes;
         this.#shares = new ShareRA(handle);
         this.#offers = new DeletionOfferRA(handle);
+        this.#users = new UserRA(handle);
         this.#orphanedBlobs = orphanedBlobs;
         this.#offerGraceMs = offerGraceMs;
     }
@@ -243,7 +249,12 @@ export class NodeManager
 
     async me(actor : SessionUser) : Promise<MeResponse>
     {
-        const used = await this.#nodes.ownedBytes(actor.id);
+        // Preferences are read from the row, not the session snapshot: the cookie cache lags a just-saved preference,
+        // so a page reload right after a save would otherwise show the stale value.
+        const [ used, stored ] = await Promise.all([
+            this.#nodes.ownedBytes(actor.id),
+            this.#users.preferencesOf(actor.id),
+        ]);
 
         return {
             id: actor.id,
@@ -251,8 +262,19 @@ export class NodeManager
             name: actor.name,
             role: actor.role === 'admin' ? 'admin' : 'user',
             quota: { used, limit: actor.quotaLimit ?? null },
+            preferences: toUserPreferences(stored),
             createdAt: new Date(actor.createdAt).toISOString(),
         };
+    }
+
+    // Merge a preferences patch into the caller's stored blob and answer the refreshed profile. The stored blob is read
+    // fresh and merged key-wise, so every key the patch does not mention -- known or unknown -- survives the write.
+    async updatePreferences(actor : SessionUser, patch : UpdatePreferencesRequest) : Promise<MeResponse>
+    {
+        const stored = await this.#users.preferencesOf(actor.id);
+        await this.#users.setPreferences(actor.id, applyPreferencesPatch(stored, patch));
+
+        return this.me(actor);
     }
 
     //------------------------------------------------------------------------------------------------------------------

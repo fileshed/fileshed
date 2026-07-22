@@ -47,8 +47,9 @@ type Bool = ColumnType<boolean | number, boolean | number, boolean | number>;
 // role (from the admin plugin) and quota_limit (from the quotaLimit additionalField). session/account/verification
 // are purely BetterAuth's, so they are not typed here.
 //
-// Only the columns FileShed's app layer actually reads are typed below, and only the ones whose names are stable
-// snake_case: id/name/email (single-word), role, and quota_limit (explicit snake_case fieldName). BetterAuth emits its
+// Only the columns FileShed's app layer actually reads or writes are typed below, and only the ones whose names are
+// stable snake_case: id/name/email (single-word), role, quota_limit and preferences (explicit snake_case fieldNames).
+// BetterAuth emits its
 // other base columns in camelCase regardless of the casing option (emailVerified, createdAt, updatedAt) -- deliberately
 // left out here so this interface never lies about a column name. Whoever first needs one types it then, as it is.
 //----------------------------------------------------------------------------------------------------------------------
@@ -68,6 +69,10 @@ export interface UserTable
     // populates it, so the app treats it as set.
     role : 'admin' | 'user';
     quota_limit : number | null;
+
+    // The per-user preferences blob: JSON text, null when the account has set none. Written only by the app's own
+    // preferences PATCH (see UserRA); read to assemble the /api/me profile.
+    preferences : string | null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

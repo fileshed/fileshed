@@ -4,11 +4,18 @@
 
 import { z } from 'zod';
 
+// Constants
+import { EDITOR_THEME_MAX_LENGTH, ROOT_LABEL_MAX_LENGTH } from '../../../constants/preferences.ts';
+
 // Models
+import { timeFormats } from '../../userPreferences.ts';
 import { userRoles } from '../../userProfile.ts';
 
+// Model Schemas
+import { userPreferencesCodec } from '../../schemas/userPreferences.ts';
+
 // Requests
-import type { MeResponse } from '../me.ts';
+import type { MeResponse, UpdatePreferencesRequest } from '../me.ts';
 
 // Request Schemas
 import { isoDateTimeCodec } from './common.ts';
@@ -32,9 +39,37 @@ export const meResponseCodec = z.strictObject({
             .nonnegative()
             .nullable(),
     }),
+    preferences: userPreferencesCodec.default({}),
     createdAt: isoDateTimeCodec,
 });
 
 typeAssert<Equals<z.output<typeof meResponseCodec>, MeResponse>>();
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// Loose by design: rootLabel (and its null delete) are validated, but unknown keys pass through untouched so a
+// forward-compat preference survives the patch instead of being stripped. See UpdatePreferencesRequest.
+export const updatePreferencesRequestCodec = z.looseObject({
+    rootLabel: z.string()
+        .trim()
+        .min(1)
+        .max(ROOT_LABEL_MAX_LENGTH)
+        .nullable()
+        .optional(),
+    timeFormat: z.enum(timeFormats)
+        .nullable()
+        .optional(),
+    editorTheme: z.string()
+        .trim()
+        .min(1)
+        .max(EDITOR_THEME_MAX_LENGTH)
+        .nullable()
+        .optional(),
+    editorGutter: z.boolean()
+        .nullable()
+        .optional(),
+});
+
+typeAssert<Equals<z.output<typeof updatePreferencesRequestCodec>, UpdatePreferencesRequest>>();
 
 //----------------------------------------------------------------------------------------------------------------------

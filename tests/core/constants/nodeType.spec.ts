@@ -20,6 +20,15 @@ describe('familyOfMimeType', () =>
         expect(familyOfMimeType('text/markdown')).toBe('documents');
     });
 
+    // Word-processor formats are documents by exact mime, not by prefix -- their mimes don't start with text/.
+    it('classifies the word-processor exacts as documents', () =>
+    {
+        expect(familyOfMimeType('application/vnd.openxmlformats-officedocument.wordprocessingml.document'))
+            .toBe('documents');
+        expect(familyOfMimeType('application/vnd.oasis.opendocument.text')).toBe('documents');
+        expect(familyOfMimeType('application/msword')).toBe('documents');
+    });
+
     // A pdf is its own family, not a document -- the client colours the two apart and the server filters them apart.
     it('classifies application/pdf as its own family, never as a document', () =>
     {

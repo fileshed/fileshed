@@ -36,7 +36,14 @@ export interface MimeFamilySpec
 }
 
 export const MIME_FAMILY_SPECS : Readonly<Record<MimeFamily, MimeFamilySpec>> = {
-    documents: { prefixes: [ 'text/' ], exact: [] },
+    documents: {
+        prefixes: [ 'text/' ],
+        exact: [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.oasis.opendocument.text',
+            'application/msword',
+        ],
+    },
     pdfs: { prefixes: [], exact: [ 'application/pdf' ] },
     images: { prefixes: [ 'image/' ], exact: [] },
     video: { prefixes: [ 'video/' ], exact: [] },

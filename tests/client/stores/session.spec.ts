@@ -5,12 +5,19 @@
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { MeResponse } from '@fileshed/core';
+import {
+    DEFAULT_EDITOR_GUTTER,
+    DEFAULT_EDITOR_THEME,
+    DEFAULT_ROOT_LABEL,
+    DEFAULT_TIME_FORMAT,
+    type MeResponse,
+} from '@fileshed/core';
 
 // Resource Access
 import { ApiError } from '@client/resource-access/apiError.ts';
 import { authClient } from '@client/resource-access/authClient.ts';
 import { fetchMe } from '@client/resource-access/me.ts';
+import { updatePreferences } from '@client/resource-access/preferences.ts';
 
 // Under test
 import { useSessionStore } from '@client/stores/session.ts';
@@ -26,13 +33,15 @@ vi.mock('@client/resource-access/authClient.ts', () => ({
 }));
 
 vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
 
-// The better-auth client and fetchMe are the only mocked seam; casting to Mock frees the tests from better-auth's
+// The better-auth client and the RA calls are the only mocked seam; casting to Mock frees the tests from better-auth's
 // exact response types while still driving resolve/reject and asserting calls.
 const signInEmail = authClient.signIn.email as unknown as Mock;
 const signUpEmail = authClient.signUp.email as unknown as Mock;
 const signOutMock = authClient.signOut as unknown as Mock;
 const fetchMeMock = fetchMe as unknown as Mock;
+const updatePreferencesMock = updatePreferences as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -43,6 +52,7 @@ function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
         email: 'member@example.com',
         role: 'user',
         quota: { used: 0, limit: null },
+        preferences: {},
         createdAt: '2026-07-20T00:00:00.000Z',
         ...overrides,
     };
@@ -208,6 +218,128 @@ describe('useSessionStore', () =>
         await Promise.all([ store.initialize(), store.initialize() ]);
 
         expect(fetchMeMock).toHaveBeenCalledTimes(1);
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Files-root label
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('reports the default files-root label when no preference is set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.rootLabel).toBe(DEFAULT_ROOT_LABEL);
+    });
+
+    it('reports the stored files-root label when one is set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { rootLabel: 'Work' } }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.rootLabel).toBe('Work');
+    });
+
+    it('reports the default files-root label while signed out', () =>
+    {
+        const store = useSessionStore();
+
+        expect(store.rootLabel).toBe(DEFAULT_ROOT_LABEL);
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Time format
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('reports the default time format when no preference is set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.timeFormat).toBe(DEFAULT_TIME_FORMAT);
+    });
+
+    it('reports the stored time format when one is set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { timeFormat: '24h' } }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.timeFormat).toBe('24h');
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Save preferences
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('adopts the refreshed profile after saving a preferences patch', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { rootLabel: 'Photos' } }));
+        const store = useSessionStore();
+        await store.initialize();
+
+        await store.savePreferences({ rootLabel: 'Photos' });
+
+        expect(store.rootLabel).toBe('Photos');
+        expect(store.me?.preferences.rootLabel).toBe('Photos');
+        expect(updatePreferencesMock).toHaveBeenCalledWith({ rootLabel: 'Photos' });
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Editor view preferences
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('reports the default editor theme and gutter when none are set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.editorTheme).toBe(DEFAULT_EDITOR_THEME);
+        expect(store.editorGutter).toBe(DEFAULT_EDITOR_GUTTER);
+    });
+
+    it('reports the stored editor theme and gutter when set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { editorTheme: 'nord', editorGutter: true } }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.editorTheme).toBe('nord');
+        expect(store.editorGutter).toBe(true);
+    });
+
+    it('applies an editor preference in memory at once without hitting the wire', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        const store = useSessionStore();
+        await store.initialize();
+
+        store.applyPreferences({ editorTheme: 'dracula', editorGutter: true });
+
+        expect(store.editorTheme).toBe('dracula');
+        expect(store.editorGutter).toBe(true);
+        expect(updatePreferencesMock).not.toHaveBeenCalled();
+    });
+
+    it('ignores an applied editor preference while signed out', () =>
+    {
+        const store = useSessionStore();
+
+        store.applyPreferences({ editorTheme: 'nord' });
+
+        expect(store.me).toBeNull();
+        expect(store.editorTheme).toBe(DEFAULT_EDITOR_THEME);
     });
 });
 

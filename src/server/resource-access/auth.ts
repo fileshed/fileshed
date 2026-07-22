@@ -98,6 +98,12 @@ const authOptionsShape = {
             // INTEGER on SQLite) so quotas above 2^31 bytes are representable. input:false keeps it out of the sign-up
             // payload -- quota is admin-set, never self-served.
             quotaLimit: { type: 'number', required: false, input: false, bigint: true, fieldName: 'quota_limit' },
+
+            // The preferences blob: a single text column holding JSON. adding a preference never needs a migration,
+            // and unknown keys survive writes (the app merges key-wise). type:'string' emits a plain text column on
+            // both dialects; input:false keeps it out of the sign-up payload and off better-auth's own update surface
+            // -- it is written only through our PATCH /api/me/preferences, never round-tripped through the auth API.
+            preferences: { type: 'string', required: false, input: false, fieldName: 'preferences' },
         },
     },
 } satisfies BetterAuthOptions;

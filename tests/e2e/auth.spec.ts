@@ -83,6 +83,25 @@ describe('sign-up / sign-in / session', () =>
         expect(me.status).toBe(200);
         expect(profile.email).toBe('member-b@example.com');
     });
+
+    it('saves a root-label preference and serves it back, persisting across a fresh session', async () =>
+    {
+        const client = new ApiClient(server.baseURL);
+        await client.signUp('member-prefs@example.com', PASSWORD);
+
+        const patched = await client.patch('/api/me/preferences', { rootLabel: 'My Vault' });
+        expect(patched.status).toBe(200);
+        expect((await patched.json()).preferences.rootLabel).toBe('My Vault');
+
+        // A fresh client signs in with an empty jar: the preference comes from the row, not a session snapshot, so a
+        // new session sees it immediately -- the same read a page reload makes.
+        const reader = new ApiClient(server.baseURL);
+        await reader.signIn('member-prefs@example.com', PASSWORD);
+        const me = await reader.get('/api/me');
+
+        expect(me.status).toBe(200);
+        expect((await me.json()).preferences.rootLabel).toBe('My Vault');
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -60,6 +60,7 @@ const EXPECTED_ROUTES = [
 
     // Me
     'GET /api/me',
+    'PATCH /api/me/preferences',
 
     // Nodes
     'GET /api/nodes/children',

@@ -15,7 +15,7 @@
                 color="neutral"
                 size="sm"
                 icon="i-lucide-hard-drive"
-                label="My Files"
+                :label="session.rootLabel"
                 class="px-1"
                 @click="goTo(-1)"
             />
@@ -89,6 +89,9 @@
 
     import { MAX_CHILDREN_LIMIT, type NodeResponse } from '@fileshed/core';
 
+    // Stores
+    import { useSessionStore } from '../../stores/session.ts';
+
     // Resource Access
     import { getChildren } from '../../resource-access/nodes.ts';
 
@@ -114,9 +117,11 @@
     const loading = ref(false);
     const error = ref(false);
 
+    const session = useSessionStore();
+
     const currentFolder = computed(() => path.value[path.value.length - 1] ?? null);
     const currentID = computed(() => currentFolder.value?.id ?? null);
-    const currentLabel = computed(() => currentFolder.value?.name ?? 'My Files');
+    const currentLabel = computed(() => currentFolder.value?.name ?? session.rootLabel);
     const pathIDs = computed(() => path.value.map((folder) => folder.id));
     const canConfirm = computed(() => canMoveAllInto(props.movingNodeIDs, pathIDs.value));
 

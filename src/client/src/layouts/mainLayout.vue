@@ -2,12 +2,15 @@
   -- Main Layout
   --
   -- The primary authenticated chrome: sidebar navigation, header with the user menu, and the routed content. Auth
-  -- pages render outside this layout (sibling routes), so it can assume a signed-in user.
+  -- pages render outside this layout (sibling routes), so it can assume a signed-in user. It is a fixed-viewport app
+  -- shell: the outer frame is pinned to the viewport (h-screen) and only <main> scrolls, so the sidebar and header stay
+  -- put on every page and a route that fills the height (the file editor) gets a real height to bound its own scroller
+  -- against instead of growing the page.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div class="flex min-h-screen bg-default text-default">
-        <aside class="flex w-64 shrink-0 flex-col border-r border-default p-4">
+    <div class="flex h-screen overflow-hidden bg-default text-default">
+        <aside class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-default p-4">
             <RouterLink to="/" class="mb-6 flex items-center gap-2 px-2 text-xl font-bold">
                 <img src="/fileshed.svg" alt="" class="size-8">
                 {{ app.name }}
@@ -44,7 +47,7 @@
                 </UDropdownMenu>
             </header>
 
-            <main class="min-w-0 flex-1 p-6">
+            <main class="min-h-0 min-w-0 flex-1 overflow-auto p-6">
                 <RouterView />
             </main>
         </div>
@@ -91,11 +94,11 @@
     // Navigation
     //------------------------------------------------------------------------------------------------------------------
 
-    const navItems : NavigationMenuItem[] = [
-        { label: 'My Files', icon: 'i-lucide-hard-drive', to: '/', exact: true },
+    const navItems = computed<NavigationMenuItem[]>(() => [
+        { label: session.rootLabel, icon: 'i-lucide-hard-drive', to: '/', exact: true },
         { label: 'Shared with me', icon: 'i-lucide-users', to: '/shared' },
         { label: 'Trash', icon: 'i-lucide-trash-2', to: '/trash' },
-    ];
+    ]);
 
     //------------------------------------------------------------------------------------------------------------------
     // New menu -- creation targets the open folder, so off a drive surface (shared/trash/search/account/admin) we drop

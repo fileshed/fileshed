@@ -34,7 +34,7 @@
             </div>
 
             <span class="truncate text-muted">{{ node.type === 'file' ? formatBytes(node.size) : '—' }}</span>
-            <span class="truncate text-muted">{{ formatNodeDate(node.updatedAt) }}</span>
+            <span class="truncate text-muted">{{ formatNodeDate(node.updatedAt, session.timeFormat) }}</span>
             <span class="truncate text-muted">{{ kindLabel }}</span>
 
             <div
@@ -64,6 +64,9 @@
 
     import type { NodeResponse } from '@fileshed/core';
 
+    // Stores
+    import { useSessionStore } from '../../stores/session.ts';
+
     // Utils
     import { formatBytes, formatNodeDate } from '../../utils/formatters/index.ts';
     import { familyPresentation, isDeadLink, nodePresentation } from '../../utils/nodeTypePresentation.ts';
@@ -82,6 +85,8 @@
     }>();
 
     //------------------------------------------------------------------------------------------------------------------
+
+    const session = useSessionStore();
 
     const presentation = computed(() => nodePresentation(props.node));
     const dead = computed(() => isDeadLink(props.node));

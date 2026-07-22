@@ -2,8 +2,9 @@
 // Node Tile
 //----------------------------------------------------------------------------------------------------------------------
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 
 import type { LinkTarget, NodeResponse } from '@fileshed/core';
 
@@ -53,6 +54,11 @@ function mountTile(node : NodeResponse, selected = false) : VueWrapper
         global: { stubs: STUBS },
     });
 }
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// The tile reads the session store for the clock style; an empty store resolves the default and renders fine.
+beforeEach(() => setActivePinia(createPinia()));
 
 //----------------------------------------------------------------------------------------------------------------------
 

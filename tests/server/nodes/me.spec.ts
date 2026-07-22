@@ -33,6 +33,7 @@ describe('GET /api/me', () =>
             role: 'user',
             quota: { used: 0, limit: null },
         });
+        expect(body.preferences).toEqual({});
     });
 });
 

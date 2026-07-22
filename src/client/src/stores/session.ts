@@ -10,12 +10,20 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
-import type { MeResponse } from '@fileshed/core';
+import {
+    DEFAULT_EDITOR_GUTTER,
+    DEFAULT_EDITOR_THEME,
+    DEFAULT_ROOT_LABEL,
+    DEFAULT_TIME_FORMAT,
+    type MeResponse,
+    type UpdatePreferencesRequest,
+} from '@fileshed/core';
 
 // Resource Access
 import { ApiError } from '../resource-access/apiError.ts';
 import { authClient } from '../resource-access/authClient.ts';
 import { fetchMe } from '../resource-access/me.ts';
+import { updatePreferences } from '../resource-access/preferences.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -31,6 +39,20 @@ export const useSessionStore = defineStore('session', () =>
 
     const isAuthenticated = computed(() => me.value !== null);
     const isAdmin = computed(() => me.value?.role === 'admin');
+
+    // The files-root name, with the default standing in until the user sets one. The single place that fallback lives,
+    // so every surface that renders the root -- sidebar, breadcrumb, move picker -- reads it here.
+    const rootLabel = computed(() => me.value?.preferences.rootLabel ?? DEFAULT_ROOT_LABEL);
+
+    // The clock style for node timestamps, defaulting until the user picks one. The single place that fallback lives;
+    // date-rendering components read it here and pass it to the pure formatter.
+    const timeFormat = computed(() => me.value?.preferences.timeFormat ?? DEFAULT_TIME_FORMAT);
+
+    // The editor colorscheme id and whether its gutter shows, each defaulting until the user picks. The single place
+    // those fallbacks live; the file editor reads them here. An unknown stored theme id is the client registry's
+    // problem to resolve, not this getter's.
+    const editorTheme = computed(() => me.value?.preferences.editorTheme ?? DEFAULT_EDITOR_THEME);
+    const editorGutter = computed(() => me.value?.preferences.editorGutter ?? DEFAULT_EDITOR_GUTTER);
 
     async function initialize() : Promise<void>
     {
@@ -103,7 +125,39 @@ export const useSessionStore = defineStore('session', () =>
         finally { pending.value = false; }
     }
 
-    return { me, pending, initialized, isAuthenticated, isAdmin, initialize, signIn, signUp, signOut };
+    // Save a preferences patch and adopt the refreshed profile the server returns, so every surface reading `me`
+    // (sidebar root label, quota) reacts at once. Failures propagate to the caller to toast.
+    async function savePreferences(patch : UpdatePreferencesRequest) : Promise<void>
+    {
+        me.value = await updatePreferences(patch);
+    }
+
+    // Merge editor-view preferences into the in-memory profile at once, without a write, so the editor reflects a pick
+    // the instant it happens. A debounced savePreferences follows to persist the settled value and reconcile against
+    // the server's echo.
+    function applyPreferences(patch : { editorTheme ?: string; editorGutter ?: boolean }) : void
+    {
+        if(me.value === null) { return; }
+        me.value = { ...me.value, preferences: { ...me.value.preferences, ...patch } };
+    }
+
+    return {
+        me,
+        pending,
+        initialized,
+        isAuthenticated,
+        isAdmin,
+        rootLabel,
+        timeFormat,
+        editorTheme,
+        editorGutter,
+        initialize,
+        signIn,
+        signUp,
+        signOut,
+        savePreferences,
+        applyPreferences,
+    };
 });
 
 //----------------------------------------------------------------------------------------------------------------------

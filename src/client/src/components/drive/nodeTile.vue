@@ -52,7 +52,7 @@
                     {{ node.name }}
                 </p>
                 <p v-if="node.type === 'file'" class="mt-0.5 truncate text-xs text-muted">
-                    {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updatedAt) }}
+                    {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
                 </p>
                 <p v-else-if="dead" class="mt-0.5 text-xs text-dimmed">
                     Broken link
@@ -69,6 +69,9 @@
     import type { ContextMenuItem } from '@nuxt/ui';
 
     import type { NodeResponse } from '@fileshed/core';
+
+    // Stores
+    import { useSessionStore } from '../../stores/session.ts';
 
     // Utils
     import { formatBytes, formatNodeDate } from '../../utils/formatters/index.ts';
@@ -88,6 +91,8 @@
     }>();
 
     //------------------------------------------------------------------------------------------------------------------
+
+    const session = useSessionStore();
 
     const presentation = computed(() => nodePresentation(props.node));
     const dead = computed(() => isDeadLink(props.node));
