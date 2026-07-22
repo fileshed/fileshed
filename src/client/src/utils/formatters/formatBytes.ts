@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Byte and Quota Formatting
+// Byte Formatting
 //
 // Decimal units (1 KB = 1000 B) match the storage figures cloud drives present to users, and the requirements quote
 // quota sizes the same way ("4 GB blob"). Precise binary sizing stays server-side; this is display only.
@@ -27,17 +27,6 @@ export function formatBytes(bytes : number) : string
     const text = unit === 0 ? String(Math.round(value)) : value.toFixed(1).replace(/\.0$/, '');
 
     return `${ text } ${ label }`;
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// The fraction of quota consumed, clamped to 0..100 for the meter. A null (unlimited) or non-positive cap has no
-// meaningful percentage, so it reads as 0.
-export function quotaPercent(used : number, limit : number | null) : number
-{
-    if(limit === null || limit <= 0) { return 0; }
-
-    return Math.min(100, Math.max(0, (used / limit) * 100));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

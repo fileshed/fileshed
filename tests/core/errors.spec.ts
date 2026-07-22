@@ -12,6 +12,7 @@ import {
     BlobNotFoundError,
     HashMismatchError,
     InvalidSha256Error,
+    RegulationCodeDisplay,
     RegulationError,
     type RegulationViolation,
     SizeMismatchError,
@@ -52,6 +53,17 @@ describe('RegulationError', () =>
 
         expect(error.violations).toEqual(violations);
         expect(error.message).toBe('over quota');
+    });
+});
+
+describe('RegulationCodeDisplay', () =>
+{
+    it('gives every code a non-blank human line', () =>
+    {
+        for(const [ code, line ] of Object.entries(RegulationCodeDisplay))
+        {
+            expect(line.trim(), code).not.toBe('');
+        }
     });
 });
 

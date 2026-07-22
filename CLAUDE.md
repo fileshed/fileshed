@@ -233,8 +233,19 @@ house style.
 Route components compose small components; they don't accrete logic. **~100 lines is the soft target for a
 component** — multiple hundreds of lines means the concerns are scoped wrong and want extracting into focused children.
 A route-level page should read as thin composition plus the orchestration that genuinely belongs at route level
-(selection, navigation, the store); self-contained pieces (a toolbar, a surface, a dialog host) live in their own
+(selection, navigation, the store); self-contained pieces (a toolbar, a surface, a modal) live in their own
 components under `components/`.
+
+Each modal is a self-contained component under `components/<area>/modals/` that owns its own visibility, pending
+state, and mutation — not a shared dialog host. Signal-driven modals self-subscribe to their trigger; imperative
+ones `defineExpose` an `open(...)` the page calls.
+
+Logic `.ts` modules never live loose in `components/` — a `.ts` file beside `.vue` files is a smell. The client
+mirrors the iDesign layers: `engines/` for pure logic (no I/O — selection math, move policy, open-intent
+resolution), `resource-access/` for all I/O (the API clients and `localStorage`-backed preferences), `stores/` to
+orchestrate, and `utils/` for genuinely cross-cutting helpers. Utility filenames say what the module does
+(`ensureExtension.ts`, `runWithToast.ts`, `formatters/formatBytes.ts`). The `componentName/types.ts` in the structure
+below is the exception to the no-loose-`.ts` rule: a component's own types inside its own directory.
 
 ### Component Structure
 

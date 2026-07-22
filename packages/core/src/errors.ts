@@ -99,6 +99,29 @@ export type RegulationCode
     | 'shareRequest.notOwner'
     | 'quota.exceeded';
 
+// The human-readable line shown for each regulation code -- the display vocabulary that travels with the code, so a
+// client renders a rejection off the stable code rather than parsing its raw message. The Record is total: a new code
+// can't ship without its copy.
+export const RegulationCodeDisplay : Record<RegulationCode, string> = {
+    'link.targetIsLink': 'You can\'t create a link to another link.',
+    'link.selfTarget': 'You can\'t create a link to itself.',
+    'link.noAccess': 'You no longer have access to that item.',
+    'parent.notFolder': 'That destination isn\'t a folder.',
+    'parent.trashed': 'That destination is in the trash.',
+    'parent.crossOwner': 'You can only move items into a folder you own.',
+    'move.intoSelf': 'You can\'t move a folder into itself.',
+    'move.intoDescendant': 'You can\'t move a folder into one of its own subfolders.',
+    'trash.linkNotTrashable': 'Links are removed, not trashed.',
+    'trash.notOwner': 'You can only trash items you own.',
+    'copy.sourceNotFile': 'Only files can be copied.',
+    'share.linkNotShareable': 'Links can\'t be shared.',
+    'share.notOwner': 'You can only share items you own.',
+    'share.granteeIsOwner': 'You can\'t share an item with its own owner.',
+    'shareRequest.notPending': 'That share request has already been handled.',
+    'shareRequest.notOwner': 'You can only respond to share requests for items you own.',
+    'quota.exceeded': 'This would put you over your storage quota.',
+};
+
 export interface RegulationViolation
 {
     code : RegulationCode;

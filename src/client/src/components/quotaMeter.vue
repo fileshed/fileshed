@@ -30,7 +30,7 @@
     import { useSessionStore } from '../stores/session.ts';
 
     // Utils
-    import { formatBytes } from '../utils/format.ts';
+    import { formatBytes } from '../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
     // Store

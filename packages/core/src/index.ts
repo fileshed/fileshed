@@ -193,6 +193,7 @@ export {
     PayloadTooLargeError,
     TooManyRequestsError,
     type RegulationCode,
+    RegulationCodeDisplay,
     type RegulationViolation,
     RegulationError,
     type BlobBackendErrorCode,

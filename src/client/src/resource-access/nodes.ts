@@ -20,7 +20,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestVoid } from './request.ts';
+import { type QueryParams, requestJson, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -29,8 +29,9 @@ export async function getNode(id : string) : Promise<NodeResponse>
     return requestJson(`/api/nodes/${ id }`, { codec: nodeResponseCodec });
 }
 
-// A folder's children, or the caller's root when parentID is null. Pagination and sort default server-side, so a caller
-// may pass only the fields it cares about.
+// A folder's children, or the caller's root when parentID is null. Pagination, sort, and the filters all default
+// server-side, so a caller may pass only the fields it cares about. The type families ride one comma-separated param
+// ("images,pdfs"); an empty selection is dropped so the server reads it as unfiltered.
 export async function getChildren(
     parentID : string | null,
     query : Partial<ChildrenQuery> = {}
@@ -38,7 +39,11 @@ export async function getChildren(
 {
     const path = parentID === null ? '/api/nodes/children' : `/api/nodes/${ parentID }/children`;
 
-    return requestJson(path, { query: { ...query }, codec: nodeListResponseCodec });
+    const { types, ...rest } = query;
+    const params : QueryParams = { ...rest };
+    if(types !== undefined && types.length > 0) { params.types = types.join(','); }
+
+    return requestJson(path, { query: params, codec: nodeListResponseCodec });
 }
 
 export async function createNode(request : CreateNodeRequest) : Promise<NodeResponse>
