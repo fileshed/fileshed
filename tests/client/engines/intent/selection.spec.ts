@@ -13,7 +13,7 @@ import {
     emptySelection,
     planTrash,
     reconcile,
-} from '@client/engines/selection.ts';
+} from '@client/engines/intent/selection.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Selection Model

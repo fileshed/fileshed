@@ -32,7 +32,7 @@ import { uploadSpec } from './uploads.openapi.ts';
 function readUploadMetadata(ctx : Context) : UploadCommitMetadata
 {
     const raw : Record<string, string> = {};
-    for(const key of [ 'name', 'parentID', 'mimeType', 'replaceNodeID' ] as const)
+    for(const key of [ 'name', 'parentID', 'mimeType', 'replaceNodeID', 'ifBlobID' ] as const)
     {
         const value = ctx.req.query(key);
         if(value !== undefined) { raw[key] = value; }

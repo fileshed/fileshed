@@ -35,6 +35,7 @@ export type { Blob } from './models/blob.ts';
 export type { DeletionOffer } from './models/deletionOffer.ts';
 export { type StorageBackend, type StorageBackendKind, storageBackendKinds } from './models/storageBackend.ts';
 export { type UserProfile, type UserRole, userRoles } from './models/userProfile.ts';
+export { type UserPreferences, type TimeFormat, timeFormats } from './models/userPreferences.ts';
 
 // Schemas
 export { nodeCodec, parseNode } from './models/schemas/node.ts';
@@ -46,6 +47,7 @@ export { blobCodec, parseBlob } from './models/schemas/blob.ts';
 export { deletionOfferCodec, parseDeletionOffer } from './models/schemas/deletionOffer.ts';
 export { storageBackendCodec, parseStorageBackend } from './models/schemas/storageBackend.ts';
 export { userProfileCodec, parseUserProfile } from './models/schemas/userProfile.ts';
+export { userPreferencesCodec, toUserPreferences } from './models/schemas/userPreferences.ts';
 
 // Requests
 export {
@@ -81,7 +83,7 @@ export {
     type ChallengeAnswerReplace,
     type ChallengeAnswerRequest,
 } from './models/requests/blobs.ts';
-export { type MeResponse } from './models/requests/me.ts';
+export { type MeResponse, type UpdatePreferencesRequest } from './models/requests/me.ts';
 export {
     type CreatePublicLinkRequest,
     type PublicLinkResponse,
@@ -147,7 +149,7 @@ export {
     challengeAnswerReplaceCodec,
     challengeAnswerRequestCodec,
 } from './models/requests/schemas/blobs.ts';
-export { meResponseCodec } from './models/requests/schemas/me.ts';
+export { meResponseCodec, updatePreferencesRequestCodec } from './models/requests/schemas/me.ts';
 export {
     createPublicLinkRequestCodec,
     publicLinkResponseCodec,
@@ -200,6 +202,7 @@ export {
     NotFoundError,
     PayloadTooLargeError,
     TooManyRequestsError,
+    ConflictError,
     type RegulationCode,
     RegulationCodeDisplay,
     type RegulationViolation,

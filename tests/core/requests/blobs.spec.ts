@@ -133,6 +133,41 @@ describe('uploadCommitMetadataCodec', () =>
         expect(result.success).toBe(true);
     });
 
+    // ifBlobID is the optional optimistic-concurrency guard: the blob the caller edited from. It rides replace metadata
+    // and is preserved through the codec so the manager can compare it against the target's current blob at commit.
+    it('accepts replace metadata carrying an ifBlobID concurrency guard', () =>
+    {
+        const result = uploadCommitMetadataCodec.safeParse({ replaceNodeID: 'node_1', ifBlobID: 'a'.repeat(64) });
+
+        expect(result.success).toBe(true);
+        if(!result.success) { throw new Error('expected replace metadata with a guard to parse'); }
+        expect(result.data).toEqual({ replaceNodeID: 'node_1', ifBlobID: 'a'.repeat(64) });
+    });
+
+    // The guard is optional -- a replace without one is last-write-wins, so an absent ifBlobID must still parse and
+    // must not appear in the parsed value.
+    it('omits ifBlobID from parsed replace metadata when none is supplied', () =>
+    {
+        const result = uploadCommitMetadataCodec.safeParse({ replaceNodeID: 'node_1' });
+
+        expect(result.success).toBe(true);
+        if(!result.success) { throw new Error('expected replace metadata to parse'); }
+        expect(result.data).toEqual({ replaceNodeID: 'node_1' });
+    });
+
+    // The guard belongs to replace mode only: create metadata is a strict object, so an ifBlobID smuggled onto a
+    // create matches neither mode and is rejected.
+    it('rejects create metadata carrying an ifBlobID', () =>
+    {
+        const result = uploadCommitMetadataCodec.safeParse({
+            name: 'report.pdf',
+            mimeType: 'application/pdf',
+            ifBlobID: 'a'.repeat(64),
+        });
+
+        expect(result.success).toBe(false);
+    });
+
     // Both modes at once is ambiguous: each mode's strict object rejects the other's key, so the union matches neither.
     it('rejects a payload carrying both modes\' fields', () =>
     {
@@ -177,6 +212,21 @@ describe('challengeAnswerRequestCodec', () =>
         const result = challengeAnswerRequestCodec.safeParse({ answer: 'deadbeef', replaceNodeID: 'node_1' });
 
         expect(result.success).toBe(true);
+    });
+
+    // The concurrency guard rides the challenge-answer transport too, since a proven dedup can replace a file's content
+    // just as an upload can.
+    it('accepts an answer with replace metadata carrying an ifBlobID guard', () =>
+    {
+        const result = challengeAnswerRequestCodec.safeParse({
+            answer: 'deadbeef',
+            replaceNodeID: 'node_1',
+            ifBlobID: 'a'.repeat(64),
+        });
+
+        expect(result.success).toBe(true);
+        if(!result.success) { throw new Error('expected a guarded replace answer to parse'); }
+        expect(result.data).toEqual({ answer: 'deadbeef', replaceNodeID: 'node_1', ifBlobID: 'a'.repeat(64) });
     });
 
     it('rejects an answer carrying both modes, or neither', () =>

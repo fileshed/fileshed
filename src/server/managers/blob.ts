@@ -24,6 +24,7 @@ import {
     CHALLENGE_TTL_MS,
     type ClaimRequest,
     type ClaimResponse,
+    ConflictError,
     FAILED_PROOF_WINDOW_MS,
     type FileNode,
     ForbiddenError,
@@ -406,7 +407,15 @@ export class BlobManager
         if('replaceNodeID' in metadata)
         {
             const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
-            return this.#commitReplace(target, role, challenge.sha256, challenge.size, metadata.mimeType, persistBlob);
+            return this.#commitReplace(
+                target,
+                role,
+                challenge.sha256,
+                challenge.size,
+                metadata.mimeType,
+                metadata.ifBlobID,
+                persistBlob
+            );
         }
 
         await this.#assertParentEdge(caller.id, metadata.parentID);
@@ -453,7 +462,15 @@ export class BlobManager
             const location = await this.#putBytes(ticket.sha256, ticket.size, body);
             const persist = this.#insertOrResurrect(ticket.sha256, ticket.size, location);
 
-            return this.#commitReplace(target, role, ticket.sha256, ticket.size, metadata.mimeType, persist);
+            return this.#commitReplace(
+                target,
+                role,
+                ticket.sha256,
+                ticket.size,
+                metadata.mimeType,
+                metadata.ifBlobID,
+                persist
+            );
         }
 
         await this.#assertParentEdge(caller.id, metadata.parentID);
@@ -650,6 +667,20 @@ export class BlobManager
         return { target: node, role };
     }
 
+    // The optimistic-concurrency check behind ifBlobID: the node's blob must still be the one the caller edited from.
+    // A vanished node, a non-file (both impossible under the schema, but they leave no blob to match), or a blob that
+    // has moved on all mean another write won the race -- the caller must reload before retrying. Read fresh inside the
+    // commit transaction so it is the authoritative current value, not the pre-upload snapshot.
+    async #assertBlobUnchanged(nodes : NodeRA, nodeID : string, expectedBlobID : string) : Promise<void>
+    {
+        const current = await nodes.get(nodeID);
+
+        if(current === undefined || current.type !== 'file' || current.blobID !== expectedBlobID)
+        {
+            throw new ConflictError('The file changed since you opened it. Reload to see the latest version.');
+        }
+    }
+
     // Repoint an existing file at new content in one transaction: persist the blob record (insert-or-resurrect for an
     // upload, resurrect for a proven dedup), move the node's blob/size/mime and bump updated_at, and graveyard the OLD
     // blob if this node was its last reference -- the sweep runs AFTER the repoint so its reference count reflects the
@@ -665,6 +696,7 @@ export class BlobManager
         sha256 : string,
         size : number,
         mimeType : string | undefined,
+        ifBlobID : string | undefined,
         persistBlob : (blob : BlobRA) => Promise<void>
     ) : Promise<CommittedNode>
     {
@@ -683,6 +715,11 @@ export class BlobManager
             const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
             const blob = new BlobRA(txHandle);
             const nodes = new NodeRA(txHandle);
+
+            // Optimistic-concurrency guard, judged against the authoritative current row inside the transaction
+            // (not the target snapshot taken before the bytes streamed): if the caller pinned the blob they edited
+            // from and it has moved on since, someone else saved first -- refuse rather than clobber their edit.
+            if(ifBlobID !== undefined) { await this.#assertBlobUnchanged(nodes, target.id, ifBlobID); }
 
             this.#enforceQuota(target.ownerID, await nodes.ownedBytes(target.ownerID), delta, ownerLimit);
 

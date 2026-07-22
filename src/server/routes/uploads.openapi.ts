@@ -18,8 +18,9 @@ export const uploadSpec = describeRoute({
     description: 'Streams the raw request body through the store -- which verifies the claimed hash and byte count and '
         + 'rejects a liar -- then commits the file node in one transaction. The commit metadata rides the query string '
         + 'since the body is bytes: either name/parentID/mimeType to create a new node, or replaceNodeID (with an '
-        + 'optional mimeType) to overwrite an existing file\'s content in place, keeping its id. The ticket is '
-        + 'single-use and consumed whether or not the upload lands.',
+        + 'optional mimeType) to overwrite an existing file\'s content in place, keeping its id. A replace may carry '
+        + 'an optional ifBlobID to guard against a concurrent edit: the commit is refused if the target\'s current '
+        + 'blob is no longer that one. The ticket is single-use and consumed whether or not the upload lands.',
     parameters: [
         pathParam('ticket', 'The upload ticket from the claim.'),
         ...unionQueryParams([ uploadCommitCreateCodec, uploadCommitReplaceCodec ]),
@@ -33,6 +34,8 @@ export const uploadSpec = describeRoute({
             + 'lacks edit access to the replace target.'),
         404: errorResponse('The ticket is unknown or expired, the parent does not exist, or the replace target is not '
             + 'resolvable by the caller.'),
+        409: errorResponse('The replace carried an ifBlobID guard and the target\'s content changed since; reload and '
+            + 'retry.'),
         413: errorResponse('The upload exceeds the maximum allowed size.'),
         422: errorResponse('The parent placement violates a rule, or the replace target is not a file.'),
     },

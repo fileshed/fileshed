@@ -10,6 +10,7 @@
 // Models
 import {
     BadRequestError,
+    ConflictError,
     ForbiddenError,
     NotFoundError,
     PayloadTooLargeError,
@@ -51,7 +52,7 @@ function toWireViolation(violation : RegulationViolation) : RegulationViolation
     return wire;
 }
 
-export type ErrorStatus = 400 | 401 | 403 | 404 | 413 | 422 | 429;
+export type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429;
 
 export interface MappedError
 {
@@ -67,6 +68,7 @@ export function mapManagerError(error : unknown) : MappedError | undefined
     if(error instanceof UnauthorizedError) { return { status: 401, body: { error: error.message } }; }
     if(error instanceof ForbiddenError) { return { status: 403, body: { error: error.message } }; }
     if(error instanceof NotFoundError) { return { status: 404, body: { error: error.message } }; }
+    if(error instanceof ConflictError) { return { status: 409, body: { error: error.message } }; }
     if(error instanceof BadRequestError) { return { status: 400, body: { error: error.message } }; }
     if(error instanceof PayloadTooLargeError) { return { status: 413, body: { error: error.message } }; }
     if(error instanceof TooManyRequestsError) { return { status: 429, body: { error: error.message } }; }

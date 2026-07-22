@@ -25,13 +25,14 @@ import { type QueryParams, requestJson, requestUpload } from './request.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 // The commit metadata as upload query params. CREATE carries name/parent/mimeType; REPLACE carries the target node id
-// and, when the new content changes type, its mimeType. A null parentID and an absent replace mimeType drop out of the
-// query -- root placement and "keep the node's current type" respectively. Shared by the ticket PUT and the XHR upload
-// so both place the resulting node identically.
+// and, when the new content changes type, its mimeType, plus an optional ifBlobID concurrency guard. A null parentID,
+// an absent replace mimeType, and an absent ifBlobID drop out of the query -- root placement, "keep the node's current
+// type", and last-write-wins respectively. Shared by the ticket PUT and the XHR upload so both place the resulting node
+// identically.
 export function commitQuery(commit : UploadCommitMetadata) : QueryParams
 {
     return 'replaceNodeID' in commit
-        ? { replaceNodeID: commit.replaceNodeID, mimeType: commit.mimeType }
+        ? { replaceNodeID: commit.replaceNodeID, mimeType: commit.mimeType, ifBlobID: commit.ifBlobID }
         : { name: commit.name, parentID: commit.parentID, mimeType: commit.mimeType };
 }
 

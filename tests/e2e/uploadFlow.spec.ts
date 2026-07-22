@@ -531,6 +531,53 @@ describe('content replace lifecycle', () =>
             .executeTakeFirst());
         expect(oldBlob?.deleted_at).not.toBeNull();
     });
+
+    // The editor's optimistic-concurrency guard over real sockets: a save pinned to the blob it opened from lands
+    // while that is still current, and a later save still pinning the now-stale blob is refused 409 rather than
+    // clobbering the content that won the race.
+    it('honours the ifBlobID guard: a matching save lands, a stale one is refused 409 and changes nothing', async () =>
+    {
+        // Claim fresh bytes and return the upload ticket (fresh content is always unknown, so always a ticket).
+        async function claimTicket(bytes : Buffer) : Promise<string>
+        {
+            const claim = await (
+                await replacer.post('/api/blobs/claim', { sha256: sha256Of(bytes), size: bytes.length })
+            ).json() as ClaimResponse;
+            if(claim.upload !== true) { throw new Error('setup: expected a ticket for fresh bytes'); }
+            return claim.ticket;
+        }
+
+        // A fresh markdown file to edit-and-save over.
+        const opened = smallFixture('guard-opened');
+        const openedSha = sha256Of(opened);
+        const createParams = new URLSearchParams({ name: 'guarded.md', mimeType: 'text/markdown' });
+        const created = await (
+            await replacer.put(`/api/uploads/${ await claimTicket(opened) }?${ createParams }`, opened)
+        ).json() as NodeResponse;
+
+        // The client saves what it edited, pinning the blob it opened -- still current, so it lands.
+        const winner = smallFixture('guard-winner');
+        const winnerSha = sha256Of(winner);
+        const winnerParams = new URLSearchParams({ replaceNodeID: created.id, ifBlobID: openedSha });
+        const savedRes = await replacer.put(`/api/uploads/${ await claimTicket(winner) }?${ winnerParams }`, winner);
+        expect(savedRes.status).toBe(200);
+
+        // A GET serves the new bytes: the node now reads back the winning content.
+        const afterSave = await (await replacer.get(`/api/nodes/${ created.id }`)).json() as NodeResponse;
+        if(afterSave.type !== 'file') { throw new Error('expected a file node'); }
+        expect(afterSave.blobID).toBe(winnerSha);
+
+        // A second save still pinning the ORIGINAL blob is stale -- the content moved on -- so it is refused.
+        const stale = smallFixture('guard-stale');
+        const staleParams = new URLSearchParams({ replaceNodeID: created.id, ifBlobID: openedSha });
+        const staleRes = await replacer.put(`/api/uploads/${ await claimTicket(stale) }?${ staleParams }`, stale);
+        expect(staleRes.status).toBe(409);
+
+        // The 409 changed nothing: the node still serves the winning content.
+        const afterConflict = await (await replacer.get(`/api/nodes/${ created.id }`)).json() as NodeResponse;
+        if(afterConflict.type !== 'file') { throw new Error('expected a file node'); }
+        expect(afterConflict.blobID).toBe(winnerSha);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

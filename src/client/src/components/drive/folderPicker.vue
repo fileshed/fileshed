@@ -3,8 +3,8 @@
   --
   -- The destination browser inside the Move dialog: start at My Files, drill into folders, and confirm the current
   -- location as the move target. It only ever lists folders. The moving folder itself is not enterable and no location
-  -- inside its own subtree can be confirmed (movePolicy), so an illegal move can't be expressed here -- the server still
-  -- re-checks, but the picker won't waste a round trip on a move it already knows is impossible.
+  -- inside its own subtree can be confirmed (regulation.node), so an illegal move can't be expressed here -- the server
+  -- still re-checks, but the picker won't waste a round trip on a move it already knows is impossible.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -56,7 +56,7 @@
                 type="button"
                 class="flex w-full items-center gap-2 border-b border-default px-3 py-2 text-left text-sm
                     last:border-b-0 enabled:hover:bg-elevated/50 disabled:opacity-40"
-                :disabled="!canEnterFolderForMove(movingNodeIDs, folder.id)"
+                :disabled="!regulation.node.canEnterFolderForMove(movingNodeIDs, folder.id)"
                 @click="enter(folder)"
             >
                 <UIcon name="i-lucide-folder" class="size-5 shrink-0 text-primary" />
@@ -96,7 +96,7 @@
     import { getChildren } from '../../resource-access/nodes.ts';
 
     // Engines
-    import { canEnterFolderForMove, canMoveAllInto } from '../../engines/movePolicy.ts';
+    import { regulation } from '../../engines/regulation/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -123,7 +123,7 @@
     const currentID = computed(() => currentFolder.value?.id ?? null);
     const currentLabel = computed(() => currentFolder.value?.name ?? session.rootLabel);
     const pathIDs = computed(() => path.value.map((folder) => folder.id));
-    const canConfirm = computed(() => canMoveAllInto(props.movingNodeIDs, pathIDs.value));
+    const canConfirm = computed(() => regulation.node.canMoveAllInto(props.movingNodeIDs, pathIDs.value));
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -150,7 +150,7 @@
 
     async function enter(folder : NodeResponse) : Promise<void>
     {
-        if(!canEnterFolderForMove(props.movingNodeIDs, folder.id)) { return; }
+        if(!regulation.node.canEnterFolderForMove(props.movingNodeIDs, folder.id)) { return; }
 
         path.value = [ ...path.value, folder ];
         await fetchFolders();

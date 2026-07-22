@@ -63,6 +63,7 @@
 
     // Stores
     import { useDriveStore } from '../stores/drive.ts';
+    import { useSessionStore } from '../stores/session.ts';
     import { useUploadsStore } from '../stores/uploads.ts';
 
     // Resource Access
@@ -81,16 +82,7 @@
     import NewDocument from '../components/drive/modals/newDocument.vue';
 
     // Engines
-    import {
-        type SelectionState,
-        applyClick,
-        canCopySelection,
-        clearSelection,
-        emptySelection,
-        planTrash,
-        reconcile,
-    } from '../engines/selection.ts';
-    import { resolveOpen } from '../engines/openIntent.ts';
+    import { type SelectionState, intent } from '../engines/intent/index.ts';
 
     // Utils
     import { isDeadLink } from '../utils/nodeTypePresentation.ts';
@@ -101,6 +93,7 @@
     //------------------------------------------------------------------------------------------------------------------
 
     const store = useDriveStore();
+    const session = useSessionStore();
     const uploads = useUploadsStore();
     const route = useRoute();
     const router = useRouter();
@@ -108,7 +101,7 @@
     const { runMutation } = useRunWithToast();
 
     const viewMode = ref<ViewMode>(loadViewMode());
-    const selection = ref<SelectionState>(emptySelection());
+    const selection = ref<SelectionState>(intent.selection.emptySelection());
     const renameModal = ref<InstanceType<typeof RenameNode> | null>(null);
     const moveModal = ref<InstanceType<typeof MoveNodes> | null>(null);
 
@@ -124,19 +117,19 @@
 
     watch(() => route.params.id, () =>
     {
-        selection.value = emptySelection();
+        selection.value = intent.selection.emptySelection();
         void store.load(routeFolderID());
     });
 
     // Trim selection to what's actually present after any listing change (navigation, refresh, load-more).
     watch(() => store.children, () =>
     {
-        selection.value = reconcile(selection.value, store.children.map((node) => node.id));
+        selection.value = intent.selection.reconcile(selection.value, store.children.map((node) => node.id));
     });
 
     function onKeydown(event : KeyboardEvent) : void
     {
-        if(event.key === 'Escape') { selection.value = clearSelection(); }
+        if(event.key === 'Escape') { selection.value = intent.selection.clearSelection(); }
     }
 
     onMounted(() =>
@@ -152,12 +145,12 @@
     //------------------------------------------------------------------------------------------------------------------
 
     const crumbs = computed<BreadcrumbItem[]>(() => [
-        { label: 'My Files', icon: 'i-lucide-hard-drive', to: '/' },
+        { label: session.rootLabel, icon: 'i-lucide-hard-drive', to: '/' },
         ...store.breadcrumb.map((folder) => ({ label: folder.name, to: `/folder/${ folder.id }` })),
     ]);
 
-    // The open folder's name for the drop overlay -- the last breadcrumb crumb, or My Files at the root.
-    const currentFolderName = computed(() => store.breadcrumb.at(-1)?.name ?? 'My Files');
+    // The open folder's name for the drop overlay -- the last breadcrumb crumb, or the files root at the top.
+    const currentFolderName = computed(() => store.breadcrumb.at(-1)?.name ?? session.rootLabel);
 
     function onDropFiles(files : File[]) : void
     {
@@ -188,7 +181,7 @@
         return selectedNodes.value.length === 1 ? selectedNodes.value[0] ?? null : null;
     });
 
-    const canCopy = computed(() => canCopySelection(selectedNodes.value));
+    const canCopy = computed(() => intent.selection.canCopySelection(selectedNodes.value));
     const copyTooltip = computed(() =>
     {
         return canCopy.value ? 'Make a copy' : 'Folders can\'t be copied';
@@ -196,12 +189,12 @@
     const canRename = computed(() => single.value !== null && !isDeadLink(single.value));
     const trashLabel = computed(() =>
     {
-        return planTrash(selectedNodes.value).mode === 'remove' ? 'Remove' : 'Trash';
+        return intent.selection.planTrash(selectedNodes.value).mode === 'remove' ? 'Remove' : 'Trash';
     });
 
     function onSelect(node : NodeResponse, event : MouseEvent) : void
     {
-        selection.value = applyClick(selection.value, orderedIDs.value, node.id, {
+        selection.value = intent.selection.applyClick(selection.value, orderedIDs.value, node.id, {
             toggle: event.metaKey || event.ctrlKey,
             range: event.shiftKey,
         });
@@ -209,7 +202,7 @@
 
     function clearSel() : void
     {
-        selection.value = clearSelection();
+        selection.value = intent.selection.clearSelection();
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -219,10 +212,11 @@
 
     function onOpen(node : NodeResponse) : void
     {
-        const action = resolveOpen(node);
+        const action = intent.handlers.resolveOpen(node);
         switch (action.kind)
         {
             case 'navigate': void router.push(`/folder/${ action.folderID }`); break;
+            case 'edit': void router.push(`/file/${ action.nodeID }`); break;
             case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
             case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
             case 'none': break;
@@ -231,9 +225,10 @@
 
     function openIcon(node : NodeResponse) : string
     {
-        switch (resolveOpen(node).kind)
+        switch (intent.handlers.resolveOpen(node).kind)
         {
             case 'navigate': return 'i-lucide-folder-open';
+            case 'edit': return 'i-lucide-file-pen';
             case 'view': return 'i-lucide-external-link';
             case 'download': return 'i-lucide-download';
             case 'none': return 'i-lucide-external-link';
@@ -294,7 +289,7 @@
     // any links are reported as left in place -- links are never trashable, and Remove is irreversible.
     function trashSelected() : void
     {
-        const plan = planTrash(selectedNodes.value);
+        const plan = intent.selection.planTrash(selectedNodes.value);
         const targets = [ ...plan.targetIDs ];
         if(targets.length === 0) { return; }
 

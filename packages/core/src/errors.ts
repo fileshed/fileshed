@@ -73,6 +73,18 @@ export class TooManyRequestsError extends Error
     }
 }
 
+// An optimistic-concurrency precondition failed: the caller pinned the state it meant to change (an ifBlobID guard on a
+// content replace) and that state no longer holds, because another write landed first. The caller must reload the
+// current content and decide whether to retry.
+export class ConflictError extends Error
+{
+    constructor(message : string)
+    {
+        super(message);
+        this.name = 'ConflictError';
+    }
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Regulation
 //

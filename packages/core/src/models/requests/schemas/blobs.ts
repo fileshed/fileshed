@@ -93,6 +93,9 @@ export const uploadCommitReplaceCodec = z.strictObject({
     mimeType: z.string()
         .min(1)
         .optional(),
+    ifBlobID: z.string()
+        .min(1)
+        .optional(),
 });
 
 typeAssert<Equals<z.output<typeof uploadCommitReplaceCodec>, UploadCommitReplace>>();

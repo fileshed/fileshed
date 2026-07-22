@@ -48,10 +48,15 @@ export interface UploadCommitCreate
 
 // mimeType is optional in replace mode: an edit save keeps the node's current type, while a collision "Replace" may
 // change it. name and parent never travel -- a replace overwrites bytes without moving or renaming the node.
+//
+// ifBlobID is an optional optimistic-concurrency guard: the blob the caller loaded and edited from. When present, the
+// commit is refused (409) if the node's current blob has moved on since -- someone else saved first. Absent, a replace
+// is last-write-wins, unchanged.
 export interface UploadCommitReplace
 {
     replaceNodeID : string;
     mimeType ?: string;
+    ifBlobID ?: string;
 }
 
 // Discriminated by which mode's fields are present, not a literal tag: create metadata carries name (and mimeType),

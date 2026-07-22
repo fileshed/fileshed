@@ -196,19 +196,22 @@ export function putUpload(
     });
 }
 
-// The replace variant of the upload commit: replaceNodeID (and an optional overriding mimeType) ride the query string
-// instead of the create metadata, so a completed upload overwrites an existing file's content in place.
+// The replace variant of the upload commit: replaceNodeID (and an optional overriding mimeType, and an optional
+// ifBlobID concurrency guard) ride the query string instead of the create metadata, so a completed upload overwrites
+// an existing file's content in place.
 export function putReplace(
     app : Hono,
     cookie : string,
     ticket : string,
     bytes : Buffer,
     replaceNodeID : string,
-    mimeType ?: string
+    mimeType ?: string,
+    ifBlobID ?: string
 ) : Promise<Response>
 {
     const params = new URLSearchParams({ replaceNodeID });
     if(mimeType !== undefined) { params.set('mimeType', mimeType); }
+    if(ifBlobID !== undefined) { params.set('ifBlobID', ifBlobID); }
 
     return app.request(`${ ORIGIN }/api/uploads/${ ticket }?${ params.toString() }`, {
         method: 'PUT',
@@ -217,18 +220,22 @@ export function putReplace(
     });
 }
 
-// The replace variant of the proof-of-possession answer: the body carries replaceNodeID (and an optional mimeType)
-// instead of the create metadata, so a proven dedup overwrites an existing file's content with zero bytes moved.
+// The replace variant of the proof-of-possession answer: the body carries replaceNodeID (and an optional mimeType, and
+// an optional ifBlobID concurrency guard) instead of the create metadata, so a proven dedup overwrites an existing
+// file's content with zero bytes moved.
 export function answerReplace(
     app : Hono,
     cookie : string,
     challengeID : string,
     answer : string,
     replaceNodeID : string,
-    mimeType ?: string
+    mimeType ?: string,
+    ifBlobID ?: string
 ) : Promise<Response>
 {
-    const body = mimeType === undefined ? { answer, replaceNodeID } : { answer, replaceNodeID, mimeType };
+    const body : Record<string, string> = { answer, replaceNodeID };
+    if(mimeType !== undefined) { body.mimeType = mimeType; }
+    if(ifBlobID !== undefined) { body.ifBlobID = ifBlobID; }
 
     return app.request(`${ ORIGIN }/api/blobs/claim/${ challengeID }`, {
         method: 'POST',

@@ -22,6 +22,9 @@ import NewDocument from '@client/components/drive/modals/newDocument.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 const toastAdd = vi.hoisted(() => vi.fn());
+const routerPush = vi.hoisted(() => vi.fn());
+
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
     getChildren: vi.fn(),
@@ -161,6 +164,19 @@ describe('NewDocument modal', () =>
         expect(field(wrapper, 'data-open')).toBe('false');
     });
 
+    it('navigates straight into the editor for the created file', async () =>
+    {
+        const wrapper = mountModal();
+        await useDriveStore().load('parent1');
+
+        useNewItemStore().requestNew('markdown');
+        await flushPromises();
+        await submit(wrapper, 'notes');
+
+        // The upload committed a node with id 'doc', so the modal drops the user into its editor route.
+        expect(routerPush).toHaveBeenCalledWith('/file/doc');
+    });
+
     it('keeps the modal open and toasts when creation fails', async () =>
     {
         claimBlobMock.mockRejectedValue(new Error('boom'));
@@ -172,6 +188,8 @@ describe('NewDocument modal', () =>
 
         expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ color: 'error' }));
         expect(field(wrapper, 'data-open')).toBe('true');
+        // A failed create never navigates.
+        expect(routerPush).not.toHaveBeenCalled();
     });
 });
 

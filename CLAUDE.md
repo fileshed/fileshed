@@ -256,6 +256,8 @@ componentName/
 └── index.ts             # Re-exports (if needed)
 ```
 
+File-type handlers (viewers/editors) live under `components/handlers/<handler>/`, one self-contained family each.
+
 ### Vue File Order
 
 1. `<template>` - HTML

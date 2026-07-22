@@ -22,6 +22,7 @@
 
 <script setup lang="ts">
     import { computed, ref, watch } from 'vue';
+    import { useRouter } from 'vue-router';
 
     // Stores
     import { useDriveStore } from '../../../stores/drive.ts';
@@ -45,6 +46,7 @@
 
     const store = useDriveStore();
     const newItem = useNewItemStore();
+    const router = useRouter();
     const { runMutation } = useRunWithToast();
 
     const open = ref(false);
@@ -62,13 +64,20 @@
         open.value = true;
     }, { immediate: true });
 
+    // Create the empty file, then drop straight into the editor for it -- a new document opens ready to type in.
     function onSubmit(name : string) : void
     {
         const { extension, mimeType } = config.value;
+        let createdID : string | null = null;
+
         void runMutation(
-            () => store.createEmptyFile(ensureExtension(name, extension), mimeType),
+            async () => { createdID = (await store.createEmptyFile(ensureExtension(name, extension), mimeType)).id; },
             pending,
-            () => { open.value = false; }
+            () =>
+            {
+                open.value = false;
+                if(createdID !== null) { void router.push(`/file/${ createdID }`); }
+            }
         );
     }
 </script>

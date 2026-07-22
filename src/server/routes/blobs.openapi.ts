@@ -38,7 +38,9 @@ export const answerChallengeSpec = describeRoute({
     description: 'Proves possession of a known blob by answering its challenge, committing with zero bytes moved '
         + '(resurrecting the blob if it was graveyarded). The body carries either the new-node metadata '
         + '(name/parentID/mimeType) or a replaceNodeID (with an optional mimeType) to overwrite an existing file\'s '
-        + 'content in place. A wrong answer is counted toward a per-user rate limit; too many failures are throttled.',
+        + 'content in place. A replace may carry an optional ifBlobID to guard against a concurrent edit: the commit '
+        + 'is refused if the target\'s current blob is no longer that one. A wrong answer is counted toward a per-user '
+        + 'rate limit; too many failures are throttled.',
     parameters: [ pathParam('challengeID', 'The challenge ID from the claim.') ],
     requestBody: jsonBody(challengeAnswerRequestCodec),
     responses: {
@@ -49,6 +51,8 @@ export const answerChallengeSpec = describeRoute({
             + 'quota, or the caller lacks edit access to the replace target.'),
         404: errorResponse('The challenge is unknown or expired, the blob vanished before it could be proven, or the '
             + 'replace target is not resolvable by the caller.'),
+        409: errorResponse('The replace carried an ifBlobID guard and the target\'s content changed since; reload and '
+            + 'retry.'),
         422: errorResponse('The parent placement violates a rule, or the replace target is not a file.'),
         429: errorResponse('Too many failed proofs; try again later.'),
     },

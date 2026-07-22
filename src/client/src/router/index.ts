@@ -11,6 +11,7 @@ import MainLayout from '../layouts/mainLayout.vue';
 import SignInPage from '../pages/signInPage.vue';
 import SignUpPage from '../pages/signUpPage.vue';
 import DrivePage from '../pages/drivePage.vue';
+import FilePage from '../pages/filePage.vue';
 import SharedPage from '../pages/sharedPage.vue';
 import TrashPage from '../pages/trashPage.vue';
 import SearchPage from '../pages/searchPage.vue';
@@ -36,6 +37,7 @@ export const router = createRouter({
             children: [
                 { path: '', name: 'drive', component: DrivePage },
                 { path: 'folder/:id', name: 'folder', component: DrivePage },
+                { path: 'file/:id', name: 'file', component: FilePage },
                 { path: 'shared', name: 'shared', component: SharedPage },
                 { path: 'trash', name: 'trash', component: TrashPage },
                 { path: 'search', name: 'search', component: SearchPage },
