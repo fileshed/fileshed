@@ -37,12 +37,15 @@ import {
     NotFoundError,
     PayloadTooLargeError,
     RegulationError,
+    type Role,
     SMALL_FILE_THRESHOLD_BYTES,
     SWEEP_INTERVAL_MS,
     SizeMismatchError,
     TICKET_TTL_MS,
     TooManyRequestsError,
+    type UploadCommitCreate,
     type UploadCommitMetadata,
+    isDirectOwner,
 } from '@fileshed/core';
 
 // Engines
@@ -54,6 +57,7 @@ import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { type BlobLocation, BlobRA } from '../resource-access/blob/index.ts';
 import { NodeRA } from '../resource-access/nodes/node.ts';
 import { ShareRA } from '../resource-access/shares/index.ts';
+import { UserRA } from '../resource-access/users/index.ts';
 
 // Utils
 import { getLogger } from '../utils/logger.ts';
@@ -262,6 +266,15 @@ export interface BlobManagerDeps
     uploadMaxBytes : number;
 }
 
+// A committed file node with the caller's effective role on it, so the route stamps the real role rather than
+// assuming ownership: a create is always the caller's own ('owner'), but a replace may be run by an editor on a file
+// shared to them, whose response must carry 'editor'.
+export interface CommittedNode
+{
+    node : FileNode;
+    role : Role;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export class BlobManager
@@ -272,6 +285,7 @@ export class BlobManager
 
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
+    readonly #users : UserRA;
 
     readonly #tickets = new TicketStore();
     readonly #challenges = new ChallengeStore();
@@ -287,6 +301,7 @@ export class BlobManager
 
         this.#nodes = new NodeRA(deps.handle);
         this.#shares = new ShareRA(deps.handle);
+        this.#users = new UserRA(deps.handle);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -344,10 +359,11 @@ export class BlobManager
     //------------------------------------------------------------------------------------------------------------------
 
     // POST /api/blobs/claim/:challengeID. Recompute the proof over the challenge's ranges, compare in constant time,
-    // and on success create the node (resurrecting a graveyarded blob) with zero bytes moved. A failed
-    // proof is logged and counted toward the per-user rate limit (a failure is probing).
+    // and on success commit (resurrecting a graveyarded blob) with zero bytes moved -- creating the caller's node, or
+    // replacing an existing file's content in place. A failed proof is logged and counted toward the per-user rate
+    // limit (a failure is probing), and is gated ahead of the target resolution so a probe learns nothing about it.
     async answerChallenge(caller : SessionUser, challengeID : string, answer : string, metadata : UploadCommitMetadata)
-    : Promise<FileNode>
+    : Promise<CommittedNode>
     {
         if(this.#failedProofs.isLimited(caller.id))
         {
@@ -383,12 +399,20 @@ export class BlobManager
             throw new ForbiddenError('Proof of possession failed.');
         }
 
-        await this.#assertParentEdge(caller.id, metadata.parentID);
+        // Known blob: the record already exists, so persistBlob only clears its graveyard marker. If GC hard-deleted
+        // the record in the challenge window, resurrect touches nothing and the write fails the blob_id FK.
+        const persistBlob = (blob : BlobRA) : Promise<void> => blob.resurrect(challenge.sha256);
 
-        // Known blob: the record already exists, so the commit only clears its graveyard marker. If GC
-        // hard-deleted the record in the challenge window, resurrect touches nothing and the node insert fails the FK.
-        return this.#commitFileNode(caller, challenge.sha256, challenge.size, metadata, (blob) =>
-            blob.resurrect(challenge.sha256));
+        if('replaceNodeID' in metadata)
+        {
+            const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
+            return this.#commitReplace(target, role, challenge.sha256, challenge.size, metadata.mimeType, persistBlob);
+        }
+
+        await this.#assertParentEdge(caller.id, metadata.parentID);
+        const node = await this.#commitFileNode(caller, challenge.sha256, challenge.size, metadata, persistBlob);
+
+        return { node, role: 'owner' };
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -396,15 +420,16 @@ export class BlobManager
     //------------------------------------------------------------------------------------------------------------------
 
     // PUT /api/uploads/:ticket. Stream the body through the store (which verifies hash + size and rejects a liar),
-    // enforcing the byte ceiling as it goes, then create the node in one transaction (insert-or-resurrect the
-    // record, insert the file node). The ticket is single-use: consumed here whether or not the upload succeeds.
+    // enforcing the byte ceiling as it goes, then commit in one transaction: create the caller's node, or replace an
+    // existing file's content in place. The placement/target facts are gathered BEFORE the bytes stream, so a bad
+    // target or parent stores nothing. The ticket is single-use: consumed here whether or not the upload succeeds.
     async commitUpload(
         caller : SessionUser,
         ticketID : string,
         body : Readable,
         metadata : UploadCommitMetadata,
         contentLength : number | undefined
-    ) : Promise<FileNode>
+    ) : Promise<CommittedNode>
     {
         const ticket = this.#tickets.consume(ticketID);
         if(ticket === undefined) { throw new NotFoundError('Upload ticket not found or expired.'); }
@@ -419,17 +444,25 @@ export class BlobManager
             throw new PayloadTooLargeError('Upload exceeds the maximum allowed size.');
         }
 
+        // Resolve the target (replace) or judge the parent edge (create) before a single byte is written -- a bad
+        // target/parent must store nothing. Then stream the bytes and, in either mode, persist the record as an
+        // insert-or-resurrect pinned to the backend the bytes landed on.
+        if('replaceNodeID' in metadata)
+        {
+            const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
+            const location = await this.#putBytes(ticket.sha256, ticket.size, body);
+            const persist = this.#insertOrResurrect(ticket.sha256, ticket.size, location);
+
+            return this.#commitReplace(target, role, ticket.sha256, ticket.size, metadata.mimeType, persist);
+        }
+
         await this.#assertParentEdge(caller.id, metadata.parentID);
         const location = await this.#putBytes(ticket.sha256, ticket.size, body);
+        const persist = this.#insertOrResurrect(ticket.sha256, ticket.size, location);
 
-        // Unknown or graveyarded: insert the record (or clear its marker) pinned to the backend the bytes landed on.
-        return this.#commitFileNode(caller, ticket.sha256, ticket.size, metadata, (blob) =>
-            blob.insertOrResurrect({
-                sha256: ticket.sha256,
-                size: ticket.size,
-                backendID: location.backendID,
-                storageKey: location.storageKey,
-            }));
+        const node = await this.#commitFileNode(caller, ticket.sha256, ticket.size, metadata, persist);
+
+        return { node, role: 'owner' };
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -455,23 +488,32 @@ export class BlobManager
     // Internals
     //------------------------------------------------------------------------------------------------------------------
 
+    // The record write for an upload commit: insert the blob (or clear its graveyard marker) pinned to the backend the
+    // bytes landed on. A proven dedup uses resurrect instead -- there are no fresh bytes, so the pin already stands.
+    #insertOrResurrect(sha256 : string, size : number, location : BlobLocation) : (blob : BlobRA) => Promise<void>
+    {
+        return (blob) => blob.insertOrResurrect({
+            sha256,
+            size,
+            backendID: location.backendID,
+            storageKey: location.storageKey,
+        });
+    }
+
     async #admitQuota(caller : SessionUser, incomingBytes : number) : Promise<void>
     {
         const usedBytes = await this.#nodes.ownedBytes(caller.id);
-        this.#enforceQuota(caller, usedBytes, incomingBytes);
+        this.#enforceQuota(caller.id, usedBytes, incomingBytes, caller.quotaLimit ?? null);
     }
 
-    // Judge one write against the owner's quota and throw the quota message on refusal. usedBytes is passed in so
-    // the caller controls whether it was read outside the commit (the early gate) or inside it (the authoritative
-    // re-check).
-    #enforceQuota(caller : SessionUser, usedBytes : number, incomingBytes : number) : void
+    // Judge one write against an owner's quota and throw the quota message on refusal. Keyed by ownerID and an explicit
+    // limit so it serves both the caller-charged create paths (caller is the owner) and the owner-charged replace path
+    // (an editor's write is charged to the file's owner, whose limit is read from their user row, not the actor's
+    // session). usedBytes is passed in so the caller controls whether it was read outside the commit (the early gate)
+    // or inside it (the authoritative re-check). incomingBytes is the DELTA for a replace, which may be negative.
+    #enforceQuota(ownerID : string, usedBytes : number, incomingBytes : number, limitBytes : number | null) : void
     {
-        const verdict = regulation.quota.admit({
-            ownerID: caller.id,
-            usedBytes,
-            limitBytes: caller.quotaLimit ?? null,
-            incomingBytes,
-        });
+        const verdict = regulation.quota.admit({ ownerID, usedBytes, limitBytes, incomingBytes });
 
         if(!verdict.ok)
         {
@@ -539,7 +581,7 @@ export class BlobManager
         caller : SessionUser,
         sha256 : string,
         size : number,
-        metadata : UploadCommitMetadata,
+        metadata : UploadCommitCreate,
         persistBlob : (blob : BlobRA) => Promise<void>
     ) : Promise<FileNode>
     {
@@ -568,13 +610,93 @@ export class BlobManager
             // isolation, so a batch of concurrent claims could jointly overshoot; this is the authoritative check. On
             // SQLite (serialized writes) it closes the window; on Postgres READ COMMITTED it narrows it to concurrent
             // uncommitted claims -- full serialization (row locks / SERIALIZABLE) is out of v1 scope.
-            this.#enforceQuota(caller, await nodes.ownedBytes(caller.id), size);
+            this.#enforceQuota(caller.id, await nodes.ownedBytes(caller.id), size, caller.quotaLimit ?? null);
 
             await persistBlob(blob);
             await nodes.insert(node);
         });
 
         return node;
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Replace
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Resolve a replace target as the caller sees it. The target must be a file the caller resolves with editor-or-
+    // better: a target they cannot resolve (missing, no access, or trashed-and-not-theirs) reads as absent (404), and
+    // a non-file or a viewer is the typed regulation rejection. A trashed file reads as absent to non-owners, but its
+    // OWNER may replace their own trashed file (it stays trashed) -- the same read-as-absent doctrine copy applies.
+    async #prepareReplace(caller : SessionUser, replaceNodeID : string) : Promise<{ target : FileNode; role : Role }>
+    {
+        const node = await this.#nodes.get(replaceNodeID);
+        if(node === undefined) { throw new NotFoundError(`No node ${ replaceNodeID }.`); }
+
+        const role = await this.#shares.effectiveRole(caller.id, node.id);
+        if(role === null) { throw new NotFoundError(`No node ${ replaceNodeID }.`); }
+
+        if(node.type !== 'link' && node.trashedAt !== null && !isDirectOwner(node, caller.id))
+        {
+            throw new NotFoundError(`No node ${ replaceNodeID }.`);
+        }
+
+        const verdict = regulation.node.replace({ target: node, actorRole: role });
+        if(!verdict.ok) { throw new RegulationError(verdict.violations); }
+
+        // Unreachable: judgeReplace rejects a non-file target above. The guard narrows the union so the commit reads
+        // the file-only fields; a folder or link reaching here would mean the judge and this build disagree.
+        if(node.type !== 'file') { throw new Error(`replace admitted a non-file target ${ node.id }`); }
+
+        return { target: node, role };
+    }
+
+    // Repoint an existing file at new content in one transaction: persist the blob record (insert-or-resurrect for an
+    // upload, resurrect for a proven dedup), move the node's blob/size/mime and bump updated_at, and graveyard the OLD
+    // blob if this node was its last reference -- the sweep runs AFTER the repoint so its reference count reflects the
+    // new state. Name, parent, owner, and trash state never change, so the node keeps its id and every link and share
+    // pointing at it stays valid.
+    //
+    // Quota is charged to the OWNER, not the acting editor, so the delta (new size - old size; negative always admits)
+    // is judged against the owner's usage and their limit from their user row. The claim-time gate charged the ACTOR
+    // (the claim never knew the target); the in-transaction re-judge here is the authoritative one against the owner.
+    async #commitReplace(
+        target : FileNode,
+        role : Role,
+        sha256 : string,
+        size : number,
+        mimeType : string | undefined,
+        persistBlob : (blob : BlobRA) => Promise<void>
+    ) : Promise<CommittedNode>
+    {
+        const oldBlobID = target.blobID;
+        const delta = size - target.size;
+        const resolvedMime = mimeType ?? target.mimeType;
+        const ownerLimit = await this.#users.quotaLimitOf(target.ownerID);
+        const now = new Date();
+
+        // Early gate against the owner's quota before a write is opened; the in-transaction re-judge below is
+        // authoritative (see #commitFileNode). A negative delta always admits -- it only lowers usage.
+        this.#enforceQuota(target.ownerID, await this.#nodes.ownedBytes(target.ownerID), delta, ownerLimit);
+
+        await this.#handle.db.transaction().execute(async (trx) =>
+        {
+            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
+            const blob = new BlobRA(txHandle);
+            const nodes = new NodeRA(txHandle);
+
+            this.#enforceQuota(target.ownerID, await nodes.ownedBytes(target.ownerID), delta, ownerLimit);
+
+            await persistBlob(blob);
+            await nodes.replaceContent(target.id, sha256, size, resolvedMime, now);
+
+            // Graveyard the old blob when this node was its last reference. Skipped when the content is unchanged (the
+            // node now references the same sha, so the sweep would find it referenced and leave it live anyway).
+            if(oldBlobID !== sha256) { await blob.graveyardUnreferenced([ oldBlobID ]); }
+        });
+
+        const node : FileNode = { ...target, blobID: sha256, size, mimeType: resolvedMime, updatedAt: now };
+
+        return { node, role };
     }
 }
 

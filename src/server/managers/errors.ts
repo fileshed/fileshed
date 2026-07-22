@@ -29,6 +29,7 @@ const authorizationCodes : ReadonlySet<RegulationCode> = new Set<RegulationCode>
     'parent.crossOwner',
     'link.noAccess',
     'trash.notOwner',
+    'replace.notEditor',
     'share.notOwner',
     'shareRequest.notOwner',
 ]);

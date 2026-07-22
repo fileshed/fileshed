@@ -157,6 +157,9 @@ export const childrenQueryCodec = z.strictObject({
     sortDirection: z.enum(sortDirections).default('asc'),
     types: typeFamiliesParam,
     ownerID: z.string().optional(),
+    name: z.string()
+        .min(1)
+        .optional(),
     updatedAfter: z.iso.datetime().optional(),
     updatedBefore: z.iso.datetime().optional(),
 });

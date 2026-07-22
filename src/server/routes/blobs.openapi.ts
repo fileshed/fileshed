@@ -35,18 +35,21 @@ export const claimSpec = describeRoute({
 export const answerChallengeSpec = describeRoute({
     tags: [ BLOB_TAG ],
     summary: 'Answer a proof-of-possession challenge',
-    description: 'Proves possession of a known blob by answering its challenge, creating the caller\'s file node with '
-        + 'zero bytes moved (resurrecting the blob if it was graveyarded). A wrong answer is counted toward a per-user '
-        + 'rate limit; too many failures are throttled.',
+    description: 'Proves possession of a known blob by answering its challenge, committing with zero bytes moved '
+        + '(resurrecting the blob if it was graveyarded). The body carries either the new-node metadata '
+        + '(name/parentID/mimeType) or a replaceNodeID (with an optional mimeType) to overwrite an existing file\'s '
+        + 'content in place. A wrong answer is counted toward a per-user rate limit; too many failures are throttled.',
     parameters: [ pathParam('challengeID', 'The challenge ID from the claim.') ],
     requestBody: jsonBody(challengeAnswerRequestCodec),
     responses: {
-        200: jsonResponse('The created file node.', nodeResponseCodec),
+        200: jsonResponse('The created or replaced file node, with the caller\'s effective role.', nodeResponseCodec),
         400: errorResponse('The request body does not match the expected shape.'),
         401: errorResponse('No session.'),
-        403: errorResponse('The proof failed, the challenge belongs to another user, or the write exceeds quota.'),
-        404: errorResponse('The challenge is unknown or expired, or the blob vanished before it could be proven.'),
-        422: errorResponse('The parent placement violates a rule.'),
+        403: errorResponse('The proof failed, the challenge belongs to another user, the write exceeds the owner\'s '
+            + 'quota, or the caller lacks edit access to the replace target.'),
+        404: errorResponse('The challenge is unknown or expired, the blob vanished before it could be proven, or the '
+            + 'replace target is not resolvable by the caller.'),
+        422: errorResponse('The parent placement violates a rule, or the replace target is not a file.'),
         429: errorResponse('Too many failed proofs; try again later.'),
     },
 });

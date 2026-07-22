@@ -108,8 +108,10 @@ export const nodeTypeFamilies
 export type NodeTypeFamily = typeof nodeTypeFamilies[number];
 
 // The filters ride the query string alongside pagination and sort, AND-combined. `types` is always present (empty =
-// unfiltered); ownerID and the date window are absent when their filter is off. The date bounds are ISO instants:
-// updatedAfter is an inclusive lower bound, updatedBefore an exclusive upper bound (a half-open window).
+// unfiltered); ownerID, name, and the date window are absent when their filter is off. The date bounds are ISO
+// instants: updatedAfter is an inclusive lower bound, updatedBefore an exclusive upper bound (a half-open window).
+// `name` is an EXACT match, not a substring -- it exists so a client can detect an upload name collision correctly
+// under pagination (asking "is there already a child named X?" without paging the whole folder).
 export interface ChildrenQuery
 {
     limit : number;
@@ -118,6 +120,7 @@ export interface ChildrenQuery
     sortDirection : SortDirection;
     types : NodeTypeFamily[];
     ownerID ?: string;
+    name ?: string;
     updatedAfter ?: string;
     updatedBefore ?: string;
 }

@@ -420,6 +420,56 @@ describe('NodeRA.children filters', () =>
         expect(count).toBe(page.length);
     });
 
+    // The name filter is an EXACT equality (collision detection), not the substring searchByName runs: a child named
+    // exactly "report.pdf" matches, one merely containing it does not.
+    it('matches a child by exact name, not by substring', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('exact', { parentID: 'p', name: 'report.pdf' }));
+        await ra.insert(file('longer', { parentID: 'p', name: 'report.pdf.bak' }));
+        await ra.insert(file('other', { parentID: 'p', name: 'notes.txt' }));
+
+        const rows = await ra.children(at, byName, { types: [], name: 'report.pdf' });
+
+        expect(rows.map((node) => node.id)).toEqual([ 'exact' ]);
+    });
+
+    // The name filter AND-composes with the other facets, and countChildren applies the same filters as the page, so
+    // a name filtered to one owner counts only that owner's matching child.
+    it('composes the name filter with an owner filter, and countChildren agrees with the page', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('mine', { parentID: 'p', ownerID: 'u1', name: 'shared.txt' }));
+        await ra.insert(file('theirs', { parentID: 'p', ownerID: 'u2', name: 'shared.txt' }));
+
+        const filters = { types: [], name: 'shared.txt', ownerID: 'u2' };
+        const page = await ra.children(at, byName, filters);
+        const count = await ra.countChildren(at, filters);
+
+        expect(page.map((node) => node.id)).toEqual([ 'theirs' ]);
+        expect(count).toBe(1);
+    });
+
+    // A name filter under pagination surfaces the same match regardless of the page window -- the point of an exact
+    // filter is answering "does a child named X exist?" without paging the whole folder.
+    it('returns the exact-name match on the first page under pagination', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await Promise.all(Array.from(
+            { length: 5 },
+            (_unused, index) => ra.insert(file(`filler-${ index }`, { parentID: 'p', name: `filler-${ index }.txt` }))
+        ));
+        await ra.insert(file('needle', { parentID: 'p', name: 'target.bin' }));
+
+        const firstPage = await ra.children(
+            at,
+            { pagination: { limit: 1, offset: 0 }, sort: { key: 'name' as const, direction: 'asc' as const } },
+            { types: [], name: 'target.bin' }
+        );
+
+        expect(firstPage.map((node) => node.id)).toEqual([ 'needle' ]);
+    });
+
     it('treats an empty type selection with no owner or window as unfiltered', async () =>
     {
         await seedFamilies();

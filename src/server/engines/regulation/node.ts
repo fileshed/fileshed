@@ -248,3 +248,44 @@ export function judgeCopy(facts : CopyFacts) : RegulationResult
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Replace Legality
+//----------------------------------------------------------------------------------------------------------------------
+
+// `actorRole` is the actor's effective role on the target, gathered by the manager (read-as-absent is handled there,
+// so a non-null role reaches here).
+export interface ReplaceFacts
+{
+    target : Node;
+    actorRole : Role | null;
+}
+
+// Only a file's content may be replaced (a folder roots a subtree with no single blob, a link carries no bytes), and
+// replacing content is an edit, so it requires editor-or-better on the target -- a viewer may read but not overwrite.
+// Both are reported so a viewer aiming at a folder learns of each. Ownership of the CHARGE (the target's owner) is
+// judged by quota separately: an editor may replace a file shared to them, spending the owner's quota, not their own.
+export function judgeReplace(facts : ReplaceFacts) : RegulationResult
+{
+    const violations : RegulationViolation[] = [];
+
+    if(facts.target.type !== 'file')
+    {
+        violations.push({
+            code: 'replace.notFile',
+            message: 'Only a file\'s content may be replaced.',
+            nodeID: facts.target.id,
+        });
+    }
+
+    if(!isAtLeastEditor(facts.actorRole))
+    {
+        violations.push({
+            code: 'replace.notEditor',
+            message: 'Replacing a file\'s content requires editor access or ownership.',
+            nodeID: facts.target.id,
+        });
+    }
+
+    return resultOf(violations);
+}
+
+//----------------------------------------------------------------------------------------------------------------------

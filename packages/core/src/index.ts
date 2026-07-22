@@ -74,7 +74,11 @@ export { type SearchQuery } from './models/requests/search.ts';
 export {
     type ClaimRequest,
     type ClaimResponse,
+    type UploadCommitCreate,
+    type UploadCommitReplace,
     type UploadCommitMetadata,
+    type ChallengeAnswerCreate,
+    type ChallengeAnswerReplace,
     type ChallengeAnswerRequest,
 } from './models/requests/blobs.ts';
 export { type MeResponse } from './models/requests/me.ts';
@@ -136,7 +140,11 @@ export { searchQueryCodec } from './models/requests/schemas/search.ts';
 export {
     claimRequestCodec,
     claimResponseCodec,
+    uploadCommitCreateCodec,
+    uploadCommitReplaceCodec,
     uploadCommitMetadataCodec,
+    challengeAnswerCreateCodec,
+    challengeAnswerReplaceCodec,
     challengeAnswerRequestCodec,
 } from './models/requests/schemas/blobs.ts';
 export { meResponseCodec } from './models/requests/schemas/me.ts';

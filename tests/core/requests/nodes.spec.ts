@@ -99,6 +99,19 @@ describe('childrenQueryCodec', () =>
 
         expect(result.success).toBe(false);
     });
+
+    // The exact-name filter is optional (a listing without it is unfiltered by name) and, when present, carries the
+    // literal name to match -- collision detection reaches for it, so it must survive parsing verbatim.
+    it('carries an optional exact-name filter through unchanged', () =>
+    {
+        const withName = childrenQueryCodec.safeParse({ name: 'report.pdf' });
+        const withoutName = childrenQueryCodec.parse({});
+
+        expect(withName.success).toBe(true);
+        if(!withName.success) { throw new Error('expected the name filter to parse'); }
+        expect(withName.data.name).toBe('report.pdf');
+        expect(withoutName.name).toBeUndefined();
+    });
 });
 
 describe('userSummaryCodec', () =>

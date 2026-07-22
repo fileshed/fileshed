@@ -91,6 +91,25 @@ export function queryParams(codec : ZodType) : OpenApiV31.ParameterObject[]
     }));
 }
 
+// Query parameters for an endpoint whose codec is a union of mutually exclusive modes (e.g. the upload commit's create
+// vs replace). The union of every mode's parameters, each marked optional: no single parameter is required across all
+// modes, so the requirement lives in the codec's cross-mode validation, not the per-parameter doc. A z.union has no
+// top-level properties for queryParams to read, so the modes' own codecs are passed and merged here.
+export function unionQueryParams(codecs : readonly ZodType[]) : OpenApiV31.ParameterObject[]
+{
+    const byName = new Map<string, OpenApiV31.ParameterObject>();
+
+    for(const codec of codecs)
+    {
+        for(const param of queryParams(codec))
+        {
+            if(!byName.has(param.name)) { byName.set(param.name, { ...param, required: false }); }
+        }
+    }
+
+    return [ ...byName.values() ];
+}
+
 export function pathParam(name : string, description : string) : OpenApiV31.ParameterObject
 {
     return { name, in: 'path', required: true, description, schema: { type: 'string' } };

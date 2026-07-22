@@ -196,6 +196,47 @@ export function putUpload(
     });
 }
 
+// The replace variant of the upload commit: replaceNodeID (and an optional overriding mimeType) ride the query string
+// instead of the create metadata, so a completed upload overwrites an existing file's content in place.
+export function putReplace(
+    app : Hono,
+    cookie : string,
+    ticket : string,
+    bytes : Buffer,
+    replaceNodeID : string,
+    mimeType ?: string
+) : Promise<Response>
+{
+    const params = new URLSearchParams({ replaceNodeID });
+    if(mimeType !== undefined) { params.set('mimeType', mimeType); }
+
+    return app.request(`${ ORIGIN }/api/uploads/${ ticket }?${ params.toString() }`, {
+        method: 'PUT',
+        headers: { cookie },
+        body: new Uint8Array(bytes),
+    });
+}
+
+// The replace variant of the proof-of-possession answer: the body carries replaceNodeID (and an optional mimeType)
+// instead of the create metadata, so a proven dedup overwrites an existing file's content with zero bytes moved.
+export function answerReplace(
+    app : Hono,
+    cookie : string,
+    challengeID : string,
+    answer : string,
+    replaceNodeID : string,
+    mimeType ?: string
+) : Promise<Response>
+{
+    const body = mimeType === undefined ? { answer, replaceNodeID } : { answer, replaceNodeID, mimeType };
+
+    return app.request(`${ ORIGIN }/api/blobs/claim/${ challengeID }`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify(body),
+    });
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Client-side proof, computed from the fixture bytes the way a possessing client would.
 //----------------------------------------------------------------------------------------------------------------------
@@ -273,6 +314,60 @@ export async function blobRowCount(handle : DatabaseHandle, sha256 : string) : P
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
     return Number(row.count);
+}
+
+// The GC graveyard marker for a blob: null when live, a timestamp once its last reference is gone.
+export async function blobDeletedAt(handle : DatabaseHandle, sha256 : string) : Promise<Date | string | null>
+{
+    const row = await handle.db
+        .selectFrom('blob')
+        .select('deleted_at')
+        .where('sha256', '=', sha256)
+        .executeTakeFirstOrThrow();
+    return row.deleted_at;
+}
+
+interface NodeContentRow
+{
+    blob_id : string | null;
+    size : number | null;
+    mime_type : string | null;
+    trashed_at : Date | string | null;
+    name : string;
+    parent_id : string | null;
+}
+
+// The content-bearing columns of a node row, read straight from the store so a replace can be proven at the row level.
+export async function nodeContentRow(handle : DatabaseHandle, id : string) : Promise<NodeContentRow>
+{
+    return handle.db
+        .selectFrom('node')
+        .select([ 'blob_id', 'size', 'mime_type', 'trashed_at', 'name', 'parent_id' ])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+}
+
+// Grant a share directly on a node, so an editor/viewer test can act on a file shared to them without driving the
+// whole share-management surface. The share resolver reads these rows verbatim.
+export async function grantShare(
+    handle : DatabaseHandle,
+    nodeID : string,
+    granteeID : string,
+    role : 'viewer' | 'editor',
+    createdBy : string
+) : Promise<void>
+{
+    await handle.db
+        .insertInto('share')
+        .values({
+            id: `share-${ nodeID }-${ granteeID }`,
+            node_id: nodeID,
+            grantee_user_id: granteeID,
+            role,
+            created_by: createdBy,
+            created_at: new Date().toISOString(),
+        })
+        .execute();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

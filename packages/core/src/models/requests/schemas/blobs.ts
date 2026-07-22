@@ -5,7 +5,16 @@
 import { z } from 'zod';
 
 // Requests
-import type { ChallengeAnswerRequest, ClaimRequest, ClaimResponse, UploadCommitMetadata } from '../blobs.ts';
+import type {
+    ChallengeAnswerCreate,
+    ChallengeAnswerReplace,
+    ChallengeAnswerRequest,
+    ClaimRequest,
+    ClaimResponse,
+    UploadCommitCreate,
+    UploadCommitMetadata,
+    UploadCommitReplace,
+} from '../blobs.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
@@ -64,7 +73,11 @@ typeAssert<Equals<z.output<typeof claimResponseCodec>, ClaimResponse>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export const uploadCommitMetadataCodec = z.strictObject({
+// The two commit modes are strict objects, so an unknown key from the other mode fails the branch outright: a payload
+// carrying BOTH modes' fields matches neither (each rejects the other's keys) and a payload carrying NEITHER's
+// required fields matches neither -- both collapse to a 400. No literal discriminant exists, so the modes are told
+// apart by which fields are present, exactly as the domain union is.
+export const uploadCommitCreateCodec = z.strictObject({
     name: z.string().min(1),
     parentID: z.string()
         .nullable()
@@ -73,12 +86,36 @@ export const uploadCommitMetadataCodec = z.strictObject({
     mimeType: z.string().min(1),
 });
 
+typeAssert<Equals<z.output<typeof uploadCommitCreateCodec>, UploadCommitCreate>>();
+
+export const uploadCommitReplaceCodec = z.strictObject({
+    replaceNodeID: z.string().min(1),
+    mimeType: z.string()
+        .min(1)
+        .optional(),
+});
+
+typeAssert<Equals<z.output<typeof uploadCommitReplaceCodec>, UploadCommitReplace>>();
+
+export const uploadCommitMetadataCodec = z.union([ uploadCommitCreateCodec, uploadCommitReplaceCodec ]);
+
 typeAssert<Equals<z.output<typeof uploadCommitMetadataCodec>, UploadCommitMetadata>>();
 
-export const challengeAnswerRequestCodec = z.strictObject({
+export const challengeAnswerCreateCodec = z.strictObject({
     answer: z.string(),
-    ...uploadCommitMetadataCodec.shape,
+    ...uploadCommitCreateCodec.shape,
 });
+
+typeAssert<Equals<z.output<typeof challengeAnswerCreateCodec>, ChallengeAnswerCreate>>();
+
+export const challengeAnswerReplaceCodec = z.strictObject({
+    answer: z.string(),
+    ...uploadCommitReplaceCodec.shape,
+});
+
+typeAssert<Equals<z.output<typeof challengeAnswerReplaceCodec>, ChallengeAnswerReplace>>();
+
+export const challengeAnswerRequestCodec = z.union([ challengeAnswerCreateCodec, challengeAnswerReplaceCodec ]);
 
 typeAssert<Equals<z.output<typeof challengeAnswerRequestCodec>, ChallengeAnswerRequest>>();
 

@@ -169,6 +169,7 @@ export class NodeManager
         const filters : NodeFilters = {
             types: query.types,
             ownerID: query.ownerID,
+            name: query.name,
             updatedAfter: query.updatedAfter === undefined ? undefined : new Date(query.updatedAfter),
             updatedBefore: query.updatedBefore === undefined ? undefined : new Date(query.updatedBefore),
         };

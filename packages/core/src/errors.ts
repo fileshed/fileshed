@@ -92,6 +92,8 @@ export type RegulationCode
     | 'trash.linkNotTrashable'
     | 'trash.notOwner'
     | 'copy.sourceNotFile'
+    | 'replace.notFile'
+    | 'replace.notEditor'
     | 'share.linkNotShareable'
     | 'share.notOwner'
     | 'share.granteeIsOwner'
@@ -114,6 +116,8 @@ export const RegulationCodeDisplay : Record<RegulationCode, string> = {
     'trash.linkNotTrashable': 'Links are removed, not trashed.',
     'trash.notOwner': 'You can only trash items you own.',
     'copy.sourceNotFile': 'Only files can be copied.',
+    'replace.notFile': 'Only a file\'s contents can be replaced.',
+    'replace.notEditor': 'You need edit access to replace this file\'s contents.',
     'share.linkNotShareable': 'Links can\'t be shared.',
     'share.notOwner': 'You can only share items you own.',
     'share.granteeIsOwner': 'You can\'t share an item with its own owner.',

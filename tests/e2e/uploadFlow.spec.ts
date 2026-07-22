@@ -461,3 +461,76 @@ describe('upload ticket and challenge misuse', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+// Content replace lifecycle
+//
+// Saving an edited file overwrites the bytes of an EXISTING node: a fresh file is uploaded, then replaced through the
+// same ticket flow with replaceNodeID. The node keeps its id (so links and shares survive), now serves the new bytes,
+// and the blob it used to hold -- left unreferenced -- is graveyarded.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('content replace lifecycle', () =>
+{
+    let replacer : ApiClient;
+
+    beforeAll(async () =>
+    {
+        replacer = new ApiClient(server.baseURL);
+        await replacer.signUp('replacer@example.com', PASSWORD);
+    });
+
+    it('replaces a file in place: same node id, new bytes served, old blob graveyarded', async () =>
+    {
+        // A fresh file to edit-and-save over.
+        const original = smallFixture('replace-original');
+        const originalSha = sha256Of(original);
+        const originalBody = { sha256: originalSha, size: original.length };
+        const originalClaimRes = await replacer.post('/api/blobs/claim', originalBody);
+        const originalClaim = await originalClaimRes.json() as ClaimResponse;
+        if(originalClaim.upload !== true) { throw new Error('setup: expected a ticket for the fresh file'); }
+
+        const createParams = new URLSearchParams({ name: 'editable.txt', mimeType: 'text/plain' });
+        const createUrl = `/api/uploads/${ originalClaim.ticket }?${ createParams.toString() }`;
+        const created = await (await replacer.put(createUrl, original)).json() as NodeResponse;
+
+        // New content for the same node.
+        const replacement = smallFixture('replace-new-content');
+        const replacementSha = sha256Of(replacement);
+        const replaceBody = { sha256: replacementSha, size: replacement.length };
+        const replaceClaimRes = await replacer.post('/api/blobs/claim', replaceBody);
+        const replaceClaim = await replaceClaimRes.json() as ClaimResponse;
+        if(replaceClaim.upload !== true) { throw new Error('setup: expected a ticket for the replacement bytes'); }
+
+        const replaceParams = new URLSearchParams({ replaceNodeID: created.id });
+        const replaceUrl = `/api/uploads/${ replaceClaim.ticket }?${ replaceParams.toString() }`;
+        const res = await replacer.put(replaceUrl, replacement);
+        const replaced = await res.json() as NodeResponse;
+
+        expect(res.status).toBe(200);
+        // Same node identity, new content.
+        expect(replaced.id).toBe(created.id);
+        expect(replaced.type).toBe('file');
+        if(replaced.type !== 'file') { throw new Error('expected a file node'); }
+        expect(replaced.blobID).toBe(replacementSha);
+        expect(replaced.size).toBe(replacement.length);
+        expect(replaced.role).toBe('owner');
+
+        // The node serves the new bytes: the stored blob for the new sha hashes back to it.
+        expect(await blobFileExists(server.storageRoot, replacementSha)).toBe(true);
+        expect(sha256Of(await readBlobFile(server.storageRoot, replacementSha))).toBe(replacementSha);
+
+        // Re-reading by id confirms the repoint persisted to the same node.
+        const reread = await (await replacer.get(`/api/nodes/${ created.id }`)).json() as NodeResponse;
+        if(reread.type !== 'file') { throw new Error('expected a file node on re-read'); }
+        expect(reread.blobID).toBe(replacementSha);
+
+        // The old blob lost its only reference and is graveyarded.
+        const oldBlob = await withDb(server, (db) => db
+            .selectFrom('blob')
+            .select('deleted_at')
+            .where('sha256', '=', originalSha)
+            .executeTakeFirst());
+        expect(oldBlob?.deleted_at).not.toBeNull();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------

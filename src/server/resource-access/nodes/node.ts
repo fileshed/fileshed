@@ -59,14 +59,15 @@ export interface ChildrenOptions
     sort : NodeSort;
 }
 
-// The listing filters, AND-combined. An empty `types` is unfiltered; a single-select owner and a half-open date
-// window (updatedAfter inclusive, updatedBefore exclusive) are absent when their filter is off. Distinct from the
-// listing's location: `ownerID` here narrows a folder to one contributor, where a location's ownerID only scopes the
-// root.
+// The listing filters, AND-combined. An empty `types` is unfiltered; a single-select owner, an exact-name match, and
+// a half-open date window (updatedAfter inclusive, updatedBefore exclusive) are absent when their filter is off.
+// Distinct from the listing's location: `ownerID` here narrows a folder to one contributor, where a location's ownerID
+// only scopes the root. `name` is an exact equality (upload collision detection), not the substring searchByName runs.
 export interface NodeFilters
 {
     types : readonly NodeTypeFamily[];
     ownerID ?: string;
+    name ?: string;
     updatedAfter ?: Date;
     updatedBefore ?: Date;
 }
@@ -115,6 +116,7 @@ function hasFilters(filters : NodeFilters) : boolean
 {
     return filters.types.length > 0
         || filters.ownerID !== undefined
+        || filters.name !== undefined
         || filters.updatedAfter !== undefined
         || filters.updatedBefore !== undefined;
 }
@@ -131,6 +133,7 @@ function filterConditions(eb : NodeExpressionBuilder, filters : NodeFilters) : E
         conditions.push(eb.or(filters.types.map((family) => familyCondition(eb, family))));
     }
     if(filters.ownerID !== undefined) { conditions.push(eb('owner_id', '=', filters.ownerID)); }
+    if(filters.name !== undefined) { conditions.push(eb('name', '=', filters.name)); }
     if(filters.updatedAfter !== undefined)
     {
         conditions.push(eb('updated_at', '>=', filters.updatedAfter.toISOString()));
@@ -423,6 +426,20 @@ export class NodeRA
         await this.#db
             .updateTable('node')
             .set({ parent_id: newParentID, updated_at: new Date().toISOString() })
+            .where('id', '=', id)
+            .execute();
+    }
+
+    // Repoint a file node at new content: its blob, logical size, and mime type, bumping updated_at. Name, parent, and
+    // owner never change -- a replace overwrites bytes in place so the node keeps its id and every link and share
+    // pointing at it stays valid. Runs inside the commit transaction alongside the blob write and the old-blob
+    // graveyard sweep, so the reference move and the record write commit together.
+    async replaceContent(id : string, blobID : string, size : number, mimeType : string, updatedAt : Date)
+    : Promise<void>
+    {
+        await this.#db
+            .updateTable('node')
+            .set({ blob_id: blobID, size, mime_type: mimeType, updated_at: updatedAt.toISOString() })
             .where('id', '=', id)
             .execute();
     }

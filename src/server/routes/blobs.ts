@@ -58,9 +58,9 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
         if(!parsed.success) { throw new BadRequestError('Invalid challenge answer.'); }
 
         const { answer, ...metadata } = parsed.data;
-        const node = await blobs.answerChallenge(caller, ctx.req.param('challengeID'), answer, metadata);
+        const { node, role } = await blobs.answerChallenge(caller, ctx.req.param('challengeID'), answer, metadata);
 
-        return ctx.json(toNodeResponse(node, 'owner'));
+        return ctx.json(toNodeResponse(node, role));
     });
 
     return router;
