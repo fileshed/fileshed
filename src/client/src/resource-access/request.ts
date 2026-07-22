@@ -52,7 +52,7 @@ interface UploadRequestOptions<T>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function buildUrl(path : string, query ?: QueryParams) : string
+export function buildUrl(path : string, query ?: QueryParams) : string
 {
     if(query === undefined) { return path; }
 

@@ -3,9 +3,10 @@
 //
 // The typed client for the claim / proof-of-possession / upload flow. A claim answers a discriminated ClaimResponse: an
 // unknown blob gets an upload ticket to PUT bytes against; a known one gets a challenge, answered in a single round
-// trip that also commits the node. The upload PUT carries the placement metadata on the query string and the file
-// bytes as a raw body -- see requestUpload. There is no upload progress here: fetch exposes none, so a progress bar
-// belongs to the upload manager (XHR), not this layer.
+// trip that also commits the node. Both commit paths carry the same two-mode commit metadata -- mint a fresh node, or
+// replace an existing one's bytes in place. The upload PUT rides the metadata on the query string and the file bytes as
+// a raw body; there is no upload progress here (fetch exposes none), so a progress bar belongs to the upload manager
+// (XHR, see uploadWithProgress), not this layer.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
@@ -19,7 +20,20 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestUpload } from './request.ts';
+import { type QueryParams, requestJson, requestUpload } from './request.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// The commit metadata as upload query params. CREATE carries name/parent/mimeType; REPLACE carries the target node id
+// and, when the new content changes type, its mimeType. A null parentID and an absent replace mimeType drop out of the
+// query -- root placement and "keep the node's current type" respectively. Shared by the ticket PUT and the XHR upload
+// so both place the resulting node identically.
+export function commitQuery(commit : UploadCommitMetadata) : QueryParams
+{
+    return 'replaceNodeID' in commit
+        ? { replaceNodeID: commit.replaceNodeID, mimeType: commit.mimeType }
+        : { name: commit.name, parentID: commit.parentID, mimeType: commit.mimeType };
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -28,8 +42,8 @@ export async function claimBlob(request : ClaimRequest) : Promise<ClaimResponse>
     return requestJson('/api/blobs/claim', { method: 'POST', body: request, codec: claimResponseCodec });
 }
 
-// Answer a proof-of-possession challenge. The body carries the HMAC answer plus the placement metadata, since a
-// successful proof commits the node in the same round trip -- no bytes are uploaded.
+// Answer a proof-of-possession challenge. The body carries the HMAC answer plus the commit metadata, since a successful
+// proof commits the node in the same round trip -- no bytes are uploaded.
 export async function answerChallenge(challengeID : string, request : ChallengeAnswerRequest) : Promise<NodeResponse>
 {
     return requestJson(`/api/blobs/claim/${ challengeID }`, {
@@ -39,16 +53,16 @@ export async function answerChallenge(challengeID : string, request : ChallengeA
     });
 }
 
-// Stream a file's bytes against an upload ticket, committing the placed node. The metadata rides the query string (the
-// body is raw bytes); an absent parentID is root placement.
+// Stream a file's bytes against an upload ticket, committing the placed node. The commit metadata rides the query
+// string (the body is raw bytes).
 export async function uploadTicket(
     ticket : string,
     body : BodyInit,
-    metadata : UploadCommitMetadata
+    commit : UploadCommitMetadata
 ) : Promise<NodeResponse>
 {
     return requestUpload(`/api/uploads/${ ticket }`, {
-        query: { name: metadata.name, parentID: metadata.parentID, mimeType: metadata.mimeType },
+        query: commitQuery(commit),
         body,
         contentType: 'application/octet-stream',
         codec: nodeResponseCodec,

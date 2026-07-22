@@ -85,18 +85,26 @@ export class RegulationApiError extends ApiError
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// The typed error for a response the fetch wrappers rejected: the server's `{ error }` message with the HTTP status,
-// upgraded to a RegulationApiError when the body carries regulation violation codes.
+// The typed error from an already-parsed error body: the server's `{ error }` message with the HTTP status, upgraded to
+// a RegulationApiError when the body carries regulation violation codes. The transport that read the body is irrelevant
+// -- fetch hands it a parsed Response body, the XHR upload hands it a parsed responseText -- so both funnel here rather
+// than each re-deriving the message and violation mapping.
+export function apiErrorFromBody(status : number, statusText : string, body : unknown) : ApiError
+{
+    const message = errorMessageOf(body) ?? (statusText || `Request failed with status ${ status }`);
+
+    const violations = regulationViolationsOf(body);
+    if(violations !== null) { return new RegulationApiError(status, message, violations, body); }
+
+    return new ApiError(status, message, body);
+}
+
+// The typed error for a fetch Response the request wrappers rejected.
 export async function apiErrorFromResponse(response : Response) : Promise<ApiError>
 {
     const body : unknown = await response.json().catch(() => null);
-    const message = errorMessageOf(body)
-        ?? (response.statusText || `Request failed with status ${ response.status }`);
 
-    const violations = regulationViolationsOf(body);
-    if(violations !== null) { return new RegulationApiError(response.status, message, violations, body); }
-
-    return new ApiError(response.status, message, body);
+    return apiErrorFromBody(response.status, response.statusText, body);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

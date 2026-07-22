@@ -32,15 +32,17 @@
             <FilterBar v-else :view-mode="viewMode" />
         </div>
 
-        <NodeSurface
-            :view-mode="viewMode"
-            :selection="selection.selected"
-            :build-menu="buildMenu"
-            @select="onSelect"
-            @open="onOpen"
-            @sort="onSort"
-            @clear-empty="clearSel"
-        />
+        <DropZone :label="currentFolderName" class="min-h-0 flex-1" @drop-files="onDropFiles">
+            <NodeSurface
+                :view-mode="viewMode"
+                :selection="selection.selected"
+                :build-menu="buildMenu"
+                @select="onSelect"
+                @open="onOpen"
+                @sort="onSort"
+                @clear-empty="clearSel"
+            />
+        </DropZone>
 
         <RenameNode ref="renameModal" />
         <MoveNodes ref="moveModal" />
@@ -61,6 +63,7 @@
 
     // Stores
     import { useDriveStore } from '../stores/drive.ts';
+    import { useUploadsStore } from '../stores/uploads.ts';
 
     // Resource Access
     import { downloadUrl } from '../resource-access/downloads.ts';
@@ -71,6 +74,7 @@
     import SelectionBar from '../components/drive/selectionBar.vue';
     import FilterBar from '../components/drive/filterBar.vue';
     import NodeSurface from '../components/drive/nodeSurface.vue';
+    import DropZone from '../components/uploads/dropZone.vue';
     import RenameNode from '../components/drive/modals/renameNode.vue';
     import MoveNodes from '../components/drive/modals/moveNodes.vue';
     import NewFolder from '../components/drive/modals/newFolder.vue';
@@ -97,6 +101,7 @@
     //------------------------------------------------------------------------------------------------------------------
 
     const store = useDriveStore();
+    const uploads = useUploadsStore();
     const route = useRoute();
     const router = useRouter();
     const toast = useToast();
@@ -150,6 +155,14 @@
         { label: 'My Files', icon: 'i-lucide-hard-drive', to: '/' },
         ...store.breadcrumb.map((folder) => ({ label: folder.name, to: `/folder/${ folder.id }` })),
     ]);
+
+    // The open folder's name for the drop overlay -- the last breadcrumb crumb, or My Files at the root.
+    const currentFolderName = computed(() => store.breadcrumb.at(-1)?.name ?? 'My Files');
+
+    function onDropFiles(files : File[]) : void
+    {
+        uploads.enqueue(files, store.folderID);
+    }
 
     function setView(mode : ViewMode) : void
     {

@@ -48,6 +48,11 @@
                 <RouterView />
             </main>
         </div>
+
+        <input ref="fileInput" type="file" multiple class="hidden" @change="onFilesPicked">
+
+        <UploadPanel />
+        <UploadCollision />
     </div>
 </template>
 
@@ -62,9 +67,13 @@
     import { useAppStore } from '../stores/app.ts';
     import { useSessionStore } from '../stores/session.ts';
     import { type NewItemKind, useNewItemStore } from '../stores/newItem.ts';
+    import { useDriveStore } from '../stores/drive.ts';
+    import { useUploadsStore } from '../stores/uploads.ts';
 
     // Components
     import QuotaMeter from '../components/quotaMeter.vue';
+    import UploadPanel from '../components/uploads/uploadPanel.vue';
+    import UploadCollision from '../components/uploads/modals/uploadCollision.vue';
 
     //------------------------------------------------------------------------------------------------------------------
     // Stores
@@ -73,6 +82,8 @@
     const app = useAppStore();
     const session = useSessionStore();
     const newItem = useNewItemStore();
+    const drive = useDriveStore();
+    const uploads = useUploadsStore();
     const route = useRoute();
     const router = useRouter();
 
@@ -99,10 +110,34 @@
         newItem.requestNew(kind);
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    // Upload -- the picker lands files in the open folder, so off a drive surface we drop to My Files first, then open
+    // the OS file dialog. The change handler enqueues against whichever folder is current by then and resets the input
+    // so re-picking the same file fires again.
+    //------------------------------------------------------------------------------------------------------------------
+
+    const fileInput = ref<HTMLInputElement | null>(null);
+
+    async function triggerUpload() : Promise<void>
+    {
+        if(!onDriveRoute.value) { await router.push('/'); }
+        fileInput.value?.click();
+    }
+
+    function onFilesPicked(event : Event) : void
+    {
+        const input = event.target as HTMLInputElement;
+        const files = input.files === null ? [] : Array.from(input.files);
+
+        if(files.length > 0) { uploads.enqueue(files, drive.folderID); }
+
+        input.value = '';
+    }
+
     const newMenuItems = computed<DropdownMenuItem[][]>(() => [
         [
             { label: 'New folder', icon: 'i-lucide-folder-plus', onSelect: () => { void requestCreate('folder'); } },
-            { label: 'Upload files', icon: 'i-lucide-upload', disabled: true },
+            { label: 'Upload files', icon: 'i-lucide-upload', onSelect: () => { void triggerUpload(); } },
         ],
         [
             {

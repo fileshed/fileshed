@@ -372,6 +372,7 @@ export const useDriveStore = defineStore('drive', () =>
         filteredEmpty,
         load,
         loadMore,
+        refresh,
         reSort,
         setTypeFamilies,
         setOwner,
