@@ -1,16 +1,17 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Handler Resolution
 //
-// The handler-resolution engine: given a node, which handler opens it -- edit (the in-app editor), native view (the
-// browser's own inline renderer), or download. It is the registry the components/handlers/ families plug into: each
-// family's handler gets first refusal at a file, and whatever no handler claims falls through to the browser's native
-// open -- the permanent fallback, where an inline-renderable type (image, audio, video, PDF, JSON) previews in a new
-// tab and the rest download. The in-app text family claims small text and markdown. Folders navigate; a resolved link
-// follows its target under the same rules; a dead link opens to nothing. resolveOpen returns the intent rather than
-// performing it, so the effectful half (router push, window.open) stays in the caller.
+// The handler-resolution engine: given a node, which handler opens it -- edit (text/markdown editors), annotate (the
+// PDF annotator), play (the media players), native view (the browser's own inline renderer), or download. It is the
+// registry the components/handlers/ families plug into: each family's handler gets first refusal at a file, and
+// whatever no handler claims falls through to the browser's native open -- the permanent fallback, where an
+// inline-renderable type previews in a new tab and the rest download. Folders navigate; a link to a folder navigates
+// to the LINK's own id (so its logical placement shows, not the target's ancestry), a link to a file follows the
+// target under the file rules, and a dead link opens to nothing. resolveOpen returns the intent rather than performing
+// it, so the effectful half (router push, window.open) stays in the caller.
 //----------------------------------------------------------------------------------------------------------------------
 
-import type { NodeResponse } from '@fileshed/core';
+import { type NodeResponse, PDF_ANNOTATOR_MAX_BYTES, type SharedTarget } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -26,12 +27,15 @@ export const EDITOR_MAX_BYTES = 1_474_560;
 
 export type EditorMode = 'markdown' | 'plain';
 
-// navigate: a folder (or a link to one). edit: a small text/markdown file, opened in the in-app editor. view: an
-// inline-renderable file, opened in a new tab. download: any other file, sent through the browser's save flow. none: a
-// dead link, nothing to open.
+// navigate: a folder (or a link to one). edit: a small text/markdown file, opened in the in-app editor. annotate: a
+// PDF under the annotator's cap, opened in the in-app annotator. play: audio or video, opened in the in-app player.
+// view: an inline-renderable file, opened in a new tab. download: any other file, sent through the browser's save
+// flow. none: a dead link, nothing to open.
 export type OpenAction
     = | { kind : 'navigate'; folderID : string }
     | { kind : 'edit'; nodeID : string }
+    | { kind : 'annotate'; nodeID : string }
+    | { kind : 'play'; nodeID : string; media : 'video' | 'audio' }
     | { kind : 'view'; nodeID : string }
     | { kind : 'download'; nodeID : string }
     | { kind : 'none' };
@@ -92,6 +96,29 @@ const HANDLERS : readonly OpenHandler[] = [
     {
         return isEditableText(target) ? { kind: 'edit', nodeID: target.nodeID } : null;
     },
+
+    // The pdf family annotates, it never edits page content; an over-cap PDF falls through to the native preview,
+    // which renders lazily without holding a whole resident copy.
+    (target) =>
+    {
+        return target.mimeType === 'application/pdf' && target.size <= PDF_ANNOTATOR_MAX_BYTES
+            ? { kind: 'annotate', nodeID: target.nodeID }
+            : null;
+    },
+
+    (target) =>
+    {
+        return target.mimeType.startsWith('video/')
+            ? { kind: 'play', nodeID: target.nodeID, media: 'video' }
+            : null;
+    },
+
+    (target) =>
+    {
+        return target.mimeType.startsWith('audio/')
+            ? { kind: 'play', nodeID: target.nodeID, media: 'audio' }
+            : null;
+    },
 ];
 
 // The browser's own renderer, the fallback nothing overrides: inline-renderable types preview in a new tab, the rest
@@ -123,7 +150,11 @@ export function resolveOpen(node : NodeResponse) : OpenAction
     }
 
     if(node.target === null) { return { kind: 'none' }; }
-    if(node.target.type === 'folder') { return { kind: 'navigate', folderID: node.target.id }; }
+
+    // A folder link navigates to the LINK's own id, not the target's: the URL then carries the link, so the breadcrumb
+    // walks the link's own placement (My Files > ... > link name) instead of the target's real ancestry, which the
+    // caller may not even be able to reach. A link to a FILE still follows the target -- its bytes are what open.
+    if(node.target.type === 'folder') { return { kind: 'navigate', folderID: node.id }; }
 
     return openFile({
         nodeID: node.target.id,
@@ -131,6 +162,25 @@ export function resolveOpen(node : NodeResponse) : OpenAction
         name: node.target.name,
         size: node.target.size ?? 0,
     });
+}
+
+// Opening an item from Shared with me: a shared folder navigates into itself (the server's effective-role machinery
+// permits the read), a shared file resolves through the same handler registry as any file. A share only ever targets a
+// file or folder -- links carry no ACL to share -- so a link target opens to nothing.
+export function resolveSharedOpen(target : SharedTarget) : OpenAction
+{
+    if(target.type === 'folder') { return { kind: 'navigate', folderID: target.id }; }
+    if(target.type === 'file')
+    {
+        return openFile({
+            nodeID: target.id,
+            mimeType: target.mimeType ?? '',
+            name: target.name,
+            size: target.size ?? 0,
+        });
+    }
+
+    return { kind: 'none' };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import {
     type Node,
     childrenQueryCodec,
     createNodeRequestCodec,
+    linkTargetCodec,
     nodeListResponseCodec,
     nodeResponseCodec,
     patchNodeRequestCodec,
@@ -184,6 +185,19 @@ describe('nodeResponseCodec', () =>
     });
 });
 
+describe('linkTargetCodec', () =>
+{
+    const base = { id: 'node_1', type: 'file' as const, name: 'photo.jpg' };
+
+    // The target's ownerID is who the row belongs to, not the link's -- a link resolves someone else's file, so the
+    // wire block naming that display fact is mandatory, not optional.
+    it('requires ownerID on a resolved target', () =>
+    {
+        expect(linkTargetCodec.safeParse(base).success).toBe(false);
+        expect(linkTargetCodec.safeParse({ ...base, ownerID: 'user_1' }).success).toBe(true);
+    });
+});
+
 describe('createNodeRequestCodec', () =>
 {
     // links are plain node CRUD through the same POST /api/nodes as folders, discriminated by type -- a folder create
@@ -273,9 +287,9 @@ describe('toNodeResponse', () =>
         expect(nodeResponseCodec.safeParse(response).success).toBe(true);
     });
 
-    // a link resolves its target for display -- id, type, name, and for a file target its size
+    // a link resolves its target for display -- id, type, name, owner, and for a file target its size
     // and mime type, so the client can render it without a second fetch.
-    it('resolves a link\'s file target to id, type, name, size, and mime type', () =>
+    it('resolves a link\'s file target to id, type, name, owner, size, and mime type', () =>
     {
         const link : Node = {
             type: 'link',
@@ -310,13 +324,46 @@ describe('toNodeResponse', () =>
                 id: 't1',
                 type: 'file',
                 name: 'photo.jpg',
+                ownerID: 'u2',
                 size: 2048,
                 mimeType: 'image/jpeg',
             });
         }
     });
 
-    // an unresolvable link (target gone, or access lost) carries a null target so the client renders it as a stub.
+    // the target's ownerID is who the row belongs to -- distinct from the link's own ownerID, which names the
+    // recipient who placed the link, not the person whose file it is.
+    it('carries the target\'s own ownerID, not the link\'s, when the two differ', () =>
+    {
+        const link : Node = {
+            type: 'link',
+            id: 'l1',
+            name: 'Shared Folder',
+            ownerID: 'recipient',
+            parentID: null,
+            createdAt,
+            updatedAt,
+            targetNodeID: 't1',
+        };
+        const target : Node = {
+            type: 'folder',
+            id: 't1',
+            name: 'Team Docs',
+            ownerID: 'original-owner',
+            parentID: null,
+            createdAt,
+            updatedAt,
+            trashedAt: null,
+        };
+
+        const response = toNodeResponse(link, 'viewer', target);
+
+        expect(response.type).toBe('link');
+        if(response.type === 'link') { expect(response.target?.ownerID).toBe('original-owner'); }
+    });
+
+    // an unresolvable link (target gone, or access lost) carries a null target so the client renders it as a stub,
+    // with no target owner to fall back on -- the client falls back to the link's own ownerID instead.
     it('serializes a link with a null target when the target is unresolved', () =>
     {
         const link : Node = {

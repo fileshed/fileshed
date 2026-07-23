@@ -9,6 +9,7 @@ import {
     type GrantShareRequest,
     type ShareListResponse,
     type ShareResponse,
+    type SharedWithMeQuery,
     type SharedWithMeResponse,
     shareListResponseCodec,
     shareResponseCodec,
@@ -16,7 +17,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestVoid } from './request.ts';
+import { type QueryParams, requestJson, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -30,9 +31,16 @@ export async function listSharesForNode(nodeID : string) : Promise<ShareListResp
     return requestJson(`/api/nodes/${ nodeID }/shares`, { codec: shareListResponseCodec });
 }
 
-export async function sharedWithMe() : Promise<SharedWithMeResponse>
+// The caller's shared-with-me listing, optionally narrowed by the Type/Modified filters on each target. The type
+// families ride one comma-separated param; an empty selection and absent date bounds are dropped, so an unfiltered
+// call issues a bare GET with no query string.
+export async function sharedWithMe(query : Partial<SharedWithMeQuery> = {}) : Promise<SharedWithMeResponse>
 {
-    return requestJson('/api/shared-with-me', { codec: sharedWithMeResponseCodec });
+    const { types, ...rest } = query;
+    const params : QueryParams = { ...rest };
+    if(types !== undefined && types.length > 0) { params.types = types.join(','); }
+
+    return requestJson('/api/shared-with-me', { query: params, codec: sharedWithMeResponseCodec });
 }
 
 export async function leaveShare(shareID : string) : Promise<void>

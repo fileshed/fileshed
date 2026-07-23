@@ -2,9 +2,12 @@
   -- Selection Bar
   --
   -- The action bar shown while a selection is active, occupying the drive's constant-height idle strip. Move and Trash
-  -- act on the whole selection; Copy is offered only when every selected node is a file; Rename only for a single,
-  -- renamable node. Presentational -- each button emits its intent and the route component owns the targets and the
-  -- mutations. The destructive button's label is passed in (Trash for files and folders, Remove for a links-only set).
+  -- act on the whole selection, each offered only when the caller directly owns EVERY selected node -- one foreign
+  -- node (a contribution, or a node reached through a traversed folder link) drops the action rather than acting on a
+  -- subset. Copy asks only read access, so it stays keyed to node type alone (every selected node a file); Rename and
+  -- Share are ownership-gated too, but only ever apply to a single selected node. Presentational -- each button emits
+  -- its intent and the route component owns the targets and the mutations. The destructive button's label is passed
+  -- in (Trash for files and folders, Remove for a links-only set).
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -23,7 +26,18 @@
         <span class="px-1 text-sm font-medium">{{ count }} selected</span>
 
         <div class="ml-2 flex items-center gap-1 whitespace-nowrap">
-            <UTooltip text="Move">
+            <UTooltip v-if="canShare" text="Share">
+                <UButton
+                    icon="i-lucide-user-plus"
+                    color="neutral"
+                    variant="subtle"
+                    label="Share"
+                    aria-label="Share"
+                    @click="emit('share')"
+                />
+            </UTooltip>
+
+            <UTooltip v-if="canMove" text="Move">
                 <UButton
                     icon="i-lucide-folder-input"
                     color="neutral"
@@ -60,7 +74,7 @@
                 />
             </UTooltip>
 
-            <UTooltip :text="trashLabel">
+            <UTooltip v-if="canTrash" :text="trashLabel">
                 <UButton
                     icon="i-lucide-trash-2"
                     color="error"
@@ -82,6 +96,9 @@
         canCopy : boolean;
         copyTooltip : string;
         canRename : boolean;
+        canShare : boolean;
+        canMove : boolean;
+        canTrash : boolean;
         trashLabel : string;
     }>();
 
@@ -90,6 +107,7 @@
         move : [];
         copy : [];
         rename : [];
+        share : [];
         trash : [];
     }>();
 </script>

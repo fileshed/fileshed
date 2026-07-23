@@ -4,9 +4,16 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { LinkTarget, NodeResponse, Role } from '@fileshed/core';
+import { type LinkTarget, type NodeResponse, PDF_ANNOTATOR_MAX_BYTES, type Role, type SharedTarget }
+    from '@fileshed/core';
 
-import { EDITOR_MAX_BYTES, canViewInline, defaultEditorMode, resolveOpen } from '@client/engines/intent/handlers.ts';
+import {
+    EDITOR_MAX_BYTES,
+    canViewInline,
+    defaultEditorMode,
+    resolveOpen,
+    resolveSharedOpen,
+} from '@client/engines/intent/handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -93,11 +100,13 @@ describe('resolveOpen', () =>
         expect(resolveOpen(file('f1', 'application/zip'))).toEqual({ kind: 'download', nodeID: 'f1' });
     });
 
-    it('navigates a link whose target is a folder, using the target id', () =>
+    // A folder link navigates to the LINK's own id, not the target's, so the URL carries the link and the breadcrumb
+    // walks the link's placement rather than the target's (possibly unreachable) ancestry.
+    it('navigates a link whose target is a folder to the LINK\'s own id', () =>
     {
-        const node = link({ id: 't1', type: 'folder', name: 'shared' });
+        const node = link({ id: 'link1', type: 'folder', name: 'shared' });
 
-        expect(resolveOpen(node)).toEqual({ kind: 'navigate', folderID: 't1' });
+        expect(resolveOpen(node)).toEqual({ kind: 'navigate', folderID: 'link1' });
     });
 
     it('views a link to a renderable file inline via the target', () =>
@@ -203,6 +212,45 @@ describe('resolveOpen — editor intent', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+// The annotator and player families: a PDF under the annotator's cap annotates, over it the native preview streams it
+// lazily instead; audio and video always play in-app, whatever their size, because playback streams.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('resolveOpen — annotator and player intents', () =>
+{
+    it('annotates a PDF under the annotator cap', () =>
+    {
+        expect(resolveOpen(fileOf({ mimeType: 'application/pdf', name: 'form.pdf' })))
+            .toEqual({ kind: 'annotate', nodeID: 'f1' });
+    });
+
+    it('falls back to the native preview for a PDF over the annotator cap', () =>
+    {
+        const overCap = fileOf({ mimeType: 'application/pdf', name: 'scan.pdf', size: PDF_ANNOTATOR_MAX_BYTES + 1 });
+
+        expect(resolveOpen(overCap)).toEqual({ kind: 'view', nodeID: 'f1' });
+    });
+
+    it('plays a video in the video family', () =>
+    {
+        expect(resolveOpen(fileOf({ mimeType: 'video/mp4', name: 'clip.mp4' })))
+            .toEqual({ kind: 'play', nodeID: 'f1', media: 'video' });
+    });
+
+    it('plays audio in the audio family regardless of size', () =>
+    {
+        expect(resolveOpen(fileOf({ mimeType: 'audio/mpeg', name: 'album.mp3', size: 600_000_000 })))
+            .toEqual({ kind: 'play', nodeID: 'f1', media: 'audio' });
+    });
+
+    it('never lets the media families claim a text file the editor already owns', () =>
+    {
+        expect(resolveOpen(fileOf({ mimeType: 'text/plain', name: 'notes.txt' })))
+            .toEqual({ kind: 'edit', nodeID: 'f1' });
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
 // The default editor mode: markdown by type or extension, plain text otherwise. A per-open toggle overrides it.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -228,6 +276,46 @@ describe('defaultEditorMode', () =>
     it('defaults plain when neither type nor name says markdown', () =>
     {
         expect(defaultEditorMode('', 'file')).toBe('plain');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Opening a Shared-with-me target: a shared folder navigates into itself; a shared file resolves through the same
+// registry as any file. A share never targets a link, so only file and folder cases exist.
+//----------------------------------------------------------------------------------------------------------------------
+
+function sharedTarget(fields : Partial<SharedTarget> & Pick<SharedTarget, 'type'>) : SharedTarget
+{
+    return { id: 's1', name: 'thing', ownerID: 'owner1', ...fields };
+}
+
+describe('resolveSharedOpen', () =>
+{
+    it('navigates into a shared folder by its own id', () =>
+    {
+        expect(resolveSharedOpen(sharedTarget({ type: 'folder', id: 'dir1' })))
+            .toEqual({ kind: 'navigate', folderID: 'dir1' });
+    });
+
+    it('opens a small shared text file in the in-app editor', () =>
+    {
+        const target = sharedTarget({ type: 'file', id: 'f1', name: 'notes.txt', mimeType: 'text/plain', size: 20 });
+
+        expect(resolveSharedOpen(target)).toEqual({ kind: 'edit', nodeID: 'f1' });
+    });
+
+    it('annotates a shared PDF in the app like any other reachable PDF', () =>
+    {
+        const target = sharedTarget({ type: 'file', id: 'f1', name: 'doc.pdf', mimeType: 'application/pdf', size: 20 });
+
+        expect(resolveSharedOpen(target)).toEqual({ kind: 'annotate', nodeID: 'f1' });
+    });
+
+    it('downloads a shared file the browser cannot render', () =>
+    {
+        const target = sharedTarget({ type: 'file', id: 'f1', name: 'a.zip', mimeType: 'application/zip', size: 20 });
+
+        expect(resolveSharedOpen(target)).toEqual({ kind: 'download', nodeID: 'f1' });
     });
 });
 

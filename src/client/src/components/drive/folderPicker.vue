@@ -67,12 +67,12 @@
 
         <div class="flex items-center justify-between gap-2">
             <p class="truncate text-xs text-muted">
-                Move into <span class="font-medium text-default">{{ currentLabel }}</span>
+                {{ verb }} into <span class="font-medium text-default">{{ currentLabel }}</span>
             </p>
             <div class="flex gap-2">
                 <UButton color="neutral" variant="ghost" label="Cancel" :disabled="pending" @click="emit('cancel')" />
                 <UButton
-                    label="Move here"
+                    :label="`${ verb } here`"
                     :loading="pending"
                     :disabled="!canConfirm"
                     @click="emit('confirm', currentID)"
@@ -103,7 +103,11 @@
     const props = withDefaults(defineProps<{
         movingNodeIDs : string[];
         pending ?: boolean;
-    }>(), { pending: false });
+
+        // The verb the footer speaks -- "Move" for relocations, "Add" for link placement. The picker's mechanics
+        // don't change with it.
+        verb ?: string;
+    }>(), { pending: false, verb: 'Move' });
 
     const emit = defineEmits<{
         confirm : [ destinationParentID : string | null ];

@@ -23,7 +23,9 @@ import {
     type CreateFolderRequest,
     type CreateLinkRequest,
     DEFAULT_GC_GRACE_DAYS,
+    DEFAULT_TRASH_PURGE_DAYS,
     type DeletionOffer,
+    type EmptyTrashResponse,
     type FileNode,
     ForbiddenError,
     MS_PER_DAY,
@@ -39,6 +41,7 @@ import {
     SEARCH_CANDIDATE_LIMIT,
     type SearchQuery,
     type UpdatePreferencesRequest,
+    type UserSummary,
     isDirectOwner,
     maxRole,
     toNodeResponse,
@@ -98,12 +101,14 @@ export class NodeManager
     readonly #users : UserRA;
     readonly #orphanedBlobs : OrphanedBlobs;
     readonly #offerGraceMs : number;
+    readonly #trashRetentionDays : number;
 
     constructor(
         handle : DatabaseHandle,
         nodes : NodeRA,
         orphanedBlobs : OrphanedBlobs,
-        offerGraceMs : number = DEFAULT_GC_GRACE_DAYS * MS_PER_DAY
+        offerGraceMs : number = DEFAULT_GC_GRACE_DAYS * MS_PER_DAY,
+        trashRetentionDays : number = DEFAULT_TRASH_PURGE_DAYS
     )
     {
         this.#db = handle.db;
@@ -114,6 +119,7 @@ export class NodeManager
         this.#users = new UserRA(handle);
         this.#orphanedBlobs = orphanedBlobs;
         this.#offerGraceMs = offerGraceMs;
+        this.#trashRetentionDays = trashRetentionDays;
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -144,33 +150,54 @@ export class NodeManager
     // contributions other users placed inside travel with the folder; no access to the folder reads as absent
     // (404). Each returned node carries the caller's real effective role.
     //
+    // A folder-LINK id lists its target's children: the link is resolved to its target under the caller's OWN access
+    // (links conduct no permission), and everything below then runs against the target exactly as if the target id had
+    // been passed -- the same role composition, the same 404 for a dead or unreachable target.
+    //
     // Roles are composed rather than re-walked: a child's ancestor chain is the child plus the parent's chain, and the
     // parent's chain is already folded into the parent's resolved role, so role(child) = max(parentRole,
     // ownership(child), direct grant on child). That is one recursive walk for the parent plus one flat grant lookup
     // for the page, instead of a walk per child.
     async children(actor : SessionUser, parentID : string | null, query : ChildrenQuery) : Promise<NodeListResponse>
     {
-        // null for a root listing: root-level nodes have no ancestors, so they carry no inherited role.
+        // null for a root listing: root-level nodes have no ancestors, so they carry no inherited role. The location
+        // parent is the effective folder to list under -- the target for a folder-link parent, otherwise parentID.
         let parentRole : Role | null = null;
+        let listedParentID = parentID;
+
+        // Set when the listing traverses a folder link: the target's owner, added to the owner facet so the link
+        // crumb's hover card has that owner's summary without a second round trip.
+        let traversedTargetOwnerID : string | undefined;
 
         if(parentID !== null)
         {
             const parent = await this.#nodes.get(parentID);
-            parentRole = parent === undefined ? null : await this.#shares.effectiveRole(actor.id, parent.id);
+            if(parent === undefined) { throw new NotFoundError(`No node ${ parentID }.`); }
+
+            // A folder link lists its TARGET's children. Resolve it under the caller's own effective role on the
+            // target, so each child carries the role children(targetID) would compose -- never anything the link
+            // lends. The 404 message keeps the requested id, never the target's, so it discloses nothing.
+            const listedParent = parent.type === 'link' ? await this.#nodes.get(parent.targetNodeID) : parent;
+            if(listedParent === undefined) { throw new NotFoundError(`No node ${ parentID }.`); }
+
+            parentRole = await this.#shares.effectiveRole(actor.id, listedParent.id);
             if(parentRole === null) { throw new NotFoundError(`No node ${ parentID }.`); }
 
             // A trashed folder is absent to everyone but its direct owner -- recipients get a 404, not an empty
             // listing that confirms the folder still exists. The owner keeps listing it: that is the trash view.
-            if(parent !== undefined && parent.type !== 'link' && parent.trashedAt !== null
-                && !isDirectOwner(parent, actor.id))
+            const trashedTarget = listedParent.type !== 'link' && listedParent.trashedAt !== null;
+            if(trashedTarget && !isDirectOwner(listedParent, actor.id))
             {
                 throw new NotFoundError(`No node ${ parentID }.`);
             }
+
+            listedParentID = listedParent.id;
+            if(parent.type === 'link') { traversedTargetOwnerID = listedParent.ownerID; }
         }
 
         // ownerID scopes the ROOT listing only -- that is where per-user trees begin. A folder's listing is scoped by
         // the folder alone (NodeRA.children), which is what lets contributions by other owners appear.
-        const location : NodeLocation = { parentID, ownerID: actor.id };
+        const location : NodeLocation = { parentID: listedParentID, ownerID: actor.id };
         const options : ChildrenOptions = {
             pagination: { limit: query.limit, offset: query.offset },
             sort: { key: query.sortKey, direction: query.sortDirection },
@@ -185,7 +212,7 @@ export class NodeManager
 
         // The page and its total carry the filters; the owner facet does NOT -- it faces the whole folder so the filter
         // menu can always switch owners.
-        const [ page, total, owners ] = await Promise.all([
+        const [ page, total, folderOwners ] = await Promise.all([
             this.#nodes.children(location, options, filters),
             this.#nodes.countChildren(location, filters),
             this.#nodes.ownersOf(location),
@@ -216,6 +243,8 @@ export class NodeManager
             return toNodeResponse(node, role, targets.get(node.targetNodeID) ?? null);
         });
 
+        const owners = await this.#withTargetOwners(folderOwners, targets, traversedTargetOwnerID);
+
         return { nodes, total, limit: query.limit, offset: query.offset, owners };
     }
 
@@ -233,6 +262,7 @@ export class NodeManager
 
         const page = accessible.slice(query.offset, query.offset + query.limit);
         const targets = await this.#resolveTargets(actor, page);
+        const owners = await this.#ownersOfPage(page, targets);
 
         const nodes = page.map((node) =>
         {
@@ -246,8 +276,44 @@ export class NodeManager
             return toNodeResponse(node, role, targets.get(node.targetNodeID) ?? null);
         });
 
-        // A search envelope faces no single folder, so it carries no owner facet.
-        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset, owners: [] };
+        // A search envelope spans many owners rather than one folder's worth, but the caller can already see every
+        // node it returns, so the page's distinct owners disclose nothing a folder listing wouldn't.
+        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset, owners };
+    }
+
+    // The caller's Trash view: the roots of their own trashed subtrees, paged and sorted like a folder listing. Every
+    // node here is directly owned by the caller, so each carries the 'owner' role; roots-only, so a trashed folder
+    // lists once and its descendants ride along rather than appearing on their own. An owner facet would name only the
+    // caller themselves, so it carries none.
+    async listTrash(actor : SessionUser, query : ChildrenQuery) : Promise<NodeListResponse>
+    {
+        const options : ChildrenOptions = {
+            pagination: { limit: query.limit, offset: query.offset },
+            sort: { key: query.sortKey, direction: query.sortDirection },
+        };
+
+        // The trash view honours the same Type/Modified filters a folder listing does. Owner and name never apply here:
+        // the trash is already owner-scoped, and name is upload-collision detection, not a listing filter. The filters
+        // ride the ROOT predicate, so roots-only holds -- a filter narrows which trashed roots list, never reaching
+        // into the descendants riding along under a trashed folder.
+        const filters : NodeFilters = {
+            types: query.types,
+            updatedAfter: query.updatedAfter === undefined ? undefined : new Date(query.updatedAfter),
+            updatedBefore: query.updatedBefore === undefined ? undefined : new Date(query.updatedBefore),
+        };
+
+        const [ page, total ] = await Promise.all([
+            this.#nodes.trashedRoots(actor.id, options, filters),
+            this.#nodes.countTrashedRoots(actor.id, filters),
+        ]);
+
+        return {
+            nodes: page.map((node) => toNodeResponse(node, 'owner')),
+            total,
+            limit: query.limit,
+            offset: query.offset,
+            owners: [],
+        };
     }
 
     async me(actor : SessionUser) : Promise<MeResponse>
@@ -266,6 +332,7 @@ export class NodeManager
             name: actor.name,
             role: actor.role === 'admin' ? 'admin' : 'user',
             quota: { used, limit: actor.quotaLimit ?? null },
+            limits: { trashRetentionDays: this.#trashRetentionDays },
             preferences: toUserPreferences(stored),
             image: avatarImage(avatarSha256),
             createdAt: new Date(actor.createdAt).toISOString(),
@@ -482,6 +549,19 @@ export class NodeManager
     async purgeTrashedRoot(rootID : string) : Promise<void>
     {
         await this.#deleteSubtree(rootID);
+    }
+
+    // Empty the trash: permanently delete every root of the caller's own trashed subtrees, each through the exact
+    // same subtree-delete + blob-graveyard path a single hardDelete purge takes -- purgeTrashedRoot per root, not a
+    // bulk delete, so the two can never drift apart. NodeRA.trashedRootIDs is already owner-scoped, so another
+    // user's trash is untouched without a further ownership gate here. An empty trash purges nothing and reports 0.
+    async emptyTrash(actor : SessionUser) : Promise<EmptyTrashResponse>
+    {
+        const roots = await this.#nodes.trashedRootIDs(actor.id);
+
+        await Promise.all(roots.map((rootID) => this.purgeTrashedRoot(rootID)));
+
+        return { purged: roots.length };
     }
 
     // One offer per user who can currently see the file through a share -- a grant on the file itself or on any
@@ -750,6 +830,52 @@ export class NodeManager
         }
 
         return resolved;
+    }
+
+    // The distinct owners of a result page, batched through the same summary lookup the folder listing's owner facet
+    // and the share/grant surfaces use. A page never carries an ownerID summariesByIDs can't resolve -- ownership is a
+    // real FK to user.id -- so this is a straight lookup, not a filtered one. Resolved link targets on the page widen
+    // the id collection BEFORE that one lookup runs: a link attributes to its target's owner, not its own, so the
+    // owner-filter facet must offer that owner too -- still one round trip, never a query per link.
+    async #ownersOfPage(page : readonly Node[], targets : ReadonlyMap<string, Node>) : Promise<UserSummary[]>
+    {
+        const ownerIDs = new Set(page.map((node) => node.ownerID));
+        for(const target of targets.values()) { ownerIDs.add(target.ownerID); }
+
+        const ids = [ ...ownerIDs ];
+        const summaries = await this.#users.summariesByIDs(ids);
+
+        return ids
+            .map((id) => summaries.get(id))
+            .filter((summary) : summary is UserSummary => summary !== undefined);
+    }
+
+    // The folder's owner facet (whole-folder, from NodeRA.ownersOf), widened with the owners of resolved link
+    // targets on THIS PAGE -- a link attributes to its target's owner, so the filter menu must offer that owner too.
+    // Folder-wide link resolution is not attempted here (the facet stays whole-folder for direct ownership, page-
+    // scoped for link targets, matching how targets themselves are only resolved for the page). `extraOwnerID` folds
+    // in the owner of a folder link the listing was reached THROUGH, so its crumb hover has the summary in hand. One
+    // batched lookup covers every missing owner; an owner already in the folder facet costs nothing extra. Sorted by
+    // name to preserve the facet's stable-menu ordering after the merge.
+    async #withTargetOwners(
+        base : readonly UserSummary[],
+        targets : ReadonlyMap<string, Node>,
+        extraOwnerID ?: string
+    ) : Promise<UserSummary[]>
+    {
+        const knownIDs = new Set(base.map((owner) => owner.id));
+        const candidateIDs = [ ...targets.values() ].map((target) => target.ownerID);
+        if(extraOwnerID !== undefined) { candidateIDs.push(extraOwnerID); }
+        const missingIDs = [ ...new Set(candidateIDs.filter((id) => !knownIDs.has(id))) ];
+
+        if(missingIDs.length === 0) { return [ ...base ]; }
+
+        const summaries = await this.#users.summariesByIDs(missingIDs);
+        const extra = missingIDs
+            .map((id) => summaries.get(id))
+            .filter((summary) : summary is UserSummary => summary !== undefined);
+
+        return [ ...base, ...extra ].sort((left, right) => left.name.localeCompare(right.name));
     }
 
     async #respondNode(actor : SessionUser, node : Node, role : Role) : Promise<NodeResponse>

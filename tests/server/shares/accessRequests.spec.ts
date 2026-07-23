@@ -9,6 +9,8 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { ACCESS_REQUEST_MESSAGE_MAX_CHARS } from '@fileshed/core';
+
 // Support
 import {
     type BootedShareApp,
@@ -18,6 +20,7 @@ import {
     grantShare,
     makeUser,
     request,
+    setAvatarSha256,
 } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -43,9 +46,17 @@ afterEach(async () =>
     await booted.cleanup();
 });
 
-function requestAccess(cookie : string, nodeID : string, role : 'viewer' | 'editor') : Promise<Response>
+function requestAccess(
+    cookie : string,
+    nodeID : string,
+    role : 'viewer' | 'editor',
+    message ?: string
+) : Promise<Response>
 {
-    return request(booted.app, 'POST', `/api/nodes/${ nodeID }/access-requests`, cookie, { requestedRole: role });
+    const body : Json = { requestedRole: role };
+    if(message !== undefined) { body['message'] = message; }
+
+    return request(booted.app, 'POST', `/api/nodes/${ nodeID }/access-requests`, cookie, body);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -54,7 +65,7 @@ function requestAccess(cookie : string, nodeID : string, role : 'viewer' | 'edit
 
 describe('POST /api/nodes/:id/access-requests', () =>
 {
-    it('records a pending request from a user who lacks access', async () =>
+    it('records a pending request from a user who lacks access, with no message', async () =>
     {
         const res = await requestAccess(requester.cookie, folder, 'viewer');
         const body = await res.json() as Json;
@@ -64,9 +75,37 @@ describe('POST /api/nodes/:id/access-requests', () =>
             nodeID: folder,
             requesterID: requester.id,
             requestedRole: 'viewer',
+            message: null,
             status: 'pending',
             resolvedAt: null,
         });
+    });
+
+    it('carries a trimmed message through in the created request', async () =>
+    {
+        const res = await requestAccess(requester.cookie, folder, 'viewer', '  Could I get viewer access?  ');
+        const body = await res.json() as Json;
+
+        expect(res.status).toBe(201);
+        expect(body['message']).toBe('Could I get viewer access?');
+    });
+
+    it('collapses a whitespace-only message to no message', async () =>
+    {
+        const res = await requestAccess(requester.cookie, folder, 'viewer', '   ');
+        const body = await res.json() as Json;
+
+        expect(res.status).toBe(201);
+        expect(body['message']).toBeNull();
+    });
+
+    it('rejects a message over the character cap with 400', async () =>
+    {
+        const overCap = 'x'.repeat(ACCESS_REQUEST_MESSAGE_MAX_CHARS + 1);
+
+        const res = await requestAccess(requester.cookie, folder, 'viewer', overCap);
+
+        expect(res.status).toBe(400);
     });
 
     it('refuses a request from someone who already has access', async () =>
@@ -115,6 +154,55 @@ describe('GET /api/access-requests', () =>
         expect(requesterView.outgoing).toHaveLength(1);
         expect(requesterView.incoming).toHaveLength(0);
     });
+
+    it('pairs an incoming request with the requester\'s display summary', async () =>
+    {
+        const created = await (await requestAccess(requester.cookie, folder, 'viewer')).json() as Json;
+
+        const res = await request(booted.app, 'GET', '/api/access-requests', owner.cookie);
+        const body = await res.json() as { incoming : { request : Json; requester : Json }[] };
+        const entry = body.incoming.find((candidate) => candidate.request.id === created.id);
+
+        expect(entry).toBeDefined();
+        expect(entry?.requester).toEqual({
+            id: requester.id, name: requester.name, email: requester.email, image: null,
+        });
+    });
+
+    it('derives the requester\'s avatar image URL from their stored avatar hash', async () =>
+    {
+        const sha256 = 'cc'.repeat(32);
+        await setAvatarSha256(booted, requester.id, sha256);
+        await requestAccess(requester.cookie, folder, 'viewer');
+
+        const res = await request(booted.app, 'GET', '/api/access-requests', owner.cookie);
+        const body = await res.json() as { incoming : { requester : { image : string | null } }[] };
+
+        expect(body.incoming[0].requester.image).toBe(`/api/avatars/${ sha256 }`);
+    });
+
+    it('carries the requester\'s message through the owner\'s incoming and requester\'s outgoing view', async () =>
+    {
+        await requestAccess(requester.cookie, folder, 'viewer', 'Could I get viewer access please?');
+
+        const ownerRes = await request(booted.app, 'GET', '/api/access-requests', owner.cookie);
+        const ownerView = await ownerRes.json() as { incoming : { request : Json }[] };
+        const requesterRes = await request(booted.app, 'GET', '/api/access-requests', requester.cookie);
+        const requesterView = await requesterRes.json() as { outgoing : Json[] };
+
+        expect(ownerView.incoming[0]?.request['message']).toBe('Could I get viewer access please?');
+        expect(requesterView.outgoing[0]?.['message']).toBe('Could I get viewer access please?');
+    });
+
+    it('carries a null message through when the requester asked without one', async () =>
+    {
+        await requestAccess(requester.cookie, folder, 'viewer');
+
+        const res = await request(booted.app, 'GET', '/api/access-requests', owner.cookie);
+        const body = await res.json() as { incoming : { request : Json }[] };
+
+        expect(body.incoming[0]?.request['message']).toBeNull();
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -145,10 +233,10 @@ describe('resolving a request', () =>
 
         await request(booted.app, 'POST', `/api/access-requests/${ created.id }/grant`, owner.cookie);
         const grantsRes = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
-        const grants = await grantsRes.json() as { shares : { granteeUserID : string; role : string }[] };
+        const grants = await grantsRes.json() as { shares : { share : { granteeUserID : string; role : string } }[] };
         const readAfter = await request(booted.app, 'GET', `/api/nodes/${ folder }`, requester.cookie);
 
-        expect(grants.shares.find((share) => share.granteeUserID === requester.id)?.role).toBe('viewer');
+        expect(grants.shares.find((entry) => entry.share.granteeUserID === requester.id)?.share.role).toBe('viewer');
         expect((await readAfter.json() as Json).role).toBe('viewer');
     });
 

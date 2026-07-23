@@ -122,6 +122,26 @@ export async function seedLinkRow(
         .execute();
 }
 
+// Inserts a share grant directly. composeNodeApp mounts no shares surface, so a spec that needs the caller to resolve
+// another user's node stages the grant at the row level. The node, grantee, and creator rows must already exist (FKs).
+export async function seedShareRow(
+    booted : BootedApp,
+    init : { nodeID : string; granteeID : string; role : 'viewer' | 'editor'; createdBy : string }
+) : Promise<void>
+{
+    await booted.handle.db
+        .insertInto('share')
+        .values({
+            id: `share_${ init.nodeID }_${ init.granteeID }`,
+            node_id: init.nodeID,
+            grantee_user_id: init.granteeID,
+            role: init.role,
+            created_by: init.createdBy,
+            created_at: new Date().toISOString(),
+        })
+        .execute();
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Actor double
 //----------------------------------------------------------------------------------------------------------------------

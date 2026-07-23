@@ -21,14 +21,15 @@ const requestIDParam = pathParam('id', 'The access request ID.');
 export const requestAccessSpec = describeRoute({
     tags: [ ACCESS_TAG ],
     summary: 'Request access to a node',
-    description: 'A user who can see a stub but cannot resolve it asks the target\'s owner for access at some role. '
-        + 'Rejected if the caller already holds any access, or already has a pending request on this node -- these '
-        + 'requests are for outsiders, not upgrades.',
+    description: 'A user who can see a stub but cannot resolve it asks the target\'s owner for access at some role, '
+        + 'with an optional message trimmed and length-capped by the codec. Rejected if the caller already holds any '
+        + 'access, or already has a pending request on this node -- these requests are for outsiders, not upgrades.',
     parameters: [ pathParam('id', 'The node ID.') ],
     requestBody: jsonBody(createAccessRequestCodec),
     responses: {
         201: jsonResponse('The created pending request.', accessRequestResponseCodec),
-        400: errorResponse('The body is invalid, or the caller already has access or a pending request.'),
+        400: errorResponse('The body is invalid, the message exceeds the cap, or the caller already has access or a '
+            + 'pending request.'),
         401: errorResponse('No session.'),
         404: errorResponse('No node at this ID.'),
     },
@@ -38,7 +39,8 @@ export const listAccessRequestsSpec = describeRoute({
     tags: [ ACCESS_TAG ],
     summary: 'List access requests',
     description: 'Both directions in one payload: the pending requests routed to the caller as an owner (the '
-        + 'actionable view), and the caller\'s own requests with their current status.',
+        + 'actionable view, each paired with the requester\'s display summary), and the caller\'s own requests with '
+        + 'their current status.',
     responses: {
         200: jsonResponse('Incoming and outgoing requests.', accessRequestListResponseCodec),
         401: errorResponse('No session.'),

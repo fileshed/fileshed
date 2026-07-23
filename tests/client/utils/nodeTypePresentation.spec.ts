@@ -4,9 +4,15 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { LinkTarget, NodeResponse } from '@fileshed/core';
+import type { LinkTarget, NodeResponse, SharedTarget } from '@fileshed/core';
 
-import { familyPresentation, isDeadLink, nodePresentation } from '@client/utils/nodeTypePresentation.ts';
+import {
+    familyPresentation,
+    isDeadLink,
+    nodeKindLabel,
+    nodePresentation,
+    sharedTargetPresentation,
+} from '@client/utils/nodeTypePresentation.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -102,6 +108,51 @@ describe('isDeadLink', () =>
         expect(isDeadLink(link({ id: 't1', type: 'folder', name: 'shared' }))).toBe(false);
         expect(isDeadLink(file('text/plain'))).toBe(false);
         expect(isDeadLink(folder())).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('nodeKindLabel', () =>
+{
+    it('labels a folder, a file by its family, and a resolved link as "Link" rather than its target\'s family', () =>
+    {
+        expect(nodeKindLabel(folder())).toBe('Folder');
+        expect(nodeKindLabel(file('application/pdf'))).toBe('PDF');
+        expect(nodeKindLabel(link({ id: 't1', type: 'folder', name: 'shared' }))).toBe('Link');
+    });
+
+    it('labels a dead link by its own broken-glyph noun, not "Link"', () =>
+    {
+        expect(nodeKindLabel(link(null))).toBe('Broken link');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('sharedTargetPresentation', () =>
+{
+    function target(fields : Partial<SharedTarget> & Pick<SharedTarget, 'type'>) : SharedTarget
+    {
+        return { id: 's1', name: 'thing', ownerID: 'owner1', ...fields };
+    }
+
+    it('presents a shared folder as the folders family', () =>
+    {
+        expect(sharedTargetPresentation(target({ type: 'folder' })))
+            .toMatchObject({ icon: 'i-lucide-folder', color: 'text-amber-500' });
+    });
+
+    it('presents a shared file by its mime family', () =>
+    {
+        expect(sharedTargetPresentation(target({ type: 'file', mimeType: 'image/png', size: 4 })))
+            .toMatchObject({ icon: 'i-lucide-image', color: 'text-emerald-500' });
+    });
+
+    it('gives a shared file of no known family a neutral, muted glyph', () =>
+    {
+        expect(sharedTargetPresentation(target({ type: 'file', mimeType: 'application/octet-stream', size: 4 })))
+            .toMatchObject({ icon: 'i-lucide-file', color: 'text-muted' });
     });
 });
 

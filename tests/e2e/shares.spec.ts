@@ -28,6 +28,7 @@ import type {
     ShareListResponse,
     ShareResponse,
     SharedWithMeResponse,
+    UserSummary,
 } from '@fileshed/core';
 
 // Support
@@ -169,7 +170,10 @@ beforeAll(async () =>
     sharedWithMeStatus = sharedRes.status;
     sharedWithMe = await sharedRes.json() as SharedWithMeResponse;
 
-    const requestRes = await stranger.post(`/api/nodes/${ folderID }/access-requests`, { requestedRole: 'viewer' });
+    const requestRes = await stranger.post(`/api/nodes/${ folderID }/access-requests`, {
+        requestedRole: 'viewer',
+        message: '  Could I get viewer access please?  ',
+    });
     accessRequestStatus = requestRes.status;
     accessRequest = await requestRes.json() as AccessRequestResponse;
 
@@ -312,6 +316,9 @@ describe('shared with me', () =>
 
         expect(entry).toBeDefined();
         expect(entry?.target.ownerID).toBe(ownerID);
+        // The sharer's real display summary rides alongside the target, so the client renders "Shared by <name>"
+        // without a lookup per row.
+        expect(entry?.owner).toEqual({ id: ownerID, name: 'E2E User', email: 'owner@example.com', image: null });
         // Placement is independent of the grant: the grantee has not created a link to the shared folder.
         expect(entry?.placed).toBe(false);
     });
@@ -323,17 +330,26 @@ describe('shared with me', () =>
 
 describe('access request lifecycle', () =>
 {
-    it('records a third user\'s request as pending', () =>
+    it('records a third user\'s request as pending, with their message trimmed', () =>
     {
         expect(accessRequestStatus).toBe(201);
         expect(accessRequest.status).toBe('pending');
         expect(accessRequest.requesterID).toBe(strangerID);
+        expect(accessRequest.message).toBe('Could I get viewer access please?');
     });
 
-    it('surfaces the pending request to the target owner', () =>
+    it('surfaces the pending request, and its message, to the target owner paired with the requester\'s summary', () =>
     {
         expect(ownerIncomingStatus).toBe(200);
-        expect(ownerIncoming.incoming.map((request) => request.id)).toContain(accessRequest.id);
+        const entry = ownerIncoming.incoming.find((candidate) => candidate.request.id === accessRequest.id);
+
+        expect(entry).toBeDefined();
+        // The requester announced themselves to the owner by asking, so disclosing their summary here discloses no
+        // one who didn't already disclose themselves.
+        expect(entry?.requester).toEqual({
+            id: strangerID, name: 'E2E User', email: 'stranger@example.com', image: null,
+        });
+        expect(entry?.request.message).toBe('Could I get viewer access please?');
     });
 
     it('leaves the requester unable to read the folder before the grant', () =>
@@ -420,6 +436,8 @@ describe('declining an access request', () =>
         const request = await requestRes.json() as AccessRequestResponse;
         expect(requestRes.status).toBe(201);
         expect(request.status).toBe('pending');
+        // No message was sent, so the round trip carries null rather than an empty string.
+        expect(request.message).toBeNull();
 
         const declineRes = await owner.post(`/api/access-requests/${ request.id }/decline`, {});
         const declined = await declineRes.json() as AccessRequestResponse;
@@ -459,12 +477,45 @@ describe('GET /api/nodes/:id/shares', () =>
 
         const ownerView = await owner.get(`/api/nodes/${ folder }/shares`);
         const list = await ownerView.json() as ShareListResponse;
+        const granteeEntry = list.shares.find((entry) => entry.share.granteeUserID === granteeID);
 
         expect(ownerView.status).toBe(200);
-        expect(list.shares.map((entry) => entry.granteeUserID)).toContain(granteeID);
+        expect(granteeEntry).toBeDefined();
+        // The grant carries its grantee's real display summary, not just their id -- the share dialog renders this
+        // straight off the wire, no per-row lookup.
+        expect(granteeEntry?.grantee).toEqual({
+            id: granteeID, name: 'E2E User', email: 'grantee@example.com', image: null,
+        });
 
         // Listing grants is the owner's authority; a non-owner is refused.
         expect((await stranger.get(`/api/nodes/${ folder }/shares`)).status).toBe(403);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Exact-email user lookup
+//
+// The share dialog resolves a grantee by exact email before granting, so a sharer sees who they are about to grant. An
+// unknown email is a 404 -- exact match only, never an enumeration oracle.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('GET /api/users/lookup', () =>
+{
+    it('resolves an exact email to that user\'s summary', async () =>
+    {
+        const res = await owner.get('/api/users/lookup?email=grantee@example.com');
+        const summary = await res.json() as UserSummary;
+
+        expect(res.status).toBe(200);
+        expect(summary.id).toBe(granteeID);
+        expect(summary.email).toBe('grantee@example.com');
+    });
+
+    it('404s an email that matches no account', async () =>
+    {
+        const res = await owner.get('/api/users/lookup?email=ghost@example.com');
+
+        expect(res.status).toBe(404);
     });
 });
 

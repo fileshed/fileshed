@@ -9,11 +9,12 @@ import {
     grantShareRequestCodec,
     shareListResponseCodec,
     shareResponseCodec,
+    sharedWithMeQueryCodec,
     sharedWithMeResponseCodec,
 } from '@fileshed/core';
 
 // Routes
-import { emptyResponse, errorResponse, jsonBody, jsonResponse, pathParam } from './docSchema.ts';
+import { emptyResponse, errorResponse, jsonBody, jsonResponse, pathParam, queryParams } from './docSchema.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -44,10 +45,11 @@ export const grantShareSpec = describeRoute({
 export const listNodeSharesSpec = describeRoute({
     tags: [ SHARE_TAG ],
     summary: 'List a node\'s shares',
-    description: 'The owner\'s view of who a node is shared with. Owner-only.',
+    description: 'The owner\'s view of who a node is shared with, each grant paired with its grantee\'s user summary. '
+        + 'Owner-only.',
     parameters: [ nodeIDParam ],
     responses: {
-        200: jsonResponse('The node\'s grants.', shareListResponseCodec),
+        200: jsonResponse('The node\'s grants, each with its grantee\'s summary.', shareListResponseCodec),
         401: errorResponse('No session.'),
         403: errorResponse('The caller does not own this node.'),
         404: errorResponse('No node at this ID.'),
@@ -57,10 +59,13 @@ export const listNodeSharesSpec = describeRoute({
 export const sharedWithMeSpec = describeRoute({
     tags: [ SHARE_TAG ],
     summary: 'List shares granted to the caller',
-    description: 'The caller\'s active shares, each with the target\'s summary and whether the caller has placed a '
-        + 'link to it in their own tree.',
+    description: 'The caller\'s active shares, each with the target\'s summary, the target owner\'s display summary, '
+        + 'and whether the caller has placed a link to it in their own tree. Optionally filtered by the target\'s type '
+        + 'family and last-modified window, the same Type and Modified filters the drive listing takes.',
+    parameters: queryParams(sharedWithMeQueryCodec),
     responses: {
         200: jsonResponse('The shares granted to the caller.', sharedWithMeResponseCodec),
+        400: errorResponse('The query parameters are invalid.'),
         401: errorResponse('No session.'),
     },
 });

@@ -29,7 +29,9 @@ import {
     copyNodeSpec,
     createNodeSpec,
     deleteNodeSpec,
+    emptyTrashSpec,
     getNodeSpec,
+    listTrashSpec,
     patchNodeSpec,
     purgeBrokenLinksSpec,
     restoreNodeSpec,
@@ -44,6 +46,23 @@ import { readJsonBody } from './readJsonBody.ts';
 export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager) : Hono
 {
     const router = new Hono();
+
+    // The caller's Trash view: their trashed subtree roots, owner-scoped, paged and sorted like a folder listing.
+    router.get('/trash', listTrashSpec, async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+        const query = parseQuery(ctx, childrenQueryCodec);
+
+        return ctx.json(await nodes.listTrash(actor, query));
+    });
+
+    // Permanently purge every one of the caller's own trashed subtree roots in one call.
+    router.delete('/trash', emptyTrashSpec, async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+
+        return ctx.json(await nodes.emptyTrash(actor));
+    });
 
     // Root listing (parentID null). A static segment, so it resolves ahead of GET /nodes/:id for the literal path.
     router.get('/nodes/children', rootChildrenSpec, async (ctx) =>

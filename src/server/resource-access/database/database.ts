@@ -135,6 +135,7 @@ export interface ShareRequestTable
     node_id : string;
     requester_id : string;
     requested_role : 'viewer' | 'editor';
+    message : string | null;
     status : 'pending' | 'granted' | 'declined';
     created_at : Timestamp;
     resolved_at : Timestamp | null;

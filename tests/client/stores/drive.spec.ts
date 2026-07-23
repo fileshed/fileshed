@@ -7,7 +7,7 @@ import { createHmac } from 'node:crypto';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeListResponse, NodeResponse, UserSummary } from '@fileshed/core';
+import type { MeResponse, NodeListResponse, NodeResponse, UserSummary } from '@fileshed/core';
 
 // Resource Access
 import { ApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
@@ -21,6 +21,9 @@ import {
     trashNode,
 } from '@client/resource-access/nodes.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
+
+// Stores
+import { useSessionStore } from '@client/stores/session.ts';
 
 // Under test
 import { useDriveStore } from '@client/stores/drive.ts';
@@ -94,6 +97,22 @@ function fileNode(id : string, name : string = id) : NodeResponse
     };
 }
 
+function linkNode(id : string, parentID : string | null, name : string, targetNodeID : string) : NodeResponse
+{
+    return {
+        id,
+        name,
+        ownerID: 'u1',
+        parentID,
+        createdAt: ISO,
+        updatedAt: ISO,
+        role: 'owner',
+        type: 'link',
+        targetNodeID,
+        target: null,
+    };
+}
+
 function page(
     nodes : NodeResponse[],
     total : number = nodes.length,
@@ -106,6 +125,22 @@ function page(
 function ownerSummary(id : string) : UserSummary
 {
     return { id, name: id, email: `${ id }@example.com`, image: null };
+}
+
+// The signed-in caller's profile, whose id anchors the breadcrumb -- folderNode's ownerID defaults to 'u1', matching
+// this fixture's default id, so an ordinary chain reads own-tree unless a test overrides a node's owner.
+function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
+{
+    return {
+        id: 'u1',
+        email: 'u1@example.com',
+        role: 'user',
+        quota: { used: 0, limit: null },
+        limits: { trashRetentionDays: 30 },
+        preferences: {},
+        createdAt: ISO,
+        ...overrides,
+    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -225,6 +260,209 @@ describe('useDriveStore', () =>
     });
 
     //------------------------------------------------------------------------------------------------------------------
+    // Breadcrumb through a folder link -- the URL carries the LINK's id, so the crumb chain must show the link's own
+    // placement (My Files > ... > link name), and a descent into the target's physical children keeps that logical
+    // prefix in front of the child rather than collapsing to the child's real ancestry.
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('walks the link\'s own parent chain, ending on the link\'s name, when the open id is a folder link', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([]));
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
+            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+
+            return Promise.reject(new ApiError(404, 'out of reach'));
+        });
+        const store = useDriveStore();
+
+        await store.load('lnk');
+
+        expect(store.breadcrumb.map((node) => node.id)).toEqual([ 'docs', 'lnk' ]);
+        expect(store.breadcrumb.map((node) => node.name)).toEqual([ 'Documents', 'Case Test\'s Docs' ]);
+        expect(store.breadcrumb.at(-1)?.type).toBe('link');
+    });
+
+    it('seeds a descended child\'s crumb as the link chain plus the child', async () =>
+    {
+        // The link lists its target's physical children; 'sub' physically lives under 'far' (the target), whose
+        // ancestry the caller cannot reach -- so a physical walk from 'sub' would clip to just 'sub'. The descent must
+        // instead carry the on-screen chain forward.
+        getChildrenMock.mockImplementation((parentID : string | null) =>
+        {
+            if(parentID === 'lnk') { return Promise.resolve(page([ folderNode('sub', 'far', 'Reports') ])); }
+
+            return Promise.resolve(page([]));
+        });
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
+            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+
+            return Promise.reject(new ApiError(404, 'out of reach'));
+        });
+        const store = useDriveStore();
+        await store.load('lnk');
+
+        await store.load('sub');
+
+        expect(store.breadcrumb.map((node) => node.id)).toEqual([ 'docs', 'lnk', 'sub' ]);
+        expect(store.breadcrumb.map((node) => node.name)).toEqual([ 'Documents', 'Case Test\'s Docs', 'Reports' ]);
+    });
+
+    it('keeps the seeded logical chain across a same-folder reload from a filter change', async () =>
+    {
+        getChildrenMock.mockImplementation((parentID : string | null) =>
+        {
+            if(parentID === 'lnk') { return Promise.resolve(page([ folderNode('sub', 'far', 'Reports') ])); }
+
+            return Promise.resolve(page([]));
+        });
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
+            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+
+            return Promise.reject(new ApiError(404, 'out of reach'));
+        });
+        const store = useDriveStore();
+        await store.load('lnk');
+        await store.load('sub');
+
+        await store.setTypeFamilies([ 'folders' ]);
+
+        expect(store.breadcrumb.map((node) => node.id)).toEqual([ 'docs', 'lnk', 'sub' ]);
+    });
+
+    // A cold deep-link straight to a physical child under a link target has no on-screen chain to carry, so it falls
+    // back to the physical parent walk and clips at the first unreachable ancestor -- the accepted limitation.
+    it('falls back to the clipped physical walk on a cold load of a deep physical child', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([]));
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'sub') { return Promise.resolve(folderNode('sub', 'far', 'Reports')); }
+
+            return Promise.reject(new ApiError(404, 'out of reach'));
+        });
+        const store = useDriveStore();
+
+        await store.load('sub');
+
+        expect(store.breadcrumb.map((node) => node.id)).toEqual([ 'sub' ]);
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Breadcrumb anchor -- whether the chain roots in the caller's own tree or a foreign one reached only by grant.
+    // The page steers a foreign chain's crumb root to Shared with me instead of My Files.
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('anchors the breadcrumb own-tree when the physical walk reaches a null-parent node the caller owns', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([]));
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'c') { return Promise.resolve(folderNode('c', 'b', 'Reports')); }
+            if(id === 'b') { return Promise.resolve(folderNode('b', null, 'Work')); }
+
+            return Promise.reject(new ApiError(404, 'not found'));
+        });
+        useSessionStore().me = meFixture();
+        const store = useDriveStore();
+
+        await store.load('c');
+
+        expect(store.breadcrumbForeign).toBe(false);
+    });
+
+    it('flags the breadcrumb foreign when the physical walk tops out at an unresolvable ancestor', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([ fileNode('f1') ]));
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'x') { return Promise.resolve(folderNode('x', 'p', 'Shared')); }
+
+            return Promise.reject(new ApiError(404, 'no access'));
+        });
+        useSessionStore().me = meFixture();
+        const store = useDriveStore();
+
+        await store.load('x');
+
+        expect(store.breadcrumbForeign).toBe(true);
+    });
+
+    it('flags the breadcrumb foreign when the walk reaches a null-parent node owned by someone else', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([]));
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'g') { return Promise.resolve({ ...folderNode('g', 'r', 'Reports'), ownerID: 'bob' }); }
+            if(id === 'r') { return Promise.resolve({ ...folderNode('r', null, 'Shared Root'), ownerID: 'bob' }); }
+
+            return Promise.reject(new ApiError(404, 'not found'));
+        });
+        useSessionStore().me = meFixture();
+        const store = useDriveStore();
+
+        await store.load('g');
+
+        expect(store.breadcrumbForeign).toBe(true);
+    });
+
+    it('keeps an own-tree chain anchored across a seeded descent, regardless of the child\'s owner', async () =>
+    {
+        getChildrenMock.mockImplementation((parentID : string | null) =>
+        {
+            if(parentID === 'lnk')
+            {
+                return Promise.resolve(page([ { ...folderNode('sub', 'far', 'Reports'), ownerID: 'far-owner' } ]));
+            }
+
+            return Promise.resolve(page([]));
+        });
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
+            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+
+            return Promise.reject(new ApiError(404, 'out of reach'));
+        });
+        useSessionStore().me = meFixture();
+        const store = useDriveStore();
+        await store.load('lnk');
+
+        await store.load('sub');
+
+        expect(store.breadcrumbForeign).toBe(false);
+    });
+
+    it('keeps a foreign chain foreign across a seeded descent', async () =>
+    {
+        getChildrenMock.mockImplementation((parentID : string | null) =>
+        {
+            if(parentID === 'g') { return Promise.resolve(page([ folderNode('h', 'g', 'Deeper') ])); }
+
+            return Promise.resolve(page([ fileNode('f1') ]));
+        });
+        getNodeMock.mockImplementation((id : string) =>
+        {
+            if(id === 'g') { return Promise.resolve({ ...folderNode('g', 'r', 'Reports'), ownerID: 'bob' }); }
+
+            return Promise.reject(new ApiError(404, 'no access'));
+        });
+        useSessionStore().me = meFixture();
+        const store = useDriveStore();
+        await store.load('g');
+        expect(store.breadcrumbForeign).toBe(true);
+
+        await store.load('h');
+
+        expect(store.breadcrumbForeign).toBe(true);
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
     // Sort
     //------------------------------------------------------------------------------------------------------------------
 
@@ -260,6 +498,23 @@ describe('useDriveStore', () =>
         await store.load(null);
 
         expect(store.owners.map((owner) => owner.id)).toEqual([ 'u1', 'u2' ]);
+    });
+
+    // knownOwners unions every owner any listing has disclosed and holds onto them: a link crumb keeps needing its
+    // target owner's summary after the user descends past the link into a folder whose own facet never names them.
+    it('accumulates owner summaries across listings and retains one a later facet drops', async () =>
+    {
+        getChildrenMock
+            .mockResolvedValueOnce(page([ fileNode('f1') ], 1, [ ownerSummary('bob') ]))
+            .mockResolvedValueOnce(page([ fileNode('f2') ], 1, []));
+        getNodeMock.mockRejectedValue(new ApiError(404, 'no crumb'));
+        const store = useDriveStore();
+        await store.load('a');
+
+        await store.load('b');
+
+        expect(store.owners.map((owner) => owner.id)).toEqual([]);
+        expect(store.knownOwners.map((owner) => owner.id)).toContain('bob');
     });
 
     it('reloads with the selected type families and marks filters active', async () =>

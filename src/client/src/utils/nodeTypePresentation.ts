@@ -8,7 +8,7 @@
 // dead link the dimmed broken glyph.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type NodeResponse, type NodeTypeFamily, familyOfMimeType } from '@fileshed/core';
+import { type NodeResponse, type NodeTypeFamily, type SharedTarget, familyOfMimeType } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -76,6 +76,24 @@ export function nodePresentation(node : NodeResponse) : NodeTypePresentation
                 ? FAMILY_PRESENTATION.folders
                 : fileMimePresentation(node.target.mimeType ?? '');
     }
+}
+
+// A Shared-with-me target reads the same as the node it is: a folder as the folders family, a file by its mime. A share
+// only ever targets a file or folder, so there is no link case to render.
+export function sharedTargetPresentation(target : SharedTarget) : NodeTypePresentation
+{
+    return target.type === 'folder' ? FAMILY_PRESENTATION.folders : fileMimePresentation(target.mimeType ?? '');
+}
+
+// The Type column's label: a dead link reads its own broken-glyph noun, a resolved link reads "Link" -- what the Links
+// filter matches -- never its target's family, which would make the column and the filter disagree about the same
+// node. Every other node reads its own family noun.
+export function nodeKindLabel(node : NodeResponse) : string
+{
+    if(isDeadLink(node)) { return nodePresentation(node).noun; }
+    if(node.type === 'link') { return familyPresentation('links').noun; }
+
+    return nodePresentation(node).noun;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

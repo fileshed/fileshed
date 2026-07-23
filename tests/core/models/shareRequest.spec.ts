@@ -13,6 +13,7 @@ const baseFields = {
     nodeID: 'node_1',
     requesterID: 'user_2',
     requestedRole: 'viewer',
+    message: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
 };
 
@@ -23,6 +24,16 @@ describe('shareRequestCodec', () =>
     it('parses a pending request with a null resolvedAt', () =>
     {
         const pending = { ...baseFields, status: 'pending', resolvedAt: null };
+
+        expect(shareRequestCodec.safeParse(pending).success).toBe(true);
+    });
+
+    // The requester's optional note rides alongside the request; a non-null message is just as valid as no message.
+    it('parses a pending request carrying a requester message', () =>
+    {
+        const pending = {
+            ...baseFields, message: 'Could I get viewer access please?', status: 'pending', resolvedAt: null,
+        };
 
         expect(shareRequestCodec.safeParse(pending).success).toBe(true);
     });

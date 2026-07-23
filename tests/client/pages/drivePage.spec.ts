@@ -7,14 +7,21 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
+import type { ContextMenuItem } from '@nuxt/ui';
+
 import type { LinkTarget, MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
+import { useDriveStore } from '@client/stores/drive.ts';
+
+// Components
+import DriveHeader from '@client/components/drive/driveHeader.vue';
+import type { DriveCrumb } from '@client/components/drive/linkCrumbCard/types.ts';
 
 // Resource Access
 import { takeLegacyViewMode } from '@client/resource-access/legacyViewMode.ts';
-import { getChildren } from '@client/resource-access/nodes.ts';
+import { copyNode, getChildren } from '@client/resource-access/nodes.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 
 // Under test
@@ -37,6 +44,7 @@ vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const getChildrenMock = getChildren as unknown as Mock;
+const copyNodeMock = copyNode as unknown as Mock;
 const takeLegacyViewModeMock = takeLegacyViewMode as unknown as Mock;
 const updatePreferencesMock = updatePreferences as unknown as Mock;
 
@@ -44,6 +52,7 @@ const updatePreferencesMock = updatePreferences as unknown as Mock;
 // wiring (the same path the context menu funnels through) is observable.
 const renameOpen = vi.fn();
 const moveOpen = vi.fn();
+const shareOpen = vi.fn();
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -51,19 +60,35 @@ const ISO = '2026-07-01T00:00:00.000Z';
 
 const BASE = { ownerID: 'u1', parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
 
-function fileNode(id : string) : NodeResponse
+type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role'>>;
+
+function fileNode(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'file', blobID: 'b1', size: 100, mimeType: 'text/plain', trashedAt: null };
+    return {
+        ...BASE,
+        id,
+        name: id,
+        type: 'file',
+        blobID: 'b1',
+        size: 100,
+        mimeType: 'text/plain',
+        trashedAt: null,
+        ...overrides,
+    };
 }
 
-function folderNode(id : string) : NodeResponse
+function folderNode(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'folder', trashedAt: null };
+    return { ...BASE, id, name: id, type: 'folder', trashedAt: null, ...overrides };
 }
 
-function linkNode(id : string, target : LinkTarget = { id: 't1', type: 'file', name: 'x' }) : NodeResponse
+function linkNode(
+    id : string,
+    target : LinkTarget | null = { id: 't1', type: 'file', name: 'x', ownerID: 'owner1' },
+    overrides : Overrides = {}
+) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'link', targetNodeID: 't1', target };
+    return { ...BASE, id, name: id, type: 'link', targetNodeID: 't1', target, ...overrides };
 }
 
 function page(nodes : NodeResponse[]) : NodeListResponse
@@ -71,13 +96,16 @@ function page(nodes : NodeResponse[]) : NodeListResponse
     return { nodes, total: nodes.length, limit: 50, offset: 0, owners: [] };
 }
 
+// 'u1' matches BASE.ownerID above -- the default signed-in caller is the owner of every fixture node, which is the
+// realistic case for My Files. Foreign-node tests override ownerID on the node fixture instead.
 function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
 {
     return {
-        id: 'user_1',
+        id: 'u1',
         email: 'member@example.com',
         role: 'user',
         quota: { used: 0, limit: null },
+        limits: { trashRetentionDays: 30 },
         preferences: {},
         createdAt: ISO,
         ...overrides,
@@ -114,16 +142,27 @@ const STUBS = {
             return () => null;
         },
     },
+    ShareDialog: {
+        name: 'ShareDialog',
+        setup(_props : unknown, { expose } : { expose : (api : unknown) => void }) : () => null
+        {
+            expose({ open: shareOpen });
+
+            return () => null;
+        },
+    },
     NewFolder: true,
     NewDocument: true,
     FilterBar: { name: 'FilterBar', template: '<div class="filter-bar" />' },
     NodeList: true,
-    NodeGrid: { name: 'NodeGrid', template: '<div class="node-grid" />' },
+    // buildMenu is declared as a real prop (not just a passthrough attr) so the kebab specs can pull the live
+    // function off the stub and invoke it directly, exactly as NodeGrid would when a row's kebab opens.
+    NodeGrid: { name: 'NodeGrid', props: [ 'buildMenu' ], template: '<div class="node-grid" />' },
 };
 
-// A signed-out session (the default) leaves the legacy view-mode migration a no-op regardless of what the mocked
-// localStorage read returns -- the migration tests seed a signed-in `me` explicitly.
-async function mountDrive(nodes : NodeResponse[], me : MeResponse | null = null) : Promise<VueWrapper>
+// The default signed-in caller owns every fixture node (BASE.ownerID/meFixture both default to 'u1') -- the ordinary
+// My Files case. Foreign-node tests pass an ownerID override on the node fixture instead of changing `me`.
+async function mountDrive(nodes : NodeResponse[], me : MeResponse | null = meFixture()) : Promise<VueWrapper>
 {
     getChildrenMock.mockResolvedValue(page(nodes));
 
@@ -152,6 +191,20 @@ function select(wrapper : VueWrapper, node : NodeResponse, modifiers = PLAIN_CLI
     wrapper.findComponent({ name: 'NodeGrid' }).vm.$emit('select', node, modifiers);
 
     return flushPromises();
+}
+
+// The live buildMenu function NodeGrid receives, pulled straight off the stub so a kebab spec can call it exactly as
+// a row's own kebab would when it opens.
+function buildMenuOf(wrapper : VueWrapper) : (node : NodeResponse) => ContextMenuItem[][]
+{
+    const grid = wrapper.findComponent({ name: 'NodeGrid' });
+
+    return grid.props('buildMenu') as (node : NodeResponse) => ContextMenuItem[][];
+}
+
+function menuLabels(groups : ContextMenuItem[][]) : string[]
+{
+    return groups.flat().map((item) => item.label ?? '');
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -253,6 +306,170 @@ describe('DrivePage — selection bar', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+describe('DrivePage — selection bar, mixed-ownership selections', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    it('offers Move and Trash when every selected node is directly owned by the caller', async () =>
+    {
+        const wrapper = await mountDrive([ fileNode('f1'), fileNode('f2') ]);
+
+        await select(wrapper, fileNode('f1'));
+        await select(wrapper, fileNode('f2'), TOGGLE_CLICK);
+
+        expect(wrapper.find('[aria-label="Move"]').exists()).toBe(true);
+        expect(wrapper.find('[aria-label="Trash"]').exists()).toBe(true);
+    });
+
+    it('drops Move and Trash the instant one selected node is foreign, even alongside owned nodes', async () =>
+    {
+        const owned = fileNode('f1');
+        const foreign = fileNode('f2', { ownerID: 'someone-else', role: 'editor' });
+        const wrapper = await mountDrive([ owned, foreign ]);
+
+        await select(wrapper, owned);
+        await select(wrapper, foreign, TOGGLE_CLICK);
+
+        expect(wrapper.text()).toContain('2 selected');
+        expect(wrapper.find('[aria-label="Move"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Trash"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Remove"]').exists()).toBe(false);
+    });
+
+    it('drops Move and Trash for a wholly foreign selection, but leaves Copy available for files', async () =>
+    {
+        const foreignA = fileNode('f1', { ownerID: 'someone-else', role: 'viewer' });
+        const foreignB = fileNode('f2', { ownerID: 'someone-else', role: 'viewer' });
+        const wrapper = await mountDrive([ foreignA, foreignB ]);
+
+        await select(wrapper, foreignA);
+        await select(wrapper, foreignB, TOGGLE_CLICK);
+
+        expect(wrapper.find('[aria-label="Move"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Trash"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Copy"]').attributes('disabled')).toBeUndefined();
+    });
+
+    it('drops Move and Trash for a foreign node even when its resolved role reads owner by inheritance', async () =>
+    {
+        // The shape a folder-link traversal or a shared folder's own contributions produce: the resolver's `role`
+        // says 'owner', but ownerID still names the real owner -- the trap this whole feature exists to close.
+        const contribution = fileNode('f1', { ownerID: 'contributor', role: 'owner' });
+        const wrapper = await mountDrive([ contribution ]);
+
+        await select(wrapper, contribution);
+
+        expect(wrapper.find('[aria-label="Move"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Trash"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Rename"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Share"]').exists()).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// The kebab (per-node context menu) is gated identically to the selection bar, node by node -- direct ownership
+// (node.ownerID), never the resolved `role`. An owner sees the full set; a non-owner never gets an action the server
+// would refuse, and a non-owned file still gets Save a copy rather than a bare Open.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — kebab menu, ownership gating', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    it('offers the full owner set for an owned file: Open, Share, Rename, Move, Make a copy, Trash', async () =>
+    {
+        const node = fileNode('f1');
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
+            [ 'Open', 'Share', 'Rename', 'Move', 'Make a copy', 'Trash' ]
+        );
+    });
+
+    it('offers the owner set for an owned folder, with no copy (a folder has no bytes)', async () =>
+    {
+        const node = folderNode('d1');
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Share', 'Rename', 'Move', 'Trash' ]);
+    });
+
+    it('offers Open, Rename, Move, Remove for an owned resolved link -- never Share, a link has no ACL', async () =>
+    {
+        const node = linkNode('l1');
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Rename', 'Move', 'Remove' ]);
+    });
+
+    it('offers only Remove for an owned dead link', async () =>
+    {
+        const node = linkNode('l1', null);
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Remove' ]);
+    });
+
+    it('offers only Open and Save a copy for a file the caller does not own', async () =>
+    {
+        const node = fileNode('f1', { ownerID: 'someone-else', role: 'editor' });
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Save a copy' ]);
+    });
+
+    it('offers only Open for a folder the caller does not own', async () =>
+    {
+        const node = folderNode('d1', { ownerID: 'someone-else', role: 'viewer' });
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open' ]);
+    });
+
+    it('offers only Open for a resolved link the caller does not own', async () =>
+    {
+        const target : LinkTarget = { id: 't2', type: 'file', name: 'y', ownerID: 'owner2' };
+        const node = linkNode('l1', target, { ownerID: 'someone-else', role: 'viewer' });
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open' ]);
+    });
+
+    it('offers nothing for a dead link the caller does not own -- no target to open, nothing to administer', async () =>
+    {
+        const node = linkNode('l1', null, { ownerID: 'someone-else', role: 'viewer' });
+        const wrapper = await mountDrive([ node ]);
+
+        expect(buildMenuOf(wrapper)(node)).toEqual([]);
+    });
+
+    it('reads as a non-owner\'s menu for a contribution whose role is owner but ownerID names someone else', async () =>
+    {
+        // The exact trap a folder owner's own contributions set: role is 'owner' by inheritance, but ownerID is the
+        // contributor's. The menu must read as a non-owner's, not an owner's.
+        const node = fileNode('f1', { ownerID: 'contributor', role: 'owner' });
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Save a copy' ]);
+    });
+
+    it('wires a non-owner\'s Save a copy to the same copy mutation as the owner\'s Make a copy', async () =>
+    {
+        copyNodeMock.mockResolvedValue(undefined);
+        const node = fileNode('f1', { ownerID: 'someone-else', role: 'viewer' });
+        const wrapper = await mountDrive([ node ]);
+
+        const groups = buildMenuOf(wrapper)(node);
+        const saveACopy = groups.flat().find((item) => item.label === 'Save a copy');
+        saveACopy?.onSelect?.();
+        await flushPromises();
+
+        expect(copyNodeMock).toHaveBeenCalledWith('f1', expect.objectContaining({ parentID: null }));
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('DrivePage — rename and move wiring', () =>
 {
     beforeEach(() => vi.clearAllMocks());
@@ -279,6 +496,55 @@ describe('DrivePage — rename and move wiring', () =>
         await wrapper.find('[aria-label="Move"]').trigger('click');
 
         expect(moveOpen).toHaveBeenCalledWith([ f1, f2 ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — share wiring', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    it('opens the share dialog for a single selected file', async () =>
+    {
+        const node = fileNode('f1');
+        const wrapper = await mountDrive([ node ]);
+        await select(wrapper, node);
+
+        await wrapper.find('[aria-label="Share"]').trigger('click');
+
+        expect(shareOpen).toHaveBeenCalledWith(node);
+    });
+
+    it('offers Share for a single selected folder', async () =>
+    {
+        const node = folderNode('d1');
+        const wrapper = await mountDrive([ node ]);
+        await select(wrapper, node);
+
+        await wrapper.find('[aria-label="Share"]').trigger('click');
+
+        expect(shareOpen).toHaveBeenCalledWith(node);
+    });
+
+    it('does not offer Share for a link (a link carries no ACL)', async () =>
+    {
+        const node = linkNode('l1');
+        const wrapper = await mountDrive([ node ]);
+        await select(wrapper, node);
+
+        expect(wrapper.find('[aria-label="Share"]').exists()).toBe(false);
+    });
+
+    it('does not offer Share for a multi-node selection', async () =>
+    {
+        const f1 = fileNode('f1');
+        const f2 = fileNode('f2');
+        const wrapper = await mountDrive([ f1, f2 ]);
+        await select(wrapper, f1);
+        await select(wrapper, f2, TOGGLE_CLICK);
+
+        expect(wrapper.find('[aria-label="Share"]').exists()).toBe(false);
     });
 });
 
@@ -320,6 +586,87 @@ describe('DrivePage — legacy view-mode migration', () =>
 
         expect(session.viewMode).toBe('grid');
         expect(updatePreferencesMock).not.toHaveBeenCalled();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — breadcrumb link marker', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    // Only a link crumb carries the marker payload (slot + link node); an ordinary folder crumb stays a plain
+    // navigable label. The link crumb's `to` navigation belongs to the marked card, so it carries no bare `to`.
+    it('marks a link breadcrumb crumb with link details and leaves folder crumbs plain', async () =>
+    {
+        const wrapper = await mountDrive([]);
+        const store = useDriveStore();
+
+        store.breadcrumb = [
+            folderNode('docs'),
+            linkNode('lnk', { id: 't1', type: 'folder', name: 'Shared Docs', ownerID: 'bob' }),
+        ];
+        await flushPromises();
+
+        const crumbs = wrapper.findComponent(DriveHeader).props('crumbs') as DriveCrumb[];
+        const linkCrumb = crumbs.find((crumb) => crumb.link !== undefined);
+        const folderCrumb = crumbs.find((crumb) => crumb.label === 'docs');
+
+        expect(linkCrumb?.slot).toBe('link');
+        expect(linkCrumb?.link?.node.id).toBe('lnk');
+        expect(folderCrumb?.link).toBeUndefined();
+        expect(folderCrumb?.to).toBe('/folder/docs');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// A foreign chain -- one that does not root in the caller's own tree -- steers the crumb root to Shared with me
+// instead of My Files. The foreign ancestor names in between still render as ordinary crumbs; only the root changes.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — breadcrumb root anchor', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    it('roots an own-tree chain at My Files, with the drive icon and the root path', async () =>
+    {
+        const wrapper = await mountDrive([]);
+        const store = useDriveStore();
+
+        store.breadcrumb = [ folderNode('docs') ];
+        await flushPromises();
+
+        const crumbs = wrapper.findComponent(DriveHeader).props('crumbs') as DriveCrumb[];
+
+        expect(crumbs[0]).toMatchObject({ label: 'My Files', icon: 'i-lucide-hard-drive', to: '/' });
+    });
+
+    it('roots a foreign chain at Shared with me, with the users icon and the shared path', async () =>
+    {
+        const wrapper = await mountDrive([]);
+        const store = useDriveStore();
+
+        // A folder link's target subtree, walked cold: the root ancestor the grant let the caller resolve belongs to
+        // someone else -- the sharer, not the caller.
+        store.breadcrumb = [ folderNode('shared-root', { ownerID: 'bob' }) ];
+        await flushPromises();
+
+        const crumbs = wrapper.findComponent(DriveHeader).props('crumbs') as DriveCrumb[];
+
+        expect(crumbs[0]).toMatchObject({ label: 'Shared with me', icon: 'i-lucide-users', to: '/shared' });
+    });
+
+    it('still renders the foreign ancestor names as ordinary crumbs beneath the Shared with me root', async () =>
+    {
+        const wrapper = await mountDrive([]);
+        const store = useDriveStore();
+
+        store.breadcrumb = [ folderNode('shared-root', { ownerID: 'bob' }), folderNode('deeper', { ownerID: 'bob' }) ];
+        await flushPromises();
+
+        const crumbs = wrapper.findComponent(DriveHeader).props('crumbs') as DriveCrumb[];
+
+        expect(crumbs.map((crumb) => crumb.label)).toEqual([ 'Shared with me', 'shared-root', 'deeper' ]);
     });
 });
 

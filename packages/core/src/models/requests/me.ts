@@ -22,6 +22,12 @@ export interface MeResponse
         used : number;
         limit : number | null;
     };
+
+    // Effective deployment limits the client must not guess at: the configured values, not the shipped defaults,
+    // so copy like the trash-retention line never lies about an overridden deployment.
+    limits : {
+        trashRetentionDays : number;
+    };
     preferences : UserPreferences;
 
     // The caller's avatar as a URL to fetch its bytes, or null when the account has none. Derived from the stored

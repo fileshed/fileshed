@@ -39,6 +39,11 @@ export const meResponseCodec = z.strictObject({
             .nonnegative()
             .nullable(),
     }),
+    limits: z.strictObject({
+        trashRetentionDays: z.number()
+            .int()
+            .nonnegative(),
+    }),
     preferences: userPreferencesCodec.default({}),
     image: z.string()
         .nullable()

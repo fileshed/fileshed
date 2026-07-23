@@ -28,6 +28,7 @@ import {
     ForbiddenError,
     type GrantShareRequest,
     type Node,
+    type NodeTypeFamily,
     NotFoundError,
     type PendingShareRequest,
     RegulationError,
@@ -36,10 +37,15 @@ import {
     type ShareRequest,
     type ShareResponse,
     type ShareRole,
+    type SharedWithMeQuery,
     type SharedWithMeResponse,
+    familyOfMimeType,
     isDirectOwner,
+    toAccessRequestListEntry,
     toAccessRequestResponse,
+    toShareListEntry,
     toShareResponse,
+    toSharedWithMeEntry,
 } from '@fileshed/core';
 
 // Engines
@@ -49,11 +55,45 @@ import { type RegulationResult, regulation } from '../engines/regulation/index.t
 import type { SessionUser } from '../resource-access/auth.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { NodeRA } from '../resource-access/nodes/node.ts';
-import { ShareRA } from '../resource-access/shares/index.ts';
+import { ShareRA, type SharedTargetSummary, type SharedWithMeRow } from '../resource-access/shares/index.ts';
+import type { UserRA } from '../resource-access/users/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export type ResolveDecision = 'grant' | 'decline';
+
+//----------------------------------------------------------------------------------------------------------------------
+// Shared-with-me filtering -- the same Type and Modified semantics the drive's SQL listing applies, expressed as a pure
+// predicate over an already-fetched row (the listing is unpaginated, so there is nothing to push into the query). Type
+// membership reads through core's familyOfMimeType, the one classifier the drive's own filter is built from, so a
+// target lands in the same family on both surfaces. The date window is half-open: updatedAfter inclusive, updatedBefore
+// exclusive.
+//----------------------------------------------------------------------------------------------------------------------
+
+function matchesTypeFamilies(target : SharedTargetSummary, families : readonly NodeTypeFamily[]) : boolean
+{
+    if(families.length === 0) { return true; }
+    if(target.type === 'folder') { return families.includes('folders'); }
+    if(target.type === 'link') { return families.includes('links'); }
+
+    const family = target.mimeType === undefined ? null : familyOfMimeType(target.mimeType);
+    return family !== null && families.includes(family);
+}
+
+function matchesSharedFilters(row : SharedWithMeRow, query : SharedWithMeQuery) : boolean
+{
+    if(!matchesTypeFamilies(row.target, query.types)) { return false; }
+    if(query.updatedAfter !== undefined && row.updatedAt.getTime() < new Date(query.updatedAfter).getTime())
+    {
+        return false;
+    }
+    if(query.updatedBefore !== undefined && row.updatedAt.getTime() >= new Date(query.updatedBefore).getTime())
+    {
+        return false;
+    }
+
+    return true;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -62,12 +102,14 @@ export class ShareManager
     readonly #handle : DatabaseHandle;
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
+    readonly #users : UserRA;
 
-    constructor(handle : DatabaseHandle, nodes : NodeRA, shares : ShareRA)
+    constructor(handle : DatabaseHandle, nodes : NodeRA, shares : ShareRA, users : UserRA)
     {
         this.#handle = handle;
         this.#nodes = nodes;
         this.#shares = shares;
+        this.#users = users;
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -116,7 +158,8 @@ export class ShareManager
         await this.#shares.deleteShare(shareID);
     }
 
-    // GET /api/nodes/:id/shares. The owner's view of who a node is shared with.
+    // GET /api/nodes/:id/shares. The owner's view of who a node is shared with, each grant paired with its grantee's
+    // summary -- one batched lookup (UserRA.summariesByIDs), never a query per grantee.
     async listForNode(actor : SessionUser, nodeID : string) : Promise<ShareListResponse>
     {
         const node = await this.#nodes.get(nodeID);
@@ -127,21 +170,48 @@ export class ShareManager
         }
 
         const shares = await this.#shares.listByNode(nodeID);
+        const grantees = await this.#users.summariesByIDs(shares.map((share) => share.granteeUserID));
 
-        return { shares: shares.map(toShareResponse) };
+        return {
+            shares: shares.map((share) =>
+            {
+                const grantee = grantees.get(share.granteeUserID);
+
+                // Unreachable by construction: grantee_user_id carries an ON DELETE CASCADE FK to user.id, so a share
+                // row never outlives its grantee's account.
+                if(grantee === undefined)
+                {
+                    throw new Error(`share ${ share.id } has no resolvable grantee summary`);
+                }
+
+                return toShareListEntry(share, grantee);
+            }),
+        };
     }
 
-    // GET /api/shared-with-me. The caller's active shares with each target's summary and whether they have placed a
-    // link to it.
-    async sharedWithMe(actor : SessionUser) : Promise<SharedWithMeResponse>
+    // GET /api/shared-with-me. The caller's active shares with each target's summary, its owner's summary (so the
+    // client can render "Shared by <name>"), and whether they have placed a link to it. The optional Type/Modified
+    // filters narrow the set against each target's own type and modified time before the owner summaries are resolved,
+    // so only the survivors' owners are looked up in the one batched lookup.
+    async sharedWithMe(actor : SessionUser, query : SharedWithMeQuery) : Promise<SharedWithMeResponse>
     {
-        const rows = await this.#shares.sharedWithMe(actor.id);
+        const rows = (await this.#shares.sharedWithMe(actor.id))
+            .filter((row) => matchesSharedFilters(row, query));
+        const owners = await this.#users.summariesByIDs(rows.map((row) => row.target.ownerID));
 
-        const entries = rows.map((row) => ({
-            share: toShareResponse(row.share),
-            target: row.target,
-            placed: row.placed,
-        }));
+        const entries = rows.map((row) =>
+        {
+            const owner = owners.get(row.target.ownerID);
+
+            // Unreachable by construction: node.owner_id carries an ON DELETE CASCADE FK to user.id, so a live
+            // target never outlives its owner's account.
+            if(owner === undefined)
+            {
+                throw new Error(`shared target ${ row.target.id } has no resolvable owner summary`);
+            }
+
+            return toSharedWithMeEntry(row.share, row.target, owner, row.placed);
+        });
 
         return { entries };
     }
@@ -169,6 +239,7 @@ export class ShareManager
             nodeID,
             requesterID: actor.id,
             requestedRole: request.requestedRole,
+            message: request.message ?? null,
             status: 'pending',
             resolvedAt: null,
             createdAt: new Date(),
@@ -179,7 +250,8 @@ export class ShareManager
     }
 
     // GET /api/access-requests. Both directions in one payload: the pending requests routed to the caller as an
-    // owner (the actionable "Sharing requests" view), and the caller's own requests with their current status.
+    // owner (the actionable "Sharing requests" view, each paired with its requester's summary), and the caller's own
+    // requests with their current status.
     async listAccessRequests(actor : SessionUser) : Promise<AccessRequestListResponse>
     {
         const [ incoming, outgoing ] = await Promise.all([
@@ -187,8 +259,22 @@ export class ShareManager
             this.#shares.listByRequester(actor.id),
         ]);
 
+        const requesters = await this.#users.summariesByIDs(incoming.map((request) => request.requesterID));
+
         return {
-            incoming: incoming.map(toAccessRequestResponse),
+            incoming: incoming.map((request) =>
+            {
+                const requester = requesters.get(request.requesterID);
+
+                // Unreachable by construction: requester_id carries an ON DELETE CASCADE FK to user.id, so a request
+                // row never outlives the account that filed it.
+                if(requester === undefined)
+                {
+                    throw new Error(`access request ${ request.id } has no resolvable requester summary`);
+                }
+
+                return toAccessRequestListEntry(request, requester);
+            }),
             outgoing: outgoing.map(toAccessRequestResponse),
         };
     }
@@ -229,6 +315,7 @@ export class ShareManager
                 nodeID: request.nodeID,
                 requesterID: request.requesterID,
                 requestedRole: request.requestedRole,
+                message: request.message,
                 createdAt: request.createdAt,
                 status: decision === 'grant' ? 'granted' : 'declined',
                 resolvedAt: now,

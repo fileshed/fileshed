@@ -23,6 +23,9 @@ import {
     type UserSummary,
 } from '@fileshed/core';
 
+// Stores
+import { useSessionStore } from './session.ts';
+
 // Resource Access
 import {
     copyNode,
@@ -64,6 +67,8 @@ async function emptyBlobProof(nonce : string) : Promise<string>
 
 export const useDriveStore = defineStore('drive', () =>
 {
+    const session = useSessionStore();
+
     const folderID = ref<string | null>(null);
     const children = ref<NodeResponse[]>([]);
     const total = ref(0);
@@ -73,6 +78,19 @@ export const useDriveStore = defineStore('drive', () =>
     const loadingMore = ref(false);
     const error = ref<Error | null>(null);
     const breadcrumb = ref<NodeResponse[]>([]);
+
+    // The chain is foreign when it does not root in the caller's own tree: either the physical walk topped out
+    // before reaching a null parent (the topmost entry still has one, just unresolved), or it reached a null parent
+    // owned by someone else. An empty chain is the files root itself, always own-tree. A logical-prefix-seeded chain
+    // (a descent through a link) never recomputes this -- it inherits the anchor for free, since seeding only
+    // appends to breadcrumb and entry 0 never changes.
+    const breadcrumbForeign = computed(() =>
+    {
+        const root = breadcrumb.value[0];
+        if(root === undefined) { return false; }
+
+        return root.parentID !== null || root.ownerID !== session.me?.id;
+    });
 
     // The active filters (server-applied) and the owner facet the current folder faces. The facet is the whole folder's
     // distinct owners, so the owner menu is complete even while an owner filter narrows the listing.
@@ -84,6 +102,12 @@ export const useDriveStore = defineStore('drive', () =>
     // Folder nodes keyed by id, reused across navigation so a breadcrumb walk re-fetches only the levels it has never
     // seen. Seeded from every listing, so descending into a folder already carries its own node.
     const nodeCache = new Map<string, NodeResponse>();
+
+    // Every owner summary any listing has disclosed, keyed by user id. The current-folder facet is scoped to the open
+    // folder, but a link breadcrumb keeps standing after the user descends past it, and its hover card still needs the
+    // target owner's summary -- carried here from the listing that traversed the link, so it survives the descent.
+    const ownerDirectory = ref(new Map<string, UserSummary>());
+    const knownOwners = computed(() => [ ...ownerDirectory.value.values() ]);
 
     const hasMore = computed(() => children.value.length < total.value);
     const isEmpty = computed(() => !loading.value && error.value === null && children.value.length === 0);
@@ -127,6 +151,16 @@ export const useDriveStore = defineStore('drive', () =>
         for(const node of nodes) { nodeCache.set(node.id, node); }
     }
 
+    // Merge a listing's owner facet into the standing directory. Reassigning a fresh Map keeps the computed reactive.
+    function rememberOwners(list : readonly UserSummary[]) : void
+    {
+        if(list.length === 0) { return; }
+
+        const next = new Map(ownerDirectory.value);
+        for(const summary of list) { next.set(summary.id, summary); }
+        ownerDirectory.value = next;
+    }
+
     async function resolveNode(id : string) : Promise<NodeResponse>
     {
         const cached = nodeCache.get(id);
@@ -168,10 +202,20 @@ export const useDriveStore = defineStore('drive', () =>
 
     async function load(target : string | null) : Promise<void>
     {
+        const sameFolder = target === folderID.value;
+
+        // The child we are descending into, read off the CURRENT listing before it is replaced: a click on a node in
+        // view. Its logical breadcrumb is the chain now on screen plus itself -- the piece the physical parent walk
+        // cannot rebuild once the chain passes through a folder link, whose target's ancestors are out of the caller's
+        // reach. A sidebar jump or a pasted URL names a folder that is not in view, so it finds no child here and falls
+        // to the physical walk; reading it off the live listing is what keeps a stale chain from ever leaking.
+        const descended = sameFolder ? null : children.value.find((node) => node.id === target) ?? null;
+        const priorChain = breadcrumb.value;
+
         // Navigating to a different folder drops the filters: a type or owner filter meaningful in one folder is noise
         // in the next, and a stale owner filter would face an owner the new folder may not even have. A same-folder
         // reload (sort or a filter change) keeps them, since that is exactly the reload those actions want.
-        if(target !== folderID.value) { resetFilters(); }
+        if(!sameFolder) { resetFilters(); }
 
         folderID.value = target;
         loading.value = true;
@@ -190,8 +234,16 @@ export const useDriveStore = defineStore('drive', () =>
             children.value = page.nodes;
             total.value = page.total;
             owners.value = page.owners;
+            rememberOwners(page.owners);
             cacheNodes(page.nodes);
-            await buildBreadcrumb(target);
+
+            // A same-folder reload leaves the open folder unchanged, so its breadcrumb stands. A descent extends the
+            // chain on screen; anything else (a cold load, a jump) walks the parent edges from scratch.
+            if(!sameFolder)
+            {
+                if(descended !== null) { breadcrumb.value = [ ...priorChain, descended ]; }
+                else { await buildBreadcrumb(target); }
+            }
         }
         catch(caught)
         {
@@ -225,6 +277,7 @@ export const useDriveStore = defineStore('drive', () =>
             children.value = [ ...children.value, ...page.nodes ];
             total.value = page.total;
             owners.value = page.owners;
+            rememberOwners(page.owners);
             cacheNodes(page.nodes);
         }
         finally
@@ -249,6 +302,7 @@ export const useDriveStore = defineStore('drive', () =>
         children.value = page.nodes;
         total.value = page.total;
         owners.value = page.owners;
+        rememberOwners(page.owners);
         cacheNodes(page.nodes);
     }
 
@@ -358,10 +412,12 @@ export const useDriveStore = defineStore('drive', () =>
         loadingMore,
         error,
         breadcrumb,
+        breadcrumbForeign,
         typeFamilies,
         owner,
         modified,
         owners,
+        knownOwners,
         hasMore,
         isEmpty,
         hasActiveFilters,

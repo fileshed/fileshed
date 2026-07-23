@@ -1,16 +1,19 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Node Row
   --
-  -- One dense row in the list: name with its type icon, size, modified time, kind, and an end-of-row kebab. Same
-  -- interaction contract as the grid tile -- click emits selection intent with modifiers, double-click emits open, the
-  -- menu items (right-click, or the kebab) are a prop. A dead link dims and reads "Broken link" in the kind column.
+  -- One dense row in the list: name with its type icon, owner, size, modified time, kind, and an end-of-row kebab.
+  -- Same interaction contract as the grid tile -- click emits selection intent with modifiers, double-click emits
+  -- open, the menu items (right-click, or the kebab) are a prop. A dead link dims and reads "Broken link" in the kind
+  -- column. The owner avatar resolves against the listing's owners facet -- a link attributes to its resolved
+  -- TARGET's owner, falling back to the link's own owner when dead; a miss (should not happen for a drive listing)
+  -- falls back to an initials avatar keyed off the raw owner id instead of hiding the cell.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <UContextMenu :items="menuItems">
         <div
-            class="group grid cursor-default grid-cols-[1fr_7rem_9rem_6rem_2.5rem] items-center gap-4 border-b
-                border-default px-3 py-2 text-sm transition-colors"
+            class="group grid cursor-default grid-cols-[1fr_2.5rem_7rem_9rem_6rem_2.5rem] items-center gap-4
+                border-b border-default px-3 py-2 text-sm transition-colors"
             :class="selected ? 'bg-primary/10' : 'hover:bg-elevated/50'"
             role="button"
             tabindex="0"
@@ -31,6 +34,13 @@
                 <span class="truncate font-medium" :class="{ 'text-dimmed': dead }" :title="node.name">
                     {{ node.name }}
                 </span>
+            </div>
+
+            <div class="flex justify-center" @click.stop @dblclick.stop>
+                <UserSummaryHover v-if="owner !== null" :summary="owner">
+                    <UAvatar :src="owner.image ?? undefined" :alt="owner.name" size="xs" />
+                </UserSummaryHover>
+                <UAvatar v-else :alt="ownerID" size="xs" />
             </div>
 
             <span class="truncate text-muted">{{ node.type === 'file' ? formatBytes(node.size) : '—' }}</span>
@@ -62,14 +72,18 @@
     import { computed } from 'vue';
     import type { ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse } from '@fileshed/core';
+    import type { NodeResponse, UserSummary } from '@fileshed/core';
 
     // Stores
     import { useSessionStore } from '../../stores/session.ts';
 
+    // Components
+    import UserSummaryHover from '../userSummaryHover.vue';
+
     // Utils
     import { formatBytes, formatNodeDate } from '../../utils/formatters/index.ts';
-    import { familyPresentation, isDeadLink, nodePresentation } from '../../utils/nodeTypePresentation.ts';
+    import { isDeadLink, nodeKindLabel, nodePresentation } from '../../utils/nodeTypePresentation.ts';
+    import { ownerIDFor, resolveOwner } from '../../utils/resolveOwner.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -77,6 +91,7 @@
         node : NodeResponse;
         selected : boolean;
         menuItems : ContextMenuItem[][];
+        owners : UserSummary[];
     }>();
 
     const emit = defineEmits<{
@@ -90,16 +105,9 @@
 
     const presentation = computed(() => nodePresentation(props.node));
     const dead = computed(() => isDeadLink(props.node));
-
-    // A resolved link reads "Link" -- what the Links filter matches -- never its target's family, which would make
-    // the column and the filter disagree about the same node.
-    const kindLabel = computed(() =>
-    {
-        if(dead.value) { return nodePresentation(props.node).noun; }
-        if(props.node.type === 'link') { return familyPresentation('links').noun; }
-
-        return presentation.value.noun;
-    });
+    const kindLabel = computed(() => nodeKindLabel(props.node));
+    const ownerID = computed(() => ownerIDFor(props.node));
+    const owner = computed(() => resolveOwner(ownerID.value, props.owners));
 
     function onClick(event : MouseEvent) : void
     {

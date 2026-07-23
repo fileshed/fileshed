@@ -26,6 +26,7 @@ import {
     createTestDatabase,
     fileNode,
     folderNode,
+    linkNode,
     seedBackend,
     seedBlob,
     seedUser,
@@ -177,6 +178,78 @@ describe('NodeManager.search', () =>
         const result = await search('alice', '50%');
 
         expect(idsOf(result.nodes)).toEqual([ 'lit' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Owner facet -- every returned hit's owner is disclosed, since the caller can already see the node itself
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeManager.search owner facet', () =>
+{
+    it('carries the caller\'s own summary alongside a foreign owner\'s, deduped, for the returned page', async () =>
+    {
+        await ra.insert(fileNode({ id: 'mine', ownerID: 'alice', blobID: 'sha-a', name: 'facet-vulture-mine' }));
+        await ra.insert(folderNode({ id: 'shared', ownerID: 'bob', name: 'facet-vulture-shared' }));
+        await seedShare('shared', 'alice', 'viewer');
+
+        const result = await search('alice', 'facet-vulture');
+
+        expect(idsOf(result.nodes)).toEqual([ 'mine', 'shared' ]);
+        expect(result.owners.map((owner) => owner.id).sort()).toEqual([ 'alice', 'bob' ]);
+    });
+
+    it('derives each owner\'s avatar image from their stored hash, null when they have none', async () =>
+    {
+        const bobSha = 'bb'.repeat(32);
+        await handle.db
+            .updateTable('user')
+            .set({ avatar_sha256: bobSha })
+            .where('id', '=', 'bob')
+            .execute();
+        await ra.insert(fileNode({ id: 'mine2', ownerID: 'alice', blobID: 'sha-a', name: 'facet-falcon-mine' }));
+        await ra.insert(folderNode({ id: 'shared2', ownerID: 'bob', name: 'facet-falcon-shared' }));
+        await seedShare('shared2', 'alice', 'viewer');
+
+        const result = await search('alice', 'facet-falcon');
+
+        expect(result.owners.find((owner) => owner.id === 'alice')).toEqual({
+            id: 'alice', name: 'alice', email: 'alice@t.test', image: null,
+        });
+        expect(result.owners.find((owner) => owner.id === 'bob')?.image).toBe(`/api/avatars/${ bobSha }`);
+    });
+
+    // The facet faces the RETURNED PAGE, not the whole accessible match set -- unlike the folder listing's facet,
+    // which faces the whole folder regardless of the current page.
+    it('reflects only the current page\'s owners, not every accessible match behind it', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p1', ownerID: 'alice', name: 'facet-window-1' }));
+        await ra.insert(folderNode({ id: 'p2', ownerID: 'alice', name: 'facet-window-2' }));
+        await ra.insert(folderNode({ id: 'p3', ownerID: 'bob', name: 'facet-window-3' }));
+        await seedShare('p3', 'alice', 'viewer');
+
+        const firstPage = await search('alice', 'facet-window', 2, 0);
+        const secondPage = await search('alice', 'facet-window', 2, 2);
+
+        expect(firstPage.nodes.map((node) => node.id)).toEqual([ 'p1', 'p2' ]);
+        expect(firstPage.owners.map((owner) => owner.id)).toEqual([ 'alice' ]);
+
+        expect(secondPage.nodes.map((node) => node.id)).toEqual([ 'p3' ]);
+        expect(secondPage.owners.map((owner) => owner.id)).toEqual([ 'bob' ]);
+    });
+
+    // A link's row is owned by whoever placed it (alice), but it displays bob's ownership of the target -- so the
+    // facet must offer bob even though nothing of bob's own directly matches the search term.
+    it('adds a matched link\'s resolved target owner to the facet', async () =>
+    {
+        await ra.insert(folderNode({ id: 'bobtarget', ownerID: 'bob', name: 'unrelated-name' }));
+        await seedShare('bobtarget', 'alice', 'viewer');
+        await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'bobtarget', name: 'facet-link-match' }));
+
+        const result = await search('alice', 'facet-link-match');
+
+        expect(idsOf(result.nodes)).toEqual([ 'lnk' ]);
+        expect(result.owners.map((owner) => owner.id).sort()).toEqual([ 'alice', 'bob' ]);
     });
 });
 

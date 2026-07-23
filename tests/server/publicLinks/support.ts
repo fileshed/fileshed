@@ -30,6 +30,7 @@ import { type DatabaseHandle, createDatabase } from '@server/resource-access/dat
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
+import { UserRA } from '@server/resource-access/users/index.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
 
@@ -74,11 +75,12 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     const sessions = new SessionManager(auth);
     const nodeRA = new NodeRA(handle);
     const shareRA = new ShareRA(handle);
+    const userRA = new UserRA(handle);
     const linkRA = new PublicLinkRA(handle);
 
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: 5 * 1024 * 1024 * 1024 });
     const nodes = new NodeManager(handle, nodeRA, noopOrphanedBlobs);
-    const shares = new ShareManager(handle, nodeRA, shareRA);
+    const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
 
     // The REAL share-aware resolver, wired exactly as app.ts wires it -- so these specs exercise the authorization
     // that actually ships. A hand-rolled double here could not fail for any share-resolution regression.

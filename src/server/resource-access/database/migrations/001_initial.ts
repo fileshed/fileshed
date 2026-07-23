@@ -182,6 +182,7 @@ export async function up(db : Kysely<unknown>, kind : DatabaseKind) : Promise<vo
         .addColumn('requested_role', 'text', (col) => col
             .notNull()
             .check(sql`requested_role in (${ inList(shareRoles) })`))
+        .addColumn('message', 'text')
         .addColumn('status', 'text', (col) => col
             .notNull()
             .check(sql`status in (${ inList(shareRequestStatuses) })`))

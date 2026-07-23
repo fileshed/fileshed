@@ -120,10 +120,17 @@ export interface TrashPlan
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// Copy makes a new file node from an existing one; only files qualify. An empty selection has nothing to copy.
+// Copy asks nothing but read access, so any resolved role admits it; only the node's type gates it -- a folder roots a
+// subtree and a link is an inert pointer, neither has a single blob to copy.
+export function canCopyNode(node : NodeResponse) : boolean
+{
+    return node.type === 'file';
+}
+
+// An empty selection has nothing to copy.
 export function canCopySelection(nodes : readonly NodeResponse[]) : boolean
 {
-    return nodes.length > 0 && nodes.every((node) => node.type === 'file');
+    return nodes.length > 0 && nodes.every(canCopyNode);
 }
 
 // A links-only selection is a Remove of every link; otherwise it is a Trash of the files and folders, reporting how
@@ -139,6 +146,34 @@ export function planTrash(nodes : readonly NodeResponse[]) : TrashPlan
     }
 
     return { mode: 'trash', targetIDs: trashables.map((node) => node.id), skippedLinks: links.length };
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Ownership-Gated Actions
+//
+// Share, Rename, Move, and Trash/Remove administer a node -- its ACL or its place in the tree -- and the server admits
+// each only from the node's DIRECT owner (node.ownerID), never the resolved `role` a folder owner also earns over a
+// contribution someone else placed inside their own folder: that role reads 'owner' by inheritance, but the folder
+// owner cannot rename, move, or trash a child they do not themselves own. So admission here keys off ownerID, not role.
+// A bulk action on the whole selection admits only when EVERY selected node is the caller's own; one foreign node
+// (a contribution, or a node reached through a traversed folder link) drops the action entirely rather than acting on
+// a subset.
+//----------------------------------------------------------------------------------------------------------------------
+
+export function isOwnedBy(node : NodeResponse, userID : string | null) : boolean
+{
+    return userID !== null && node.ownerID === userID;
+}
+
+// A link carries no ACL of its own -- Share only ever targets a file or folder.
+export function canShareNode(node : NodeResponse, userID : string | null) : boolean
+{
+    return node.type !== 'link' && isOwnedBy(node, userID);
+}
+
+export function ownsSelection(nodes : readonly NodeResponse[], userID : string | null) : boolean
+{
+    return nodes.length > 0 && nodes.every((node) => isOwnedBy(node, userID));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

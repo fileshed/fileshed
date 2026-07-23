@@ -8,6 +8,8 @@
 // mapManagerError, so specs drive the flow with app.request and read state through the real handle. Zero mocks.
 //----------------------------------------------------------------------------------------------------------------------
 
+/* eslint-disable camelcase -- setAvatarSha256 writes a snake_case DB column directly (house convention for Kysely) */
+
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -23,6 +25,7 @@ import { type DatabaseHandle, createDatabase } from '@server/resource-access/dat
 import { initialize } from '@server/resource-access/boot.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
+import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
 import { BlobManager } from '@server/managers/blob.ts';
@@ -64,10 +67,11 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
     const sessions = new SessionManager(auth);
     const nodesRA = new NodeRA(handle);
     const sharesRA = new ShareRA(handle);
+    const usersRA = new UserRA(handle);
 
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes });
     const nodes = new NodeManager(handle, nodesRA, blob);
-    const shares = new ShareManager(handle, nodesRA, sharesRA);
+    const shares = new ShareManager(handle, nodesRA, sharesRA, usersRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
 
     const app = new Hono();
@@ -128,13 +132,14 @@ export interface TestUser
     id : string;
     cookie : string;
     email : string;
+    name : string;
 }
 
-// Sign up and sign in, returning the user's id (as the FKs see it) and their session cookie.
-export async function makeUser(booted : BootedShareApp, email : string) : Promise<TestUser>
+// Sign up and sign in, returning the user's id (as the FKs see it), their display name, and their session cookie.
+export async function makeUser(booted : BootedShareApp, email : string, name = 'Test User') : Promise<TestUser>
 {
     const password = 'correct-horse-battery';
-    await signUp(booted.app, email, password);
+    await signUp(booted.app, email, password, name);
     const cookie = cookieFrom(await signIn(booted.app, email, password));
 
     const row = await booted.handle.db
@@ -143,7 +148,7 @@ export async function makeUser(booted : BootedShareApp, email : string) : Promis
         .where('email', '=', email)
         .executeTakeFirstOrThrow();
 
-    return { id: row.id, cookie, email };
+    return { id: row.id, cookie, email, name };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -194,6 +199,17 @@ export function grantShare(
 ) : Promise<Response>
 {
     return request(app, 'POST', `/api/nodes/${ nodeID }/shares`, cookie, { granteeUserID, role });
+}
+
+// Points a user at an avatar hash directly, bypassing the upload flow -- enough to exercise avatarImage's derived
+// URL on the grantee-summary path without standing up a blob backend.
+export async function setAvatarSha256(booted : BootedShareApp, userID : string, sha256 : string) : Promise<void>
+{
+    await booted.handle.db
+        .updateTable('user')
+        .set({ avatar_sha256: sha256 })
+        .where('id', '=', userID)
+        .execute();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

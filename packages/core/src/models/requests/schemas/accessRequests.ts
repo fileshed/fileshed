@@ -4,12 +4,17 @@
 
 import { z } from 'zod';
 
+// Constants
+import { ACCESS_REQUEST_MESSAGE_MAX_CHARS } from '../../../constants/accessRequest.ts';
+
 // Models
 import { type ShareRequest, shareRequestStatuses } from '../../shareRequest.ts';
 import { shareRoleCodec } from '../../schemas/role.ts';
 
 // Requests
+import type { UserSummary } from '../nodes.ts';
 import {
+    type AccessRequestListEntry,
     type AccessRequestListResponse,
     type AccessRequestResponse,
     type CreateAccessRequest,
@@ -17,14 +22,25 @@ import {
 
 // Request Schemas
 import { isoDateTimeCodec } from './common.ts';
+import { userSummaryCodec } from './nodes.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// message is trimmed, capped, and an empty result collapses to absent -- "   " and "" are the same as never asking.
 export const createAccessRequestCodec = z.strictObject({
     requestedRole: shareRoleCodec,
+    message: z.string()
+        .trim()
+        .max(ACCESS_REQUEST_MESSAGE_MAX_CHARS)
+        .transform((value) =>
+        {
+            if(value === '') { return undefined; }
+            return value;
+        })
+        .optional(),
 });
 
 typeAssert<Equals<z.output<typeof createAccessRequestCodec>, CreateAccessRequest>>();
@@ -34,6 +50,7 @@ export const accessRequestResponseCodec = z.strictObject({
     nodeID: z.string(),
     requesterID: z.string(),
     requestedRole: shareRoleCodec,
+    message: z.string().nullable(),
     status: z.enum(shareRequestStatuses),
     createdAt: isoDateTimeCodec,
     resolvedAt: isoDateTimeCodec.nullable(),
@@ -41,8 +58,15 @@ export const accessRequestResponseCodec = z.strictObject({
 
 typeAssert<Equals<z.output<typeof accessRequestResponseCodec>, AccessRequestResponse>>();
 
+export const accessRequestListEntryCodec = z.strictObject({
+    request: accessRequestResponseCodec,
+    requester: userSummaryCodec,
+});
+
+typeAssert<Equals<z.output<typeof accessRequestListEntryCodec>, AccessRequestListEntry>>();
+
 export const accessRequestListResponseCodec = z.strictObject({
-    incoming: z.array(accessRequestResponseCodec),
+    incoming: z.array(accessRequestListEntryCodec),
     outgoing: z.array(accessRequestResponseCodec),
 });
 
@@ -60,10 +84,16 @@ export function toAccessRequestResponse(request : ShareRequest) : AccessRequestR
         nodeID: request.nodeID,
         requesterID: request.requesterID,
         requestedRole: request.requestedRole,
+        message: request.message,
         status: request.status,
         createdAt: request.createdAt.toISOString(),
         resolvedAt: request.resolvedAt === null ? null : request.resolvedAt.toISOString(),
     };
+}
+
+export function toAccessRequestListEntry(request : ShareRequest, requester : UserSummary) : AccessRequestListEntry
+{
+    return { request: toAccessRequestResponse(request), requester };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

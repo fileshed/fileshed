@@ -64,9 +64,15 @@ function shareOf(id : string, nodeID : string, granteeUserID : string, role : Sh
     return { id, nodeID, granteeUserID, role, createdBy: 'owner', createdAt };
 }
 
-function pendingRequest(id : string, nodeID : string, requesterID : string, role : ShareRole) : PendingShareRequest
+function pendingRequest(
+    id : string,
+    nodeID : string,
+    requesterID : string,
+    role : ShareRole,
+    message : string | null = null
+) : PendingShareRequest
 {
-    return { id, nodeID, requesterID, requestedRole: role, status: 'pending', resolvedAt: null, createdAt };
+    return { id, nodeID, requesterID, requestedRole: role, message, status: 'pending', resolvedAt: null, createdAt };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -161,6 +167,19 @@ describe('ShareRA.sharedWithMe', () =>
         expect(entry.placed).toBe(false);
     });
 
+    // The row carries the target's last-modified time alongside the wire summary so the manager's Modified filter has a
+    // value to test; it is not part of the wire target, only the row.
+    it('carries the target\'s last-modified time on the row', async () =>
+    {
+        const updatedAt = new Date('2026-05-15T12:00:00.000Z');
+        await nodes.insert(fileNode({ id: 'doc', ownerID: 'owner', blobID: 'sha-a', updatedAt }));
+        await shares.upsertShare(shareOf('s1', 'doc', 'grantee', 'viewer'));
+
+        const [ entry ] = await shares.sharedWithMe('grantee');
+
+        expect(entry.updatedAt).toEqual(updatedAt);
+    });
+
     it('reports placed=true when the grantee holds a link to the shared target', async () =>
     {
         await nodes.insert(fileNode({ id: 'doc', ownerID: 'owner', blobID: 'sha-a' }));
@@ -199,6 +218,15 @@ describe('ShareRA share request rows', () =>
         await shares.insertRequest(request);
 
         expect(await shares.getRequestById('r1')).toEqual(request);
+    });
+
+    it('round-trips a requester\'s message through the row<->domain boundary', async () =>
+    {
+        await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
+        const request = pendingRequest('r1', 'f', 'requester', 'viewer', 'Could I get viewer access please?');
+        await shares.insertRequest(request);
+
+        expect((await shares.getRequestById('r1'))?.message).toBe('Could I get viewer access please?');
     });
 
     it('resolves a request by stamping status and resolved_at together', async () =>

@@ -25,6 +25,7 @@ interface ShareRequestBase
     nodeID : string;
     requesterID : string;
     requestedRole : ShareRole;
+    message : string | null;
     createdAt : Date;
 }
 

@@ -11,13 +11,14 @@
 import { Hono } from 'hono';
 
 // Models
-import { grantShareRequestCodec } from '@fileshed/core';
+import { grantShareRequestCodec, sharedWithMeQueryCodec } from '@fileshed/core';
 
 // Managers
 import type { SessionManager } from '../managers/session.ts';
 import type { ShareManager } from '../managers/share.ts';
 
 // Routes
+import { parseQuery } from './parseQuery.ts';
 import { readJsonBody } from './readJsonBody.ts';
 import {
     grantShareSpec,
@@ -51,8 +52,9 @@ export function createShareRoutes(sessions : SessionManager, shares : ShareManag
     router.get('/shared-with-me', sharedWithMeSpec, async (ctx) =>
     {
         const actor = await sessions.requireUser(ctx.req.raw.headers);
+        const query = parseQuery(ctx, sharedWithMeQueryCodec);
 
-        return ctx.json(await shares.sharedWithMe(actor));
+        return ctx.json(await shares.sharedWithMe(actor, query));
     });
 
     router.post('/shares/:id/leave', leaveShareSpec, async (ctx) =>

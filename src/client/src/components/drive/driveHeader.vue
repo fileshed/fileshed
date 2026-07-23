@@ -7,38 +7,32 @@
 
 <template>
     <div class="flex items-center gap-2">
-        <UBreadcrumb :items="crumbs" class="min-w-0 flex-1" />
+        <UBreadcrumb :items="crumbs" class="min-w-0 flex-1">
+            <template #link="{ item }">
+                <LinkCrumbCard v-if="item.link" :node="item.link.node" :owner="item.link.owner" />
+            </template>
+        </UBreadcrumb>
 
-        <UFieldGroup>
-            <UButton
-                icon="i-lucide-layout-grid"
-                color="neutral"
-                :variant="viewMode === 'grid' ? 'solid' : 'outline'"
-                aria-label="Grid view"
-                @click="emit('set-view', 'grid')"
-            />
-            <UButton
-                icon="i-lucide-list"
-                color="neutral"
-                :variant="viewMode === 'list' ? 'solid' : 'outline'"
-                aria-label="List view"
-                @click="emit('set-view', 'list')"
-            />
-        </UFieldGroup>
+        <ViewToggle :view-mode="viewMode" @set-view="(mode) => emit('set-view', mode)" />
     </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import type { BreadcrumbItem } from '@nuxt/ui';
-
     import type { ViewMode } from '@fileshed/core';
+
+    // Components
+    import ViewToggle from '../viewToggle.vue';
+    import LinkCrumbCard from './linkCrumbCard/linkCrumbCard.vue';
+
+    // Types
+    import type { DriveCrumb } from './linkCrumbCard/types.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
     defineProps<{
-        crumbs : BreadcrumbItem[];
+        crumbs : DriveCrumb[];
         viewMode : ViewMode;
     }>();
 

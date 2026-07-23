@@ -8,9 +8,13 @@ import type { NodeResponse } from '@fileshed/core';
 
 import {
     applyClick,
+    canCopyNode,
     canCopySelection,
+    canShareNode,
     clearSelection,
     emptySelection,
+    isOwnedBy,
+    ownsSelection,
     planTrash,
     reconcile,
 } from '@client/engines/intent/selection.ts';
@@ -222,20 +226,55 @@ const BASE = {
     role: 'owner' as const,
 };
 
-function file(id : string) : NodeResponse
+type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role'>>;
+
+function file(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, type: 'file', blobID: 'b1', size: 10, mimeType: 'text/plain', trashedAt: null };
+    return { ...BASE, id, type: 'file', blobID: 'b1', size: 10, mimeType: 'text/plain', trashedAt: null, ...overrides };
 }
 
-function folder(id : string) : NodeResponse
+function folder(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, type: 'folder', trashedAt: null };
+    return { ...BASE, id, type: 'folder', trashedAt: null, ...overrides };
 }
 
-function link(id : string) : NodeResponse
+function link(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, type: 'link', targetNodeID: 't1', target: { id: 't1', type: 'file', name: 'x' } };
+    return {
+        ...BASE,
+        id,
+        type: 'link',
+        targetNodeID: 't1',
+        target: { id: 't1', type: 'file', name: 'x', ownerID: 'u1' },
+        ...overrides,
+    };
 }
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('canCopyNode', () =>
+{
+    it('admits a file', () =>
+    {
+        expect(canCopyNode(file('a'))).toBe(true);
+    });
+
+    it('refuses a folder -- no single blob to reference', () =>
+    {
+        expect(canCopyNode(folder('a'))).toBe(false);
+    });
+
+    it('refuses a link -- an inert pointer with no bytes of its own', () =>
+    {
+        expect(canCopyNode(link('a'))).toBe(false);
+    });
+
+    it('admits a file regardless of role -- copy asks only read access', () =>
+    {
+        expect(canCopyNode(file('a', { role: 'viewer' }))).toBe(true);
+        expect(canCopyNode(file('a', { role: 'editor' }))).toBe(true);
+    });
+});
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -296,6 +335,125 @@ describe('planTrash', () =>
     it('removes a single selected link', () =>
     {
         expect(planTrash([ link('a') ])).toEqual({ mode: 'remove', targetIDs: [ 'a' ], skippedLinks: 0 });
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Ownership-Gated Actions
+//
+// Share, Rename, Move, and Trash/Remove administer a node and the server admits each only from direct ownership
+// (node.ownerID), never the resolved `role` -- a folder owner reads a contribution placed in their own folder as
+// role 'owner' by inheritance, without administering it. Every case below is built with role deliberately set OPPOSITE
+// of what ownerID would suggest, to prove the admission never takes the role shortcut.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('isOwnedBy', () =>
+{
+    it('admits the direct owner', () =>
+    {
+        expect(isOwnedBy(file('a', { ownerID: 'me' }), 'me')).toBe(true);
+    });
+
+    it('refuses a node owned by someone else', () =>
+    {
+        expect(isOwnedBy(file('a', { ownerID: 'someone-else' }), 'me')).toBe(false);
+    });
+
+    it('refuses a null caller (no signed-in user to own anything)', () =>
+    {
+        expect(isOwnedBy(file('a', { ownerID: 'me' }), null)).toBe(false);
+    });
+
+    it('refuses a node whose resolved role is owner but whose direct owner is someone else', () =>
+    {
+        // A folder owner's role over a contribution placed inside their own folder resolves to 'owner' by
+        // inheritance; ownerID still names the contributor. Administering it is still refused.
+        const contribution = file('a', { ownerID: 'contributor', role: 'owner' });
+
+        expect(isOwnedBy(contribution, 'folder-owner')).toBe(false);
+    });
+
+    it('admits a directly owned node even when its resolved role reads editor or viewer', () =>
+    {
+        // Unreachable in practice (direct ownership always resolves at least 'owner'), but the admission must key off
+        // ownerID alone, so a role field that disagrees changes nothing.
+        expect(isOwnedBy(file('a', { ownerID: 'me', role: 'viewer' }), 'me')).toBe(true);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('canShareNode', () =>
+{
+    it('admits the direct owner of a file', () =>
+    {
+        expect(canShareNode(file('a', { ownerID: 'me' }), 'me')).toBe(true);
+    });
+
+    it('admits the direct owner of a folder', () =>
+    {
+        expect(canShareNode(folder('a', { ownerID: 'me' }), 'me')).toBe(true);
+    });
+
+    it('refuses a link even when owned -- a link carries no ACL of its own', () =>
+    {
+        expect(canShareNode(link('a', { ownerID: 'me' }), 'me')).toBe(false);
+    });
+
+    it('refuses a file the caller does not directly own', () =>
+    {
+        expect(canShareNode(file('a', { ownerID: 'someone-else' }), 'me')).toBe(false);
+    });
+
+    it('refuses an editor -- sharing administers the ACL, which only the direct owner may do', () =>
+    {
+        expect(canShareNode(file('a', { ownerID: 'someone-else', role: 'editor' }), 'me')).toBe(false);
+    });
+
+    it('refuses a contribution whose inherited role reads owner but whose direct owner is someone else', () =>
+    {
+        expect(canShareNode(file('a', { ownerID: 'contributor', role: 'owner' }), 'folder-owner')).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('ownsSelection', () =>
+{
+    it('admits a selection where every node is directly owned by the caller', () =>
+    {
+        expect(ownsSelection([ file('a', { ownerID: 'me' }), folder('b', { ownerID: 'me' }) ], 'me')).toBe(true);
+    });
+
+    it('refuses the whole selection when one node is foreign, even if the rest are owned', () =>
+    {
+        const nodes = [ file('a', { ownerID: 'me' }), file('b', { ownerID: 'someone-else' }) ];
+
+        expect(ownsSelection(nodes, 'me')).toBe(false);
+    });
+
+    it('refuses a wholly foreign selection', () =>
+    {
+        const nodes = [ file('a', { ownerID: 'someone-else' }), folder('b', { ownerID: 'someone-else' }) ];
+
+        expect(ownsSelection(nodes, 'me')).toBe(false);
+    });
+
+    it('refuses an empty selection', () =>
+    {
+        expect(ownsSelection([], 'me')).toBe(false);
+    });
+
+    it('refuses a selection whose nodes all resolve role owner by inheritance but are not directly owned', () =>
+    {
+        // The exact shape a folder-link traversal or a shared folder's contributions produce: every child inherits
+        // 'owner' from the parent's role, but ownerID still names the real contributor.
+        const nodes = [
+            file('a', { ownerID: 'contributor-1', role: 'owner' }),
+            file('b', { ownerID: 'contributor-2', role: 'owner' }),
+        ];
+
+        expect(ownsSelection(nodes, 'folder-owner')).toBe(false);
     });
 });
 

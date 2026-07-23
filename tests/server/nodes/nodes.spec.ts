@@ -11,7 +11,7 @@ import type { Hono } from 'hono';
 
 // Support
 import { ORIGIN, bootTestApp, cookieFrom, signUp } from '../auth/support.ts';
-import { composeNodeApp, seedLinkRow, userIDByEmail } from './support.ts';
+import { composeNodeApp, seedLinkRow, seedShareRow, userIDByEmail } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -306,6 +306,58 @@ describe('GET /api/nodes children listing', () =>
 
         expect(body.owners).toHaveLength(1);
         expect(body.owners[0]).toMatchObject({ id: ownerID, email: 'a@example.com' });
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('GET /api/nodes/:id/children through a folder link', () =>
+{
+    // Navigating INTO a folder link lists its target's children over the wire: the URL carries the link id, and the
+    // listing resolves the target under the caller's own access, so each child shows the role a direct read of the
+    // target would give -- the link conducts nothing.
+    it('lists a folder link\'s target children, each with the caller\'s effective role', async () =>
+    {
+        const booted = await bootTestApp();
+        const app = composeNodeApp(booted);
+        const cookieCarol = await signedUp(app, 'carol@example.com');
+        const cookieAlice = await signedUp(app, 'alice@example.com');
+        const carolID = await userIDByEmail(booted, 'carol@example.com');
+        const aliceID = await userIDByEmail(booted, 'alice@example.com');
+
+        const docs = await createFolder(app, cookieCarol, 'Documents');
+        const docsID = docs.id as string;
+        const reports = await createFolder(app, cookieCarol, 'Reports', docsID);
+        await seedShareRow(booted, { nodeID: docsID, granteeID: aliceID, role: 'viewer', createdBy: carolID });
+        await seedLinkRow(booted, {
+            id: 'alicelink',
+            ownerID: aliceID,
+            targetNodeID: docsID,
+            name: 'Case Test\'s Docs',
+        });
+
+        const res = await request(app, 'GET', '/api/nodes/alicelink/children', cookieAlice);
+        const body = await res.json() as { nodes : Json[]; total : number };
+
+        expect(res.status).toBe(200);
+        expect(body.total).toBe(1);
+        expect(body.nodes[0]).toMatchObject({ id: reports.id, name: 'Reports', role: 'viewer' });
+    });
+
+    it('answers 404 when the link\'s target does not resolve for the caller', async () =>
+    {
+        const booted = await bootTestApp();
+        const app = composeNodeApp(booted);
+        const cookieCarol = await signedUp(app, 'carol@example.com');
+        const cookieAlice = await signedUp(app, 'alice@example.com');
+        const aliceID = await userIDByEmail(booted, 'alice@example.com');
+
+        const priv = await createFolder(app, cookieCarol, 'Private');
+        await seedLinkRow(booted, { id: 'deadlink', ownerID: aliceID, targetNodeID: priv.id as string });
+
+        const res = await request(app, 'GET', '/api/nodes/deadlink/children', cookieAlice);
+
+        expect(res.status).toBe(404);
     });
 });
 

@@ -149,6 +149,24 @@ function filterConditions(eb : NodeExpressionBuilder, filters : NodeFilters) : E
     return conditions;
 }
 
+// The predicate isolating one owner's trashed subtree ROOTS: a trashed node they own whose parent is not itself
+// trashed (or which sits at root level). setTrashed stamps a whole subtree, so a trashed folder's descendants each
+// carry a trashed_at too; the NOT EXISTS drops any node whose parent is trashed, leaving only the top of each trashed
+// subtree -- the same root definition expiredTrashRootIDs uses, so a nested trashed child never double-lists.
+function trashedRootConditions(eb : NodeExpressionBuilder, ownerID : string) : Expression<SqlBool>[]
+{
+    return [
+        eb('owner_id', '=', ownerID),
+        eb('trashed_at', 'is not', null),
+        eb.not(eb.exists(
+            eb.selectFrom('node as ancestor')
+                .select(sql`1`.as('present'))
+                .whereRef('ancestor.id', '=', 'node.parent_id')
+                .where('ancestor.trashed_at', 'is not', null)
+        )),
+    ];
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export class NodeRA
@@ -408,6 +426,73 @@ export class NodeRA
                 eb('n.parent_id', 'is', null),
                 eb('parent.trashed_at', 'is', null),
             ]))
+            .execute();
+
+        return rows.map((row) => row.id);
+    }
+
+    // The caller's Trash view: the ROOTS of their own trashed subtrees, one page at a time, paged and sorted exactly
+    // as a folder listing is -- folders pinned above the file partition, the sort key within each, the id tiebreaker
+    // for determinism. Owner-scoped, so only the caller's own trashed nodes appear; roots-only, so a trashed folder
+    // lists once while everything inside it travels with it. Links never carry trashed_at, so none reach here.
+    async trashedRoots(ownerID : string, options : ChildrenOptions, filters ?: NodeFilters) : Promise<Node[]>
+    {
+        const { pagination, sort } = options;
+
+        let builder = this.#db
+            .selectFrom('node')
+            .selectAll()
+            .where((eb) => eb.and(trashedRootConditions(eb, ownerID)));
+
+        if(filters !== undefined && hasFilters(filters))
+        {
+            builder = builder.where((eb) => eb.and(filterConditions(eb, filters)));
+        }
+
+        builder = builder.orderBy(sql<number>`case when ${ sql.ref('type') } = 'folder' then 0 else 1 end`, 'asc');
+
+        for(const column of sortColumns[sort.key])
+        {
+            builder = builder.orderBy(column, sort.direction);
+        }
+
+        const rows = await builder
+            .orderBy('id', 'asc')
+            .limit(pagination.limit)
+            .offset(pagination.offset)
+            .execute();
+
+        return rows.map(nodeFromRow);
+    }
+
+    // The unpaginated count of the caller's trashed roots -- the grand total the trash-view envelope reports, over the
+    // identical predicate `trashedRoots` pages, so the count and the page can never describe different sets.
+    async countTrashedRoots(ownerID : string, filters ?: NodeFilters) : Promise<number>
+    {
+        let builder = this.#db
+            .selectFrom('node')
+            .select((eb) => eb.fn.count('id').as('count'))
+            .where((eb) => eb.and(trashedRootConditions(eb, ownerID)));
+
+        if(filters !== undefined && hasFilters(filters))
+        {
+            builder = builder.where((eb) => eb.and(filterConditions(eb, filters)));
+        }
+
+        const row = await builder.executeTakeFirstOrThrow();
+
+        return Number(row.count);
+    }
+
+    // The unpaginated ids of every root of the caller's own trashed subtrees -- what "empty trash" purges whole, one
+    // root at a time. Same owner-scoped root predicate `trashedRoots` pages against, bare ids instead of full pages,
+    // the same shape `expiredTrashRootIDs` hands the auto-purge sweep.
+    async trashedRootIDs(ownerID : string) : Promise<string[]>
+    {
+        const rows = await this.#db
+            .selectFrom('node')
+            .select('id')
+            .where((eb) => eb.and(trashedRootConditions(eb, ownerID)))
             .execute();
 
         return rows.map((row) => row.id);

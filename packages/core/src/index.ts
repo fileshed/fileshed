@@ -77,6 +77,7 @@ export {
     type NodeListResponse,
     type UserSummary,
     type PurgeBrokenLinksResponse,
+    type EmptyTrashResponse,
 } from './models/requests/nodes.ts';
 export { type SearchQuery } from './models/requests/search.ts';
 export {
@@ -90,6 +91,7 @@ export {
     type ChallengeAnswerRequest,
 } from './models/requests/blobs.ts';
 export { type MeResponse, type UpdatePreferencesRequest } from './models/requests/me.ts';
+export { type UserLookupQuery } from './models/requests/users.ts';
 export {
     type CreatePublicLinkRequest,
     type PublicLinkResponse,
@@ -98,14 +100,17 @@ export {
 export {
     type GrantShareRequest,
     type ShareResponse,
+    type ShareListEntry,
     type ShareListResponse,
     type SharedTarget,
     type SharedWithMeEntry,
     type SharedWithMeResponse,
+    type SharedWithMeQuery,
 } from './models/requests/shares.ts';
 export {
     type CreateAccessRequest,
     type AccessRequestResponse,
+    type AccessRequestListEntry,
     type AccessRequestListResponse,
 } from './models/requests/accessRequests.ts';
 export {
@@ -138,6 +143,7 @@ export {
     childrenQueryCodec,
     deleteNodeQueryCodec,
     purgeBrokenLinksResponseCodec,
+    emptyTrashResponseCodec,
     linkTargetCodec,
     nodeResponseCodec,
     nodeListResponseCodec,
@@ -156,6 +162,7 @@ export {
     challengeAnswerRequestCodec,
 } from './models/requests/schemas/blobs.ts';
 export { meResponseCodec, updatePreferencesRequestCodec } from './models/requests/schemas/me.ts';
+export { userLookupQueryCodec } from './models/requests/schemas/users.ts';
 export {
     createPublicLinkRequestCodec,
     publicLinkResponseCodec,
@@ -166,17 +173,23 @@ export {
 export {
     grantShareRequestCodec,
     shareResponseCodec,
+    shareListEntryCodec,
     shareListResponseCodec,
     sharedTargetCodec,
     sharedWithMeEntryCodec,
     sharedWithMeResponseCodec,
+    sharedWithMeQueryCodec,
     toShareResponse,
+    toShareListEntry,
+    toSharedWithMeEntry,
 } from './models/requests/schemas/shares.ts';
 export {
     createAccessRequestCodec,
     accessRequestResponseCodec,
+    accessRequestListEntryCodec,
     accessRequestListResponseCodec,
     toAccessRequestResponse,
+    toAccessRequestListEntry,
 } from './models/requests/schemas/accessRequests.ts';
 export {
     setQuotaRequestCodec,

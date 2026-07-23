@@ -15,6 +15,7 @@ import {
     copyNodeRequestCodec,
     createNodeRequestCodec,
     deleteNodeQueryCodec,
+    emptyTrashResponseCodec,
     nodeListResponseCodec,
     nodeResponseCodec,
     patchNodeRequestCodec,
@@ -74,6 +75,32 @@ export const childrenSpec = describeRoute({
         400: errorResponse('The query parameters are invalid.'),
         401: errorResponse('No session.'),
         404: errorResponse('No folder is readable at this ID.'),
+    },
+});
+
+export const listTrashSpec = describeRoute({
+    tags: [ NODE_TAG ],
+    summary: 'List the caller\'s trash',
+    description: 'Lists the roots of the caller\'s trashed subtrees, one page at a time, paged and sorted like a '
+        + 'folder listing. A trashed folder lists once; the items inside it travel with it and never list separately. '
+        + 'Only the caller\'s own trashed nodes appear, each with the owner role.',
+    parameters: queryParams(childrenQueryCodec),
+    responses: {
+        200: jsonResponse('A page of the caller\'s trashed roots.', nodeListResponseCodec),
+        400: errorResponse('The query parameters are invalid.'),
+        401: errorResponse('No session.'),
+    },
+});
+
+export const emptyTrashSpec = describeRoute({
+    tags: [ NODE_TAG ],
+    summary: 'Empty the trash',
+    description: 'Permanently deletes every root of the caller\'s own trashed subtrees, each through the same '
+        + 'subtree-delete and blob-graveyard path a single permanent delete takes, and reports how many roots were '
+        + 'purged. Only the caller\'s own trash is ever touched; an already-empty trash is a harmless no-op.',
+    responses: {
+        200: jsonResponse('The number of trashed roots purged.', emptyTrashResponseCodec),
+        401: errorResponse('No session.'),
     },
 });
 

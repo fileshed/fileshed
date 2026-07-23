@@ -88,7 +88,7 @@ describe('NodeTile — live nodes', () =>
 {
     it('badges a resolved link and does not dim it', () =>
     {
-        const wrapper = mountTile(linkNode({ id: 't1', type: 'folder', name: 'shared' }));
+        const wrapper = mountTile(linkNode({ id: 't1', type: 'folder', name: 'shared', ownerID: 'u2' }));
 
         expect(wrapper.find('[data-icon="i-lucide-link"]').exists()).toBe(true);
         expect(wrapper.text()).not.toContain('Broken link');

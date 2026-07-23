@@ -8,8 +8,19 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Intent
-import { applyClick, canCopySelection, clearSelection, emptySelection, planTrash, reconcile } from './selection.ts';
-import { canViewInline, defaultEditorMode, resolveOpen } from './handlers.ts';
+import {
+    applyClick,
+    canCopyNode,
+    canCopySelection,
+    canShareNode,
+    clearSelection,
+    emptySelection,
+    isOwnedBy,
+    ownsSelection,
+    planTrash,
+    reconcile,
+} from './selection.ts';
+import { canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from './handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -19,13 +30,18 @@ export const intent = {
         applyClick,
         clearSelection,
         reconcile,
+        canCopyNode,
         canCopySelection,
         planTrash,
+        isOwnedBy,
+        canShareNode,
+        ownsSelection,
     },
     handlers: {
         canViewInline,
         defaultEditorMode,
         resolveOpen,
+        resolveSharedOpen,
     },
 } as const;
 
@@ -34,9 +50,20 @@ export const intent = {
 //----------------------------------------------------------------------------------------------------------------------
 
 export type { SelectionState, ClickModifiers, TrashMode, TrashPlan } from './selection.ts';
-export { emptySelection, applyClick, clearSelection, reconcile, canCopySelection, planTrash } from './selection.ts';
+export {
+    emptySelection,
+    applyClick,
+    clearSelection,
+    reconcile,
+    canCopyNode,
+    canCopySelection,
+    planTrash,
+    isOwnedBy,
+    canShareNode,
+    ownsSelection,
+} from './selection.ts';
 
 export type { EditorMode, OpenAction } from './handlers.ts';
-export { EDITOR_MAX_BYTES, canViewInline, defaultEditorMode, resolveOpen } from './handlers.ts';
+export { EDITOR_MAX_BYTES, canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from './handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------

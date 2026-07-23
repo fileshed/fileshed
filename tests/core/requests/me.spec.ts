@@ -14,6 +14,7 @@ describe('meResponseCodec', () =>
         id: 'user_1',
         email: 'ada@example.com',
         role: 'user' as const,
+        limits: { trashRetentionDays: 30 },
         createdAt: '2026-01-01T00:00:00.000Z',
     };
 
@@ -44,6 +45,16 @@ describe('meResponseCodec', () =>
     it('rejects a negative quota limit', () =>
     {
         const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, limit: -1 } });
+
+        expect(result.success).toBe(false);
+    });
+
+    // Retention copy is built from this value, so a profile without it is not a valid profile -- the server always
+    // knows its configuration and must always send it.
+    it('rejects a profile missing the limits object', () =>
+    {
+        const { limits: _limits, ...withoutLimits } = { ...base, quota: { used: 0, limit: null } };
+        const result = meResponseCodec.safeParse(withoutLimits);
 
         expect(result.success).toBe(false);
     });

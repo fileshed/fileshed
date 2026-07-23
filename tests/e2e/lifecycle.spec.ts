@@ -314,6 +314,98 @@ describe('restore to root', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+// Trash listing: GET /api/trash over the wire
+//
+// The Trash view walked end to end: a trashed folder lists as a root, a trashed CHILD of a trashed folder does not
+// double-list, restoring drops the node from the listing, and one user's trash is invisible to another.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('trash listing over the wire', () =>
+{
+    async function trashIDs(client : ApiClient) : Promise<string[]>
+    {
+        const listing = await (await client.get('/api/trash')).json() as NodeListResponse;
+        return listing.nodes.map((node) => node.id);
+    }
+
+    it('lists trashed roots, hides nested trashed children, and clears on restore -- per caller', async () =>
+    {
+        const owner = new ApiClient(server.baseURL);
+        const other = new ApiClient(server.baseURL);
+        await owner.signUp('trash-list-owner@example.com', PASSWORD);
+        await other.signUp('trash-list-other@example.com', PASSWORD);
+
+        const parent = (await (await owner.post('/api/nodes', { type: 'folder', name: 'roots', parentID: null }))
+            .json() as NodeResponse).id;
+        const child = (await (await owner.post('/api/nodes', { type: 'folder', name: 'nested', parentID: parent }))
+            .json() as NodeResponse).id;
+        const solo = (await (await owner.post('/api/nodes', { type: 'folder', name: 'solo', parentID: null }))
+            .json() as NodeResponse).id;
+
+        // Trash the parent (stamping its child too) and the standalone folder.
+        expect((await owner.post(`/api/nodes/${ parent }/trash`, {})).status).toBe(200);
+        expect((await owner.post(`/api/nodes/${ solo }/trash`, {})).status).toBe(200);
+
+        // Both trashed roots list; the nested child rides along with its parent and never lists on its own.
+        const listed = await trashIDs(owner);
+        expect(listed).toContain(parent);
+        expect(listed).toContain(solo);
+        expect(listed).not.toContain(child);
+
+        // Another user sees none of it.
+        expect(await trashIDs(other)).toHaveLength(0);
+
+        // Restoring the parent drops it from the trash listing; the standalone folder stays.
+        expect((await owner.post(`/api/nodes/${ parent }/restore`, {})).status).toBe(200);
+        const afterRestore = await trashIDs(owner);
+        expect(afterRestore).not.toContain(parent);
+        expect(afterRestore).toContain(solo);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Empty trash: DELETE /api/trash over the wire
+//
+// Emptying the trash purges every one of the caller's own trashed roots in one call and reports how many were purged,
+// leaving the listing empty; another user's trash is untouched.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('empty trash over the wire', () =>
+{
+    async function trashIDs(client : ApiClient) : Promise<string[]>
+    {
+        const listing = await (await client.get('/api/trash')).json() as NodeListResponse;
+        return listing.nodes.map((node) => node.id);
+    }
+
+    it('purges every trashed root and reports the count, leaving another user\'s trash intact', async () =>
+    {
+        const owner = new ApiClient(server.baseURL);
+        const other = new ApiClient(server.baseURL);
+        await owner.signUp('empty-trash-owner@example.com', PASSWORD);
+        await other.signUp('empty-trash-other@example.com', PASSWORD);
+
+        const first = (await (await owner.post('/api/nodes', { type: 'folder', name: 'first', parentID: null }))
+            .json() as NodeResponse).id;
+        const second = (await (await owner.post('/api/nodes', { type: 'folder', name: 'second', parentID: null }))
+            .json() as NodeResponse).id;
+        const untouched = (await (await other.post('/api/nodes', { type: 'folder', name: 'mine', parentID: null }))
+            .json() as NodeResponse).id;
+
+        expect((await owner.post(`/api/nodes/${ first }/trash`, {})).status).toBe(200);
+        expect((await owner.post(`/api/nodes/${ second }/trash`, {})).status).toBe(200);
+        expect((await other.post(`/api/nodes/${ untouched }/trash`, {})).status).toBe(200);
+
+        const emptied = await owner.del('/api/trash');
+
+        expect(emptied.status).toBe(200);
+        expect(await emptied.json()).toEqual({ purged: 2 });
+        expect(await trashIDs(owner)).toEqual([]);
+        expect(await trashIDs(other)).toEqual([ untouched ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
 // Deletion offers: recipients-may-copy on hard delete
 //
 // Hard-deleting a shared file with the recipients-may-copy opt-in graveyards the blob but keeps its bytes for the grace

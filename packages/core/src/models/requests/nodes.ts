@@ -90,6 +90,17 @@ export interface PurgeBrokenLinksResponse
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Empty trash (DELETE /api/trash) -- the count of the caller's own trashed subtree roots permanently purged. Each
+// root purges through the same subtree-delete + blob-graveyard path a single permanent delete takes; an already-empty
+// trash reports zero rather than erroring.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface EmptyTrashResponse
+{
+    purged : number;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Children listing (GET /api/nodes/:id/children) -- pagination, the sort-key vocabulary, and the filter facets.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -132,13 +143,17 @@ export interface ChildrenQuery
 
 // A link's resolved target, for display: enough of the target to render its name and type, plus size and mime
 // type when it is a file. null when the caller cannot resolve the target -- the row is gone, or access was lost -- in
-// which case the client renders the link as a stub. No owner or ACL rides here: links conduct no
-// permissions, and every resolution re-runs the ACL check as the viewer.
+// which case the client renders the link as a stub, falling back to the link node's own ownerID. ownerID names who
+// owns the TARGET, not the link -- a link placed via "Add to my files" points at someone else's file, so the Owner
+// column must name that someone, not the recipient who placed it. No ACL rides here: links conduct no
+// permissions, and every resolution re-runs the ACL check as the viewer -- so disclosing the target's owner
+// discloses nothing the viewer couldn't already see by resolving the target directly.
 export interface LinkTarget
 {
     id : string;
     type : NodeType;
     name : string;
+    ownerID : string;
     mimeType ?: string;
     size ?: number;
 }

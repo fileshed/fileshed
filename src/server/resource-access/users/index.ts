@@ -11,8 +11,16 @@
 
 /* eslint-disable camelcase -- update sets name snake_case DB columns (house convention for Kysely) */
 
+import { type SqlBool, sql } from 'kysely';
+
+// Models
+import type { UserSummary } from '@fileshed/core';
+
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
+
+// Utils
+import { avatarImage } from '../../utils/avatarImage.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -57,6 +65,51 @@ export class UserRA
             .executeTakeFirst();
 
         return row?.quota_limit ?? null;
+    }
+
+    // The display summary of the user whose email matches `email` exactly (case-insensitively), or undefined when no
+    // account carries it. Whole-email match only -- never a prefix or substring -- so the share dialog's lookup can
+    // confirm a grantee without becoming an account-enumeration oracle. Builds the UserSummary the same way the owner
+    // facet does (avatarImage), so the avatar URL is derived identically on both paths.
+    async findSummaryByEmail(email : string) : Promise<UserSummary | undefined>
+    {
+        const normalized = email.trim().toLowerCase();
+        const row = await this.#db
+            .selectFrom('user')
+            .select([ 'id', 'name', 'email', 'avatar_sha256' ])
+            .where(sql<SqlBool>`lower(email) = ${ normalized }`)
+            .executeTakeFirst();
+
+        if(row === undefined) { return undefined; }
+
+        return {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            image: avatarImage(row.avatar_sha256),
+        };
+    }
+
+    // The display summaries of every id in `userIDs`, keyed by id, in one query -- the owners-facet batching
+    // precedent (NodeRA.ownersOf), so a grants list with N grantees costs one round trip rather than N.
+    async summariesByIDs(userIDs : readonly string[]) : Promise<Map<string, UserSummary>>
+    {
+        const summaries = new Map<string, UserSummary>();
+        if(userIDs.length === 0) { return summaries; }
+
+        const rows = await this.#db
+            .selectFrom('user')
+            .select([ 'id', 'name', 'email', 'avatar_sha256' ])
+            .where('id', 'in', userIDs)
+            .execute();
+
+        for(const row of rows)
+        {
+            const image = avatarImage(row.avatar_sha256);
+            summaries.set(row.id, { id: row.id, name: row.name, email: row.email, image });
+        }
+
+        return summaries;
     }
 
     // The raw preferences blob straight from the row -- every key it carries, known and unknown. The merge on a write

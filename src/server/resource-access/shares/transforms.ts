@@ -67,6 +67,7 @@ export function shareRequestFromRow(row : Selectable<ShareRequestTable>) : Share
         nodeID: row.node_id,
         requesterID: row.requester_id,
         requestedRole: row.requested_role,
+        message: row.message,
         createdAt: toDate(row.created_at),
     };
 
@@ -94,6 +95,7 @@ export function rowFromPendingShareRequest(request : PendingShareRequest) : Inse
         node_id: request.nodeID,
         requester_id: request.requesterID,
         requested_role: request.requestedRole,
+        message: request.message,
         status: 'pending',
         created_at: request.createdAt.toISOString(),
         resolved_at: null,

@@ -56,11 +56,14 @@ export interface SharedTargetSummary
 }
 
 // One active share granted to the caller, with its target summary and whether the caller has placed a link to it --
-// placement is independent of the grant.
+// placement is independent of the grant. `updatedAt` is the target's last-modified time, carried alongside the
+// wire-shaped summary rather than inside it, so the caller's Modified filter has a value to test without widening the
+// wire target.
 export interface SharedWithMeRow
 {
     share : Share;
     target : SharedTargetSummary;
+    updatedAt : Date;
     placed : boolean;
 }
 
@@ -277,6 +280,7 @@ export class ShareRA
                 'node.owner_id as target_owner_id',
                 'node.mime_type as target_mime_type',
                 'node.size as target_size',
+                'node.updated_at as target_updated_at',
                 eb.exists(eb
                     .selectFrom('node as link')
                     .select('link.id')
@@ -304,6 +308,7 @@ export class ShareRA
                 mimeType: row.target_mime_type ?? undefined,
                 size: row.target_size ?? undefined,
             },
+            updatedAt: new Date(row.target_updated_at),
             placed: toBool(row.placed),
         }));
     }

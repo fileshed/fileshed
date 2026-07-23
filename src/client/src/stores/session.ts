@@ -15,6 +15,7 @@ import {
     DEFAULT_EDITOR_THEME,
     DEFAULT_ROOT_LABEL,
     DEFAULT_TIME_FORMAT,
+    DEFAULT_TRASH_PURGE_DAYS,
     DEFAULT_VIEW_MODE,
     type MeResponse,
     type UpdatePreferencesRequest,
@@ -60,6 +61,10 @@ export const useSessionStore = defineStore('session', () =>
     // The drive's grid-vs-list choice, defaulting until the user picks one. The single place that fallback lives; the
     // drive page reads it here.
     const viewMode = computed(() => me.value?.preferences.viewMode ?? DEFAULT_VIEW_MODE);
+
+    // The deployment's effective trash retention, defaulting only until the profile loads -- the server always sends
+    // the configured value, so copy built on this never shows a shipped default an operator has overridden.
+    const trashRetentionDays = computed(() => me.value?.limits.trashRetentionDays ?? DEFAULT_TRASH_PURGE_DAYS);
 
     async function initialize() : Promise<void>
     {
@@ -198,6 +203,7 @@ export const useSessionStore = defineStore('session', () =>
         editorTheme,
         editorGutter,
         viewMode,
+        trashRetentionDays,
         initialize,
         signIn,
         signUp,

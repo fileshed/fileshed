@@ -29,6 +29,7 @@ import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
 import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
+import { createUserRoutes } from './routes/users.ts';
 
 // Resource Access
 import { type Auth, createAuth } from './resource-access/auth.ts';
@@ -39,6 +40,7 @@ import { BlobRA } from './resource-access/blob/index.ts';
 import { NodeRA } from './resource-access/nodes/node.ts';
 import { PublicLinkRA } from './resource-access/publicLinks/index.ts';
 import { ShareRA } from './resource-access/shares/index.ts';
+import { UserRA } from './resource-access/users/index.ts';
 
 // Managers
 import { AdminManager } from './managers/admin.ts';
@@ -49,6 +51,7 @@ import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
 import { SessionManager } from './managers/session.ts';
+import { UserManager } from './managers/user.ts';
 import { StatusManager } from './managers/status.ts';
 import { LastRunTracker } from './managers/lastRun.ts';
 import { mapManagerError } from './managers/errors.ts';
@@ -93,6 +96,7 @@ export interface AppServices
     publicLinks : PublicLinkManager;
     deletionOffers : DeletionOfferManager;
     adminStatus : StatusManager;
+    users : UserManager;
 }
 
 export function createApp(auth ?: Auth, services ?: AppServices) : Hono
@@ -134,6 +138,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
             app.route('/api', createNodeRoutes(sessions, services.nodes));
             app.route('/api', createSearchRoutes(sessions, services.nodes));
             app.route('/api', createMeRoutes(sessions, services.nodes));
+            app.route('/api', createUserRoutes(sessions, services.users));
             app.route('/api', createAvatarRoutes(sessions, services.avatars, services.nodes));
             app.route('/api', createShareRoutes(sessions, services.shares));
             app.route('/api', createAccessRequestRoutes(sessions, services.shares));
@@ -189,11 +194,13 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const blob = new BlobRA(handle);
     const nodeRA = new NodeRA(handle);
     const shareRA = new ShareRA(handle);
+    const userRA = new UserRA(handle);
     const tracker = new LastRunTracker();
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES });
-    const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY);
-    const shares = new ShareManager(handle, nodeRA, shareRA);
+    const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY, config.TRASH_PURGE_DAYS);
+    const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
+    const users = new UserManager(userRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
     const adminStatus = new StatusManager(blob, tracker);
     const publicLinks = new PublicLinkManager(
@@ -223,7 +230,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         stopSweeps();
     };
 
-    const services = { blobs, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus };
+    const services = { blobs, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users };
 
     return { app: createApp(auth, services), config, shutdown };
 }

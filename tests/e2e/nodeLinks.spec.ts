@@ -35,6 +35,7 @@ let owner : ApiClient;
 let recipient : ApiClient;
 let stranger : ApiClient;
 let recipientID : string;
+let ownerID : string;
 
 async function callerID(client : ApiClient) : Promise<string>
 {
@@ -132,6 +133,7 @@ beforeAll(async () =>
     await recipient.signUp('link-recipient@example.com', PASSWORD);
     await stranger.signUp('link-stranger@example.com', PASSWORD);
     recipientID = await callerID(recipient);
+    ownerID = await callerID(owner);
 });
 
 afterAll(async () =>
@@ -150,12 +152,18 @@ describe('a link to a shared item', () =>
         const { folderID, childID, share, linkID } = await placeLinkIntoSharedFolder('heal', 'viewer');
 
         // Live share: the link resolves, carrying the target's summary.
-        const listedLive = (await recipientRoot()).nodes.find((node) => node.id === linkID);
+        const rootWhileLive = await recipientRoot();
+        const listedLive = rootWhileLive.nodes.find((node) => node.id === linkID);
         expect(listedLive?.type).toBe('link');
         if(listedLive?.type !== 'link') { throw new Error('expected a link node'); }
         expect(listedLive.targetNodeID).toBe(childID);
         expect(listedLive.target?.id).toBe(childID);
         expect(listedLive.target?.type).toBe('file');
+
+        // The Owner column attributes the link to the TARGET's owner, not the recipient who placed it -- and the
+        // owner facet discloses that owner even though the recipient's own root would otherwise name only themself.
+        expect(listedLive.target?.ownerID).toBe(ownerID);
+        expect(rootWhileLive.owners.some((summary) => summary.id === ownerID)).toBe(true);
 
         // Revoke: the target no longer resolves for the recipient, so the link renders as a stub -- but its row stays.
         expect((await owner.del(`/api/shares/${ share.id }`)).status).toBe(204);
@@ -181,6 +189,56 @@ describe('a link to a shared item', () =>
         expect(listedHealed?.type).toBe('link');
         if(listedHealed?.type !== 'link') { throw new Error('expected a link node'); }
         expect(listedHealed.target?.id).toBe(childID);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Navigating into a folder link
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('navigating into a folder link', () =>
+{
+    it('lists the target folder\'s children through the link id, each with the caller\'s role', async () =>
+    {
+        // A shared folder holding a subfolder and a file; the recipient places a link to the FOLDER, then navigates
+        // into it by the LINK's id.
+        const folder = await makeFolder(owner, 'nav-folder');
+        const sub = await (await owner.post('/api/nodes', {
+            type: 'folder',
+            name: 'nav-sub',
+            parentID: folder.id,
+        })).json() as NodeResponse;
+        const file = await upload(owner, folder.id, 'nav-file.bin', smallFixture('nav-child'));
+
+        expect((await grantShare(folder.id, recipientID, 'viewer')).status).toBe(201);
+        const link = await placeLink(recipient, null, folder.id);
+
+        // GET the link node itself -- the crumb source: it is the link, not the target.
+        const linkNode = await (await recipient.get(`/api/nodes/${ link.id }`)).json() as NodeResponse;
+        expect(linkNode.type).toBe('link');
+
+        // GET children THROUGH the link id: the target's real children, each carrying the recipient's viewer role.
+        const throughLink = await (await recipient.get(`/api/nodes/${ link.id }/children`)).json() as NodeListResponse;
+        expect(new Set(throughLink.nodes.map((node) => node.id))).toEqual(new Set([ sub.id, file.id ]));
+        expect(throughLink.nodes.every((node) => node.role === 'viewer')).toBe(true);
+
+        // Identical to reading the target folder's children directly -- the link is a pure redirect.
+        const direct = await (await recipient.get(`/api/nodes/${ folder.id }/children`)).json() as NodeListResponse;
+        expect(throughLink.nodes.map((node) => node.id).sort()).toEqual(direct.nodes.map((node) => node.id).sort());
+    });
+
+    it('answers 404 navigating into a link whose target the caller cannot resolve', async () =>
+    {
+        // The recipient links a shared folder, then the owner revokes: the link is now dead, and navigating into it is
+        // a 404, never an empty listing that would confirm the target still exists.
+        const folder = await makeFolder(owner, 'nav-revoked');
+        await (await owner.post('/api/nodes', { type: 'folder', name: 'nav-revoked-sub', parentID: folder.id })).json();
+        const share = await (await grantShare(folder.id, recipientID, 'viewer')).json() as ShareResponse;
+        const link = await placeLink(recipient, null, folder.id);
+
+        expect((await owner.del(`/api/shares/${ share.id }`)).status).toBe(204);
+
+        expect((await recipient.get(`/api/nodes/${ link.id }/children`)).status).toBe(404);
     });
 });
 
@@ -342,8 +400,6 @@ describe('purging broken links', () =>
 
     it('never removes a second user\'s dead link when the folder owner purges', async () =>
     {
-        const ownerID = await callerID(owner);
-
         // A folder the owner shares editor to the recipient, so both may place links inside it.
         const shared = await makeFolder(owner, 'purge-shared-folder');
         expect((await grantShare(shared.id, recipientID, 'editor')).status).toBe(201);

@@ -45,6 +45,7 @@ function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
         name: 'Ada Lovelace',
         role: 'user',
         quota: { used: 0, limit: null },
+        limits: { trashRetentionDays: 30 },
         preferences: {},
         image: null,
         createdAt: '2026-07-20T00:00:00.000Z',

@@ -17,6 +17,7 @@ import {
     grantShare,
     makeUser,
     request,
+    setAvatarSha256,
 } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -117,11 +118,11 @@ describe('POST /api/nodes/:id/shares', () =>
 
         const res = await grantShare(booted.app, owner.cookie, folder, grantee.id, 'editor');
         const list = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
-        const body = await list.json() as { shares : { granteeUserID : string; role : string }[] };
+        const body = await list.json() as { shares : { share : { granteeUserID : string; role : string } }[] };
 
         expect(res.status).toBe(201);
-        expect(body.shares.filter((share) => share.granteeUserID === grantee.id)).toHaveLength(1);
-        expect(body.shares.find((share) => share.granteeUserID === grantee.id)?.role).toBe('editor');
+        expect(body.shares.filter((entry) => entry.share.granteeUserID === grantee.id)).toHaveLength(1);
+        expect(body.shares.find((entry) => entry.share.granteeUserID === grantee.id)?.share.role).toBe('editor');
     });
 });
 
@@ -243,6 +244,51 @@ describe('GET /api/nodes/:id/shares', () =>
 
         expect(res.status).toBe(403);
     });
+
+    it('pairs each grant with its grantee\'s display summary', async () =>
+    {
+        const folder = await createFolder(booted.app, owner.cookie, 'Shared');
+        await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
+
+        const res = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
+        const body = await res.json() as { shares : { share : Json; grantee : Json }[] };
+
+        expect(res.status).toBe(200);
+        expect(body.shares).toHaveLength(1);
+        expect(body.shares[0].share).toMatchObject({ granteeUserID: grantee.id, role: 'viewer' });
+        expect(body.shares[0].grantee).toEqual({
+            id: grantee.id,
+            name: grantee.name,
+            email: grantee.email,
+            image: null,
+        });
+    });
+
+    it('derives a grantee\'s avatar image URL from their stored avatar hash', async () =>
+    {
+        const folder = await createFolder(booted.app, owner.cookie, 'Shared');
+        await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
+        const sha256 = 'bb'.repeat(32);
+        await setAvatarSha256(booted, grantee.id, sha256);
+
+        const res = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
+        const body = await res.json() as { shares : { grantee : { image : string | null } }[] };
+
+        expect(body.shares[0].grantee.image).toBe(`/api/avatars/${ sha256 }`);
+    });
+
+    it('resolves every grantee\'s summary when a node carries more than one grant', async () =>
+    {
+        const folder = await createFolder(booted.app, owner.cookie, 'Shared');
+        const third = await makeUser(booted, 'third-list@example.com');
+        await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
+        await grantShare(booted.app, owner.cookie, folder, third.id, 'editor');
+
+        const res = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
+        const body = await res.json() as { shares : { grantee : { id : string } }[] };
+
+        expect(body.shares.map((entry) => entry.grantee.id).sort()).toEqual([ grantee.id, third.id ].sort());
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -281,6 +327,64 @@ describe('GET /api/shared-with-me', () =>
         const body = await res.json() as { entries : { placed : boolean }[] };
 
         expect(body.entries[0].placed).toBe(true);
+    });
+
+    it('pairs each entry with the target owner\'s display summary', async () =>
+    {
+        const folder = await createFolder(booted.app, owner.cookie, 'Shared');
+        await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
+
+        const res = await request(booted.app, 'GET', '/api/shared-with-me', grantee.cookie);
+        const body = await res.json() as { entries : { owner : Json }[] };
+
+        // The recipient sees the sharer's real name, not just the ownerID already riding on the target -- the owner
+        // shared WITH them, so disclosing this summary discloses no one who didn't already disclose themselves.
+        expect(body.entries[0].owner).toEqual({ id: owner.id, name: owner.name, email: owner.email, image: null });
+    });
+
+    it('derives the owner\'s avatar image URL from their stored avatar hash', async () =>
+    {
+        const folder = await createFolder(booted.app, owner.cookie, 'Shared');
+        await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
+        const sha256 = 'dd'.repeat(32);
+        await setAvatarSha256(booted, owner.id, sha256);
+
+        const res = await request(booted.app, 'GET', '/api/shared-with-me', grantee.cookie);
+        const body = await res.json() as { entries : { owner : { image : string | null } }[] };
+
+        expect(body.entries[0].owner.image).toBe(`/api/avatars/${ sha256 }`);
+    });
+
+    // The Type filter rides the query string and narrows against the target's own type. This proves the param travels
+    // parse -> manager -> RA over the wire; the mime-family precision is proven at the manager level.
+    it('narrows the listing to shares whose target matches the selected type family', async () =>
+    {
+        const folder = await createFolder(booted.app, owner.cookie, 'Shared');
+        await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
+
+        const asFolders = await request(booted.app, 'GET', '/api/shared-with-me?types=folders', grantee.cookie);
+        const asImages = await request(booted.app, 'GET', '/api/shared-with-me?types=images', grantee.cookie);
+
+        const foldersBody = await asFolders.json() as { entries : { target : { id : string } }[] };
+        const imagesBody = await asImages.json() as { entries : unknown[] };
+
+        expect(foldersBody.entries.map((entry) => entry.target.id)).toEqual([ folder ]);
+        expect(imagesBody.entries).toEqual([]);
+    });
+
+    it('bounds the listing by the modified window against the target', async () =>
+    {
+        const folder = await createFolder(booted.app, owner.cookie, 'Shared');
+        await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
+
+        const futurePath = '/api/shared-with-me?updatedAfter=2999-01-01T00:00:00.000Z';
+        const pastPath = '/api/shared-with-me?updatedAfter=2000-01-01T00:00:00.000Z';
+        const future = await request(booted.app, 'GET', futurePath, grantee.cookie);
+        const past = await request(booted.app, 'GET', pastPath, grantee.cookie);
+
+        expect((await future.json() as { entries : unknown[] }).entries).toEqual([]);
+        expect((await past.json() as { entries : { target : { id : string } }[] }).entries
+            .map((entry) => entry.target.id)).toEqual([ folder ]);
     });
 });
 

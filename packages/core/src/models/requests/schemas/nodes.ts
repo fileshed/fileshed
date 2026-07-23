@@ -20,6 +20,7 @@ import {
     type CreateLinkRequest,
     type CreateNodeRequest,
     type DeleteNodeQuery,
+    type EmptyTrashResponse,
     type LinkTarget,
     type MoveRequest,
     type NodeListResponse,
@@ -127,6 +128,14 @@ export const purgeBrokenLinksResponseCodec = z.strictObject({
 
 typeAssert<Equals<z.output<typeof purgeBrokenLinksResponseCodec>, PurgeBrokenLinksResponse>>();
 
+export const emptyTrashResponseCodec = z.strictObject({
+    purged: z.number()
+        .int()
+        .nonnegative(),
+});
+
+typeAssert<Equals<z.output<typeof emptyTrashResponseCodec>, EmptyTrashResponse>>();
+
 //----------------------------------------------------------------------------------------------------------------------
 // Query strings arrive as strings, so limit/offset are coerced; an over-max limit is rejected rather than silently
 // clamped, matching the strict-schema convention elsewhere in core. The type families ride a single comma-separated
@@ -134,7 +143,7 @@ typeAssert<Equals<z.output<typeof purgeBrokenLinksResponseCodec>, PurgeBrokenLin
 // rejected. The date bounds are full ISO instants.
 //----------------------------------------------------------------------------------------------------------------------
 
-const typeFamiliesParam = z.string()
+export const typeFamiliesParam = z.string()
     .optional()
     .transform((value) =>
     {
@@ -175,6 +184,7 @@ export const linkTargetCodec = z.strictObject({
     id: z.string(),
     type: z.enum(nodeTypes),
     name: z.string(),
+    ownerID: z.string(),
     mimeType: z.string().optional(),
     size: z.number().optional(),
 });
@@ -257,10 +267,17 @@ function linkTargetOf(target : Node | null) : LinkTarget | null
 
     if(target.type === 'file')
     {
-        return { id: target.id, type: 'file', name: target.name, mimeType: target.mimeType, size: target.size };
+        return {
+            id: target.id,
+            type: 'file',
+            name: target.name,
+            ownerID: target.ownerID,
+            mimeType: target.mimeType,
+            size: target.size,
+        };
     }
 
-    return { id: target.id, type: target.type, name: target.name };
+    return { id: target.id, type: target.type, name: target.name, ownerID: target.ownerID };
 }
 
 export function toNodeResponse(node : Node, role : Role, target : Node | null = null) : NodeResponse

@@ -55,6 +55,7 @@
                 :sort-key="store.sortKey"
                 :sort-direction="store.sortDirection"
                 :build-menu="buildMenu"
+                :owners="store.owners"
                 @select="(node, event) => emit('select', node, event)"
                 @open="(node) => emit('open', node)"
                 @sort="(key) => emit('sort', key)"

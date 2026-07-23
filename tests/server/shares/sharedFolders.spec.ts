@@ -225,8 +225,8 @@ describe('the folder owner and a foreign-owned contribution', () =>
     {
         const contributionID = await contribute();
         const grantsRes = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
-        const grants = await grantsRes.json() as { shares : { id : string; granteeUserID : string }[] };
-        const editorGrant = grants.shares.find((share) => share.granteeUserID === editor.id);
+        const grants = await grantsRes.json() as { shares : { share : { id : string; granteeUserID : string } }[] };
+        const editorGrant = grants.shares.find((entry) => entry.share.granteeUserID === editor.id)?.share;
 
         await request(booted.app, 'DELETE', `/api/shares/${ editorGrant?.id }`, owner.cookie);
 

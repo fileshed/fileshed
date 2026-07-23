@@ -15,6 +15,7 @@ import {
     createNode,
     getChildren,
     getNode,
+    getTrash,
     hardDeleteNode,
     patchNode,
     purgeBrokenLinks,
@@ -41,6 +42,7 @@ import {
     listDeletionOffers,
 } from '@client/resource-access/deletionOffers.ts';
 import { createPublicLink, listLinksForNode, revokePublicLink } from '@client/resource-access/publicLinks.ts';
+import { lookupUser } from '@client/resource-access/users.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
 import { adminStatus, listUsers, setQuota } from '@client/resource-access/admin.ts';
 import { downloadUrl } from '@client/resource-access/downloads.ts';
@@ -108,6 +110,20 @@ const rows : EndpointRow[] = [
         path: '/api/nodes/n1',
         body: { name: 'renamed' },
     },
+    {
+        name: 'getTrash',
+        call: () => getTrash({ limit: 50, sortKey: 'name', sortDirection: 'asc' }),
+        method: 'GET',
+        path: '/api/trash',
+        query: { limit: '50', sortKey: 'name', sortDirection: 'asc' },
+    },
+    {
+        name: 'getTrash (filtered)',
+        call: () => getTrash({ limit: 50, types: [ 'images', 'pdfs' ], updatedAfter: '2026-02-01T00:00:00.000Z' }),
+        method: 'GET',
+        path: '/api/trash',
+        query: { limit: '50', types: 'images,pdfs', updatedAfter: '2026-02-01T00:00:00.000Z' },
+    },
     { name: 'trashNode', call: () => trashNode('n1'), method: 'POST', path: '/api/nodes/n1/trash' },
     { name: 'restoreNode', call: () => restoreNode('n1'), method: 'POST', path: '/api/nodes/n1/restore' },
     {
@@ -156,7 +172,21 @@ const rows : EndpointRow[] = [
         body: { granteeUserID: 'u2', role: 'viewer' },
     },
     { name: 'listSharesForNode', call: () => listSharesForNode('n1'), method: 'GET', path: '/api/nodes/n1/shares' },
+    {
+        name: 'lookupUser',
+        call: () => lookupUser('grace@example.com'),
+        method: 'GET',
+        path: '/api/users/lookup',
+        query: { email: 'grace@example.com' },
+    },
     { name: 'sharedWithMe', call: () => sharedWithMe(), method: 'GET', path: '/api/shared-with-me' },
+    {
+        name: 'sharedWithMe (filtered)',
+        call: () => sharedWithMe({ types: [ 'images' ], updatedBefore: '2026-03-01T00:00:00.000Z' }),
+        method: 'GET',
+        path: '/api/shared-with-me',
+        query: { types: 'images', updatedBefore: '2026-03-01T00:00:00.000Z' },
+    },
     { name: 'leaveShare', call: () => leaveShare('s1'), method: 'POST', path: '/api/shares/s1/leave' },
     { name: 'revokeShare', call: () => revokeShare('s1'), method: 'DELETE', path: '/api/shares/s1' },
 

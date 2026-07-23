@@ -22,11 +22,15 @@
                 :can-copy="canCopy"
                 :copy-tooltip="copyTooltip"
                 :can-rename="canRename"
+                :can-share="canShare"
+                :can-move="canMove"
+                :can-trash="canTrash"
                 :trash-label="trashLabel"
                 @clear="clearSel"
                 @move="moveSelection"
                 @copy="copySelected"
                 @rename="renameSingle"
+                @share="shareSingle"
                 @trash="trashSelected"
             />
             <FilterBar v-else :view-mode="viewMode" />
@@ -46,6 +50,7 @@
 
         <RenameNode ref="renameModal" />
         <MoveNodes ref="moveModal" />
+        <ShareDialog ref="shareModal" />
         <NewFolder />
         <NewDocument />
     </section>
@@ -57,7 +62,7 @@
     import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { useToast } from '@nuxt/ui/composables';
-    import type { BreadcrumbItem, ContextMenuItem } from '@nuxt/ui';
+    import type { ContextMenuItem } from '@nuxt/ui';
 
     import type { NodeResponse, NodeSortKey, ViewMode } from '@fileshed/core';
 
@@ -78,14 +83,19 @@
     import DropZone from '../components/uploads/dropZone.vue';
     import RenameNode from '../components/drive/modals/renameNode.vue';
     import MoveNodes from '../components/drive/modals/moveNodes.vue';
+    import ShareDialog from '../components/share/modals/shareDialog.vue';
     import NewFolder from '../components/drive/modals/newFolder.vue';
     import NewDocument from '../components/drive/modals/newDocument.vue';
+
+    // Types
+    import type { DriveCrumb } from '../components/drive/linkCrumbCard/types.ts';
 
     // Engines
     import { type SelectionState, intent } from '../engines/intent/index.ts';
 
     // Utils
     import { isDeadLink } from '../utils/nodeTypePresentation.ts';
+    import { ownerIDFor, resolveOwner } from '../utils/resolveOwner.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -103,6 +113,7 @@
     const selection = ref<SelectionState>(intent.selection.emptySelection());
     const renameModal = ref<InstanceType<typeof RenameNode> | null>(null);
     const moveModal = ref<InstanceType<typeof MoveNodes> | null>(null);
+    const shareModal = ref<InstanceType<typeof ShareDialog> | null>(null);
 
     //------------------------------------------------------------------------------------------------------------------
     // Routing -- the route param is the source of truth for which folder is open.
@@ -156,9 +167,34 @@
     // Breadcrumb and view mode
     //------------------------------------------------------------------------------------------------------------------
 
-    const crumbs = computed<BreadcrumbItem[]>(() => [
-        { label: session.rootLabel, icon: 'i-lucide-hard-drive', to: '/' },
-        ...store.breadcrumb.map((folder) => ({ label: folder.name, to: `/folder/${ folder.id }` })),
+    // A foreign chain (a cold reload deep inside a shared subtree, walked up from ancestors the caller only sees by
+    // grant) roots under Shared with me instead of My Files -- the sharer's own folder names in between still render,
+    // as browsable context once correctly rooted, not as a leak into the caller's own tree.
+    const crumbRoot = computed<DriveCrumb>(() =>
+    {
+        return store.breadcrumbForeign
+            ? { label: 'Shared with me', icon: 'i-lucide-users', to: '/shared' }
+            : { label: session.rootLabel, icon: 'i-lucide-hard-drive', to: '/' };
+    });
+
+    // A link crumb renders through the link slot (marker + hover card), carrying the link node and its target owner
+    // resolved off the standing owner directory -- which retains the owner even after the user descends past the link.
+    // Every other crumb is a plain navigable label.
+    const crumbs = computed<DriveCrumb[]>(() => [
+        crumbRoot.value,
+        ...store.breadcrumb.map((node) : DriveCrumb =>
+        {
+            if(node.type === 'link')
+            {
+                return {
+                    label: node.name,
+                    slot: 'link',
+                    link: { node, owner: resolveOwner(ownerIDFor(node), store.knownOwners) },
+                };
+            }
+
+            return { label: node.name, to: `/folder/${ node.id }` };
+        }),
     ]);
 
     // The open folder's name for the drop overlay -- the last breadcrumb crumb, or the files root at the top.
@@ -197,12 +233,29 @@
         return selectedNodes.value.length === 1 ? selectedNodes.value[0] ?? null : null;
     });
 
+    // The caller's own id, gating every owner-only action below -- direct ownership (node.ownerID), never the
+    // resolved `role`: a folder owner reads a contribution placed in their own folder as role 'owner' but does not
+    // administer it, so role alone would offer Rename/Move/Trash the server refuses.
+    const currentUserID = computed(() => session.me?.id ?? null);
+
     const canCopy = computed(() => intent.selection.canCopySelection(selectedNodes.value));
     const copyTooltip = computed(() =>
     {
         return canCopy.value ? 'Make a copy' : 'Folders can\'t be copied';
     });
-    const canRename = computed(() => single.value !== null && !isDeadLink(single.value));
+    const canRename = computed(() =>
+    {
+        return single.value !== null && !isDeadLink(single.value) && intent.selection.isOwnedBy(
+            single.value,
+            currentUserID.value
+        );
+    });
+    const canShare = computed(() =>
+    {
+        return single.value !== null && intent.selection.canShareNode(single.value, currentUserID.value);
+    });
+    const canMove = computed(() => intent.selection.ownsSelection(selectedNodes.value, currentUserID.value));
+    const canTrash = computed(() => intent.selection.ownsSelection(selectedNodes.value, currentUserID.value));
     const trashLabel = computed(() =>
     {
         return intent.selection.planTrash(selectedNodes.value).mode === 'remove' ? 'Remove' : 'Trash';
@@ -233,6 +286,8 @@
         {
             case 'navigate': void router.push(`/folder/${ action.folderID }`); break;
             case 'edit': void router.push(`/file/${ action.nodeID }`); break;
+            case 'annotate': void router.push(`/file/${ action.nodeID }`); break;
+            case 'play': void router.push(`/file/${ action.nodeID }`); break;
             case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
             case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
             case 'none': break;
@@ -245,6 +300,8 @@
         {
             case 'navigate': return 'i-lucide-folder-open';
             case 'edit': return 'i-lucide-file-pen';
+            case 'annotate': return 'i-lucide-pen-tool';
+            case 'play': return 'i-lucide-play';
             case 'view': return 'i-lucide-external-link';
             case 'download': return 'i-lucide-download';
             case 'none': return 'i-lucide-external-link';
@@ -266,14 +323,26 @@
         moveModal.value?.open(nodes);
     }
 
+    function openShare(node : NodeResponse) : void
+    {
+        shareModal.value?.open(node);
+    }
+
     function moveSelection() : void
     {
+        if(!canMove.value) { return; }
+
         openMove(selectedNodes.value);
     }
 
     function renameSingle() : void
     {
-        if(single.value !== null) { openRename(single.value); }
+        if(canRename.value && single.value !== null) { openRename(single.value); }
+    }
+
+    function shareSingle() : void
+    {
+        if(canShare.value && single.value !== null) { openShare(single.value); }
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -305,6 +374,8 @@
     // any links are reported as left in place -- links are never trashable, and Remove is irreversible.
     function trashSelected() : void
     {
+        if(!canTrash.value) { return; }
+
         const plan = intent.selection.planTrash(selectedNodes.value);
         const targets = [ ...plan.targetIDs ];
         if(targets.length === 0) { return; }
@@ -346,37 +417,62 @@
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    // Context menu -- a dead link offers only Remove; every other node gets the full set, with Trash for files and
-    // folders and Remove for links (links are deleted directly, never trashed).
+    // Context menu -- gated by direct ownership (node.ownerID), never the resolved `role`, exactly like the selection
+    // bar above. A dead link owned by someone else offers nothing: there is no target to open and no administering it.
+    // A foreign file (a viewer or editor's own contribution, or a node reached through a traversed folder link) gets
+    // Open plus Save a copy -- Copy asks only read access, so it rides for any role -- so a non-owner is never left
+    // with a bare Open. Every owner-only action -- Share, Rename, Move, Trash/Remove -- disappears entirely for a node
+    // the caller does not directly own.
     //------------------------------------------------------------------------------------------------------------------
 
     function buildMenu(node : NodeResponse) : ContextMenuItem[][]
     {
+        const owned = intent.selection.isOwnedBy(node, currentUserID.value);
+
         if(isDeadLink(node))
         {
+            if(!owned) { return []; }
+
             return [ [
                 { label: 'Remove', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => removeLink(node) },
             ] ];
+        }
+
+        const groups : ContextMenuItem[][] = [
+            [ { label: 'Open', icon: openIcon(node), onSelect: () => onOpen(node) } ],
+        ];
+
+        if(!owned)
+        {
+            if(intent.selection.canCopyNode(node))
+            {
+                groups.push([ { label: 'Save a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) } ]);
+            }
+
+            return groups;
+        }
+
+        if(node.type !== 'link')
+        {
+            groups.push([ { label: 'Share', icon: 'i-lucide-user-plus', onSelect: () => openShare(node) } ]);
         }
 
         const edit : ContextMenuItem[] = [
             { label: 'Rename', icon: 'i-lucide-pencil', onSelect: () => openRename(node) },
             { label: 'Move', icon: 'i-lucide-folder-input', onSelect: () => openMove([ node ]) },
         ];
-        if(node.type === 'file')
+        if(intent.selection.canCopyNode(node))
         {
             edit.push({ label: 'Make a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) });
         }
+        groups.push(edit);
 
         const remove : ContextMenuItem = node.type === 'link'
             ? { label: 'Remove', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => removeLink(node) }
             : { label: 'Trash', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => trashOne(node) };
+        groups.push([ remove ]);
 
-        return [
-            [ { label: 'Open', icon: openIcon(node), onSelect: () => onOpen(node) } ],
-            edit,
-            [ remove ],
-        ];
+        return groups;
     }
 </script>
 

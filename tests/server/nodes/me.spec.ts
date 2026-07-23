@@ -32,6 +32,7 @@ describe('GET /api/me', () =>
             email: 'a@example.com',
             role: 'user',
             quota: { used: 0, limit: null },
+            limits: { trashRetentionDays: 30 },
         });
         expect(body.preferences).toEqual({});
     });

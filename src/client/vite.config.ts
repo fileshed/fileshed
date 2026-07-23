@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) =>
             devServer({
                 entry: '../server/server.ts',
                 exclude: [
-                    /^(?!\/api\/).*/,
+                    /^(?!\/api\/|\/d\/).*/,
                 ],
             }),
         ],
