@@ -5,12 +5,16 @@
 // client of this version understands. Unknown keys are not modelled here on purpose: their survival across writes is a
 // storage property enforced by the key-wise merge on the server, not a shape the app reasons about. rootLabel is the
 // name shown for the files root; timeFormat is the clock style for node timestamps; editorTheme is the id of the
-// editor colorscheme and editorGutter whether its line-number gutter shows. Any key absent means the default, which is
-// resolved on the client -- the blob stores only what the user has chosen.
+// editor colorscheme and editorGutter whether its line-number gutter shows; viewMode is the drive's grid-vs-list
+// choice. Any key absent means the default, which is resolved on the client -- the blob stores only what the user has
+// chosen.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const timeFormats = [ '12h', '24h' ] as const;
 export type TimeFormat = typeof timeFormats[number];
+
+export const viewModes = [ 'grid', 'list' ] as const;
+export type ViewMode = typeof viewModes[number];
 
 export interface UserPreferences
 {
@@ -18,6 +22,7 @@ export interface UserPreferences
     timeFormat ?: TimeFormat;
     editorTheme ?: string;
     editorGutter ?: boolean;
+    viewMode ?: ViewMode;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -33,8 +33,7 @@
 <script setup lang="ts">
     import type { BreadcrumbItem } from '@nuxt/ui';
 
-    // Resource Access
-    import type { ViewMode } from '../../resource-access/viewPreference.ts';
+    import type { ViewMode } from '@fileshed/core';
 
     //------------------------------------------------------------------------------------------------------------------
 

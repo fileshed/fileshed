@@ -59,7 +59,7 @@
     import { useToast } from '@nuxt/ui/composables';
     import type { BreadcrumbItem, ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse, NodeSortKey } from '@fileshed/core';
+    import type { NodeResponse, NodeSortKey, ViewMode } from '@fileshed/core';
 
     // Stores
     import { useDriveStore } from '../stores/drive.ts';
@@ -68,7 +68,7 @@
 
     // Resource Access
     import { downloadUrl } from '../resource-access/downloads.ts';
-    import { type ViewMode, loadViewMode, saveViewMode } from '../resource-access/viewPreference.ts';
+    import { takeLegacyViewMode } from '../resource-access/legacyViewMode.ts';
 
     // Components
     import DriveHeader from '../components/drive/driveHeader.vue';
@@ -100,7 +100,6 @@
     const toast = useToast();
     const { runMutation } = useRunWithToast();
 
-    const viewMode = ref<ViewMode>(loadViewMode());
     const selection = ref<SelectionState>(intent.selection.emptySelection());
     const renameModal = ref<InstanceType<typeof RenameNode> | null>(null);
     const moveModal = ref<InstanceType<typeof MoveNodes> | null>(null);
@@ -132,9 +131,22 @@
         if(event.key === 'Escape') { selection.value = intent.selection.clearSelection(); }
     }
 
+    // A pre-migration browser may still hold the view mode in localStorage. Adopted only when the profile's own blob
+    // carries none, so a value already in the blob always wins; the legacy key is cleared either way, since it is
+    // consulted at most once.
+    function migrateLegacyViewMode() : void
+    {
+        const legacy = takeLegacyViewMode();
+        if(legacy === null || session.me === null || session.me.preferences.viewMode !== undefined) { return; }
+
+        session.applyPreferences({ viewMode: legacy });
+        void runMutation(() => session.savePreferences({ viewMode: legacy }));
+    }
+
     onMounted(() =>
     {
         void store.load(routeFolderID());
+        migrateLegacyViewMode();
         window.addEventListener('keydown', onKeydown);
     });
 
@@ -152,6 +164,8 @@
     // The open folder's name for the drop overlay -- the last breadcrumb crumb, or the files root at the top.
     const currentFolderName = computed(() => store.breadcrumb.at(-1)?.name ?? session.rootLabel);
 
+    const viewMode = computed(() => session.viewMode);
+
     function onDropFiles(files : File[]) : void
     {
         uploads.enqueue(files, store.folderID);
@@ -159,8 +173,10 @@
 
     function setView(mode : ViewMode) : void
     {
-        viewMode.value = mode;
-        saveViewMode(mode);
+        if(mode === session.viewMode) { return; }
+
+        session.applyPreferences({ viewMode: mode });
+        void runMutation(() => session.savePreferences({ viewMode: mode }));
     }
 
     function onSort(key : NodeSortKey) : void

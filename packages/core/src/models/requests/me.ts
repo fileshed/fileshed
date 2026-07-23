@@ -7,7 +7,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { TimeFormat, UserPreferences } from '../userPreferences.ts';
+import type { TimeFormat, UserPreferences, ViewMode } from '../userPreferences.ts';
 import type { UserRole } from '../userProfile.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -42,6 +42,7 @@ export interface UpdatePreferencesRequest
     timeFormat ?: TimeFormat | null;
     editorTheme ?: string | null;
     editorGutter ?: boolean | null;
+    viewMode ?: ViewMode | null;
     [key : string] : unknown;
 }
 

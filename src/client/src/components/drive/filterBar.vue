@@ -155,13 +155,16 @@
     import { type DateValue, getLocalTimeZone } from '@internationalized/date';
     import type { DropdownMenuItem } from '@nuxt/ui';
 
-    import { type NodeSortKey, type NodeTypeFamily, type UserSummary, nodeTypeFamilies } from '@fileshed/core';
+    import {
+        type NodeSortKey,
+        type NodeTypeFamily,
+        type UserSummary,
+        type ViewMode,
+        nodeTypeFamilies,
+    } from '@fileshed/core';
 
     // Stores
     import { useDriveStore } from '../../stores/drive.ts';
-
-    // Resource Access
-    import type { ViewMode } from '../../resource-access/viewPreference.ts';
 
     // Utils
     import {

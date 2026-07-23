@@ -2,7 +2,7 @@
 // Preferences Constants
 //----------------------------------------------------------------------------------------------------------------------
 
-import type { TimeFormat } from '../models/userPreferences.ts';
+import type { TimeFormat, ViewMode } from '../models/userPreferences.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -22,5 +22,8 @@ export const DEFAULT_EDITOR_THEME = 'ayu-dark';
 
 // Whether the editor shows its line-number gutter when a user has set none.
 export const DEFAULT_EDITOR_GUTTER = false;
+
+// The drive's grid-vs-list choice when a user has set none.
+export const DEFAULT_VIEW_MODE : ViewMode = 'grid';
 
 //----------------------------------------------------------------------------------------------------------------------

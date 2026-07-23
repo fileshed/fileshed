@@ -15,8 +15,10 @@ import {
     DEFAULT_EDITOR_THEME,
     DEFAULT_ROOT_LABEL,
     DEFAULT_TIME_FORMAT,
+    DEFAULT_VIEW_MODE,
     type MeResponse,
     type UpdatePreferencesRequest,
+    type ViewMode,
 } from '@fileshed/core';
 
 // Resource Access
@@ -54,6 +56,10 @@ export const useSessionStore = defineStore('session', () =>
     // problem to resolve, not this getter's.
     const editorTheme = computed(() => me.value?.preferences.editorTheme ?? DEFAULT_EDITOR_THEME);
     const editorGutter = computed(() => me.value?.preferences.editorGutter ?? DEFAULT_EDITOR_GUTTER);
+
+    // The drive's grid-vs-list choice, defaulting until the user picks one. The single place that fallback lives; the
+    // drive page reads it here.
+    const viewMode = computed(() => me.value?.preferences.viewMode ?? DEFAULT_VIEW_MODE);
 
     async function initialize() : Promise<void>
     {
@@ -172,10 +178,10 @@ export const useSessionStore = defineStore('session', () =>
         me.value = await fetchMe();
     }
 
-    // Merge editor-view preferences into the in-memory profile at once, without a write, so the editor reflects a pick
-    // the instant it happens. A debounced savePreferences follows to persist the settled value and reconcile against
-    // the server's echo.
-    function applyPreferences(patch : { editorTheme ?: string; editorGutter ?: boolean }) : void
+    // Merge a view preference into the in-memory profile at once, without a write, so the surface reflects a pick the
+    // instant it happens. A savePreferences call follows to persist the settled value and reconcile against the
+    // server's echo.
+    function applyPreferences(patch : { editorTheme ?: string; editorGutter ?: boolean; viewMode ?: ViewMode }) : void
     {
         if(me.value === null) { return; }
         me.value = { ...me.value, preferences: { ...me.value.preferences, ...patch } };
@@ -191,6 +197,7 @@ export const useSessionStore = defineStore('session', () =>
         timeFormat,
         editorTheme,
         editorGutter,
+        viewMode,
         initialize,
         signIn,
         signUp,

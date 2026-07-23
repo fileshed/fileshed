@@ -35,7 +35,13 @@ export type { Blob } from './models/blob.ts';
 export type { DeletionOffer } from './models/deletionOffer.ts';
 export { type StorageBackend, type StorageBackendKind, storageBackendKinds } from './models/storageBackend.ts';
 export { type UserProfile, type UserRole, userRoles } from './models/userProfile.ts';
-export { type UserPreferences, type TimeFormat, timeFormats } from './models/userPreferences.ts';
+export {
+    type UserPreferences,
+    type TimeFormat,
+    timeFormats,
+    type ViewMode,
+    viewModes,
+} from './models/userPreferences.ts';
 
 // Schemas
 export { nodeCodec, parseNode } from './models/schemas/node.ts';

@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { EDITOR_THEME_MAX_LENGTH, ROOT_LABEL_MAX_LENGTH } from '../../../constants/preferences.ts';
 
 // Models
-import { timeFormats } from '../../userPreferences.ts';
+import { timeFormats, viewModes } from '../../userPreferences.ts';
 import { userRoles } from '../../userProfile.ts';
 
 // Model Schemas
@@ -69,6 +69,9 @@ export const updatePreferencesRequestCodec = z.looseObject({
         .nullable()
         .optional(),
     editorGutter: z.boolean()
+        .nullable()
+        .optional(),
+    viewMode: z.enum(viewModes)
         .nullable()
         .optional(),
 });

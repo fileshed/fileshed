@@ -10,6 +10,7 @@ import {
     DEFAULT_EDITOR_THEME,
     DEFAULT_ROOT_LABEL,
     DEFAULT_TIME_FORMAT,
+    DEFAULT_VIEW_MODE,
     type MeResponse,
 } from '@fileshed/core';
 
@@ -340,6 +341,56 @@ describe('useSessionStore', () =>
 
         expect(store.me).toBeNull();
         expect(store.editorTheme).toBe(DEFAULT_EDITOR_THEME);
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Drive view mode
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('reports the default view mode (grid) when no preference is set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.viewMode).toBe('grid');
+        expect(store.viewMode).toBe(DEFAULT_VIEW_MODE);
+    });
+
+    it('reports the stored view mode when one is set', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.viewMode).toBe('list');
+    });
+
+    it('applies a view-mode preference in memory at once without hitting the wire', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        const store = useSessionStore();
+        await store.initialize();
+
+        store.applyPreferences({ viewMode: 'list' });
+
+        expect(store.viewMode).toBe('list');
+        expect(updatePreferencesMock).not.toHaveBeenCalled();
+    });
+
+    it('adopts the refreshed profile after saving a view-mode preference patch', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+        const store = useSessionStore();
+        await store.initialize();
+
+        await store.savePreferences({ viewMode: 'list' });
+
+        expect(store.viewMode).toBe('list');
+        expect(updatePreferencesMock).toHaveBeenCalledWith({ viewMode: 'list' });
     });
 });
 

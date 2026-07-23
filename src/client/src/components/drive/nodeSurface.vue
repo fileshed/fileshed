@@ -78,7 +78,7 @@
 <script setup lang="ts">
     import type { ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse, NodeSortKey } from '@fileshed/core';
+    import type { NodeResponse, NodeSortKey, ViewMode } from '@fileshed/core';
 
     // Stores
     import { useDriveStore } from '../../stores/drive.ts';
@@ -86,9 +86,6 @@
     // Components
     import NodeGrid from './nodeGrid.vue';
     import NodeList from './nodeList.vue';
-
-    // Resource Access
-    import type { ViewMode } from '../../resource-access/viewPreference.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

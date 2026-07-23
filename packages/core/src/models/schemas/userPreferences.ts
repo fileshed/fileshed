@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { EDITOR_THEME_MAX_LENGTH, ROOT_LABEL_MAX_LENGTH } from '../../constants/preferences.ts';
 
 // Models
-import { type UserPreferences, timeFormats } from '../userPreferences.ts';
+import { type UserPreferences, timeFormats, viewModes } from '../userPreferences.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../utils/typeAssert.ts';
@@ -28,6 +28,7 @@ export const userPreferencesCodec = z.object({
         .max(EDITOR_THEME_MAX_LENGTH)
         .optional(),
     editorGutter: z.boolean().optional(),
+    viewMode: z.enum(viewModes).optional(),
 });
 
 typeAssert<Equals<z.output<typeof userPreferencesCodec>, UserPreferences>>();

@@ -7,10 +7,15 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
-import type { LinkTarget, NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { LinkTarget, MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
+
+// Stores
+import { useSessionStore } from '@client/stores/session.ts';
 
 // Resource Access
+import { takeLegacyViewMode } from '@client/resource-access/legacyViewMode.ts';
 import { getChildren } from '@client/resource-access/nodes.ts';
+import { updatePreferences } from '@client/resource-access/preferences.ts';
 
 // Under test
 import DrivePage from '@client/pages/drivePage.vue';
@@ -27,9 +32,13 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     hardDeleteNode: vi.fn(),
 }));
 
+vi.mock('@client/resource-access/legacyViewMode.ts', () => ({ takeLegacyViewMode: vi.fn(() => null) }));
+vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const getChildrenMock = getChildren as unknown as Mock;
+const takeLegacyViewModeMock = takeLegacyViewMode as unknown as Mock;
+const updatePreferencesMock = updatePreferences as unknown as Mock;
 
 // Rename and Move are opened imperatively by the page; these stubs record the open(...) call so the selection-bar
 // wiring (the same path the context menu funnels through) is observable.
@@ -60,6 +69,19 @@ function linkNode(id : string, target : LinkTarget = { id: 't1', type: 'file', n
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
     return { nodes, total: nodes.length, limit: 50, offset: 0, owners: [] };
+}
+
+function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
+{
+    return {
+        id: 'user_1',
+        email: 'member@example.com',
+        role: 'user',
+        quota: { used: 0, limit: null },
+        preferences: {},
+        createdAt: ISO,
+        ...overrides,
+    };
 }
 
 const PLAIN_CLICK = { metaKey: false, ctrlKey: false, shiftKey: false };
@@ -99,12 +121,15 @@ const STUBS = {
     NodeGrid: { name: 'NodeGrid', template: '<div class="node-grid" />' },
 };
 
-async function mountDrive(nodes : NodeResponse[]) : Promise<VueWrapper>
+// A signed-out session (the default) leaves the legacy view-mode migration a no-op regardless of what the mocked
+// localStorage read returns -- the migration tests seed a signed-in `me` explicitly.
+async function mountDrive(nodes : NodeResponse[], me : MeResponse | null = null) : Promise<VueWrapper>
 {
     getChildrenMock.mockResolvedValue(page(nodes));
 
     const pinia = createPinia();
     setActivePinia(pinia);
+    useSessionStore().me = me;
 
     const router = createRouter({
         history: createMemoryHistory(),
@@ -254,6 +279,47 @@ describe('DrivePage — rename and move wiring', () =>
         await wrapper.find('[aria-label="Move"]').trigger('click');
 
         expect(moveOpen).toHaveBeenCalledWith([ f1, f2 ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — legacy view-mode migration', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    it('adopts a legacy localStorage view mode when the profile carries none, then persists it', async () =>
+    {
+        takeLegacyViewModeMock.mockReturnValueOnce('list');
+        updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+
+        await mountDrive([], meFixture({ preferences: {} }));
+        const session = useSessionStore();
+
+        expect(session.viewMode).toBe('list');
+        expect(updatePreferencesMock).toHaveBeenCalledWith({ viewMode: 'list' });
+    });
+
+    it('ignores a legacy localStorage view mode when the profile already has one', async () =>
+    {
+        takeLegacyViewModeMock.mockReturnValueOnce('list');
+
+        await mountDrive([], meFixture({ preferences: { viewMode: 'grid' } }));
+        const session = useSessionStore();
+
+        expect(session.viewMode).toBe('grid');
+        expect(updatePreferencesMock).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when there is no legacy localStorage view mode to migrate', async () =>
+    {
+        takeLegacyViewModeMock.mockReturnValueOnce(null);
+
+        await mountDrive([], meFixture({ preferences: {} }));
+        const session = useSessionStore();
+
+        expect(session.viewMode).toBe('grid');
+        expect(updatePreferencesMock).not.toHaveBeenCalled();
     });
 });
 

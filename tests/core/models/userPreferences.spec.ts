@@ -85,6 +85,17 @@ describe('userPreferencesCodec', () =>
     {
         expect(userPreferencesCodec.safeParse({ editorGutter: 'on' }).success).toBe(false);
     });
+
+    it('accepts both view-mode literals', () =>
+    {
+        expect(userPreferencesCodec.parse({ viewMode: 'grid' }).viewMode).toBe('grid');
+        expect(userPreferencesCodec.parse({ viewMode: 'list' }).viewMode).toBe('list');
+    });
+
+    it('rejects a view-mode value outside the two literals', () =>
+    {
+        expect(userPreferencesCodec.safeParse({ viewMode: 'compact' }).success).toBe(false);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -124,6 +135,16 @@ describe('toUserPreferences', () =>
     it('collapses a malformed editor preference to the empty view instead of throwing', () =>
     {
         expect(toUserPreferences({ editorGutter: 'yes' })).toEqual({});
+    });
+
+    it('carries a valid view mode into the view', () =>
+    {
+        expect(toUserPreferences({ viewMode: 'list' })).toEqual({ viewMode: 'list' });
+    });
+
+    it('collapses a malformed view mode to the empty view instead of throwing', () =>
+    {
+        expect(toUserPreferences({ viewMode: 'compact' })).toEqual({});
     });
 });
 
