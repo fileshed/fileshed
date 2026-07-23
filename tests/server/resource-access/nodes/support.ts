@@ -51,6 +51,8 @@ async function createUserStub(db : Kysely<Database>) : Promise<void>
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
         .addColumn('quota_limit', 'integer')
         .addColumn('preferences', 'text')
+        .addColumn('avatar_sha256', 'text')
+        .addColumn('avatar_mime', 'text')
         .execute();
 }
 
@@ -72,7 +74,7 @@ const isoNow = () : string => new Date().toISOString();
 export async function seedUser(
     db : Kysely<Database>,
     id : string,
-    extra : { name ?: string; image ?: string | null } = {}
+    extra : { name ?: string; avatarSha256 ?: string | null } = {}
 ) : Promise<void>
 {
     await db
@@ -81,7 +83,7 @@ export async function seedUser(
             id,
             name: extra.name ?? id,
             email: `${ id }@t.test`,
-            image: extra.image ?? null,
+            avatar_sha256: extra.avatarSha256 ?? null,
             role: 'user',
         })
         .execute();

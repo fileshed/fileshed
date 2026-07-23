@@ -16,6 +16,7 @@ import { MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
 // Routes
 import health from './routes/health.ts';
 import { createAdminRoutes, createAdminStatusRoutes } from './routes/admin.ts';
+import { createAvatarRoutes } from './routes/avatars.ts';
 import { createBlobRoutes } from './routes/blobs.ts';
 import { createMeRoutes } from './routes/me.ts';
 import { createAccessRequestRoutes } from './routes/accessRequests.ts';
@@ -41,6 +42,7 @@ import { ShareRA } from './resource-access/shares/index.ts';
 
 // Managers
 import { AdminManager } from './managers/admin.ts';
+import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
 import { DeletionOfferManager } from './managers/deletionOffer.ts';
 import { NodeManager } from './managers/node.ts';
@@ -85,6 +87,7 @@ export function targetsAuthAdminSurface(pathname : string) : boolean
 export interface AppServices
 {
     blobs : BlobManager;
+    avatars : AvatarManager;
     nodes : NodeManager;
     shares : ShareManager;
     publicLinks : PublicLinkManager;
@@ -131,6 +134,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
             app.route('/api', createNodeRoutes(sessions, services.nodes));
             app.route('/api', createSearchRoutes(sessions, services.nodes));
             app.route('/api', createMeRoutes(sessions, services.nodes));
+            app.route('/api', createAvatarRoutes(sessions, services.avatars, services.nodes));
             app.route('/api', createShareRoutes(sessions, services.shares));
             app.route('/api', createAccessRequestRoutes(sessions, services.shares));
             app.route('/api', createDownloadRoutes(sessions, services.publicLinks));
@@ -187,6 +191,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const shareRA = new ShareRA(handle);
     const tracker = new LastRunTracker();
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
+    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES });
     const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY);
     const shares = new ShareManager(handle, nodeRA, shareRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
@@ -218,7 +223,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         stopSweeps();
     };
 
-    const services = { blobs, nodes, shares, publicLinks, deletionOffers, adminStatus };
+    const services = { blobs, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus };
 
     return { app: createApp(auth, services), config, shutdown };
 }

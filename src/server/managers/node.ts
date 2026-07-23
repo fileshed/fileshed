@@ -62,6 +62,9 @@ import {
 import { ShareRA } from '../resource-access/shares/index.ts';
 import { UserRA } from '../resource-access/users/index.ts';
 
+// Utils
+import { avatarImage } from '../utils/avatarImage.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // The seam to blob graveyarding: after a subtree is hard-deleted, the shas of its files' blobs are handed here so the
@@ -249,11 +252,12 @@ export class NodeManager
 
     async me(actor : SessionUser) : Promise<MeResponse>
     {
-        // Preferences are read from the row, not the session snapshot: the cookie cache lags a just-saved preference,
-        // so a page reload right after a save would otherwise show the stale value.
-        const [ used, stored ] = await Promise.all([
+        // Preferences and the avatar are read from the row, not the session snapshot: the cookie cache lags a just-
+        // saved value, so a page reload right after a change would otherwise show the stale one.
+        const [ used, stored, avatarSha256 ] = await Promise.all([
             this.#nodes.ownedBytes(actor.id),
             this.#users.preferencesOf(actor.id),
+            this.#users.avatarSha256Of(actor.id),
         ]);
 
         return {
@@ -263,6 +267,7 @@ export class NodeManager
             role: actor.role === 'admin' ? 'admin' : 'user',
             quota: { used, limit: actor.quotaLimit ?? null },
             preferences: toUserPreferences(stored),
+            image: avatarImage(avatarSha256),
             createdAt: new Date(actor.createdAt).toISOString(),
         };
     }

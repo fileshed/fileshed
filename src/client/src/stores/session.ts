@@ -22,6 +22,7 @@ import {
 // Resource Access
 import { ApiError } from '../resource-access/apiError.ts';
 import { authClient } from '../resource-access/authClient.ts';
+import { deleteAvatar, uploadAvatar } from '../resource-access/avatar.ts';
 import { fetchMe } from '../resource-access/me.ts';
 import { updatePreferences } from '../resource-access/preferences.ts';
 
@@ -132,6 +133,45 @@ export const useSessionStore = defineStore('session', () =>
         me.value = await updatePreferences(patch);
     }
 
+    // Change the display name through better-auth's self-service updateUser, then adopt the refreshed profile so every
+    // surface reading `me` (the header menu, the profile card) re-labels at once. Failures propagate to the caller to
+    // toast.
+    async function updateName(name : string) : Promise<void>
+    {
+        const { error } = await authClient.updateUser({ name });
+        if(error) { throw new Error(error.message ?? 'Unable to update your name.'); }
+
+        me.value = await fetchMe();
+    }
+
+    // Change the sign-in password through better-auth's self-service changePassword. Nothing in /api/me depends on the
+    // password, so there is no profile to re-adopt; revokeOtherSessions signs every other device out. Failures
+    // propagate to the caller to toast.
+    async function changePassword(
+        currentPassword : string,
+        newPassword : string,
+        revokeOtherSessions : boolean
+    ) : Promise<void>
+    {
+        const { error } = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions });
+        if(error) { throw new Error(error.message ?? 'Unable to change your password.'); }
+    }
+
+    // Upload a new avatar and adopt the refreshed profile the server returns, so the new image URL propagates to the
+    // header and the profile card at once. Failures propagate to the caller to toast.
+    async function saveAvatar(file : File) : Promise<void>
+    {
+        me.value = await uploadAvatar(file);
+    }
+
+    // Remove the avatar, then refetch the profile (the DELETE answers 204, not the refreshed shape) so the image URL
+    // clears everywhere. Failures propagate to the caller to toast.
+    async function removeAvatar() : Promise<void>
+    {
+        await deleteAvatar();
+        me.value = await fetchMe();
+    }
+
     // Merge editor-view preferences into the in-memory profile at once, without a write, so the editor reflects a pick
     // the instant it happens. A debounced savePreferences follows to persist the settled value and reconcile against
     // the server's echo.
@@ -157,6 +197,10 @@ export const useSessionStore = defineStore('session', () =>
         signOut,
         savePreferences,
         applyPreferences,
+        updateName,
+        changePassword,
+        saveAvatar,
+        removeAvatar,
     };
 });
 

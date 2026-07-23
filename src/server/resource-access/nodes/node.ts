@@ -29,6 +29,9 @@ import {
 import type { Database, DatabaseHandle } from '../database/database.ts';
 import { nodeFromRow, rowFromNode } from './transforms.ts';
 
+// Utils
+import { avatarImage } from '../../utils/avatarImage.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export type NodeSortKey = 'name' | 'size' | 'createdAt' | 'updatedAt' | 'kind';
@@ -267,7 +270,12 @@ export class NodeRA
         let builder = this.#db
             .selectFrom('node')
             .innerJoin('user', 'user.id', 'node.owner_id')
-            .select([ 'user.id as id', 'user.name as name', 'user.email as email', 'user.image as image' ])
+            .select([
+                'user.id as id',
+                'user.name as name',
+                'user.email as email',
+                'user.avatar_sha256 as avatarSha256',
+            ])
             .distinct()
             .where('node.trashed_at', 'is', null);
 
@@ -277,7 +285,12 @@ export class NodeRA
 
         const rows = await builder.orderBy('user.name', 'asc').execute();
 
-        return rows.map((row) => ({ id: row.id, name: row.name, email: row.email, image: row.image }));
+        return rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            image: avatarImage(row.avatarSha256),
+        }));
     }
 
     // The ancestor chain of `id` by parent edges, nearest parent first up to the root, excluding `id` itself -- the

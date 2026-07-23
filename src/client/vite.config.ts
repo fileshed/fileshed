@@ -36,6 +36,7 @@ export default defineConfig(({ mode }) =>
                 ui: {
                     colors: {
                         primary: 'shed',
+                        secondary: 'violet',
                         neutral: 'zinc',
                     },
                 },

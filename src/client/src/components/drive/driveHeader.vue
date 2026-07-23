@@ -13,14 +13,14 @@
             <UButton
                 icon="i-lucide-layout-grid"
                 color="neutral"
-                :variant="viewMode === 'grid' ? 'solid' : 'ghost'"
+                :variant="viewMode === 'grid' ? 'solid' : 'outline'"
                 aria-label="Grid view"
                 @click="emit('set-view', 'grid')"
             />
             <UButton
                 icon="i-lucide-list"
                 color="neutral"
-                :variant="viewMode === 'list' ? 'solid' : 'ghost'"
+                :variant="viewMode === 'list' ? 'solid' : 'outline'"
                 aria-label="List view"
                 @click="emit('set-view', 'list')"
             />

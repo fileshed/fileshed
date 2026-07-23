@@ -104,6 +104,12 @@ const authOptionsShape = {
             // both dialects; input:false keeps it out of the sign-up payload and off better-auth's own update surface
             // -- it is written only through our PATCH /api/me/preferences, never round-tripped through the auth API.
             preferences: { type: 'string', required: false, input: false, fieldName: 'preferences' },
+
+            // The avatar: the sha256 of its bytes in the blob store, and the mime to serve them with. Same
+            // input:false discipline as preferences -- both are written only through our own /api/me/avatar routes,
+            // never the auth API. The mime is stored because an avatar blob has no node row to carry one.
+            avatarSha256: { type: 'string', required: false, input: false, fieldName: 'avatar_sha256' },
+            avatarMime: { type: 'string', required: false, input: false, fieldName: 'avatar_mime' },
         },
     },
 } satisfies BetterAuthOptions;

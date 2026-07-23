@@ -22,6 +22,7 @@ import { createAuth } from '@server/resource-access/auth.ts';
 import { createDatabase } from '@server/resource-access/database/database.ts';
 
 // Managers
+import { AvatarManager } from '@server/managers/avatar.ts';
 import { BlobManager } from '@server/managers/blob.ts';
 import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
 import { NodeManager } from '@server/managers/node.ts';
@@ -61,6 +62,11 @@ const EXPECTED_ROUTES = [
     // Me
     'GET /api/me',
     'PATCH /api/me/preferences',
+
+    // Avatars
+    'POST /api/me/avatar',
+    'DELETE /api/me/avatar',
+    'GET /api/avatars/:sha256',
 
     // Nodes
     'GET /api/nodes/children',
@@ -127,6 +133,7 @@ const nodes = new NodeManager(handle, nodeRA, blob);
 
 const app = createApp(auth, {
     blobs: new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES }),
+    avatars: new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES }),
     nodes,
     shares: new ShareManager(handle, nodeRA, shareRA),
     publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>

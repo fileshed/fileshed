@@ -2,6 +2,7 @@
 // Constants Barrel
 //----------------------------------------------------------------------------------------------------------------------
 
+export * from './avatar.ts';
 export * from './blob.ts';
 export * from './config.ts';
 export * from './nodeType.ts';

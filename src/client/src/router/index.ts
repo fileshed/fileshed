@@ -2,10 +2,11 @@
 // Router
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createRouter, createWebHistory } from 'vue-router';
+import { type RouteRecordRaw, createRouter, createWebHistory } from 'vue-router';
 
 // Layouts
 import MainLayout from '../layouts/mainLayout.vue';
+import AccountLayout from '../layouts/accountLayout.vue';
 
 // Pages
 import SignInPage from '../pages/signInPage.vue';
@@ -15,7 +16,9 @@ import FilePage from '../pages/filePage.vue';
 import SharedPage from '../pages/sharedPage.vue';
 import TrashPage from '../pages/trashPage.vue';
 import SearchPage from '../pages/searchPage.vue';
-import AccountPage from '../pages/accountPage.vue';
+import ProfileTab from '../pages/account/profileTab.vue';
+import SettingsTab from '../pages/account/settingsTab.vue';
+import AccountTab from '../pages/account/accountTab.vue';
 import AdminPage from '../pages/adminPage.vue';
 
 // Stores
@@ -26,26 +29,37 @@ import { createAuthGuard } from './guard.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
+export const routes : RouteRecordRaw[] = [
+    { path: '/signin', name: 'signin', component: SignInPage, meta: { public: true } },
+    { path: '/signup', name: 'signup', component: SignUpPage, meta: { public: true } },
+    {
+        path: '/',
+        component: MainLayout,
+        children: [
+            { path: '', name: 'drive', component: DrivePage },
+            { path: 'folder/:id', name: 'folder', component: DrivePage },
+            { path: 'file/:id', name: 'file', component: FilePage },
+            { path: 'shared', name: 'shared', component: SharedPage },
+            { path: 'trash', name: 'trash', component: TrashPage },
+            { path: 'search', name: 'search', component: SearchPage },
+            { path: 'admin', name: 'admin', component: AdminPage, meta: { admin: true } },
+        ],
+    },
+    {
+        path: '/account',
+        component: AccountLayout,
+        children: [
+            { path: '', redirect: { name: 'account-profile' } },
+            { path: 'profile', name: 'account-profile', component: ProfileTab },
+            { path: 'settings', name: 'account-settings', component: SettingsTab },
+            { path: 'account', name: 'account-account', component: AccountTab },
+        ],
+    },
+];
+
 export const router = createRouter({
     history: createWebHistory(),
-    routes: [
-        { path: '/signin', name: 'signin', component: SignInPage, meta: { public: true } },
-        { path: '/signup', name: 'signup', component: SignUpPage, meta: { public: true } },
-        {
-            path: '/',
-            component: MainLayout,
-            children: [
-                { path: '', name: 'drive', component: DrivePage },
-                { path: 'folder/:id', name: 'folder', component: DrivePage },
-                { path: 'file/:id', name: 'file', component: FilePage },
-                { path: 'shared', name: 'shared', component: SharedPage },
-                { path: 'trash', name: 'trash', component: TrashPage },
-                { path: 'search', name: 'search', component: SearchPage },
-                { path: 'account', name: 'account', component: AccountPage },
-                { path: 'admin', name: 'admin', component: AdminPage, meta: { admin: true } },
-            ],
-        },
-    ],
+    routes,
 });
 
 // useSessionStore is resolved lazily inside the guard so Pinia is already installed by the time it runs.

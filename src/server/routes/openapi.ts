@@ -38,6 +38,7 @@ const tags : OpenApiV31.TagObject[] = [
     { name: 'Nodes', description: 'Files, folders, and links.' },
     { name: 'Search', description: 'Name search across accessible nodes.' },
     { name: 'Me', description: 'The current user and their quota.' },
+    { name: 'Avatars', description: 'User avatar upload, removal, and serving.' },
     { name: 'Admin', description: 'User management and server status.' },
     { name: 'Blobs', description: 'Content-addressed claim and proof-of-possession.' },
     { name: 'Uploads', description: 'Committing uploaded bytes to a file node.' },

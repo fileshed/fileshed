@@ -40,6 +40,9 @@ export const meResponseCodec = z.strictObject({
             .nullable(),
     }),
     preferences: userPreferencesCodec.default({}),
+    image: z.string()
+        .nullable()
+        .optional(),
     createdAt: isoDateTimeCodec,
 });
 

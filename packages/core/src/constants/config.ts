@@ -14,5 +14,6 @@ export const DEFAULT_GC_GRACE_DAYS = 7;
 export const DEFAULT_GC_INTERVAL_MINUTES = 60;
 export const DEFAULT_TRASH_PURGE_DAYS = 30;
 export const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
+export const DEFAULT_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
 //----------------------------------------------------------------------------------------------------------------------

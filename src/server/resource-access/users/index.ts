@@ -2,11 +2,14 @@
 // User Resource Access
 //
 // A narrow read/write surface over BetterAuth's `user` table for the columns FileShed's app layer touches outside an
-// auth round trip: the per-user byte quota, and the preferences blob. The quota read exists because a write charged to
-// an owner who is NOT the acting caller -- an editor replacing content in a file shared to them -- must judge quota
-// against the OWNER's authoritative limit, which the caller's session snapshot cannot supply. The preferences read is
-// fresh-from-row on purpose: the session cookie cache would lag a just-saved preference, so /api/me reads the row.
+// auth round trip: the per-user byte quota, the preferences blob, and the avatar reference. The quota read exists
+// because a write charged to an owner who is NOT the acting caller -- an editor replacing content in a file shared to
+// them -- must judge quota against the OWNER's authoritative limit, which the caller's session snapshot cannot supply.
+// The preferences and avatar reads are fresh-from-row on purpose: the session cookie cache would lag a just-saved
+// value, so /api/me reads the row.
 //----------------------------------------------------------------------------------------------------------------------
+
+/* eslint-disable camelcase -- update sets name snake_case DB columns (house convention for Kysely) */
 
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
@@ -78,6 +81,56 @@ export class UserRA
             .set({ preferences: JSON.stringify(preferences) })
             .where('id', '=', userID)
             .execute();
+    }
+
+    // The sha256 of the user's avatar blob, or null when they have none. Read fresh from the row (not the session
+    // snapshot) so /api/me reflects an avatar the same request just changed.
+    async avatarSha256Of(userID : string) : Promise<string | null>
+    {
+        const row = await this.#db
+            .selectFrom('user')
+            .select('avatar_sha256')
+            .where('id', '=', userID)
+            .executeTakeFirst();
+
+        return row?.avatar_sha256 ?? null;
+    }
+
+    // Point the user at a new avatar: its blob hash and the mime to serve it with. The caller has already stored the
+    // bytes and their blob record; this only moves the reference.
+    async setAvatar(userID : string, sha256 : string, mime : string) : Promise<void>
+    {
+        await this.#db
+            .updateTable('user')
+            .set({ avatar_sha256: sha256, avatar_mime: mime })
+            .where('id', '=', userID)
+            .execute();
+    }
+
+    // Drop the user's avatar reference. The old blob is graveyarded separately by the caller once the reference is
+    // gone.
+    async clearAvatar(userID : string) : Promise<void>
+    {
+        await this.#db
+            .updateTable('user')
+            .set({ avatar_sha256: null, avatar_mime: null })
+            .where('id', '=', userID)
+            .execute();
+    }
+
+    // The mime any user's avatar carries for this blob hash, or null when NO user references it as their avatar. This
+    // is the authorization gate for serving avatar bytes: a hash no avatar points at reads as null, so the serve route
+    // 404s rather than handing back arbitrary dedup-store content by hash. Identical bytes carry one mime, so any
+    // referencing user's stored mime is the right one.
+    async avatarMimeForSha(sha256 : string) : Promise<string | null>
+    {
+        const row = await this.#db
+            .selectFrom('user')
+            .select('avatar_mime')
+            .where('avatar_sha256', '=', sha256)
+            .executeTakeFirst();
+
+        return row?.avatar_mime ?? null;
     }
 }
 

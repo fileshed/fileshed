@@ -489,7 +489,8 @@ describe('NodeRA.ownersOf', () =>
 {
     it('returns the folder\'s distinct owners as display summaries, ordered by name', async () =>
     {
-        await seedUser(db, 'ada', { name: 'Ada', image: 'https://cdn/ada.png' });
+        const adaSha = 'aa'.repeat(32);
+        await seedUser(db, 'ada', { name: 'Ada', avatarSha256: adaSha });
         await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
         await ra.insert(file('mine', { parentID: 'p', ownerID: 'u1' }));
         await ra.insert(file('mine2', { parentID: 'p', ownerID: 'u1' }));
@@ -498,12 +499,13 @@ describe('NodeRA.ownersOf', () =>
         const owners = await ra.ownersOf({ parentID: 'p', ownerID: 'u1' });
 
         // u1 collapses to one row despite two files; ordered by name, 'Ada' precedes 'u1'. The summary carries the
-        // joined display fields, with a null image when the account has none.
+        // joined display fields; image is derived from the avatar hash -- an /api/avatars URL when one is set, null
+        // when the account has none.
         expect(owners.map((entry) => entry.id)).toEqual([ 'ada', 'u1' ]);
         expect(owners.find((entry) => entry.id === 'u1')).toEqual({
             id: 'u1', name: 'u1', email: 'u1@t.test', image: null,
         });
-        expect(owners.find((entry) => entry.id === 'ada')?.image).toBe('https://cdn/ada.png');
+        expect(owners.find((entry) => entry.id === 'ada')?.image).toBe(`/api/avatars/${ adaSha }`);
     });
 
     it('excludes owners whose only nodes here are trashed', async () =>

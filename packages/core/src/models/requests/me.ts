@@ -23,6 +23,10 @@ export interface MeResponse
         limit : number | null;
     };
     preferences : UserPreferences;
+
+    // The caller's avatar as a URL to fetch its bytes, or null when the account has none. Derived from the stored
+    // avatar hash at serialization time -- never a persisted URL.
+    image ?: string | null;
     createdAt : string;
 }
 

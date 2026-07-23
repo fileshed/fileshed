@@ -60,8 +60,8 @@ export interface UserTable
     name : string;
     email : string;
 
-    // BetterAuth's standard avatar URL, null when the account has none. Read for the owner-summary facet a listing
-    // faces its owner filter with.
+    // BetterAuth's standard avatar-URL column. FileShed does not use it: avatars are content-addressed bytes in the
+    // blob store, referenced by avatar_sha256 below, not a URL. Typed only because better-auth's migrator creates it.
     image : string | null;
 
     // role gates admin tooling; quota_limit is the per-user byte cap (null = unlimited). The role enum is enforced at
@@ -73,6 +73,12 @@ export interface UserTable
     // The per-user preferences blob: JSON text, null when the account has set none. Written only by the app's own
     // preferences PATCH (see UserRA); read to assemble the /api/me profile.
     preferences : string | null;
+
+    // The caller's avatar: the sha256 of its bytes in the shared blob store, and the stored mime the GET serves it
+    // with (the blob record carries no mime -- an avatar has no node row to hang one on). Both null when unset. Better-
+    // auth additionalFields (input:false); written only through the app's own avatar routes, never the auth API.
+    avatar_sha256 : string | null;
+    avatar_mime : string | null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

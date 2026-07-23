@@ -249,12 +249,13 @@ export class BlobRA
             .execute();
     }
 
-    // Graveyard every listed sha256 whose last file-node reference is gone (ref count is derived, never a
-    // stored counter). One statement, so a concurrent claim that adds a reference either lands before this -- the
-    // NOT EXISTS then sees it and the record is left live -- or after, on an already-graveyarded record it resurrects.
-    // The `deleted_at IS NULL` guard keeps a re-sweep from resetting an already-graveyarded record's grace clock.
-    // Accepts an executor so a caller can run this in the same transaction as the node delete that orphaned the blobs
-    // (the node manager's hard delete); defaults to the handle's connection.
+    // Graveyard every listed sha256 whose last reference is gone (ref count is derived, never a stored counter). A blob
+    // is referenced by any file node pointing at it OR by any user whose avatar it is -- both keep it live, so both are
+    // checked. One statement, so a concurrent claim that adds a reference either lands before this -- a NOT EXISTS then
+    // sees it and the record is left live -- or after, on an already-graveyarded record it resurrects. The
+    // `deleted_at IS NULL` guard keeps a re-sweep from resetting an already-graveyarded record's grace clock. Accepts
+    // an executor so a caller can run this in the same transaction as the delete that orphaned the blobs (the node
+    // manager's hard delete, an avatar replace); defaults to the handle's connection.
     async graveyardUnreferenced(shas : string[], executor : DatabaseHandle['db'] = this.#db) : Promise<void>
     {
         if(shas.length === 0) { return; }
@@ -269,6 +270,11 @@ export class BlobRA
                     .select('node.id')
                     .whereRef('node.blob_id', '=', 'blob.sha256')
                     .where('node.type', '=', 'file')
+            )))
+            .where((eb) => eb.not(eb.exists(
+                eb.selectFrom('user')
+                    .select('user.id')
+                    .whereRef('user.avatar_sha256', '=', 'blob.sha256')
             )))
             .execute();
     }

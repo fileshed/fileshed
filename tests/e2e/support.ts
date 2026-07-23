@@ -322,6 +322,14 @@ export class ApiClient
         });
     }
 
+    async postBytes(path : string, bytes : Uint8Array, contentType : string) : Promise<Response>
+    {
+        return this.#request('POST', path, {
+            headers: { 'content-type': contentType },
+            body: bytes,
+        });
+    }
+
     async del(path : string) : Promise<Response>
     {
         return this.#request('DELETE', path, {});

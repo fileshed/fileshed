@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 // Constants
 import {
+    DEFAULT_AVATAR_MAX_BYTES,
     DEFAULT_BASE_URL,
     DEFAULT_DATABASE_PATH,
     DEFAULT_GC_GRACE_DAYS,
@@ -40,7 +41,8 @@ const configSchema = z.object({
     // Blob storage + GC. STORAGE_ROOT is both the fs backend's root and the config the default storage_backend row is
     // seeded with. GC_GRACE_DAYS is the graveyard window before a dereferenced blob is hard-deleted; 0 collects
     // immediately (useful in tests). TRASH_PURGE_DAYS is the window a trashed item survives before the sweeper
-    // permanently deletes it; 0 purges on the next sweep. UPLOAD_MAX_BYTES caps a single upload's byte count.
+    // permanently deletes it; 0 purges on the next sweep. UPLOAD_MAX_BYTES caps a single upload's byte count;
+    // AVATAR_MAX_BYTES caps a single avatar image (charged to no quota, so it has its own, much smaller ceiling).
     STORAGE_ROOT: z.string()
         .min(1)
         .default(DEFAULT_STORAGE_ROOT),
@@ -60,6 +62,10 @@ const configSchema = z.object({
         .int()
         .positive()
         .default(DEFAULT_UPLOAD_MAX_BYTES),
+    AVATAR_MAX_BYTES: z.coerce.number()
+        .int()
+        .positive()
+        .default(DEFAULT_AVATAR_MAX_BYTES),
 
     // First-run admin bootstrap. Both-or-neither: setting one without the other is a misconfiguration, caught below.
     // When both are present and no user owns the email yet, boot creates the admin.

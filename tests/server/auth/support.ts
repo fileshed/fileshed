@@ -40,6 +40,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         GC_INTERVAL_MINUTES: 60,
         TRASH_PURGE_DAYS: 30,
         UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
+        AVATAR_MAX_BYTES: 2 * 1024 * 1024,
         ...overrides,
     };
 }

@@ -14,6 +14,10 @@ export default defineConfig({
             '@server': path.resolve(__dirname, 'src/server'),
             '@client': path.resolve(__dirname, 'src/client/src'),
             '@fileshed/core': path.resolve(__dirname, 'packages/core/src'),
+
+            // The client's Vite root is src/client, so template logos resolve /fileshed.svg against its public dir.
+            // Tests run from the repo root, so point that one public asset at the real file to render layout chrome.
+            '/fileshed.svg': path.resolve(__dirname, 'src/client/public/fileshed.svg'),
         },
     },
     test: {
