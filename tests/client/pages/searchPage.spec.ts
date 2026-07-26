@@ -210,15 +210,15 @@ describe('SearchPage', () =>
         expect(push).toHaveBeenCalledWith('/folder/dir1');
     });
 
-    it('opens a small text file result in the in-app editor', async () =>
+    it('opens a small text file result in the editor in a new tab', async () =>
     {
         searchMock.mockResolvedValue(envelope([ textFileNode('f1', 'notes.txt') ]));
-        const { wrapper, router } = await mountSearch('notes');
-        const push = vi.spyOn(router, 'push');
+        const { wrapper } = await mountSearch('notes');
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
 
         await wrapper.get('[aria-label="notes.txt"]').trigger('dblclick');
 
-        expect(push).toHaveBeenCalledWith('/file/f1');
+        expect(open).toHaveBeenCalledWith('/file/f1', '_blank');
     });
 });
 

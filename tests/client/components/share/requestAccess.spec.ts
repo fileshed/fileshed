@@ -161,11 +161,11 @@ describe('RequestAccess', () =>
         expect(wrapper.text()).toContain('You already have a pending request for this node.');
     });
 
-    it('leaves the page via Back without asking for anything', async () =>
+    it('leaves for My Files without asking for anything', async () =>
     {
         const wrapper = mountCard();
 
-        await clickButton(wrapper, 'Back to files');
+        await clickButton(wrapper, 'Go to my files');
 
         expect(requestAccessMock).not.toHaveBeenCalled();
         expect(wrapper.emitted('back')).toHaveLength(1);

@@ -470,6 +470,55 @@ describe('DrivePage — kebab menu, ownership gating', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// Every file surface -- the editors, the annotator, the players -- opens at /file/:id in a fresh tab rather than
+// navigating the drive away. Folder navigation stays in place (covered elsewhere).
+describe('DrivePage — opening a file surface in a new tab', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    function openViaKebab(wrapper : VueWrapper, node : NodeResponse) : void
+    {
+        const item = buildMenuOf(wrapper)(node).flat()
+            .find((entry) => entry.label === 'Open');
+        item?.onSelect?.(new Event('click'));
+    }
+
+    it('opens an editable text file at /file/:id in a new tab', async () =>
+    {
+        const node = fileNode('f1');
+        const wrapper = await mountDrive([ node ]);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        openViaKebab(wrapper, node);
+
+        expect(open).toHaveBeenCalledWith('/file/f1', '_blank');
+    });
+
+    it('opens a PDF for annotation at /file/:id in a new tab', async () =>
+    {
+        const node : NodeResponse = { ...fileNode('p1'), mimeType: 'application/pdf', size: 1000 };
+        const wrapper = await mountDrive([ node ]);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        openViaKebab(wrapper, node);
+
+        expect(open).toHaveBeenCalledWith('/file/p1', '_blank');
+    });
+
+    it('opens a media file in the player at /file/:id in a new tab', async () =>
+    {
+        const node : NodeResponse = { ...fileNode('v1'), mimeType: 'video/mp4' };
+        const wrapper = await mountDrive([ node ]);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        openViaKebab(wrapper, node);
+
+        expect(open).toHaveBeenCalledWith('/file/v1', '_blank');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('DrivePage — rename and move wiring', () =>
 {
     beforeEach(() => vi.clearAllMocks());

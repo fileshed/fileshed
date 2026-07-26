@@ -7,6 +7,7 @@ import { type RouteRecordRaw, createRouter, createWebHistory } from 'vue-router'
 // Layouts
 import MainLayout from '../layouts/mainLayout.vue';
 import AccountLayout from '../layouts/accountLayout.vue';
+import EditorLayout from '../layouts/editorLayout.vue';
 
 // Pages
 import SignInPage from '../pages/signInPage.vue';
@@ -38,11 +39,17 @@ export const routes : RouteRecordRaw[] = [
         children: [
             { path: '', name: 'drive', component: DrivePage },
             { path: 'folder/:id', name: 'folder', component: DrivePage },
-            { path: 'file/:id', name: 'file', component: FilePage },
             { path: 'shared', name: 'shared', component: SharedPage },
             { path: 'trash', name: 'trash', component: TrashPage },
             { path: 'search', name: 'search', component: SearchPage },
             { path: 'admin', name: 'admin', component: AdminPage, meta: { admin: true } },
+        ],
+    },
+    {
+        path: '/file/:id',
+        component: EditorLayout,
+        children: [
+            { path: '', name: 'file', component: FilePage },
         ],
     },
     {

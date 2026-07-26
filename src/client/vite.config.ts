@@ -40,6 +40,12 @@ export default defineConfig(({ mode }) =>
                         neutral: 'zinc',
                     },
                 },
+                // Handler families deliberately reuse basenames (each family owns an identityBar.vue, toolbar.vue,
+                // ...) and every use is an explicit import. Excluding them from component auto-registration kills
+                // the basename-conflict warnings and the wrong-family <Toolbar /> resolution footgun.
+                components: {
+                    globsExclude: [ 'src/components/handlers/**' ],
+                },
             }),
             devServer({
                 entry: '../server/server.ts',

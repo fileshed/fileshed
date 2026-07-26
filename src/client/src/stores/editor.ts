@@ -18,7 +18,7 @@ import { type NodeResponse, type UploadCommitMetadata, isRoleAtLeast } from '@fi
 import { ApiError } from '../resource-access/apiError.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '../resource-access/blobs.ts';
 import { fetchNodeText } from '../resource-access/content.ts';
-import { getNode } from '../resource-access/nodes.ts';
+import { getNode, patchNode } from '../resource-access/nodes.ts';
 
 // Engines
 import { computeProofAnswer } from '../engines/claim.ts';
@@ -280,6 +280,17 @@ export const useEditorStore = defineStore('editor', () =>
         conflict.value = false;
     }
 
+    // Rename the open file in place. The node is replaced with the server's response, so later saves carry the new
+    // name and the freshened timestamps without a reload.
+    async function rename(name : string) : Promise<void>
+    {
+        const current = node.value;
+        const trimmed = name.trim();
+        if(current === null || readOnly.value || trimmed.length === 0 || trimmed === current.name) { return; }
+
+        node.value = await patchNode(current.id, { name: trimmed });
+    }
+
     //------------------------------------------------------------------------------------------------------------------
 
     function reset() : void
@@ -320,6 +331,7 @@ export const useEditorStore = defineStore('editor', () =>
         reload,
         overwrite,
         dismissConflict,
+        rename,
         reset,
     };
 });

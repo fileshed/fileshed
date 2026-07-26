@@ -1,72 +1,166 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- File Page
   --
-  -- The full-page, deep-linkable editor at /file/:id, and the file editor's handler host: it mounts the handler for the
-  -- open file's type -- today the text (CodeMirror) family under components/handlers/text/ (toolbar, editing surface,
-  -- conflict modal) -- and is the seam where further file-type handlers (a rich Markdown editor, a PDF annotator) will
-  -- mount as the open-intent vocabulary grows. It owns only what a page owns: loading the routed file, resetting on
-  -- leave, back navigation, the Cmd/Ctrl+S shortcut, the load/error framing, and the card that frames the toolbar and
-  -- editing surface as one contained document -- since a user-chosen theme's background rarely matches the app chrome,
-  -- the bordered, clipped card is what makes a foreign background read as deliberate rather than a glitch. Editing,
-  -- saving, autosave, and conflict resolution all live in the store; a viewer lands here too and gets the same surface,
-  -- read-only.
+  -- The deep-linkable handler host at /file/:id, opened in its own tab. It resolves the routed node FIRST, asks the
+  -- handler registry what opens it, and mounts that family: text or markdown editors (the markdown family is a page on a
+  -- canvas; the text family is the editor store's card, framed here because a user-chosen theme's background reads as
+  -- deliberate only inside a bordered, clipped card), the PDF annotator and media players (self-contained families that
+  -- own their own chrome and save paths), or -- for natively-rendered types deep-linked here -- a redirect to the
+  -- browser's own inline/download handling. It owns only what a page owns: resolving the routed node, the pre-resolution
+  -- load/denied/error framing, and the Cmd/Ctrl+S shortcut for the editor path (the annotator binds its own). There is
+  -- no Back button -- files open in a fresh tab, so the layout header logo (and "Go to my files" on a dead resolve) is
+  -- the way out. Each mounted family contributes its own identity into the layout header; the text family's identity bar
+  -- and control toolbar are mounted here beside it. Editing, saving, autosave, and conflict resolution live in the
+  -- stores; the markdown family carries its own toolbar and conflict modal, the text family's are mounted here beside it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <div class="flex h-full flex-col">
-        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-default">
-            <div v-if="editor.loadState === 'loading'" class="flex flex-1 items-center justify-center text-muted">
+        <div
+            v-if="phase === 'loading'"
+            class="flex min-h-0 flex-1 items-center justify-center text-muted"
+        >
+            <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
+        </div>
+
+        <RequestAccess
+            v-else-if="phase === 'denied' && fileID !== null"
+            v-bind="{ nodeID: fileID }"
+            class="min-h-0 flex-1"
+            @back="goHome"
+        />
+
+        <div
+            v-else-if="phase === 'error'"
+            class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 text-center"
+        >
+            <UIcon name="i-lucide-file-x" class="size-10 text-dimmed" />
+            <p class="text-muted">
+                {{ loadError ?? 'This file could not be opened.' }}
+            </p>
+            <UButton icon="i-lucide-hard-drive" label="Go to my files" color="neutral" @click="goHome" />
+        </div>
+
+        <PdfAnnotator
+            v-else-if="action?.kind === 'annotate' && fileID !== null"
+            v-bind="{ nodeID: fileID }"
+            class="min-h-0 flex-1"
+        />
+
+        <template v-else-if="action?.kind === 'play' && node !== null">
+            <EditorHeaderSlot>
+                <div class="flex min-w-0 items-center gap-2">
+                    <UIcon
+                        :name="mediaKind === 'video' ? 'i-lucide-film' : 'i-lucide-music'"
+                        class="shrink-0 text-dimmed"
+                    />
+                    <span class="truncate font-medium">{{ node.name }}</span>
+                </div>
+            </EditorHeaderSlot>
+
+            <VideoPlayer
+                v-if="mediaKind === 'video'"
+                v-bind="{ nodeID: node.id, name: node.name, mimeType: mediaMime }"
+                class="min-h-0 flex-1"
+            />
+
+            <div v-else class="flex min-h-0 flex-1 items-center justify-center p-6">
+                <AudioPlayer v-bind="{ nodeID: node.id, name: node.name, mimeType: mediaMime }" />
+            </div>
+        </template>
+
+        <template v-else-if="action?.kind === 'edit'">
+            <div
+                v-if="editor.loadState === 'loading'"
+                class="flex min-h-0 flex-1 items-center justify-center text-muted"
+            >
                 <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
             </div>
 
             <div
                 v-else-if="editor.loadState === 'error'"
-                class="flex flex-1 flex-col items-center justify-center gap-4 text-center"
+                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 text-center"
             >
                 <UIcon name="i-lucide-file-x" class="size-10 text-dimmed" />
                 <p class="text-muted">
                     {{ editor.loadError ?? 'This file could not be opened.' }}
                 </p>
-                <UButton icon="i-lucide-arrow-left" label="Back to files" color="neutral" @click="goBack" />
+                <UButton icon="i-lucide-hard-drive" label="Go to my files" color="neutral" @click="goHome" />
             </div>
 
+            <MarkdownEditor
+                v-else-if="isMarkdownFile"
+                class="min-h-0 flex-1"
+                :model-value="editor.buffer"
+                :mode="editor.mode"
+                :read-only="editor.readOnly"
+                :theme="session.editorTheme"
+                :gutter="session.editorGutter"
+                @update:model-value="editor.setBuffer"
+            />
+
             <template v-else>
-                <EditorToolbar @back="goBack" />
-                <TextEditor
-                    class="min-h-0 flex-1"
-                    :model-value="editor.buffer"
-                    :mode="editor.mode"
-                    :read-only="editor.readOnly"
-                    :theme="session.editorTheme"
-                    :gutter="session.editorGutter"
-                    @update:model-value="editor.setBuffer"
+                <TextIdentityBar />
+
+                <div class="flex min-h-0 flex-1 justify-center p-4 sm:p-6">
+                    <div class="flex min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-default">
+                        <EditorToolbar />
+                        <TextEditor
+                            class="min-h-0 flex-1"
+                            :model-value="editor.buffer"
+                            :mode="editor.mode"
+                            :read-only="editor.readOnly"
+                            :theme="session.editorTheme"
+                            :gutter="session.editorGutter"
+                            @update:model-value="editor.setBuffer"
+                        />
+                    </div>
+                </div>
+
+                <ConflictModal
+                    v-model:open="conflictOpen"
+                    :busy="editor.saving"
+                    @reload="editor.reload()"
+                    @overwrite="editor.overwrite()"
                 />
             </template>
-        </div>
-
-        <ConflictModal
-            v-model:open="conflictOpen"
-            :busy="editor.saving"
-            @reload="editor.reload()"
-            @overwrite="editor.overwrite()"
-        />
+        </template>
     </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, onMounted, onUnmounted, watch } from 'vue';
+    import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+
+    import type { NodeResponse } from '@fileshed/core';
+
+    // Engines
+    import { type OpenAction, defaultEditorMode, resolveOpen } from '../engines/intent/index.ts';
 
     // Stores
     import { useEditorStore } from '../stores/editor.ts';
     import { useSessionStore } from '../stores/session.ts';
 
+    // Resource Access
+    import { downloadUrl } from '../resource-access/downloads.ts';
+    import { getNode } from '../resource-access/nodes.ts';
+
     // Components
+    import EditorHeaderSlot from '../components/handlers/editorHeaderSlot.vue';
     import EditorToolbar from '../components/handlers/text/toolbar.vue';
+    import TextIdentityBar from '../components/handlers/text/identityBar.vue';
     import TextEditor from '../components/handlers/text/textEditor.vue';
     import ConflictModal from '../components/handlers/text/modals/conflictModal.vue';
+    import RequestAccess from '../components/share/requestAccess.vue';
+
+    // The heavier families load only when a file actually opens with them: pdf.js and TipTap stay out of the main
+    // bundle, and nothing outside an opened file ever evaluates their module graphs.
+    const MarkdownEditor = defineAsyncComponent(() => import('../components/handlers/markdown/markdownEditor.vue'));
+    const PdfAnnotator = defineAsyncComponent(() => import('../components/handlers/pdf/pdfAnnotator.vue'));
+    const VideoPlayer = defineAsyncComponent(() => import('../components/handlers/video/videoPlayer.vue'));
+    const AudioPlayer = defineAsyncComponent(() => import('../components/handlers/audio/audioPlayer.vue'));
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -81,14 +175,81 @@
         return typeof id === 'string' && id.length > 0 ? id : null;
     }
 
-    function load() : void
+    const fileID = computed<string | null>(routeFileID);
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Resolution: fetch the routed node, ask the registry what opens it, mount that family.
+    //------------------------------------------------------------------------------------------------------------------
+
+    type Phase = 'loading' | 'ready' | 'denied' | 'error';
+
+    const node = ref<NodeResponse | null>(null);
+    const phase = ref<Phase>('loading');
+    const loadError = ref<string | null>(null);
+
+    const action = computed<OpenAction | null>(() =>
+    {
+        return node.value === null ? null : resolveOpen(node.value);
+    });
+
+    const mediaKind = computed<'video' | 'audio' | null>(() =>
+    {
+        return action.value?.kind === 'play' ? action.value.media : null;
+    });
+
+    const isMarkdownFile = computed(() =>
+    {
+        if(node.value === null || node.value.type !== 'file') { return false; }
+
+        return defaultEditorMode(node.value.mimeType, node.value.name) === 'markdown';
+    });
+
+    // The players want the mime the bytes will stream as; a file link's target may carry none, so fall back to what a
+    // node of unknown type streams as.
+    const mediaMime = computed(() =>
+    {
+        return node.value !== null && node.value.type === 'file' ? node.value.mimeType : 'application/octet-stream';
+    });
+
+    async function load() : Promise<void>
     {
         const id = routeFileID();
-        if(id !== null) { void editor.open(id); }
+        if(id === null) { return; }
+
+        phase.value = 'loading';
+        loadError.value = null;
+
+        try
+        {
+            node.value = await getNode(id);
+        }
+        catch(error)
+        {
+            // The server answers 404 for both no-access and gone, so the denied framing (with its request-access
+            // affordance) is the honest rendering of any failed resolve; other failures land on the plain error card.
+            node.value = null;
+            phase.value = 'denied';
+            loadError.value = error instanceof Error ? error.message : null;
+
+            return;
+        }
+
+        phase.value = 'ready';
     }
 
-    // The param is the source of truth; re-loading on change lets one editor instance follow a deep-link swap.
-    watch(() => route.params.id, load);
+    // The registry's verdict decides the effectful path: the edit family runs through the editor store, and a
+    // natively-handled deep link leaves the app for the browser's own renderer rather than mounting an empty shell.
+    watch(action, (resolved) =>
+    {
+        if(resolved === null) { return; }
+
+        const id = routeFileID();
+        if(resolved.kind === 'edit' && id !== null) { void editor.open(id); }
+        if(resolved.kind === 'view') { window.location.replace(downloadUrl(resolved.nodeID, 'inline')); }
+        if(resolved.kind === 'download') { window.location.replace(downloadUrl(resolved.nodeID)); }
+    }, { immediate: true });
+
+    watch(() => route.params.id, () => { void load(); });
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -97,25 +258,27 @@
         set: (open) => { if(!open) { editor.dismissConflict(); } },
     });
 
-    function goBack() : void
+    // Files open in a fresh tab, so there is nowhere to go "back" to. The escape hatch is My Files -- the header logo
+    // in the normal case, and this on a dead resolve where no family mounted.
+    function goHome() : void
     {
-        const parentID = editor.node?.parentID ?? null;
-        void router.push(parentID === null ? '/' : `/folder/${ parentID }`);
+        void router.push('/');
     }
 
-    // Cmd/Ctrl+S saves, pre-empting the browser's Save Page. A viewer's read-only session has nothing to save.
+    // Cmd/Ctrl+S saves for the editor families; the annotator binds its own shortcut, and a viewer's read-only session
+    // has nothing to save.
     function onKeydown(event : KeyboardEvent) : void
     {
         if((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's')
         {
             event.preventDefault();
-            if(!editor.readOnly) { void editor.save(); }
+            if(action.value?.kind === 'edit' && !editor.readOnly) { void editor.save(); }
         }
     }
 
     onMounted(() =>
     {
-        load();
+        void load();
         window.addEventListener('keydown', onKeydown);
     });
 

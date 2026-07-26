@@ -207,14 +207,14 @@ describe('SharedPage', () =>
         expect(push).toHaveBeenCalledWith('/folder/dir1');
     });
 
-    it('opens a shared text file in the editor when its row is opened', async () =>
+    it('opens a shared text file in the editor in a new tab when its row is opened', async () =>
     {
-        const { wrapper, router } = await mountShared([ entry(fileTarget('f1', 'notes.txt')) ]);
-        const push = vi.spyOn(router, 'push');
+        const { wrapper } = await mountShared([ entry(fileTarget('f1', 'notes.txt')) ]);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
 
         await wrapper.get('[aria-label="notes.txt"]').trigger('dblclick');
 
-        expect(push).toHaveBeenCalledWith('/file/f1');
+        expect(open).toHaveBeenCalledWith('/file/f1', '_blank');
     });
 
     it('offers a file recipient open, save-a-copy, and leave -- never the owner-only actions', async () =>

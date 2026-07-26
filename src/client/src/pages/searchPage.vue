@@ -69,8 +69,9 @@
     }, { immediate: true });
 
     //------------------------------------------------------------------------------------------------------------------
-    // Open -- the same handler seam the drive and Shared with me use. A folder navigates in, a browser-renderable file
-    // opens in a new tab, an editable text file opens in the in-app editor, anything else downloads.
+    // Open -- the same handler seam the drive and Shared with me use. A folder navigates in place; every file surface
+    // opens in a fresh tab -- the in-app editor, the annotator, the players, and browser-renderable or downloadable
+    // files off the download endpoint.
     //------------------------------------------------------------------------------------------------------------------
 
     function onOpen(node : NodeResponse) : void
@@ -79,9 +80,9 @@
         switch (action.kind)
         {
             case 'navigate': void router.push(`/folder/${ action.folderID }`); break;
-            case 'edit': void router.push(`/file/${ action.nodeID }`); break;
-            case 'annotate': void router.push(`/file/${ action.nodeID }`); break;
-            case 'play': void router.push(`/file/${ action.nodeID }`); break;
+            case 'edit': window.open(`/file/${ action.nodeID }`, '_blank'); break;
+            case 'annotate': window.open(`/file/${ action.nodeID }`, '_blank'); break;
+            case 'play': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
             case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
             case 'none': break;

@@ -275,8 +275,10 @@
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    // Open -- the native-viewer seam decides; the view just runs the intent. Folders navigate, a browser-renderable
-    // file opens inline in a new tab, anything else downloads, and a resolved link follows its target under that rule.
+    // Open -- the native-viewer seam decides; the view just runs the intent. Folders navigate in place; every file
+    // surface opens in a fresh tab (the editors, the annotator, the players at /file/:id, and browser-renderable or
+    // downloadable files straight off the download endpoint), so the drive stays put behind the opened file. A resolved
+    // link follows its target under that rule.
     //------------------------------------------------------------------------------------------------------------------
 
     function onOpen(node : NodeResponse) : void
@@ -285,9 +287,9 @@
         switch (action.kind)
         {
             case 'navigate': void router.push(`/folder/${ action.folderID }`); break;
-            case 'edit': void router.push(`/file/${ action.nodeID }`); break;
-            case 'annotate': void router.push(`/file/${ action.nodeID }`); break;
-            case 'play': void router.push(`/file/${ action.nodeID }`); break;
+            case 'edit': window.open(`/file/${ action.nodeID }`, '_blank'); break;
+            case 'annotate': window.open(`/file/${ action.nodeID }`, '_blank'); break;
+            case 'play': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
             case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
             case 'none': break;

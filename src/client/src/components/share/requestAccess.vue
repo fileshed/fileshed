@@ -20,7 +20,7 @@
                     The owner will decide whether to grant you {{ pending.requestedRole }} access.
                 </p>
             </div>
-            <UButton icon="i-lucide-arrow-left" label="Back to files" color="neutral" @click="emit('back')" />
+            <UButton icon="i-lucide-hard-drive" label="Go to my files" color="neutral" @click="emit('back')" />
         </template>
 
         <template v-else>
@@ -63,8 +63,8 @@
             </p>
 
             <UButton
-                icon="i-lucide-arrow-left"
-                label="Back to files"
+                icon="i-lucide-hard-drive"
+                label="Go to my files"
                 color="neutral"
                 variant="ghost"
                 @click="emit('back')"

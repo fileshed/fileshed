@@ -14,7 +14,7 @@ import type { NodeResponse, Role } from '@fileshed/core';
 
 // Resource Access
 import { ApiError } from '@client/resource-access/apiError.ts';
-import { getNode } from '@client/resource-access/nodes.ts';
+import { getNode, patchNode } from '@client/resource-access/nodes.ts';
 import { fetchNodeText } from '@client/resource-access/content.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
 
@@ -29,7 +29,7 @@ import { useEditorStore } from '@client/stores/editor.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
+vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn(), patchNode: vi.fn() }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeText: vi.fn() }));
 vi.mock('@client/resource-access/blobs.ts', () => ({
     claimBlob: vi.fn(),
@@ -364,6 +364,46 @@ describe('useEditorStore conflict', () =>
         expect(store.conflict).toBe(false);
         expect(store.buffer).toBe('their newer content');
         expect(store.dirty).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('EditorStore.rename', () =>
+{
+    it('renames the loaded node and adopts the server response', async () =>
+    {
+        const store = useEditorStore();
+        store.node = fileNode({ name: 'notes.txt' });
+        (patchNode as unknown as Mock).mockResolvedValue(fileNode({ name: 'journal.txt' }));
+
+        await store.rename('  journal.txt  ');
+
+        expect(store.node?.name).toBe('journal.txt');
+        expect(patchNode).toHaveBeenCalledWith('f1', { name: 'journal.txt' });
+    });
+
+    it('refuses to rename a read-only session', async () =>
+    {
+        const store = useEditorStore();
+        store.node = fileNode({ name: 'notes.txt', role: 'viewer' });
+
+        await store.rename('renamed.txt');
+
+        expect(store.node?.name).toBe('notes.txt');
+        expect(patchNode).not.toHaveBeenCalled();
+    });
+
+    it('ignores blank and unchanged names', async () =>
+    {
+        const store = useEditorStore();
+        store.node = fileNode({ name: 'notes.txt' });
+
+        await store.rename('   ');
+        await store.rename('notes.txt');
+
+        expect(store.node?.name).toBe('notes.txt');
+        expect(patchNode).not.toHaveBeenCalled();
     });
 });
 
