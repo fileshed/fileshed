@@ -8,6 +8,10 @@
 // raises one prompt at a time, so the queue never asks two questions at once. An item landing in the folder the drive
 // view currently shows refreshes that listing. Cancellation aborts an in-flight transfer, settles a waiting prompt, or
 // drops a still-queued item; every failure leaves a readable message on the item's own row.
+//
+// Folder uploads walk a dropped tree: each folder is created first (merging into an existing folder of the same
+// name, the way an OS copy merges directories) and its files enqueue into the created node; a folder that can't be
+// created surfaces as an error row wearing the folder's name rather than vanishing.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -20,11 +24,13 @@ import { useDriveStore } from './drive.ts';
 
 // Resource Access
 import { answerChallenge, claimBlob } from '../resource-access/blobs.ts';
-import { getChildren } from '../resource-access/nodes.ts';
+import { readDroppedPayload } from '../resource-access/droppedEntries.ts';
+import { createNode, getChildren } from '../resource-access/nodes.ts';
 import { uploadWithProgress } from '../resource-access/uploadWithProgress.ts';
 
 // Engines
 import { computeProofAnswer } from '../engines/claim.ts';
+import type { DroppedFolder, DroppedPayload } from '../engines/uploads/droppedTree.ts';
 
 // Utils
 import { nextCopyName } from '../utils/formatters/index.ts';
@@ -352,6 +358,95 @@ export const useUploadsStore = defineStore('uploads', () =>
         pump();
     }
 
+    // A folder that couldn't be created still needs a face in the panel -- an error row wearing the folder's name,
+    // so a failed subtree is visible instead of silently missing.
+    function pushFolderError(name : string, error : unknown) : void
+    {
+        counter += 1;
+        items.value.push({
+            id: `upload-${ counter }`,
+            file: new File([], name),
+            folderID: null,
+            name,
+            status: 'error',
+            progress: { hashedBytes: 0, sentBytes: 0, totalBytes: 0 },
+            result: null,
+            error: `Couldn't create this folder — nothing inside it was uploaded. ${ describeApiError(error) }`,
+        });
+    }
+
+    // The folder a dropped tree lands in: merged into an existing same-named sibling folder when there is one --
+    // the way an OS copy merges directories, and because the server happily mints duplicate names -- and created
+    // fresh otherwise. The lookup comes first precisely because creation would succeed and silently fork the tree.
+    async function ensureFolder(name : string, parentID : string | null) : Promise<string>
+    {
+        const listing = await getChildren(parentID, { name, types: [ 'folders' ], limit: 1 });
+        const existing = listing.nodes[0];
+
+        if(existing !== undefined && existing.type === 'folder') { return existing.id; }
+
+        const created = await createNode({ type: 'folder', name, parentID });
+
+        return created.id;
+    }
+
+    async function enqueueFolders(folders : readonly DroppedFolder[], parentID : string | null) : Promise<void>
+    {
+        for(const folder of folders)
+        {
+            let folderNodeID : string | null = null;
+
+            try
+            {
+                // eslint-disable-next-line no-await-in-loop -- sibling folders create serially, in drop order
+                folderNodeID = await ensureFolder(folder.name, parentID);
+            }
+            catch(caught)
+            {
+                pushFolderError(folder.name, caught);
+            }
+
+            if(folderNodeID !== null)
+            {
+                enqueue(folder.files, folderNodeID);
+
+                // eslint-disable-next-line no-await-in-loop -- the subtree needs its parent's id before it can start
+                await enqueueFolders(folder.folders, folderNodeID);
+            }
+        }
+    }
+
+    // A folder upload, from either doorway: the picker input's relative paths or a drop's traversed entries. Loose
+    // files start immediately; each folder is created (or merged) first so its contents land inside it.
+    async function enqueuePayload(payload : DroppedPayload, folderID : string | null) : Promise<void>
+    {
+        enqueue(payload.files, folderID);
+        await enqueueFolders(payload.folders, folderID);
+
+        const drive = useDriveStore();
+        if(payload.folders.length > 0 && folderID === drive.folderID)
+        {
+            await drive.refresh().catch(() => undefined);
+        }
+    }
+
+    // The drop-zone path: entry handles were collected synchronously during the drop; files is the fallback for a
+    // browser (or a drag source) that offers no entries.
+    async function enqueueDropped(
+        entries : readonly FileSystemEntry[],
+        files : readonly File[],
+        folderID : string | null
+    ) : Promise<void>
+    {
+        if(entries.length === 0)
+        {
+            enqueue(files, folderID);
+            return;
+        }
+
+        await enqueuePayload(await readDroppedPayload(entries), folderID);
+    }
+
     function cancel(itemID : string) : void
     {
         const item = itemByID(itemID);
@@ -393,6 +488,8 @@ export const useUploadsStore = defineStore('uploads', () =>
         doneCount,
         hasItems,
         enqueue,
+        enqueuePayload,
+        enqueueDropped,
         cancel,
         retry,
         resolveCollision,

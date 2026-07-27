@@ -17,7 +17,8 @@ import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { ApiError } from '@client/resource-access/apiError.ts';
-import { getChildren } from '@client/resource-access/nodes.ts';
+import { readDroppedPayload } from '@client/resource-access/droppedEntries.ts';
+import { createNode, getChildren } from '@client/resource-access/nodes.ts';
 import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
 import { uploadWithProgress } from '@client/resource-access/uploadWithProgress.ts';
 
@@ -48,11 +49,15 @@ vi.mock('@client/resource-access/blobs.ts', () => ({
 
 vi.mock('@client/resource-access/uploadWithProgress.ts', () => ({ uploadWithProgress: vi.fn() }));
 
+vi.mock('@client/resource-access/droppedEntries.ts', () => ({ readDroppedPayload: vi.fn() }));
+
 vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const getChildrenMock = getChildren as unknown as Mock;
+const createNodeMock = createNode as unknown as Mock;
+const readDroppedPayloadMock = readDroppedPayload as unknown as Mock;
 const claimBlobMock = claimBlob as unknown as Mock;
 const answerChallengeMock = answerChallenge as unknown as Mock;
 const uploadMock = uploadWithProgress as unknown as Mock;
@@ -91,6 +96,30 @@ function listing(total : number, targetID = 'existing') : NodeListResponse
 function uploadFile(name : string, size = 3, type = 'text/plain') : File
 {
     return new File([ new Uint8Array(size) ], name, { type });
+}
+
+function folderNode(id : string, name : string) : NodeResponse
+{
+    return {
+        id,
+        name,
+        ownerID: 'u1',
+        parentID: null,
+        createdAt: ISO,
+        updatedAt: ISO,
+        role: 'owner',
+        type: 'folder',
+        trashedAt: null,
+    };
+}
+
+// The standard happy-path pipeline mocks: fresh blob, no collisions, ticket upload lands.
+function mockHappyPipeline() : void
+{
+    hashFileMock.mockResolvedValue('sha-1');
+    getChildrenMock.mockResolvedValue(listing(0));
+    claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+    uploadMock.mockResolvedValue(fileNode('n1'));
 }
 
 async function waitFor(predicate : () => boolean, label = 'condition') : Promise<void>
@@ -374,6 +403,107 @@ describe('useUploadsStore', () =>
         await waitFor(() => store.items[0]?.status === 'cancelled', 'cancelled');
 
         expect(store.items[0]?.status).toBe('cancelled');
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Folder uploads -- each folder is created (or merged into a same-named sibling) before its files enqueue, and a
+    // folder that can't be created surfaces as an error row instead of vanishing.
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('creates the dropped tree\'s folders and lands each file inside its own folder', async () =>
+    {
+        mockHappyPipeline();
+        createNodeMock
+            .mockResolvedValueOnce(folderNode('dir-music', 'Music'))
+            .mockResolvedValueOnce(folderNode('dir-albums', 'Albums'));
+
+        const store = useUploadsStore();
+        await store.enqueuePayload({
+            files: [ uploadFile('loose.txt') ],
+            folders: [ {
+                name: 'Music',
+                files: [ uploadFile('one.mp3') ],
+                folders: [ { name: 'Albums', files: [ uploadFile('two.mp3') ], folders: [] } ],
+            } ],
+        }, 'root-folder');
+        await waitFor(() => store.items.every((item) => item.status === 'done'), 'all done');
+
+        expect(createNodeMock).toHaveBeenCalledWith({ type: 'folder', name: 'Music', parentID: 'root-folder' });
+        expect(createNodeMock).toHaveBeenCalledWith({ type: 'folder', name: 'Albums', parentID: 'dir-music' });
+
+        const placements = store.items.map((item) => [ item.name, item.folderID ]);
+        expect(placements).toEqual([
+            [ 'loose.txt', 'root-folder' ],
+            [ 'one.mp3', 'dir-music' ],
+            [ 'two.mp3', 'dir-albums' ],
+        ]);
+    });
+
+    it('merges into an existing same-named folder instead of minting a duplicate', async () =>
+    {
+        mockHappyPipeline();
+        getChildrenMock.mockImplementation((parentID : string | null, query : { name ?: string } = {}) =>
+        {
+            return Promise.resolve(query.name === 'Music'
+                ? { nodes: [ folderNode('dir-existing', 'Music') ], total: 1, limit: 1, offset: 0, owners: [] }
+                : listing(0));
+        });
+
+        const store = useUploadsStore();
+        await store.enqueuePayload({
+            files: [],
+            folders: [ { name: 'Music', files: [ uploadFile('one.mp3') ], folders: [] } ],
+        }, null);
+        await waitFor(() => store.items[0]?.status === 'done', 'done');
+
+        expect(store.items[0]?.folderID).toBe('dir-existing');
+        expect(createNodeMock).not.toHaveBeenCalled();
+    });
+
+    it('surfaces an uncreatable folder as an error row naming it, skipping what was inside', async () =>
+    {
+        mockHappyPipeline();
+        createNodeMock.mockRejectedValue(new ApiError(403, 'read only'));
+
+        const store = useUploadsStore();
+        await store.enqueuePayload({
+            files: [],
+            folders: [ { name: 'Music', files: [ uploadFile('one.mp3') ], folders: [] } ],
+        }, null);
+
+        expect(store.items).toHaveLength(1);
+        expect(store.items[0]?.status).toBe('error');
+        expect(store.items[0]?.name).toBe('Music');
+        expect(store.items[0]?.error).toContain('nothing inside it was uploaded');
+    });
+
+    it('falls back to a plain multi-file enqueue when a drop carries no entry handles', async () =>
+    {
+        mockHappyPipeline();
+
+        const store = useUploadsStore();
+        await store.enqueueDropped([], [ uploadFile('plain.txt') ], 'folder1');
+        await waitFor(() => store.items[0]?.status === 'done', 'done');
+
+        expect(readDroppedPayloadMock).not.toHaveBeenCalled();
+        expect(store.items[0]?.folderID).toBe('folder1');
+    });
+
+    it('routes a drop with entry handles through traversal into the folder pipeline', async () =>
+    {
+        mockHappyPipeline();
+        createNodeMock.mockResolvedValue(folderNode('dir-music', 'Music'));
+        readDroppedPayloadMock.mockResolvedValue({
+            files: [],
+            folders: [ { name: 'Music', files: [ uploadFile('one.mp3') ], folders: [] } ],
+        });
+
+        const store = useUploadsStore();
+        await store.enqueueDropped([ { isFile: false, isDirectory: true } as FileSystemEntry ], [], null);
+        await waitFor(() => store.items[0]?.status === 'done', 'done');
+
+        expect(store.items[0]?.name).toBe('one.mp3');
+        expect(store.items[0]?.folderID).toBe('dir-music');
     });
 });
 

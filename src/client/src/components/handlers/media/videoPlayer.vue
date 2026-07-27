@@ -1,11 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Video Player
   --
-  -- Mount contract: pass nodeID, name, and mimeType for the file to play -- the already-resolved facts a host reads
-  -- off the node, mirroring how filePage.vue hands the text editor an already-loaded value rather than an id to
-  -- fetch. There is no v-model and nothing is emitted: this is a viewer with no save path, and an unplayable file
-  -- shows its own in-card fallback rather than asking the host to react. The component fills whatever size its host
-  -- gives it and cards itself (rounded, bordered, clipped) so it reads as complete standing alone.
+  -- Mount contract: pass the already-resolved facts of the track to play -- the src the element streams (a drive
+  -- inline-download URL or a remote stream), the download fallback href, name, and mimeType -- plus the queue
+  -- context: whether neighbours exist for the transport's previous/next, whether this track should start on its
+  -- own, and the volume/mute/rate the listener already chose. The host remounts a fresh player per track, so those
+  -- settings arrive as initial values and every later change is emitted back up (volume-change, rate-change) for
+  -- the host to carry into the next mount; ended/previous/next are the queue asks. An unplayable file shows its own
+  -- in-card fallback rather than asking the host to react. The component fills whatever size its host gives it and
+  -- cards itself (rounded, bordered, clipped) so it reads as complete standing alone.
   --
   -- The src is the node's inline-download URL, not fetched bytes: the browser streams it directly against the
   -- Range-supporting download endpoint, so scrubbing never waits on the whole file.
@@ -23,7 +26,7 @@
             <video
                 ref="mediaEl"
                 class="min-h-0 flex-1 bg-black"
-                preload="metadata"
+                preload="auto"
                 playsinline
                 :aria-label="name"
                 @click="togglePlay"
@@ -39,7 +42,7 @@
                 @ratechange="onRateChange"
                 @error="onError"
             >
-                <source :src="src" :type="mimeType">
+                <source :src="src" :type="mimeType ?? undefined">
             </video>
 
             <VideoControls
@@ -52,12 +55,25 @@
                 :muted="muted"
                 :playback-rate="playbackRate"
                 :is-fullscreen="isFullscreen"
+                :has-previous="hasPrevious"
+                :has-next="hasNext"
+                :shuffle="shuffle"
+                :repeat="repeat"
+                :cast-available="castAvailable"
+                :casting="casting"
+                :playlist-hidden="playlistHidden"
                 @toggle-play="togglePlay"
                 @seek="seek"
                 @toggle-mute="toggleMute"
                 @set-volume="setVolume"
-                @cycle-rate="cycleRate"
+                @set-rate="setRate"
                 @toggle-fullscreen="toggleFullscreen"
+                @previous="emit('previous')"
+                @next="emit('next')"
+                @toggle-shuffle="emit('toggle-shuffle')"
+                @cycle-repeat="emit('cycle-repeat')"
+                @cast="promptCast"
+                @toggle-playlist="emit('toggle-playlist')"
             />
         </template>
 
@@ -82,13 +98,12 @@
 
 <script setup lang="ts">
     import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-
-    // Resource Access
-    import { downloadUrl } from '../../../resource-access/downloads.ts';
+    import { useToast } from '@nuxt/ui/composables';
 
     // Engines
-    import { bufferedPercent, clampSeekTime, nextPlaybackRate } from '../../../engines/media/playback.ts';
+    import { bufferedPercent, clampSeekTime } from '../../../engines/media/playback.ts';
     import { resolveMediaShortcut } from '../../../engines/media/keyboard.ts';
+    import type { RepeatMode } from '../../../engines/media/queue.ts';
 
     // Components
     import VideoControls from './videoControls.vue';
@@ -96,15 +111,36 @@
     //------------------------------------------------------------------------------------------------------------------
 
     const props = defineProps<{
-        nodeID : string;
+        src : string;
+        downloadHref : string;
         name : string;
-        mimeType : string;
+        mimeType : string | null;
+        hasPrevious : boolean;
+        hasNext : boolean;
+        shuffle : boolean;
+        repeat : RepeatMode;
+        playlistHidden : boolean;
+        autoplay : boolean;
+        initialVolume : number;
+        initialMuted : boolean;
+        initialRate : number;
     }>();
 
-    const src = computed(() => downloadUrl(props.nodeID, 'inline'));
-    const downloadHref = computed(() => downloadUrl(props.nodeID));
+    const emit = defineEmits<{
+        'ended' : [];
+        'error' : [];
+        'previous' : [];
+        'next' : [];
+        'toggle-shuffle' : [];
+        'cycle-repeat' : [];
+        'toggle-playlist' : [];
+        'volume-change' : [ volume : number, muted : boolean ];
+        'rate-change' : [ rate : number ];
+    }>();
 
     //------------------------------------------------------------------------------------------------------------------
+
+    const toast = useToast();
 
     const container = ref<HTMLElement | null>(null);
     const mediaEl = ref<HTMLVideoElement | null>(null);
@@ -125,8 +161,18 @@
 
     function onPlay() : void { playing.value = true; }
     function onPause() : void { playing.value = false; }
-    function onEnded() : void { playing.value = false; }
-    function onError() : void { errored.value = true; }
+
+    function onError() : void
+    {
+        errored.value = true;
+        emit('error');
+    }
+
+    function onEnded() : void
+    {
+        playing.value = false;
+        emit('ended');
+    }
 
     function onTimeUpdate() : void
     {
@@ -155,6 +201,7 @@
 
         volume.value = mediaEl.value.volume;
         muted.value = mediaEl.value.muted;
+        emit('volume-change', volume.value, muted.value);
     }
 
     function onRateChange() : void
@@ -162,6 +209,7 @@
         if(mediaEl.value === null) { return; }
 
         playbackRate.value = mediaEl.value.playbackRate;
+        emit('rate-change', playbackRate.value);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -225,13 +273,84 @@
         muted.value = next;
     }
 
-    function cycleRate() : void
+    function setRate(rate : number) : void
     {
         if(mediaEl.value === null) { return; }
 
-        const next = nextPlaybackRate(playbackRate.value);
-        mediaEl.value.playbackRate = next;
-        playbackRate.value = next;
+        mediaEl.value.playbackRate = rate;
+        playbackRate.value = rate;
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Casting -- the standard Remote Playback API: Chromecast in Chromium, AirPlay in Safari, nothing in Firefox
+    // (whose elements carry no remote, so the button simply never appears). The button gates on watchAvailability:
+    // for VIDEO sources Chrome's monitoring answers truthfully once the media is loaded, and it stays false through
+    // every case prompt() would otherwise swallow into a fake "dismissed" (metadata not yet loaded, media under
+    // Chrome's 15-second remoting floor, no allowlisted device). Where monitoring itself is unsupported, the button
+    // shows and prompt()'s native picker does the discovery -- the spec's own degraded mode.
+    //------------------------------------------------------------------------------------------------------------------
+
+    const castAvailable = ref(false);
+    const casting = ref(false);
+    let castWatchID : number | null = null;
+
+    function remoteOf() : RemotePlayback | undefined
+    {
+        return mediaEl.value?.remote;
+    }
+
+    function onRemoteConnect() : void { casting.value = true; }
+    function onRemoteDisconnect() : void { casting.value = false; }
+
+    // Closing the picker arrives as NotAllowedError -- a choice, not a failure. Anything else names its reason in
+    // a toast, because a cast button that silently does nothing is indistinguishable from a broken one.
+    function promptCast() : void
+    {
+        const remote = remoteOf();
+        if(remote === undefined) { return; }
+
+        remote.prompt()
+            .catch((caught : unknown) =>
+            {
+                if(caught instanceof DOMException && caught.name === 'NotAllowedError') { return; }
+
+                const detail = caught instanceof DOMException && caught.name === 'NotFoundError'
+                    ? 'No cast devices were found on the network.'
+                    : (caught instanceof Error ? caught.message : 'Casting failed.');
+
+                toast.add({ title: 'Couldn\'t start casting', description: detail, color: 'error' });
+            });
+    }
+
+    function watchCast() : void
+    {
+        const remote = remoteOf();
+        if(remote === undefined || typeof remote.watchAvailability !== 'function') { return; }
+
+        casting.value = remote.state !== 'disconnected';
+        remote.addEventListener('connect', onRemoteConnect);
+        remote.addEventListener('connecting', onRemoteConnect);
+        remote.addEventListener('disconnect', onRemoteDisconnect);
+
+        remote.watchAvailability((available) => { castAvailable.value = available; })
+            .then((id) => { castWatchID = id; })
+            .catch(() => { castAvailable.value = true; });
+    }
+
+    function unwatchCast() : void
+    {
+        const remote = remoteOf();
+        if(remote === undefined) { return; }
+
+        remote.removeEventListener('connect', onRemoteConnect);
+        remote.removeEventListener('connecting', onRemoteConnect);
+        remote.removeEventListener('disconnect', onRemoteDisconnect);
+
+        if(castWatchID !== null)
+        {
+            void remote.cancelWatchAvailability(castWatchID)
+                .catch(() => undefined);
+        }
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -275,8 +394,40 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    onMounted(() => { document.addEventListener('fullscreenchange', onFullscreenChange); });
-    onBeforeUnmount(() => { document.removeEventListener('fullscreenchange', onFullscreenChange); });
+    onMounted(() =>
+    {
+        document.addEventListener('fullscreenchange', onFullscreenChange);
+
+        // Fresh mount per track: the listener's settings arrive as props rather than element defaults, and a
+        // queue-driven arrival starts on its own.
+        if(mediaEl.value !== null)
+        {
+            mediaEl.value.volume = props.initialVolume;
+            mediaEl.value.muted = props.initialMuted;
+            mediaEl.value.playbackRate = props.initialRate;
+            volume.value = props.initialVolume;
+            muted.value = props.initialMuted;
+            playbackRate.value = props.initialRate;
+
+            watchCast();
+
+            if(props.autoplay) { mediaEl.value.play().catch(ignoreBlockedAutoplay); }
+        }
+    });
+
+    // Track churn leaves detached elements holding their network request open in some browsers; stopping playback
+    // and reloading an emptied element on the way out aborts the fetch.
+    onBeforeUnmount(() =>
+    {
+        document.removeEventListener('fullscreenchange', onFullscreenChange);
+        unwatchCast();
+
+        if(mediaEl.value === null) { return; }
+
+        mediaEl.value.pause();
+        for(const child of Array.from(mediaEl.value.children)) { child.remove(); }
+        mediaEl.value.load();
+    });
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

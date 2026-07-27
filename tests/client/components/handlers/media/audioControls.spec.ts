@@ -1,29 +1,39 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Video Controls — presentational transport bar
+// Audio Controls — presentational transport row
 //
 // Purely props-in, emits-out: no media element involved. What this guards: the play/pause and volume icons track the
 // props they're derived from, the buffered and played fills widen with their percentages, the time readout formats
-// through the shared engine, and every control emits the action the player is expected to carry out.
+// through the shared engine, and every control emits the action the player is expected to carry out. No fullscreen
+// control exists here -- there is no visual surface to fill.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 
 // Under test
-import VideoControls from '@client/components/handlers/video/videoControls.vue';
+import AudioControls from '@client/components/handlers/media/audioControls.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const UButtonStub = {
     name: 'UButton',
-    props: [ 'icon', 'label', 'variant', 'color', 'size', 'ariaLabel' ],
+    props: [ 'icon', 'label', 'variant', 'color', 'size', 'ariaLabel', 'disabled' ],
     emits: [ 'click' ],
-    template: '<button :data-icon="icon" :aria-label="ariaLabel" @click="$emit(\'click\')">{{ label }}</button>',
+    template: '<button :data-icon="icon" :aria-label="ariaLabel" :disabled="disabled" '
+        + '@click="$emit(\'click\')">{{ label }}</button>',
 };
 
-const stubs = { UButton: UButtonStub };
+const UDropdownMenuStub = {
+    name: 'UDropdownMenu',
+    props: [ 'items' ],
+    template: '<div class="rate-menu"><slot />'
+        + '<button v-for="item in items.flat()" :key="item.label" :data-rate-item="item.label" '
+        + '@click="item.onSelect()">{{ item.label }}</button></div>',
+};
 
-type Props = InstanceType<typeof VideoControls>['$props'];
+const stubs = { UButton: UButtonStub, UDropdownMenu: UDropdownMenuStub, UIcon: true };
+
+type Props = InstanceType<typeof AudioControls>['$props'];
 
 function baseProps() : Props
 {
@@ -35,16 +45,20 @@ function baseProps() : Props
         volume: 1,
         muted: false,
         playbackRate: 1,
-        isFullscreen: false,
+        hasPrevious: false,
+        hasNext: false,
+        shuffle: false,
+        repeat: 'off',
+        castAvailable: false,
+        casting: false,
     };
 }
 
 function mountControls(overrides : Partial<Props> = {}) : VueWrapper
 {
-    return mount(VideoControls, { props: { ...baseProps(), ...overrides }, global: { stubs } });
+    return mount(AudioControls, { props: { ...baseProps(), ...overrides }, global: { stubs } });
 }
 
-// The seek row renders three plain divs in order (track, buffered fill, played fill) followed by the range input.
 function seekFills(wrapper : VueWrapper) : { buffered : HTMLElement; played : HTMLElement }
 {
     const input = wrapper.get('input[aria-label="Seek"]').element;
@@ -56,7 +70,7 @@ function seekFills(wrapper : VueWrapper) : { buffered : HTMLElement; played : HT
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('VideoControls', () =>
+describe('AudioControls', () =>
 {
     it('shows the play icon when paused and the pause icon when playing', () =>
     {
@@ -97,12 +111,12 @@ describe('VideoControls', () =>
         expect(volumeIcon({ muted: false, volume: 0.8 })).toBe('i-lucide-volume-2');
     });
 
-    it('shows the current playback rate and the fullscreen state', () =>
+    it('shows the current playback rate and has no fullscreen control', () =>
     {
-        const wrapper = mountControls({ playbackRate: 1.5, isFullscreen: true });
+        const wrapper = mountControls({ playbackRate: 1.5 });
 
         expect(wrapper.text()).toContain('1.5x');
-        expect(wrapper.get('[aria-label="Toggle fullscreen"]').attributes('data-icon')).toBe('i-lucide-minimize');
+        expect(wrapper.find('[aria-label="Toggle fullscreen"]').exists()).toBe(false);
     });
 
     it('emits the matching action for each button', async () =>
@@ -111,13 +125,40 @@ describe('VideoControls', () =>
 
         await wrapper.get('[aria-label="Play"]').trigger('click');
         await wrapper.get('[aria-label="Mute"]').trigger('click');
-        await wrapper.get('[aria-label="Playback speed"]').trigger('click');
-        await wrapper.get('[aria-label="Toggle fullscreen"]').trigger('click');
 
         expect(wrapper.emitted('toggle-play')).toHaveLength(1);
         expect(wrapper.emitted('toggle-mute')).toHaveLength(1);
-        expect(wrapper.emitted('cycle-rate')).toHaveLength(1);
-        expect(wrapper.emitted('toggle-fullscreen')).toHaveLength(1);
+    });
+
+    it('offers the rate ladder as a menu and emits the chosen rate', async () =>
+    {
+        const wrapper = mountControls();
+
+        await wrapper.get('[data-rate-item="1.5x"]').trigger('click');
+
+        expect(wrapper.emitted('set-rate')).toEqual([ [ 1.5 ] ]);
+    });
+
+    it('offers Cast only where remote playback is available', async () =>
+    {
+        const absent = mountControls();
+        expect(absent.find('[aria-label="Cast"]').exists()).toBe(false);
+
+        const wrapper = mountControls({ castAvailable: true });
+        await wrapper.get('[aria-label="Cast"]').trigger('click');
+        expect(wrapper.emitted('cast')).toHaveLength(1);
+    });
+
+    it('emits shuffle and repeat toggles, and wears the repeat-one icon in that mode', async () =>
+    {
+        const wrapper = mountControls({ repeat: 'one' });
+
+        await wrapper.get('[aria-label="Shuffle off"]').trigger('click');
+        await wrapper.get('[aria-label="Repeat one"]').trigger('click');
+
+        expect(wrapper.emitted('toggle-shuffle')).toHaveLength(1);
+        expect(wrapper.emitted('cycle-repeat')).toHaveLength(1);
+        expect(wrapper.get('[aria-label="Repeat one"]').attributes('data-icon')).toBe('i-lucide-repeat-1');
     });
 
     it('emits a seek with the dragged time and a set-volume with the dragged level', async () =>
@@ -136,6 +177,30 @@ describe('VideoControls', () =>
         const wrapper = mountControls({ duration: 0 });
 
         expect(wrapper.get('input[aria-label="Seek"]').attributes('disabled')).toBeDefined();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('AudioControls queue transport', () =>
+{
+    it('disables previous and next at the queue boundaries', () =>
+    {
+        const wrapper = mountControls({ hasPrevious: false, hasNext: false });
+
+        expect(wrapper.get('button[aria-label="Previous track"]').attributes('disabled')).toBeDefined();
+        expect(wrapper.get('button[aria-label="Next track"]').attributes('disabled')).toBeDefined();
+    });
+
+    it('emits previous and next when neighbours exist', async () =>
+    {
+        const wrapper = mountControls({ hasPrevious: true, hasNext: true });
+
+        await wrapper.get('button[aria-label="Previous track"]').trigger('click');
+        await wrapper.get('button[aria-label="Next track"]').trigger('click');
+
+        expect(wrapper.emitted('previous')).toHaveLength(1);
+        expect(wrapper.emitted('next')).toHaveLength(1);
     });
 });
 

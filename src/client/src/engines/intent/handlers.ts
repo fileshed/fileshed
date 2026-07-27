@@ -11,7 +11,12 @@
 // it, so the effectful half (router push, window.open) stays in the caller.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type NodeResponse, PDF_ANNOTATOR_MAX_BYTES, type SharedTarget } from '@fileshed/core';
+import {
+    type NodeResponse,
+    PDF_ANNOTATOR_MAX_BYTES,
+    type SharedTarget,
+    isPlaylistFile,
+} from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -36,6 +41,7 @@ export type OpenAction
     | { kind : 'edit'; nodeID : string }
     | { kind : 'annotate'; nodeID : string }
     | { kind : 'play'; nodeID : string; media : 'video' | 'audio' }
+    | { kind : 'play-playlist'; nodeID : string }
     | { kind : 'view'; nodeID : string }
     | { kind : 'download'; nodeID : string }
     | { kind : 'none' };
@@ -92,6 +98,15 @@ export function defaultEditorMode(mimeType : string, name : string) : EditorMode
 type OpenHandler = (target : OpenTarget) => OpenAction | null;
 
 const HANDLERS : readonly OpenHandler[] = [
+    // First on purpose: an .m3u often arrives typed text/plain (which the editor would claim) or audio/x-mpegurl
+    // (which the player would claim as an undecodable "track"); the playlist opens as a playlist regardless.
+    (target) =>
+    {
+        return isPlaylistFile(target.mimeType, target.name)
+            ? { kind: 'play-playlist', nodeID: target.nodeID }
+            : null;
+    },
+
     (target) =>
     {
         return isEditableText(target) ? { kind: 'edit', nodeID: target.nodeID } : null;

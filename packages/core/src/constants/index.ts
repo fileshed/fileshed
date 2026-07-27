@@ -6,6 +6,7 @@ export * from './accessRequest.ts';
 export * from './avatar.ts';
 export * from './blob.ts';
 export * from './config.ts';
+export * from './media.ts';
 export * from './nodeType.ts';
 export * from './pagination.ts';
 export * from './pdf.ts';

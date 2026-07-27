@@ -248,6 +248,17 @@ describe('resolveOpen — annotator and player intents', () =>
         expect(resolveOpen(fileOf({ mimeType: 'text/plain', name: 'notes.txt' })))
             .toEqual({ kind: 'edit', nodeID: 'f1' });
     });
+
+    it('opens a playlist as a playlist whatever it was typed as — m3u mimes wear an audio/ prefix, and a .m3u '
+        + 'often arrives as text/plain the editor would otherwise claim', () =>
+    {
+        expect(resolveOpen(fileOf({ mimeType: 'audio/x-mpegurl', name: 'mix.weird' })))
+            .toEqual({ kind: 'play-playlist', nodeID: 'f1' });
+        expect(resolveOpen(fileOf({ mimeType: 'text/plain', name: 'mix.m3u' })))
+            .toEqual({ kind: 'play-playlist', nodeID: 'f1' });
+        expect(resolveOpen(fileOf({ mimeType: 'application/octet-stream', name: 'mix.M3U8' })))
+            .toEqual({ kind: 'play-playlist', nodeID: 'f1' });
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

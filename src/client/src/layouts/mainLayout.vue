@@ -38,6 +38,7 @@
         </div>
 
         <input ref="fileInput" type="file" multiple class="hidden" @change="onFilesPicked">
+        <input ref="folderInput" type="file" webkitdirectory class="hidden" @change="onFolderPicked">
 
         <UploadPanel />
         <UploadCollision />
@@ -50,6 +51,9 @@
     import { computed, ref } from 'vue';
     import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
     import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui';
+
+    // Engines
+    import { payloadFromRelativePaths } from '../engines/uploads/droppedTree.ts';
 
     // Stores
     import { useAppStore } from '../stores/app.ts';
@@ -106,11 +110,18 @@
     //------------------------------------------------------------------------------------------------------------------
 
     const fileInput = ref<HTMLInputElement | null>(null);
+    const folderInput = ref<HTMLInputElement | null>(null);
 
     async function triggerUpload() : Promise<void>
     {
         if(!onDriveRoute.value) { await router.push('/'); }
         fileInput.value?.click();
+    }
+
+    async function triggerFolderUpload() : Promise<void>
+    {
+        if(!onDriveRoute.value) { await router.push('/'); }
+        folderInput.value?.click();
     }
 
     function onFilesPicked(event : Event) : void
@@ -123,10 +134,27 @@
         input.value = '';
     }
 
+    // A directory pick arrives as a flat file list whose webkitRelativePath spells out the tree; the uploads store
+    // rebuilds and creates the folders before the files start.
+    function onFolderPicked(event : Event) : void
+    {
+        const input = event.target as HTMLInputElement;
+        const files = input.files === null ? [] : Array.from(input.files);
+
+        if(files.length > 0) { void uploads.enqueuePayload(payloadFromRelativePaths(files), drive.folderID); }
+
+        input.value = '';
+    }
+
     const newMenuItems = computed<DropdownMenuItem[][]>(() => [
         [
             { label: 'New folder', icon: 'i-lucide-folder-plus', onSelect: () => { void requestCreate('folder'); } },
             { label: 'Upload files', icon: 'i-lucide-upload', onSelect: () => { void triggerUpload(); } },
+            {
+                label: 'Upload folder',
+                icon: 'i-lucide-folder-up',
+                onSelect: () => { void triggerFolderUpload(); },
+            },
         ],
         [
             {

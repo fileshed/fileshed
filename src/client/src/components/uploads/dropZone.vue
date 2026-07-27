@@ -2,10 +2,11 @@
   -- Drop Zone
   --
   -- Wraps a surface and turns a file drag over it into an upload. A drag carrying files raises an overlay naming the
-  -- target folder; a drop emits the files for the parent to enqueue. Dragging over child elements fires a stream of
-  -- enter/leave events, so a depth counter (not a boolean) drives the overlay -- it stays up until the drag has truly
-  -- left the surface, not just crossed onto a child. Only file drags are tracked, so dragging a node selection does
-  -- nothing.
+  -- target folder; a drop emits what it carried for the parent to enqueue -- FileSystemEntry handles when the browser
+  -- offers them (they can name whole folders, and MUST be collected synchronously inside the drop event or they go
+  -- stale) plus the plain File list as the fallback. Dragging over child elements fires a stream of enter/leave
+  -- events, so a depth counter (not a boolean) drives the overlay -- it stays up until the drag has truly left the
+  -- surface, not just crossed onto a child. Only file drags are tracked, so dragging a node selection does nothing.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -26,7 +27,7 @@
             <div class="flex flex-col items-center gap-2 text-primary">
                 <UIcon name="i-lucide-upload-cloud" class="size-10" />
                 <p class="text-sm font-medium">
-                    Drop files to upload to {{ label }}
+                    Drop files or folders to upload to {{ label }}
                 </p>
             </div>
         </div>
@@ -43,7 +44,7 @@
     defineProps<{ label : string }>();
 
     const emit = defineEmits<{
-        'drop-files' : [ files : File[] ];
+        'drop-upload' : [ entries : FileSystemEntry[], files : File[] ];
     }>();
 
     //------------------------------------------------------------------------------------------------------------------
@@ -71,8 +72,12 @@
         event.preventDefault();
         depth.value = 0;
 
+        const entries = Array.from(event.dataTransfer?.items ?? [])
+            .map((item) => { return typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null; })
+            .filter((entry) : entry is FileSystemEntry => entry !== null);
         const files = Array.from(event.dataTransfer?.files ?? []);
-        if(files.length > 0) { emit('drop-files', files); }
+
+        if(entries.length > 0 || files.length > 0) { emit('drop-upload', entries, files); }
     }
 </script>
 

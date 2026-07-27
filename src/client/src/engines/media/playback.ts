@@ -2,7 +2,7 @@
 // Media Playback Engine
 //
 // Pure logic behind the video and audio transport controls: time formatting, seek clamping, the buffered-ahead
-// percentage for the scrub bar, and the fixed playback-rate ladder both families cycle through. Callers hand in plain
+// percentage for the scrub bar, and the fixed playback-rate ladder the rate menu offers. Callers hand in plain
 // numbers (and a TimeRanges-shaped buffered list) read off the native media element's own events -- nothing here
 // touches the DOM.
 //----------------------------------------------------------------------------------------------------------------------
@@ -55,15 +55,6 @@ export function bufferedPercent(buffered : BufferedRanges, duration : number) : 
     for(let index = 0; index < buffered.length; index += 1) { furthest = Math.max(furthest, buffered.end(index)); }
 
     return Math.min(100, Math.max(0, (furthest / duration) * 100));
-}
-
-// The next rate in the fixed ladder, wrapping from the fastest back to the slowest. A rate the ladder doesn't
-// contain resolves to its first step rather than throwing off the cycle.
-export function nextPlaybackRate(current : number) : number
-{
-    const index = PLAYBACK_RATES.indexOf(current as typeof PLAYBACK_RATES[number]);
-
-    return PLAYBACK_RATES[index === -1 ? 0 : (index + 1) % PLAYBACK_RATES.length] ?? PLAYBACK_RATES[0];
 }
 
 //----------------------------------------------------------------------------------------------------------------------

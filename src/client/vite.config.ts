@@ -39,6 +39,18 @@ export default defineConfig(({ mode }) =>
                         secondary: 'violet',
                         neutral: 'zinc',
                     },
+                    // Stock neutral-ghost hovers with bg-elevated -- invisible on this app's chrome, which mostly
+                    // sits ON elevated panels (dark mode's elevated and muted tokens collide). Hover one step up
+                    // the ladder instead, matching what neutral soft/subtle already do.
+                    button: {
+                        compoundVariants: [
+                            {
+                                color: 'neutral',
+                                variant: 'ghost',
+                                class: 'hover:bg-accented/75 active:bg-accented/75',
+                            },
+                        ],
+                    },
                 },
                 // Handler families deliberately reuse basenames (each family owns an identityBar.vue, toolbar.vue,
                 // ...) and every use is an explicit import. Excluding them from component auto-registration kills

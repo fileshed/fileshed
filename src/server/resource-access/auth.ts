@@ -27,19 +27,15 @@ import type { Config } from '../utils/config.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 // Origins allowed to hit the auth endpoints. Same-origin requests (client served by the server) never need this; it
-// exists for the cross-origin dev flow where Vite serves the client on 5173 and the API answers on 3000. Production
-// trusts only the configured BASE_URL.
+// exists for the cross-origin flows. Production trusts only the configured BASE_URL. Development turns origin
+// matching off entirely (better-auth's bare `*` pattern matches any host) -- a dev box gets reached however is
+// handy: localhost, the machine's LAN IP for cast/phone testing, a .local hostname. The rest of the CSRF machinery
+// stays on; only the origin allowlist opens up, and only outside production.
 function resolveTrustedOrigins(config : Config) : string[]
 {
-    const origins = new Set<string>([ config.BASE_URL ]);
+    if(process.env['NODE_ENV'] !== 'production') { return [ config.BASE_URL, '*' ]; }
 
-    if(process.env['NODE_ENV'] !== 'production')
-    {
-        origins.add('http://localhost:5173');
-        origins.add('http://localhost:3000');
-    }
-
-    return [ ...origins ];
+    return [ config.BASE_URL ];
 }
 
 //----------------------------------------------------------------------------------------------------------------------

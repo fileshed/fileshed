@@ -128,6 +128,7 @@
             case 'edit': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'annotate': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'play': window.open(`/file/${ action.nodeID }`, '_blank'); break;
+            case 'play-playlist': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
             case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
             case 'none': break;
@@ -142,6 +143,7 @@
             case 'edit': return 'i-lucide-file-pen';
             case 'annotate': return 'i-lucide-pen-tool';
             case 'play': return 'i-lucide-play';
+            case 'play-playlist': return 'i-lucide-list-music';
             case 'view': return 'i-lucide-external-link';
             case 'download': return 'i-lucide-download';
             case 'none': return 'i-lucide-external-link';

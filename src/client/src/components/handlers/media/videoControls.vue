@@ -1,11 +1,12 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Video Controls
   --
-  -- The transport bar overlaid on the video: play/pause, a scrub bar showing both playback progress and how far the
-  -- browser has buffered ahead, elapsed/total time, volume, playback rate, and fullscreen. Presentational only -- it
-  -- holds no media state of its own, reading everything from props and asking the player to act via emits. Painted
-  -- fixed-dark-on-black regardless of the app's own light/dark mode, since it sits on the video image itself rather
-  -- than the app chrome (the same reasoning the text editor's gutter uses to opt out of the chosen colorscheme).
+  -- The transport bar overlaid on the video: a full-width scrub bar showing both playback progress and how far the
+  -- browser has buffered ahead, then shuffle, previous/next over the playlist, play/pause, repeat, elapsed/total
+  -- time, volume, a playback-rate menu, and fullscreen. Presentational only -- it holds no media state of its own,
+  -- reading everything from props and asking the player to act via emits. Painted fixed-dark-on-black regardless of
+  -- the app's own light/dark mode, since it sits on the video image itself rather than the app chrome (the same
+  -- reasoning the text editor's gutter uses to opt out of the chosen colorscheme).
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -36,7 +37,26 @@
             >
         </div>
 
-        <div class="flex items-center gap-2 text-white">
+        <div class="flex items-center gap-1 text-white">
+            <UButton
+                icon="i-lucide-shuffle"
+                :color="shuffle ? 'primary' : 'neutral'"
+                variant="ghost"
+                size="sm"
+                class="focus-visible:outline-white"
+                :aria-label="shuffle ? 'Shuffle on' : 'Shuffle off'"
+                @click="emit('toggle-shuffle')"
+            />
+            <UButton
+                icon="i-lucide-skip-back"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                class="focus-visible:outline-white"
+                :disabled="!hasPrevious"
+                aria-label="Previous track"
+                @click="emit('previous')"
+            />
             <UButton
                 :icon="playing ? 'i-lucide-pause' : 'i-lucide-play'"
                 color="neutral"
@@ -46,12 +66,41 @@
                 :aria-label="playing ? 'Pause' : 'Play'"
                 @click="emit('toggle-play')"
             />
+            <UButton
+                icon="i-lucide-skip-forward"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                class="focus-visible:outline-white"
+                :disabled="!hasNext"
+                aria-label="Next track"
+                @click="emit('next')"
+            />
+            <UButton
+                :icon="repeat === 'one' ? 'i-lucide-repeat-1' : 'i-lucide-repeat'"
+                :color="repeat === 'off' ? 'neutral' : 'primary'"
+                variant="ghost"
+                size="sm"
+                class="focus-visible:outline-white"
+                :aria-label="`Repeat ${ repeat }`"
+                @click="emit('cycle-repeat')"
+            />
 
-            <span class="text-xs tabular-nums text-neutral-300">
+            <span class="ml-1 text-xs tabular-nums text-neutral-300">
                 {{ formatMediaTime(currentTime) }} / {{ formatMediaTime(duration) }}
             </span>
 
             <div class="ml-auto flex items-center gap-1">
+                <UButton
+                    v-if="castAvailable"
+                    icon="i-lucide-cast"
+                    :color="casting ? 'primary' : 'neutral'"
+                    variant="ghost"
+                    size="sm"
+                    class="focus-visible:outline-white"
+                    :aria-label="casting ? 'Casting' : 'Cast'"
+                    @click="emit('cast')"
+                />
                 <UButton
                     :icon="volumeIcon"
                     color="neutral"
@@ -86,14 +135,25 @@
                     >
                 </div>
 
+                <UDropdownMenu :items="rateItems">
+                    <UButton
+                        :label="`${ playbackRate }x`"
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="focus-visible:outline-white"
+                        aria-label="Playback speed"
+                    />
+                </UDropdownMenu>
+
                 <UButton
-                    :label="`${ playbackRate }x`"
+                    :icon="playlistHidden ? 'i-lucide-panel-right-open' : 'i-lucide-panel-right-close'"
                     color="neutral"
                     variant="ghost"
                     size="sm"
                     class="focus-visible:outline-white"
-                    aria-label="Playback speed"
-                    @click="emit('cycle-rate')"
+                    :aria-label="playlistHidden ? 'Show playlist' : 'Hide playlist'"
+                    @click="emit('toggle-playlist')"
                 />
 
                 <UButton
@@ -114,9 +174,11 @@
 
 <script setup lang="ts">
     import { computed } from 'vue';
+    import type { DropdownMenuItem } from '@nuxt/ui';
 
     // Engines
-    import { formatMediaTime } from '../../../engines/media/playback.ts';
+    import { PLAYBACK_RATES, formatMediaTime } from '../../../engines/media/playback.ts';
+    import type { RepeatMode } from '../../../engines/media/queue.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -129,6 +191,13 @@
         muted : boolean;
         playbackRate : number;
         isFullscreen : boolean;
+        hasPrevious : boolean;
+        hasNext : boolean;
+        shuffle : boolean;
+        repeat : RepeatMode;
+        castAvailable : boolean;
+        casting : boolean;
+        playlistHidden : boolean;
     }>();
 
     const emit = defineEmits<{
@@ -136,8 +205,14 @@
         'seek' : [ time : number ];
         'toggle-mute' : [];
         'set-volume' : [ value : number ];
-        'cycle-rate' : [];
+        'set-rate' : [ rate : number ];
         'toggle-fullscreen' : [];
+        'previous' : [];
+        'next' : [];
+        'toggle-shuffle' : [];
+        'cycle-repeat' : [];
+        'cast' : [];
+        'toggle-playlist' : [];
     }>();
 
     //------------------------------------------------------------------------------------------------------------------
@@ -153,6 +228,15 @@
 
         return props.volume < 0.5 ? 'i-lucide-volume-1' : 'i-lucide-volume-2';
     });
+
+    const rateItems = computed<DropdownMenuItem[][]>(() => [
+        PLAYBACK_RATES.map((rate) => ({
+            label: `${ rate }x`,
+            type: 'checkbox' as const,
+            checked: rate === props.playbackRate,
+            onSelect: () => { emit('set-rate', rate); },
+        })),
+    ]);
 
     function onSeekInput(event : Event) : void
     {

@@ -9,11 +9,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
     type BufferedRanges,
-    PLAYBACK_RATES,
     bufferedPercent,
     clampSeekTime,
     formatMediaTime,
-    nextPlaybackRate,
 } from '@client/engines/media/playback.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -117,24 +115,5 @@ describe('bufferedPercent', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-
-describe('nextPlaybackRate', () =>
-{
-    it('steps to the next rate in the ladder', () =>
-    {
-        expect(nextPlaybackRate(1)).toBe(1.25);
-        expect(nextPlaybackRate(0.5)).toBe(0.75);
-    });
-
-    it('wraps from the fastest rate back to the slowest', () =>
-    {
-        expect(nextPlaybackRate(PLAYBACK_RATES[PLAYBACK_RATES.length - 1])).toBe(PLAYBACK_RATES[0]);
-    });
-
-    it('resolves a rate outside the ladder to its first step', () =>
-    {
-        expect(nextPlaybackRate(3)).toBe(PLAYBACK_RATES[0]);
-    });
-});
 
 //----------------------------------------------------------------------------------------------------------------------

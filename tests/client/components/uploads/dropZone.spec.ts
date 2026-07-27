@@ -3,7 +3,8 @@
 //
 // A synthetic DragEvent with a populated dataTransfer can't be produced in a real browser (the constructor drops it),
 // so the drag-to-upload DOM behaviour is verified here where the event payload is under the test's control: the
-// files-only gate, the enter/leave depth counter that keeps the overlay up across child crossings, and the drop emit.
+// files-only gate, the enter/leave depth counter that keeps the overlay up across child crossings, and the drop
+// emit carrying both the synchronously-collected entry handles and the plain file fallback.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -16,12 +17,28 @@ import DropZone from '@client/components/uploads/dropZone.vue';
 
 const OVERLAY = '.pointer-events-none';
 
-function withFiles(files : File[] = []) : { dataTransfer : { files : File[]; types : string[] } }
+interface FakeTransfer
+{
+    dataTransfer : { files : File[]; types : string[]; items ?: { webkitGetAsEntry : () => unknown }[] };
+}
+
+function withFiles(files : File[] = []) : FakeTransfer
 {
     return { dataTransfer: { files, types: [ 'Files' ] } };
 }
 
-function withoutFiles() : { dataTransfer : { files : File[]; types : string[] } }
+function withEntries(entries : unknown[], files : File[] = []) : FakeTransfer
+{
+    return {
+        dataTransfer: {
+            files,
+            types: [ 'Files' ],
+            items: entries.map((entry) => ({ webkitGetAsEntry: () => entry })),
+        },
+    };
+}
+
+function withoutFiles() : FakeTransfer
 {
     return { dataTransfer: { files: [], types: [ 'text/plain' ] } };
 }
@@ -53,7 +70,7 @@ describe('DropZone', () =>
         await wrapper.trigger('dragenter', withFiles());
 
         expect(wrapper.find(OVERLAY).exists()).toBe(true);
-        expect(wrapper.text()).toContain('Drop files to upload to Reports');
+        expect(wrapper.text()).toContain('Drop files or folders to upload to Reports');
     });
 
     it('ignores a drag that carries no files', async () =>
@@ -86,8 +103,19 @@ describe('DropZone', () =>
         await wrapper.trigger('dragenter', withFiles([ file ]));
         await wrapper.trigger('drop', withFiles([ file ]));
 
-        expect(wrapper.emitted('drop-files')).toEqual([ [ [ file ] ] ]);
+        expect(wrapper.emitted('drop-upload')).toEqual([ [ [], [ file ] ] ]);
         expect(wrapper.find(OVERLAY).exists()).toBe(false);
+    });
+
+    it('collects entry handles during the drop event itself, alongside the file fallback', async () =>
+    {
+        const wrapper = mountZone();
+        const file = new File([ 'x' ], 'dropped.txt', { type: 'text/plain' });
+        const entry = { isFile: false, isDirectory: true, name: 'Music' };
+
+        await wrapper.trigger('drop', withEntries([ entry, null ], [ file ]));
+
+        expect(wrapper.emitted('drop-upload')).toEqual([ [ [ entry ], [ file ] ] ]);
     });
 
     it('does not emit when a drop carries no files', async () =>
@@ -96,7 +124,7 @@ describe('DropZone', () =>
 
         await wrapper.trigger('drop', withoutFiles());
 
-        expect(wrapper.emitted('drop-files')).toBeUndefined();
+        expect(wrapper.emitted('drop-upload')).toBeUndefined();
     });
 });
 

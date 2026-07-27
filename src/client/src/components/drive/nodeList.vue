@@ -9,15 +9,21 @@
 <template>
     <div>
         <div
-            class="grid grid-cols-[1fr_2.5rem_7rem_9rem_6rem_2.5rem] gap-4 border-b border-default px-3 pb-2 text-xs
-            font-semibold text-muted"
+            class="grid grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
+                md:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
+                lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] gap-4 border-b border-default px-3 pb-2
+                text-xs font-semibold text-muted"
         >
             <button type="button" class="flex items-center gap-1 text-left hover:text-default" @click="emit('sort', 'name')">
                 Name
                 <UIcon v-if="sortKey === 'name'" :name="directionIcon" class="size-3.5" />
             </button>
             <span class="text-center">Owner</span>
-            <button type="button" class="flex items-center gap-1 text-left hover:text-default" @click="emit('sort', 'size')">
+            <button
+                type="button"
+                class="hidden items-center gap-1 text-left hover:text-default md:flex"
+                @click="emit('sort', 'size')"
+            >
                 Size
                 <UIcon v-if="sortKey === 'size'" :name="directionIcon" class="size-3.5" />
             </button>
@@ -29,7 +35,11 @@
                 Modified
                 <UIcon v-if="sortKey === 'updatedAt'" :name="directionIcon" class="size-3.5" />
             </button>
-            <button type="button" class="flex items-center gap-1 text-left hover:text-default" @click="emit('sort', 'kind')">
+            <button
+                type="button"
+                class="hidden items-center gap-1 text-left hover:text-default lg:flex"
+                @click="emit('sort', 'kind')"
+            >
                 Type
                 <UIcon v-if="sortKey === 'kind'" :name="directionIcon" class="size-3.5" />
             </button>

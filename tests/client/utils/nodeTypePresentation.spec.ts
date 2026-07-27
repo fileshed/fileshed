@@ -26,9 +26,9 @@ const BASE = {
     role: 'owner' as const,
 };
 
-function file(mimeType : string) : NodeResponse
+function file(mimeType : string, name = 'thing') : NodeResponse
 {
-    return { ...BASE, type: 'file', blobID: 'b1', size: 10, mimeType, trashedAt: null };
+    return { ...BASE, name, type: 'file', blobID: 'b1', size: 10, mimeType, trashedAt: null };
 }
 
 function folder() : NodeResponse
@@ -120,6 +120,17 @@ describe('nodeKindLabel', () =>
         expect(nodeKindLabel(folder())).toBe('Folder');
         expect(nodeKindLabel(file('application/pdf'))).toBe('PDF');
         expect(nodeKindLabel(link({ id: 't1', type: 'folder', name: 'shared' }))).toBe('Link');
+    });
+
+    it('tells a playlist apart from the audio family it hides in — by mime or by name', () =>
+    {
+        expect(nodeKindLabel(file('audio/x-mpegurl', 'mix.weird'))).toBe('Playlist');
+        expect(nodeKindLabel(file('text/plain', 'mix.m3u'))).toBe('Playlist');
+        expect(nodeKindLabel(file('audio/mpeg', 'song.mp3'))).toBe('Audio');
+
+        expect(nodePresentation(file('audio/x-mpegurl', 'mix.m3u8')))
+            .toMatchObject({ icon: 'i-lucide-list-music', noun: 'Playlist' });
+        expect(nodePresentation(file('audio/mpeg', 'song.mp3')).icon).toBe('i-lucide-music');
     });
 
     it('labels a dead link by its own broken-glyph noun, not "Link"', () =>

@@ -4,7 +4,7 @@
   -- The deep-linkable handler host at /file/:id, opened in its own tab. It resolves the routed node FIRST, asks the
   -- handler registry what opens it, and mounts that family: text or markdown editors (the markdown family is a page on a
   -- canvas; the text family is the editor store's card, framed here because a user-chosen theme's background reads as
-  -- deliberate only inside a bordered, clipped card), the PDF annotator and media players (self-contained families that
+  -- deliberate only inside a bordered, clipped card), the PDF annotator and media player (self-contained families that
   -- own their own chrome and save paths), or -- for natively-rendered types deep-linked here -- a redirect to the
   -- browser's own inline/download handling. It owns only what a page owns: resolving the routed node, the pre-resolution
   -- load/denied/error framing, and the Cmd/Ctrl+S shortcut for the editor path (the annotator binds its own). There is
@@ -47,27 +47,19 @@
             class="min-h-0 flex-1"
         />
 
-        <template v-else-if="action?.kind === 'play' && node !== null">
-            <EditorHeaderSlot>
-                <div class="flex min-w-0 items-center gap-2">
-                    <UIcon
-                        :name="mediaKind === 'video' ? 'i-lucide-film' : 'i-lucide-music'"
-                        class="shrink-0 text-dimmed"
-                    />
-                    <span class="truncate font-medium">{{ node.name }}</span>
-                </div>
-            </EditorHeaderSlot>
+        <MediaPlayer
+            v-else-if="action?.kind === 'play-playlist' && node !== null"
+            :node="node"
+            playlist
+            class="min-h-0 flex-1"
+        />
 
-            <VideoPlayer
-                v-if="mediaKind === 'video'"
-                v-bind="{ nodeID: node.id, name: node.name, mimeType: mediaMime }"
-                class="min-h-0 flex-1"
-            />
-
-            <div v-else class="flex min-h-0 flex-1 items-center justify-center p-6">
-                <AudioPlayer v-bind="{ nodeID: node.id, name: node.name, mimeType: mediaMime }" />
-            </div>
-        </template>
+        <MediaPlayer
+            v-else-if="mediaKind !== null && node !== null"
+            :node="node"
+            :media="mediaKind"
+            class="min-h-0 flex-1"
+        />
 
         <template v-else-if="action?.kind === 'edit'">
             <div
@@ -148,7 +140,6 @@
     import { getNode } from '../resource-access/nodes.ts';
 
     // Components
-    import EditorHeaderSlot from '../components/handlers/editorHeaderSlot.vue';
     import EditorToolbar from '../components/handlers/text/toolbar.vue';
     import TextIdentityBar from '../components/handlers/text/identityBar.vue';
     import TextEditor from '../components/handlers/text/textEditor.vue';
@@ -159,8 +150,7 @@
     // bundle, and nothing outside an opened file ever evaluates their module graphs.
     const MarkdownEditor = defineAsyncComponent(() => import('../components/handlers/markdown/markdownEditor.vue'));
     const PdfAnnotator = defineAsyncComponent(() => import('../components/handlers/pdf/pdfAnnotator.vue'));
-    const VideoPlayer = defineAsyncComponent(() => import('../components/handlers/video/videoPlayer.vue'));
-    const AudioPlayer = defineAsyncComponent(() => import('../components/handlers/audio/audioPlayer.vue'));
+    const MediaPlayer = defineAsyncComponent(() => import('../components/handlers/media/mediaPlayer.vue'));
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -202,13 +192,6 @@
         if(node.value === null || node.value.type !== 'file') { return false; }
 
         return defaultEditorMode(node.value.mimeType, node.value.name) === 'markdown';
-    });
-
-    // The players want the mime the bytes will stream as; a file link's target may carry none, so fall back to what a
-    // node of unknown type streams as.
-    const mediaMime = computed(() =>
-    {
-        return node.value !== null && node.value.type === 'file' ? node.value.mimeType : 'application/octet-stream';
     });
 
     async function load() : Promise<void>

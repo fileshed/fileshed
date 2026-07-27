@@ -3,12 +3,19 @@
 //
 // The single source of how a node type reads on screen: per-family label, lucide icon, and Tailwind text-colour. The
 // grid tiles, the list rows, and the Type filter dropdown all draw from this one table, so a family looks the same
-// wherever it appears. A file classifies through core's familyOfMimeType (the same map the server filters by); a folder
-// is the folders family; a link borrows its target's presentation; an unclassified file gets a neutral glyph and a
-// dead link the dimmed broken glyph.
+// wherever it appears. A file classifies through core's familyOfMimeType (the same map the server filters by),
+// except playlists, which core's isPlaylistFile carves out of the audio family so they read as their own kind; a
+// folder is the folders family; a link borrows its target's presentation; an unclassified file gets a neutral glyph
+// and a dead link the dimmed broken glyph.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type NodeResponse, type NodeTypeFamily, type SharedTarget, familyOfMimeType } from '@fileshed/core';
+import {
+    type NodeResponse,
+    type NodeTypeFamily,
+    type SharedTarget,
+    familyOfMimeType,
+    isPlaylistFile,
+} from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -36,6 +43,11 @@ const FAMILY_PRESENTATION : Readonly<Record<NodeTypeFamily, NodeTypePresentation
 const NEUTRAL_PRESENTATION : NodeTypePresentation
     = { label: 'File', noun: 'File', icon: 'i-lucide-file', color: 'text-muted' };
 
+// Playlists sit inside the audio mime family but read as their own thing -- in a folder of tracks, the icon and the
+// Type column are what tell a playlist from a song.
+const PLAYLIST_PRESENTATION : NodeTypePresentation
+    = { label: 'Playlists', noun: 'Playlist', icon: 'i-lucide-list-music', color: 'text-fuchsia-500' };
+
 // A link with a null target: the broken glyph, dimmed. Tiles and rows fade it further via isDeadLink.
 const DEAD_LINK_PRESENTATION : NodeTypePresentation
     = { label: 'Broken link', noun: 'Broken link', icon: 'i-lucide-unlink', color: 'text-dimmed' };
@@ -47,8 +59,10 @@ export function familyPresentation(family : NodeTypeFamily) : NodeTypePresentati
     return FAMILY_PRESENTATION[family];
 }
 
-function fileMimePresentation(mimeType : string) : NodeTypePresentation
+function fileMimePresentation(mimeType : string, name : string) : NodeTypePresentation
 {
+    if(isPlaylistFile(mimeType, name)) { return PLAYLIST_PRESENTATION; }
+
     const family = familyOfMimeType(mimeType);
     return family === null ? NEUTRAL_PRESENTATION : FAMILY_PRESENTATION[family];
 }
@@ -67,14 +81,14 @@ export function nodePresentation(node : NodeResponse) : NodeTypePresentation
             return FAMILY_PRESENTATION.folders;
 
         case 'file':
-            return fileMimePresentation(node.mimeType);
+            return fileMimePresentation(node.mimeType, node.name);
 
         case 'link':
             if(node.target === null) { return DEAD_LINK_PRESENTATION; }
 
             return node.target.type === 'folder'
                 ? FAMILY_PRESENTATION.folders
-                : fileMimePresentation(node.target.mimeType ?? '');
+                : fileMimePresentation(node.target.mimeType ?? '', node.target.name);
     }
 }
 
@@ -82,7 +96,9 @@ export function nodePresentation(node : NodeResponse) : NodeTypePresentation
 // only ever targets a file or folder, so there is no link case to render.
 export function sharedTargetPresentation(target : SharedTarget) : NodeTypePresentation
 {
-    return target.type === 'folder' ? FAMILY_PRESENTATION.folders : fileMimePresentation(target.mimeType ?? '');
+    return target.type === 'folder'
+        ? FAMILY_PRESENTATION.folders
+        : fileMimePresentation(target.mimeType ?? '', target.name);
 }
 
 // The Type column's label: a dead link reads its own broken-glyph noun, a resolved link reads "Link" -- what the Links

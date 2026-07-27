@@ -2,6 +2,8 @@
   -- Node Row
   --
   -- One dense row in the list: name with its type icon, owner, size, modified time, kind, and an end-of-row kebab.
+  -- The name outranks the metadata columns: at narrow widths Type leaves first, then Size, so the name always keeps
+  -- readable room.
   -- Same interaction contract as the grid tile -- click emits selection intent with modifiers, double-click emits
   -- open, the menu items (right-click, or the kebab) are a prop. A dead link dims and reads "Broken link" in the kind
   -- column. The owner avatar resolves against the listing's owners facet -- a link attributes to its resolved
@@ -12,7 +14,9 @@
 <template>
     <UContextMenu :items="menuItems">
         <div
-            class="group grid cursor-default grid-cols-[1fr_2.5rem_7rem_9rem_6rem_2.5rem] items-center gap-4
+            class="group grid cursor-default grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
+                md:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
+                lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] items-center gap-4
                 border-b border-default px-3 py-2 text-sm transition-colors"
             :class="selected ? 'bg-primary/10' : 'hover:bg-elevated/50'"
             role="button"
@@ -43,9 +47,11 @@
                 <UAvatar v-else :alt="ownerID" size="xs" />
             </div>
 
-            <span class="truncate text-muted">{{ node.type === 'file' ? formatBytes(node.size) : '—' }}</span>
+            <span class="hidden truncate text-muted md:block">
+                {{ node.type === 'file' ? formatBytes(node.size) : '—' }}
+            </span>
             <span class="truncate text-muted">{{ formatNodeDate(node.updatedAt, session.timeFormat) }}</span>
-            <span class="truncate text-muted">{{ kindLabel }}</span>
+            <span class="hidden truncate text-muted lg:block">{{ kindLabel }}</span>
 
             <div
                 class="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"

@@ -36,7 +36,7 @@
             <FilterBar v-else :view-mode="viewMode" />
         </div>
 
-        <DropZone :label="currentFolderName" class="min-h-0 flex-1" @drop-files="onDropFiles">
+        <DropZone :label="currentFolderName" class="min-h-0 flex-1" @drop-upload="onDropUpload">
             <NodeSurface
                 :view-mode="viewMode"
                 :selection="selection.selected"
@@ -202,9 +202,9 @@
 
     const viewMode = computed(() => session.viewMode);
 
-    function onDropFiles(files : File[]) : void
+    function onDropUpload(entries : FileSystemEntry[], files : File[]) : void
     {
-        uploads.enqueue(files, store.folderID);
+        void uploads.enqueueDropped(entries, files, store.folderID);
     }
 
     function setView(mode : ViewMode) : void
@@ -290,6 +290,7 @@
             case 'edit': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'annotate': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'play': window.open(`/file/${ action.nodeID }`, '_blank'); break;
+            case 'play-playlist': window.open(`/file/${ action.nodeID }`, '_blank'); break;
             case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
             case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
             case 'none': break;
@@ -304,6 +305,7 @@
             case 'edit': return 'i-lucide-file-pen';
             case 'annotate': return 'i-lucide-pen-tool';
             case 'play': return 'i-lucide-play';
+            case 'play-playlist': return 'i-lucide-list-music';
             case 'view': return 'i-lucide-external-link';
             case 'download': return 'i-lucide-download';
             case 'none': return 'i-lucide-external-link';

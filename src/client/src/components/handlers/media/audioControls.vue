@@ -1,12 +1,13 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Audio Controls
   --
-  -- The transport row inside the compact audio card: play/pause, a scrub bar showing playback progress and how far
-  -- the browser has buffered ahead, elapsed/total time, volume, and playback rate -- the same transport the video
-  -- family exposes, minus fullscreen, which has no meaning without a visual surface. Presentational only -- it holds
-  -- no media state of its own, reading everything from props and asking the player to act via emits. Styled with the
-  -- app's own semantic tokens rather than a fixed dark bar, since it sits in the normal surface, not over a video
-  -- image.
+  -- The transport rows inside the compact audio card: a full-width scrub bar showing playback progress and how far
+  -- the browser has buffered ahead, then shuffle, previous/next over the playlist, play/pause, repeat,
+  -- elapsed/total time, an availability-gated cast button, volume, and a playback-rate menu -- the same transport
+  -- the video side exposes, minus fullscreen, which has no meaning without a visual surface. Presentational only -- it holds no media state of its
+  -- own, reading everything from props and asking the player to act via emits. Styled with the app's own semantic
+  -- tokens rather than a fixed dark bar; the bar baselines use the accented tokens because the muted ones vanish
+  -- against the elevated card.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -15,7 +16,7 @@
             class="relative flex h-4 w-full items-center rounded-full has-[:focus-visible]:outline-2
                 has-[:focus-visible]:outline-primary has-[:focus-visible]:outline-offset-2"
         >
-            <div class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" />
+            <div class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-accented" />
             <div
                 class="pointer-events-none absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary/30"
                 :style="{ width: `${ bufferedPercent }%` }"
@@ -37,21 +38,64 @@
             >
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1">
+            <UButton
+                icon="i-lucide-shuffle"
+                :color="shuffle ? 'primary' : 'neutral'"
+                variant="ghost"
+                size="sm"
+                :aria-label="shuffle ? 'Shuffle on' : 'Shuffle off'"
+                @click="emit('toggle-shuffle')"
+            />
+            <UButton
+                icon="i-lucide-skip-back"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :disabled="!hasPrevious"
+                aria-label="Previous track"
+                @click="emit('previous')"
+            />
             <UButton
                 :icon="playing ? 'i-lucide-pause' : 'i-lucide-play'"
                 color="neutral"
-                variant="subtle"
+                variant="ghost"
                 size="sm"
                 :aria-label="playing ? 'Pause' : 'Play'"
                 @click="emit('toggle-play')"
             />
+            <UButton
+                icon="i-lucide-skip-forward"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :disabled="!hasNext"
+                aria-label="Next track"
+                @click="emit('next')"
+            />
+            <UButton
+                :icon="repeat === 'one' ? 'i-lucide-repeat-1' : 'i-lucide-repeat'"
+                :color="repeat === 'off' ? 'neutral' : 'primary'"
+                variant="ghost"
+                size="sm"
+                :aria-label="`Repeat ${ repeat }`"
+                @click="emit('cycle-repeat')"
+            />
 
-            <span class="text-xs tabular-nums text-dimmed">
+            <span class="ml-1 text-xs tabular-nums text-dimmed">
                 {{ formatMediaTime(currentTime) }} / {{ formatMediaTime(duration) }}
             </span>
 
             <div class="ml-auto flex items-center gap-1">
+                <UButton
+                    v-if="castAvailable"
+                    icon="i-lucide-cast"
+                    :color="casting ? 'primary' : 'neutral'"
+                    variant="ghost"
+                    size="sm"
+                    :aria-label="casting ? 'Casting' : 'Cast'"
+                    @click="emit('cast')"
+                />
                 <UButton
                     :icon="volumeIcon"
                     color="neutral"
@@ -67,7 +111,7 @@
                 >
                     <div
                         class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full
-                            bg-muted"
+                            bg-accented"
                     />
                     <div
                         class="pointer-events-none absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full
@@ -86,14 +130,15 @@
                     >
                 </div>
 
-                <UButton
-                    :label="`${ playbackRate }x`"
-                    color="neutral"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Playback speed"
-                    @click="emit('cycle-rate')"
-                />
+                <UDropdownMenu :items="rateItems">
+                    <UButton
+                        :label="`${ playbackRate }x`"
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        aria-label="Playback speed"
+                    />
+                </UDropdownMenu>
             </div>
         </div>
     </div>
@@ -103,9 +148,11 @@
 
 <script setup lang="ts">
     import { computed } from 'vue';
+    import type { DropdownMenuItem } from '@nuxt/ui';
 
     // Engines
-    import { formatMediaTime } from '../../../engines/media/playback.ts';
+    import { PLAYBACK_RATES, formatMediaTime } from '../../../engines/media/playback.ts';
+    import type { RepeatMode } from '../../../engines/media/queue.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -117,6 +164,12 @@
         volume : number;
         muted : boolean;
         playbackRate : number;
+        hasPrevious : boolean;
+        hasNext : boolean;
+        shuffle : boolean;
+        repeat : RepeatMode;
+        castAvailable : boolean;
+        casting : boolean;
     }>();
 
     const emit = defineEmits<{
@@ -124,7 +177,12 @@
         'seek' : [ time : number ];
         'toggle-mute' : [];
         'set-volume' : [ value : number ];
-        'cycle-rate' : [];
+        'set-rate' : [ rate : number ];
+        'previous' : [];
+        'next' : [];
+        'toggle-shuffle' : [];
+        'cycle-repeat' : [];
+        'cast' : [];
     }>();
 
     //------------------------------------------------------------------------------------------------------------------
@@ -140,6 +198,15 @@
 
         return props.volume < 0.5 ? 'i-lucide-volume-1' : 'i-lucide-volume-2';
     });
+
+    const rateItems = computed<DropdownMenuItem[][]>(() => [
+        PLAYBACK_RATES.map((rate) => ({
+            label: `${ rate }x`,
+            type: 'checkbox' as const,
+            checked: rate === props.playbackRate,
+            onSelect: () => { emit('set-rate', rate); },
+        })),
+    ]);
 
     function onSeekInput(event : Event) : void
     {

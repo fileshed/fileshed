@@ -1,11 +1,11 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Rename Title
   --
-  -- The file name in the editor header, and the Docs-style inline rename behind it: hover shows the click affordance,
-  -- a click swaps in an edit field with the name's stem pre-selected (so retyping keeps the extension without any
-  -- munging), Enter or blur commits through the owning store's rename, Escape cancels, and a blank or unchanged entry
-  -- reverts silently. Read-only sessions get the plain name. Prop-driven like the save indicator, because each editor
-  -- family fronts a different store.
+  -- An inline Docs-style rename: hover shows the click affordance, a click swaps in an edit field with the name's
+  -- stem pre-selected (so retyping keeps an extension without any munging), Enter or blur commits through the
+  -- owner's rename, Escape cancels, and a blank or unchanged entry reverts silently. Read-only sessions get the
+  -- plain text. Prop-driven like the save indicator, because each owner fronts a different store -- the editor
+  -- headers rename the FILE with it, the playlist panel its display title, so the labels are props too.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -16,7 +16,7 @@
         ref="inputEl"
         v-model="draft"
         type="text"
-        aria-label="File name"
+        :aria-label="inputLabel"
         class="-mx-1.5 w-72 max-w-full rounded-md border border-accented bg-default px-1.5 py-0.5 font-medium
             outline-none focus:border-primary"
         @keydown.enter.prevent="commit"
@@ -27,7 +27,7 @@
     <button
         v-else
         type="button"
-        title="Rename"
+        :title="tooltip"
         class="-mx-1.5 min-w-0 cursor-text truncate rounded-md px-1.5 py-0.5 text-left font-medium
             ring-accented transition hover:ring"
         @click="beginEdit"
@@ -48,11 +48,13 @@
 
     defineOptions({ name: 'RenameTitle' });
 
-    const props = defineProps<{
+    const props = withDefaults(defineProps<{
         name : string;
         readOnly : boolean;
         rename : (name : string) => Promise<void>;
-    }>();
+        tooltip ?: string;
+        inputLabel ?: string;
+    }>(), { tooltip: 'Rename', inputLabel: 'File name' });
 
     const { runMutation } = useRunWithToast();
 
