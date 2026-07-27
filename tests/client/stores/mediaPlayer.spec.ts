@@ -33,6 +33,7 @@ const {
     claimBlobMock,
     uploadTicketMock,
     hashFileMock,
+    mintPlaybackTokenMock,
 } = vi.hoisted(() => ({
     readMediaTagsMock: vi.fn(),
     releaseMediaTagsMock: vi.fn(),
@@ -42,6 +43,7 @@ const {
     claimBlobMock: vi.fn(),
     uploadTicketMock: vi.fn(),
     hashFileMock: vi.fn(),
+    mintPlaybackTokenMock: vi.fn(),
 }));
 
 vi.mock('@client/resource-access/mediaTags.ts', () => ({
@@ -57,6 +59,7 @@ vi.mock('@client/resource-access/blobs.ts', () => ({
     answerChallenge: vi.fn(),
 }));
 vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: hashFileMock, readSampleWindows: vi.fn() }));
+vi.mock('@client/resource-access/accessTokens.ts', () => ({ mintPlaybackToken: mintPlaybackTokenMock }));
 
 function someTags(overrides : Partial<MediaTags> = {}) : MediaTags
 {
@@ -118,6 +121,10 @@ beforeEach(() =>
     setActivePinia(createPinia());
     vi.clearAllMocks();
     readMediaTagsMock.mockResolvedValue(null);
+
+    // A failed mint is the store's quiet default -- in-page playback rides the cookie -- so specs not about the
+    // token see exactly the pre-token behavior. Token specs override this per case.
+    mintPlaybackTokenMock.mockRejectedValue(new Error('no token in this spec'));
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -794,6 +801,124 @@ describe('MediaPlayerStore tags', () =>
 
         expect(store.tagsFor('a1')).toBeNull();
         expect(releaseMediaTagsMock).toHaveBeenCalledWith(withArt);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// The playback token: minted when a session opens so cast receivers can fetch tokened src URLs cookie-less,
+// refreshed on a track change near expiry (retiring the predecessor), and treated as the suspect on a track error
+// once it is dead -- a credential loss re-mints and remounts, it never skips the queue.
+//----------------------------------------------------------------------------------------------------------------------
+
+const HOUR_MS = 60 * 60 * 1000;
+
+function tokenResponse(id : string, msUntilExpiry : number) : { id : string; token : string; expiresAt : string }
+{
+    return { id, token: `fsplay_${ id }`, expiresAt: new Date(Date.now() + msUntilExpiry).toISOString() };
+}
+
+describe('MediaPlayerStore playback token', () =>
+{
+    it('mints a session token when a file opens, and remounts the pre-play track to carry it', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+
+        store.open(fileNode(), 'audio');
+        expect(store.playToken).toBe(1);
+
+        await flushPromises();
+
+        expect(store.playbackToken?.token).toBe('fsplay_k1');
+        expect(store.playToken).toBe(2);
+        expect(store.autoplay).toBe(false);
+    });
+
+    it('carries on without a token when the mint fails, so in-page playback is never blocked', async () =>
+    {
+        const store = useMediaPlayerStore();
+
+        store.open(fileNode(), 'audio');
+        await flushPromises();
+
+        expect(store.playbackToken).toBeNull();
+        expect(store.playToken).toBe(1);
+    });
+
+    it('refreshes on a track change inside the final window, retiring the predecessor', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 10 * 60 * 1000));
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'f1' }), 'audio');
+        await flushPromises();
+        expect(store.playbackToken?.id).toBe('k1');
+
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k2', 5 * HOUR_MS));
+        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.select(1);
+        await flushPromises();
+
+        expect(mintPlaybackTokenMock).toHaveBeenLastCalledWith('k1');
+        expect(store.playbackToken?.id).toBe('k2');
+    });
+
+    it('leaves a fresh token alone across track changes', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'f1' }), 'audio');
+        await flushPromises();
+
+        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.select(1);
+        await flushPromises();
+
+        expect(mintPlaybackTokenMock).toHaveBeenCalledTimes(1);
+        expect(store.playbackToken?.id).toBe('k1');
+    });
+
+    it('treats a track error with a dead token as a credential loss: re-mints and remounts, never skips', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', -1000));
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'f1' }), 'audio');
+        await flushPromises();
+        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        const mountsBefore = store.playToken;
+
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k2', 5 * HOUR_MS));
+        store.handleTrackError();
+        await flushPromises();
+
+        expect(store.currentIndex).toBe(0);
+        expect(store.playbackToken?.id).toBe('k2');
+        expect(store.autoplay).toBe(true);
+        expect(store.playToken).toBe(mountsBefore + 1);
+    });
+
+    it('skips on a track error while the token is alive -- dead media, not a dead credential', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'f1' }), 'audio');
+        await flushPromises();
+        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+
+        store.handleTrackError();
+
+        expect(store.currentIndex).toBe(1);
+    });
+
+    it('drops the token on reset', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+        store.open(fileNode(), 'audio');
+        await flushPromises();
+
+        store.reset();
+
+        expect(store.playbackToken).toBeNull();
     });
 });
 

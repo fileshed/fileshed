@@ -14,7 +14,13 @@ import { Readable } from 'node:stream';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 
 // Models
-import { BadRequestError, type UploadCommitMetadata, toNodeResponse, uploadCommitMetadataCodec } from '@fileshed/core';
+import {
+    BadRequestError,
+    type UploadCommitMetadata,
+    permissionDemands,
+    toNodeResponse,
+    uploadCommitMetadataCodec,
+} from '@fileshed/core';
 
 // Managers
 import type { BlobManager } from '../managers/blob.ts';
@@ -67,7 +73,7 @@ export function createUploadRoutes(sessions : SessionManager, blobs : BlobManage
 
     router.put('/uploads/:ticket', uploadSpec, async (ctx) =>
     {
-        const caller = await sessions.requireUser(ctx.req.raw.headers);
+        const caller = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
 
         const metadata = readUploadMetadata(ctx);
         const contentLength = parseContentLength(ctx.req.header('content-length'));
@@ -76,7 +82,7 @@ export function createUploadRoutes(sessions : SessionManager, blobs : BlobManage
         if(body === null) { throw new BadRequestError('An upload body is required.'); }
 
         const { node, role } = await blobs.commitUpload(
-            caller,
+            caller.user,
             ctx.req.param('ticket'),
             Readable.fromWeb(body as NodeReadableStream<Uint8Array>),
             metadata,

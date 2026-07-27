@@ -72,6 +72,7 @@
     const navItems : NavigationMenuItem[] = [
         { label: 'Profile', icon: 'i-lucide-user', to: '/account/profile' },
         { label: 'Account', icon: 'i-lucide-shield', to: '/account/account' },
+        { label: 'Access tokens', icon: 'i-lucide-key-round', to: '/account/tokens' },
         { label: 'Settings', icon: 'i-lucide-settings', to: '/account/settings' },
     ];
 </script>

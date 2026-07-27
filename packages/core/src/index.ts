@@ -31,6 +31,16 @@ export {
     publicLinkModes,
     publicLinkDispositions,
 } from './models/publicLink.ts';
+export {
+    type AccessToken,
+    type AccessTokenScope,
+    type PermissionStatement,
+    accessTokenScopes,
+    scopeStatements,
+    permissionDemands,
+    statementForScopes,
+    scopesFromStatement,
+} from './models/accessToken.ts';
 export type { Blob } from './models/blob.ts';
 export type { DeletionOffer } from './models/deletionOffer.ts';
 export { type StorageBackend, type StorageBackendKind, storageBackendKinds } from './models/storageBackend.ts';
@@ -129,6 +139,14 @@ export {
     type DeletionOfferListResponse,
     type AcceptDeletionOfferRequest,
 } from './models/requests/deletionOffers.ts';
+export {
+    type CreateAccessTokenRequest,
+    type AccessTokenResponse,
+    type CreateAccessTokenResponse,
+    type AccessTokenListResponse,
+    type CreatePlaybackTokenRequest,
+    type PlaybackTokenResponse,
+} from './models/requests/accessTokens.ts';
 
 // Request Schemas
 export { isoDateTimeCodec } from './models/requests/schemas/common.ts';
@@ -206,6 +224,16 @@ export {
     toDeletionOfferResponse,
     toDeletionOfferListResponse,
 } from './models/requests/schemas/deletionOffers.ts';
+export {
+    createAccessTokenRequestCodec,
+    accessTokenResponseCodec,
+    createAccessTokenResponseCodec,
+    accessTokenListResponseCodec,
+    createPlaybackTokenRequestCodec,
+    playbackTokenResponseCodec,
+    toAccessTokenResponse,
+    toAccessTokenListResponse,
+} from './models/requests/schemas/accessTokens.ts';
 
 // Utils
 export { type Equals, typeAssert } from './utils/typeAssert.ts';

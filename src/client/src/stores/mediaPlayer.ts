@@ -23,6 +23,7 @@ import {
     MAX_CHILDREN_LIMIT,
     MEDIA_FOLDER_ADD_MAX_DEPTH,
     type NodeResponse,
+    PLAYBACK_TOKEN_REFRESH_WINDOW_MS,
     PLAYLIST_SAVE_MIME,
     type UploadCommitMetadata,
 } from '@fileshed/core';
@@ -49,6 +50,7 @@ import {
 } from '../engines/media/queue.ts';
 
 // Resource Access
+import { mintPlaybackToken } from '../resource-access/accessTokens.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '../resource-access/blobs.ts';
 import { fetchNodeBlob } from '../resource-access/content.ts';
 import { type MediaTags, readMediaTags, releaseMediaTags } from '../resource-access/mediaTags.ts';
@@ -97,6 +99,13 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // list never remounts (and never restarts) the playing track.
     const playToken = ref(0);
 
+    // The session's playback token: a short-lived download-scoped key the host appends to every drive track's src,
+    // so a cast receiver handed the URL fetches bytes without a cookie jar. Minted when a session opens and
+    // refreshed on a track change inside the final window; a failed mint leaves it null and in-page playback rides
+    // the session cookie unbothered.
+    const playbackToken = ref<{ id : string; token : string; expiresAt : number } | null>(null);
+    let tokenMintInFlight = false;
+
     // Embedded tags by node, read lazily as tracks join the queue. An entry is absent until the read settles and
     // null when the file carries none -- both render as the filename, so tags only ever upgrade a row. Removing a
     // track keeps its entry: the tags are facts about the file, and the file may still sit elsewhere in the queue.
@@ -138,6 +147,51 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
 
     //------------------------------------------------------------------------------------------------------------------
 
+    async function mintToken(previousID : string | null) : Promise<void>
+    {
+        if(tokenMintInFlight) { return; }
+
+        tokenMintInFlight = true;
+        try
+        {
+            const minted = await mintPlaybackToken(previousID);
+            playbackToken.value = { id: minted.id, token: minted.token, expiresAt: Date.parse(minted.expiresAt) };
+        }
+        catch { /* in-page playback still rides the cookie; the next track change retries */ }
+        finally
+        {
+            tokenMintInFlight = false;
+        }
+    }
+
+    async function ensurePlaybackToken() : Promise<void>
+    {
+        if(playbackToken.value !== null) { return; }
+
+        await mintToken(null);
+
+        // The first track mounted before the mint settled, so its element src carries no token -- and AirPlay hands
+        // a receiver whatever the element holds. Remount it with the tokened src while nothing queue-driven is
+        // pending; pre-play the remount is invisible.
+        if(playbackToken.value !== null && !autoplay.value) { playToken.value += 1; }
+    }
+
+    function refreshPlaybackTokenIfNeeded() : void
+    {
+        const stamp = playbackToken.value;
+        if(stamp === null)
+        {
+            void ensurePlaybackToken();
+            return;
+        }
+
+        if(stamp.expiresAt - Date.now() > PLAYBACK_TOKEN_REFRESH_WINDOW_MS) { return; }
+
+        void mintToken(stamp.id);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+
     function open(node : NodeResponse, kind : MediaKind) : void
     {
         const opened = trackForPlay(node, kind);
@@ -150,6 +204,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         playlistBlobID = null;
         hostFolderID.value = node.parentID;
         loadTags(opened);
+        void ensurePlaybackToken();
     }
 
     // Non-media nodes have no seat in the queue and are dropped here rather than surfaced -- the picker only offers
@@ -208,6 +263,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         queue.value = selected;
         autoplay.value = true;
         playToken.value += 1;
+        refreshPlaybackTokenIfNeeded();
     }
 
     // Restart whatever is current: a fresh mount of the same track, playing.
@@ -215,6 +271,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     {
         autoplay.value = true;
         playToken.value += 1;
+        refreshPlaybackTokenIfNeeded();
     }
 
     function jumpTo(index : number) : void
@@ -225,6 +282,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         queue.value = target;
         autoplay.value = true;
         playToken.value += 1;
+        refreshPlaybackTokenIfNeeded();
     }
 
     // The shuffle jump: a random row whose file hasn't played this cycle. An exhausted cycle either starts over
@@ -284,6 +342,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         queue.value = advanced;
         autoplay.value = true;
         playToken.value += 1;
+        refreshPlaybackTokenIfNeeded();
     }
 
     // The ended-track advance. Unlike a pressed Next, this honours repeat-one, and at the queue's end (or an
@@ -321,6 +380,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         queue.value = advanced;
         autoplay.value = true;
         playToken.value += 1;
+        refreshPlaybackTokenIfNeeded();
     }
 
     function previous() : void
@@ -333,6 +393,30 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         queue.value = stepped;
         autoplay.value = true;
         playToken.value += 1;
+        refreshPlaybackTokenIfNeeded();
+    }
+
+    // A track error while the session's token is dead is a credential problem, not a media problem: re-mint and
+    // remount the same track rather than letting the skip path eat the queue. (Playback position is not restored;
+    // only a single file outlasting the whole token lifetime can land here.)
+    function handleTrackError() : void
+    {
+        const stamp = playbackToken.value;
+        if(stamp !== null && stamp.expiresAt <= Date.now())
+        {
+            playbackToken.value = null;
+            void mintToken(stamp.id).then(() =>
+            {
+                if(playbackToken.value !== null)
+                {
+                    autoplay.value = true;
+                    playToken.value += 1;
+                }
+            });
+            return;
+        }
+
+        next();
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -439,6 +523,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     ) : Promise<{ resolved : number; broken : number }>
     {
         playlistBusy.value = true;
+        void ensurePlaybackToken();
 
         try
         {
@@ -679,6 +764,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         queue.value = null;
         autoplay.value = false;
         playToken.value = 0;
+        playbackToken.value = null;
         shuffle.value = false;
         repeat.value = 'off';
         playedIDs.clear();
@@ -703,6 +789,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         queue,
         autoplay,
         playToken,
+        playbackToken,
         shuffle,
         repeat,
         playlistNode,
@@ -722,6 +809,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         next,
         previous,
         advance,
+        handleTrackError,
         toggleShuffle,
         cycleRepeat,
         openPlaylistNode,

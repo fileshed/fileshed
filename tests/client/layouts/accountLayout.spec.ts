@@ -1,8 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Account Layout — the account-area chrome
 //
-// The account shell's sidebar *is* the tab strip: the three account tabs (Profile, Account, Settings) as section nav,
-// an escape hatch back to the drive, and the home logo -- and, crucially, none of the drive chrome (no New button,
+// The account shell's sidebar *is* the tab strip: the account tabs (Profile, Account, Access tokens, Settings) as
+// section nav, an escape hatch back to the drive, and the home logo -- and, crucially, none of the drive chrome (no
+// New button,
 // no drive nav, no storage gauge). What this guards: the tabs are offered in order to their child routes, the escape
 // hatch and logo point home, a RouterView carries the active tab, and no drive chrome leaks into the account context.
 //----------------------------------------------------------------------------------------------------------------------
@@ -75,13 +76,14 @@ describe('AccountLayout', () =>
         setActivePinia(createPinia());
     });
 
-    it('offers Profile, Account, and Settings as sidebar navigation to the tab routes', () =>
+    it('offers Profile, Account, Access tokens, and Settings as sidebar navigation to the tab routes', () =>
     {
         const wrapper = mountLayout();
 
         expect(navLinks(wrapper)).toEqual([
             { label: 'Profile', to: '/account/profile' },
             { label: 'Account', to: '/account/account' },
+            { label: 'Access tokens', to: '/account/tokens' },
             { label: 'Settings', to: '/account/settings' },
         ]);
     });
@@ -130,6 +132,7 @@ describe('AccountLayout', () =>
         expect(navLinks(wrapper).map((link) => link.to)).toEqual([
             '/account/profile',
             '/account/account',
+            '/account/tokens',
             '/account/settings',
         ]);
 

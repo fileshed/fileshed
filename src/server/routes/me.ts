@@ -1,16 +1,15 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Me Route
 //
-// GET /api/me: the caller's own profile plus live quota usage and preferences. PATCH /api/me/preferences: a key-wise
-// merge into the caller's preferences blob, answering the refreshed profile. Both sit behind the session gate like
-// every authenticated route (401 when there is no session); the node manager assembles the profile and computes usage
-// fresh from owned file nodes.
+// GET /api/me: the caller's own profile plus live quota usage and preferences -- readable with an account:read
+// token, so a status-bar script can watch its quota. PATCH /api/me/preferences stays session-only: no token
+// mutates account state. The node manager assembles the profile and computes usage fresh from owned file nodes.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { Hono } from 'hono';
 
 // Models
-import { updatePreferencesRequestCodec } from '@fileshed/core';
+import { permissionDemands, updatePreferencesRequestCodec } from '@fileshed/core';
 
 // Managers
 import type { NodeManager } from '../managers/node.ts';
@@ -28,9 +27,9 @@ export function createMeRoutes(sessions : SessionManager, nodes : NodeManager) :
 
     router.get('/me', meSpec, async (ctx) =>
     {
-        const actor = await sessions.requireUser(ctx.req.raw.headers);
+        const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.accountRead);
 
-        return ctx.json(await nodes.me(actor));
+        return ctx.json(await nodes.me(actor.user));
     });
 
     router.patch('/me/preferences', updatePreferencesSpec, async (ctx) =>

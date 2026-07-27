@@ -3,6 +3,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 export * from './accessRequest.ts';
+export * from './accessToken.ts';
 export * from './avatar.ts';
 export * from './blob.ts';
 export * from './config.ts';

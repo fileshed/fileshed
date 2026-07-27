@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 
 // Models
-import { searchQueryCodec } from '@fileshed/core';
+import { permissionDemands, searchQueryCodec } from '@fileshed/core';
 
 // Managers
 import type { NodeManager } from '../managers/node.ts';
@@ -28,10 +28,10 @@ export function createSearchRoutes(sessions : SessionManager, nodes : NodeManage
 
     router.get('/search', searchSpec, async (ctx) =>
     {
-        const actor = await sessions.requireUser(ctx.req.raw.headers);
+        const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesRead);
         const query = parseQuery(ctx, searchQueryCodec);
 
-        return ctx.json(await nodes.search(actor, query));
+        return ctx.json(await nodes.search(actor.user, query));
     });
 
     return router;

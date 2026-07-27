@@ -35,6 +35,7 @@ import { initialize } from '@server/resource-access/boot.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
 
 // Managers
+import { AccessTokenManager } from '@server/managers/accessToken.ts';
 import { BlobManager } from '@server/managers/blob.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { PublicLinkManager } from '@server/managers/publicLink.ts';
@@ -45,7 +46,9 @@ import { mapManagerError } from '@server/managers/errors.ts';
 // Routes
 import { createBlobRoutes } from '@server/routes/blobs.ts';
 import { createDirectRoutes } from '@server/routes/direct.ts';
+import { createAccessTokenRoutes } from '@server/routes/accessTokens.ts';
 import { createDownloadRoutes } from '@server/routes/downloads.ts';
+import { createMeRoutes } from '@server/routes/me.ts';
 import { createNodeRoutes } from '@server/routes/nodes.ts';
 import { createPublicLinkRoutes } from '@server/routes/links.ts';
 import { createShareRoutes } from '@server/routes/shares.ts';
@@ -94,6 +97,8 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     const app = new Hono();
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
+    app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
+    app.route('/api', createMeRoutes(sessions, nodes));
     app.route('/api', createBlobRoutes(sessions, blobs));
     app.route('/api', createUploadRoutes(sessions, blobs));
     app.route('/api', createNodeRoutes(sessions, nodes));

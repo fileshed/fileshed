@@ -1,50 +1,64 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Auth — the admin-surface gate
+// Auth — the gated plugin surfaces
 //
 // The security assertion of the gated-capability pattern: better-auth's /api/auth/admin/* endpoints must be
-// unreachable from outside, EVEN with a valid admin session. If any variant leaks through, the whole plugin surface
-// (ban, impersonate, set-role, delete) is exposed. These specs are the tripwire.
+// unreachable from outside, EVEN with a valid admin session — if any variant leaks through, the whole plugin surface
+// (ban, impersonate, set-role, delete) is exposed. The api-key plugin's stock endpoints join the same gate: reachable,
+// they would let any session mint unscoped keys outside our vocabulary, where the only sanctioned surface is
+// /api/me/access-tokens. These specs are the tripwire.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
 
 // App
-import { targetsAuthAdminSurface } from '@server/app.ts';
+import { targetsGatedAuthSurface } from '@server/app.ts';
 
 // Support
 import { ORIGIN, bootTestApp, makeAdmin } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('targetsAuthAdminSurface', () =>
+describe('targetsGatedAuthSurface', () =>
 {
     it('matches the admin prefix and its endpoints', () =>
     {
-        expect(targetsAuthAdminSurface('/api/auth/admin')).toBe(true);
-        expect(targetsAuthAdminSurface('/api/auth/admin/list-users')).toBe(true);
-        expect(targetsAuthAdminSurface('/api/auth/admin/set-role')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/admin')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/admin/list-users')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/admin/set-role')).toBe(true);
+    });
+
+    it('matches the api-key prefix and its endpoints', () =>
+    {
+        expect(targetsGatedAuthSurface('/api/auth/api-key')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/api-key/create')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/api-key/list')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/api-key/delete')).toBe(true);
     });
 
     it('matches evasion variants: encoded slash, doubled slashes, trailing slash, uppercase', () =>
     {
-        expect(targetsAuthAdminSurface('/api/auth/admin%2Flist-users')).toBe(true);
-        expect(targetsAuthAdminSurface('/api/auth//admin/list-users')).toBe(true);
-        expect(targetsAuthAdminSurface('/api/auth/admin/list-users/')).toBe(true);
-        expect(targetsAuthAdminSurface('/api/auth/ADMIN/list-users')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/admin%2Flist-users')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth//admin/list-users')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/admin/list-users/')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/ADMIN/list-users')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/api-key%2Fcreate')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth//api-key/create')).toBe(true);
+        expect(targetsGatedAuthSurface('/api/auth/API-KEY/create')).toBe(true);
     });
 
-    it('does not match the non-admin auth surface or lookalikes', () =>
+    it('does not match the non-gated auth surface or lookalikes', () =>
     {
-        expect(targetsAuthAdminSurface('/api/auth/get-session')).toBe(false);
-        expect(targetsAuthAdminSurface('/api/auth/sign-in/email')).toBe(false);
-        expect(targetsAuthAdminSurface('/api/auth/administrator')).toBe(false);
-        expect(targetsAuthAdminSurface('/api/health')).toBe(false);
+        expect(targetsGatedAuthSurface('/api/auth/get-session')).toBe(false);
+        expect(targetsGatedAuthSurface('/api/auth/sign-in/email')).toBe(false);
+        expect(targetsGatedAuthSurface('/api/auth/administrator')).toBe(false);
+        expect(targetsGatedAuthSurface('/api/auth/api-keychain')).toBe(false);
+        expect(targetsGatedAuthSurface('/api/health')).toBe(false);
     });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('admin HTTP surface', () =>
+describe('gated plugin HTTP surfaces', () =>
 {
     const variants : { method : string; path : string; body ?: string }[]
         = [
@@ -58,6 +72,13 @@ describe('admin HTTP surface', () =>
             { method: 'POST', path: '/api/auth/admin%2Flist-users', body: '{}' },
             { method: 'POST', path: '/api/auth/admin/list-users/', body: '{}' },
             { method: 'GET', path: '/api/auth/ADMIN/list-users' },
+            { method: 'POST', path: '/api/auth/api-key/create', body: '{}' },
+            { method: 'GET', path: '/api/auth/api-key/list' },
+            { method: 'POST', path: '/api/auth/api-key/update', body: '{}' },
+            { method: 'POST', path: '/api/auth/api-key/delete', body: '{}' },
+            { method: 'GET', path: '/api/auth/api-key/get' },
+            { method: 'POST', path: '/api/auth//api-key/create', body: '{}' },
+            { method: 'POST', path: '/api/auth/api-key%2Fcreate', body: '{}' },
         ];
 
     it('answers 404 with our JSON shape for every variant, even carrying a valid admin session', async () =>
@@ -81,7 +102,7 @@ describe('admin HTTP surface', () =>
         }));
     });
 
-    it('leaves the non-admin auth surface reachable for the same admin session', async () =>
+    it('leaves the non-gated auth surface reachable for the same admin session', async () =>
     {
         const booted = await bootTestApp();
         const cookie = await makeAdmin(booted, 'root@example.com', 'correct-horse-battery');

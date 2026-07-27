@@ -65,6 +65,12 @@ const EXPECTED_ROUTES = [
     'GET /api/me',
     'PATCH /api/me/preferences',
 
+    // Access tokens (the only key-management surface; the plugin's own endpoints are gated shut)
+    'POST /api/me/access-tokens',
+    'GET /api/me/access-tokens',
+    'DELETE /api/me/access-tokens/:id',
+    'POST /api/me/playback-token',
+
     // Users
     'GET /api/users/lookup',
 

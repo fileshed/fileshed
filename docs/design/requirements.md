@@ -226,6 +226,33 @@ REST, JSON, cookie session auth (BetterAuth). Sketch — exact DTOs defined in c
 
 All node-returning endpoints include the caller's effective role on each item.
 
+### 7.1 Access Tokens
+
+A second authentication plane beside the session cookie: **identity delegation, never node capability**. A token
+authenticates as its owner and then normal authorization runs unchanged — contrast `/d/:token`, which is an
+anonymous capability published only by an owner. Do not unify the two surfaces; they answer different questions.
+
+- Backed by the `@better-auth/api-key` plugin, two configurations in one table: `pat` (durable, user-managed,
+  `fspat_` prefix, name required, optional 1–365-day expiry) and `playback` (system-minted by the media player,
+  `fsplay_` prefix, ~5-hour expiry, never listed). Keys are hashed at rest; the full value appears exactly once, in
+  the create response.
+- Transport: `Authorization: Bearer` or `?token=` on opted-in routes. The query form exists because media elements
+  and cast receivers cannot send headers; it is why AirPlay/cast receivers can fetch bytes at all.
+- **Scopes are UI-level bundles; stored statements are explicit `{ resource: [actions] }` records; routes demand
+  single actions; verification is exact containment with no hierarchy.** Broader scopes STORE the narrower actions
+  (`files:write` carries read and download). A key's statement is frozen at mint — scopes added later never accrue
+  to old keys, and the UI's Full-access/Read-only presets only tick real checkboxes, deliberately.
+- Vocabulary: `files:download`, `files:read`, `files:write`, `shares:read`, `shares:write` (publish-capable —
+  badge it), `account:read`.
+- Never token-reachable: `/api/auth/*` (the api-key plugin's own endpoints are gated like the admin surface —
+  `/api/me/access-tokens` is the only management surface), token minting itself (no laundering), permanent deletion
+  (`DELETE /api/nodes/:id`, `DELETE /api/trash`), preferences/avatar writes, admin.
+- Tokens survive sign-out and password change (standard PAT semantics), but die with revocation, with their
+  owner's ban or deletion (database hooks delete the rows; the identity seam re-checks the user on every verify as
+  the backstop), and on expiry.
+- Byte responses on the token plane are `cache-control: private, no-cache` — revalidation stays cheap via the
+  content-hash ETag, and Range keeps working.
+
 ---
 
 ## 8. Frontend

@@ -13,13 +13,13 @@ import type { StreamResult } from '../managers/publicLink.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function streamResponse(result : StreamResult) : Response
+export function streamResponse(result : StreamResult, extraHeaders ?: Record<string, string>) : Response
 {
     // toWeb hands back node:stream/web's ReadableStream, which IS a web stream at runtime -- the assertion only bridges
     // the duplicate lib declarations.
     const body : BodyInit | null = result.stream === null ? null : Readable.toWeb(result.stream) as BodyInit;
 
-    return new Response(body, { status: result.status, headers: result.headers });
+    return new Response(body, { status: result.status, headers: { ...result.headers, ...extraHeaders } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

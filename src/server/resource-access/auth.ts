@@ -14,9 +14,21 @@
 // bigint on both dialects. Migration 001 therefore does NOT add either column -- better-auth's migrator owns them.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type BetterAuthOptions, betterAuth } from 'better-auth';
+import { type BetterAuthOptions, type User, betterAuth } from 'better-auth';
 import { admin } from 'better-auth/plugins';
+import { apiKey } from '@better-auth/api-key';
 import { createId } from '@paralleldrive/cuid2';
+import { sql } from 'kysely';
+
+// Models
+import {
+    ACCESS_TOKEN_CONFIG_PAT,
+    ACCESS_TOKEN_CONFIG_PLAYBACK,
+    ACCESS_TOKEN_PREFIX,
+    MS_PER_SECOND,
+    PLAYBACK_TOKEN_PREFIX,
+    PLAYBACK_TOKEN_TTL_MS,
+} from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from './database/database.ts';
@@ -63,6 +75,35 @@ export function socialProvidersFromConfig(config : Config) : BetterAuthOptions['
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// The two api-key configurations behind FileShed's access tokens. `pat` is the durable, user-managed kind: named,
+// prefixed for glance-recognition, expiry user-chosen (the 1-365 day bounds live in the request codec and happen to
+// match the plugin's own clamp). `playback` is the media player's short-lived download-scoped kind: no name, no
+// stored starting characters (never listed anywhere), expiring on the config default alone. Rate limiting is off for
+// both -- FileShed is self-hosted, and the mint route also stamps rateLimitEnabled:false per key so no schema
+// default can resurrect it. Expiry values are SECONDS: the shipped plugin passes them through getDate(x, 'sec')
+// even though its reference docs say milliseconds -- the dist wins.
+const apiKeyConfigurations = [
+    {
+        configId: ACCESS_TOKEN_CONFIG_PAT,
+        defaultPrefix: ACCESS_TOKEN_PREFIX,
+        requireName: true,
+        rateLimit: { enabled: false },
+        keyExpiration: { defaultExpiresIn: null, minExpiresIn: 1, maxExpiresIn: 365 },
+        startingCharactersConfig: { shouldStore: true, charactersLength: 12 },
+        deferUpdates: true,
+    },
+    {
+        configId: ACCESS_TOKEN_CONFIG_PLAYBACK,
+        defaultPrefix: PLAYBACK_TOKEN_PREFIX,
+        rateLimit: { enabled: false },
+        keyExpiration: { defaultExpiresIn: PLAYBACK_TOKEN_TTL_MS / MS_PER_SECOND },
+        startingCharactersConfig: { shouldStore: false },
+        deferUpdates: true,
+    },
+];
+
+//----------------------------------------------------------------------------------------------------------------------
+
 // A representative of the auth options, present only to give createAuth a nameable return type. better-auth's instance
 // type is a deep inference over the enabled plugins and additionalFields (it carries $Infer), with no hand-writable
 // annotation that preserves it. The runtime values below are placeholders -- only the shape and its type-bearing parts
@@ -83,7 +124,10 @@ const authOptionsShape = {
         // keeps admin access for that window. Revisit before ban/impersonation surfaces ship.
         cookieCache: { enabled: true },
     },
-    plugins: [ admin() ],
+    plugins: [ admin(), apiKey(apiKeyConfigurations) ],
+    // Placeholder for the type only, like socialProviders: createAuth supplies the live hooks, which need the
+    // database handle this shape cannot carry.
+    databaseHooks: undefined as BetterAuthOptions['databaseHooks'],
     advanced: {
         // cuid2 everywhere, matching the app's own ids.
         database: { generateId: () => createId() },
@@ -114,6 +158,44 @@ export type Auth = ReturnType<typeof betterAuth<typeof authOptionsShape>>;
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// Access-token cleanup shared by the ban and deletion hooks. The apikey table is better-auth territory (its
+// migrator owns it, camelCase columns, referenceId has no FK to user), so this is raw SQL rather than a typed
+// Kysely table: keys must not survive their owner losing standing.
+async function deleteAccessTokensFor(handle : DatabaseHandle, userID : string) : Promise<void>
+{
+    await sql`delete from apikey where "referenceId" = ${ userID }`.execute(handle.db);
+}
+
+// Access tokens die with their owner's standing. Database hooks fire on the row operation itself, so every path to
+// a ban (admin route, server-side auth.api call, future surfaces) is covered without enumerating endpoints -- and
+// key verification never consults the user row, so revocation here is what makes a ban stick for outstanding keys.
+// Ban deletion is permanent: unbanning does not resurrect keys. Typed against BetterAuthOptions so the live options
+// object matches the shape's placeholder exactly.
+function accessTokenCleanupHooks(handle : DatabaseHandle) : BetterAuthOptions['databaseHooks']
+{
+    return {
+        user: {
+            update: {
+                after: async (user : User) =>
+                {
+                    if((user as User & { banned ?: boolean | null }).banned === true)
+                    {
+                        await deleteAccessTokensFor(handle, user.id);
+                    }
+                },
+            },
+            delete: {
+                after: async (user : User) =>
+                {
+                    await deleteAccessTokensFor(handle, user.id);
+                },
+            },
+        },
+    };
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 export function createAuth(handle : DatabaseHandle, config : Config) : Auth
 {
     return betterAuth({
@@ -124,7 +206,8 @@ export function createAuth(handle : DatabaseHandle, config : Config) : Auth
         trustedOrigins: resolveTrustedOrigins(config),
         socialProviders: socialProvidersFromConfig(config),
         // Fresh plugin instances per auth instance; the shape above supplies only their type.
-        plugins: [ admin() ],
+        plugins: [ admin(), apiKey(apiKeyConfigurations) ],
+        databaseHooks: accessTokenCleanupHooks(handle),
     });
 }
 

@@ -9,7 +9,13 @@
 import { type Context, Hono } from 'hono';
 
 // Models
-import { BadRequestError, challengeAnswerRequestCodec, claimRequestCodec, toNodeResponse } from '@fileshed/core';
+import {
+    BadRequestError,
+    challengeAnswerRequestCodec,
+    claimRequestCodec,
+    permissionDemands,
+    toNodeResponse,
+} from '@fileshed/core';
 
 // Managers
 import type { BlobManager } from '../managers/blob.ts';
@@ -42,23 +48,23 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
 
     router.post('/blobs/claim', claimSpec, async (ctx) =>
     {
-        const caller = await sessions.requireUser(ctx.req.raw.headers);
+        const caller = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
 
         const parsed = claimRequestCodec.safeParse(await readJson(ctx));
         if(!parsed.success) { throw new BadRequestError('Invalid claim request.'); }
 
-        return ctx.json(await blobs.claim(caller, parsed.data));
+        return ctx.json(await blobs.claim(caller.user, parsed.data));
     });
 
     router.post('/blobs/claim/:challengeID', answerChallengeSpec, async (ctx) =>
     {
-        const caller = await sessions.requireUser(ctx.req.raw.headers);
+        const caller = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
 
         const parsed = challengeAnswerRequestCodec.safeParse(await readJson(ctx));
         if(!parsed.success) { throw new BadRequestError('Invalid challenge answer.'); }
 
         const { answer, ...metadata } = parsed.data;
-        const { node, role } = await blobs.answerChallenge(caller, ctx.req.param('challengeID'), answer, metadata);
+        const { node, role } = await blobs.answerChallenge(caller.user, ctx.req.param('challengeID'), answer, metadata);
 
         return ctx.json(toNodeResponse(node, role));
     });

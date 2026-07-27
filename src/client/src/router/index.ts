@@ -20,6 +20,7 @@ import SearchPage from '../pages/searchPage.vue';
 import ProfileTab from '../pages/account/profileTab.vue';
 import SettingsTab from '../pages/account/settingsTab.vue';
 import AccountTab from '../pages/account/accountTab.vue';
+import TokensTab from '../pages/account/tokensTab.vue';
 import AdminPage from '../pages/adminPage.vue';
 
 // Stores
@@ -60,6 +61,7 @@ export const routes : RouteRecordRaw[] = [
             { path: 'profile', name: 'account-profile', component: ProfileTab },
             { path: 'settings', name: 'account-settings', component: SettingsTab },
             { path: 'account', name: 'account-account', component: AccountTab },
+            { path: 'tokens', name: 'account-tokens', component: TokensTab },
         ],
     },
 ];

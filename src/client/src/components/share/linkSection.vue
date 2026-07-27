@@ -86,6 +86,7 @@
     import { createPublicLink, listLinksForNode, revokePublicLink } from '../../resource-access/publicLinks.ts';
 
     // Utils
+    import { copyToClipboard } from '../../utils/copyToClipboard.ts';
     import { useRunWithToast } from '../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -139,12 +140,11 @@
     {
         const url = absoluteUrl(link);
 
-        try
+        if(await copyToClipboard(url))
         {
-            await navigator.clipboard.writeText(url);
             toast.add({ title: 'Link copied', description: url, color: 'success' });
         }
-        catch
+        else
         {
             toast.add({
                 title: 'Couldn\'t copy the link',

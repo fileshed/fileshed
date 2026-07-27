@@ -35,6 +35,9 @@ vi.mock('@client/resource-access/blobs.ts', () => ({
     claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
 }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/accessTokens.ts', () => ({
+    mintPlaybackToken: vi.fn(() => Promise.reject(new Error('no token in this spec'))),
+}));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -105,6 +108,20 @@ beforeEach(() =>
 
 describe('MediaPlayer surfaces', () =>
 {
+    // Safari hands an AirPlay receiver whatever URL the element holds, and the receiver has no cookie jar -- the
+    // credential must ride the src itself.
+    it('appends the session playback token to drive srcs', () =>
+    {
+        const store = useMediaPlayerStore();
+        store.playbackToken = { id: 'k1', token: 'fsplay_sessionkey', expiresAt: Date.now() + 3_600_000 };
+
+        const wrapper = mountPlayer(fileNode());
+        const src = wrapper.get('source').attributes('src') ?? '';
+
+        expect(src).toContain('disposition=inline');
+        expect(src).toContain('token=fsplay_sessionkey');
+    });
+
     it('opens the routed audio file as the session and mounts the audio card, not the video canvas', () =>
     {
         const wrapper = mountPlayer(fileNode({ id: 'a1', name: 'one.mp3' }));

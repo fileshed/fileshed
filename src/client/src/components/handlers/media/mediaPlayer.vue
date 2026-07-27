@@ -38,7 +38,7 @@
                     :initial-rate="rate"
                     class="min-h-0 flex-1"
                     @ended="store.advance()"
-                    @error="store.next()"
+                    @error="store.handleTrackError()"
                     @previous="store.previous()"
                     @next="store.next()"
                     @toggle-shuffle="store.toggleShuffle()"
@@ -107,7 +107,7 @@
                             :initial-muted="muted"
                             :initial-rate="rate"
                             @ended="store.advance()"
-                            @error="store.next()"
+                            @error="store.handleTrackError()"
                             @previous="store.previous()"
                             @next="store.next()"
                             @toggle-shuffle="store.toggleShuffle()"
@@ -178,9 +178,17 @@
     const store = useMediaPlayerStore();
     const toast = useToast();
 
+    // Drive tracks carry the session's playback token so a cast receiver -- handed this exact URL by the browser --
+    // can fetch bytes without cookies. External stream URLs pass through untouched, and the user-facing download
+    // href stays deliberately tokenless: no credential in a link someone might copy.
     function srcFor(entry : MediaTrack) : string
     {
-        return entry.remoteUrl ?? downloadUrl(entry.nodeID, 'inline');
+        if(entry.remoteUrl !== null) { return entry.remoteUrl; }
+
+        const src = downloadUrl(entry.nodeID, 'inline');
+        const stamp = store.playbackToken;
+
+        return stamp === null ? src : `${ src }&token=${ encodeURIComponent(stamp.token) }`;
     }
 
     function downloadHrefFor(entry : MediaTrack) : string

@@ -15,6 +15,7 @@ import { MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
 
 // Routes
 import health from './routes/health.ts';
+import { createAccessTokenRoutes } from './routes/accessTokens.ts';
 import { createAdminRoutes, createAdminStatusRoutes } from './routes/admin.ts';
 import { createAvatarRoutes } from './routes/avatars.ts';
 import { createBlobRoutes } from './routes/blobs.ts';
@@ -43,6 +44,7 @@ import { ShareRA } from './resource-access/shares/index.ts';
 import { UserRA } from './resource-access/users/index.ts';
 
 // Managers
+import { AccessTokenManager } from './managers/accessToken.ts';
 import { AdminManager } from './managers/admin.ts';
 import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
@@ -67,14 +69,19 @@ import { getLogger } from './utils/logger.ts';
 const logger = getLogger('server');
 
 //----------------------------------------------------------------------------------------------------------------------
-// Admin surface gate
+// Gated auth surfaces
 //----------------------------------------------------------------------------------------------------------------------
 
-// True when a request path targets better-auth's admin HTTP surface, which we refuse externally. Matched
-// adversarially, since a single bypass reopens the whole plugin: the path is percent-decoded (so `admin%2Flist-users`
-// cannot slip through as one segment), collapsed on repeated slashes (`/api/auth//admin`), and lowercased (`/ADMIN/`),
-// then tested against the prefix. Blocking a superset of better-auth's real routes is the safe direction for a gate.
-export function targetsAuthAdminSurface(pathname : string) : boolean
+// Plugin HTTP surfaces we refuse externally: the admin plugin's routes (our /api/admin is the only admin surface)
+// and the api-key plugin's stock endpoints (create there would mint unscoped keys outside our vocabulary; the only
+// key-management surface is /api/me/access-tokens). Matched adversarially, since a single bypass reopens the whole
+// plugin: the path is percent-decoded (so `admin%2Flist-users` cannot slip through as one segment), collapsed on
+// repeated slashes (`/api/auth//admin`), and lowercased (`/ADMIN/`), then tested against the prefixes. Blocking a
+// superset of the plugins' real routes is the safe direction for a gate. Server-side auth.api.* calls never
+// traverse HTTP, so internal minting is unaffected.
+const gatedAuthPrefixes = [ '/api/auth/admin', '/api/auth/api-key' ];
+
+export function targetsGatedAuthSurface(pathname : string) : boolean
 {
     let path = pathname;
     try { path = decodeURIComponent(pathname); }
@@ -82,7 +89,7 @@ export function targetsAuthAdminSurface(pathname : string) : boolean
 
     path = path.replace(/\/{2,}/g, '/').toLowerCase();
 
-    return path === '/api/auth/admin' || path.startsWith('/api/auth/admin/');
+    return gatedAuthPrefixes.some((prefix) => path === prefix || path.startsWith(`${ prefix }/`));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -111,7 +118,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
     {
         app.use('*', async (ctx, next) =>
         {
-            if(targetsAuthAdminSurface(new URL(ctx.req.url).pathname))
+            if(targetsGatedAuthSurface(new URL(ctx.req.url).pathname))
             {
                 return ctx.json({ error: 'Not Found' }, 404);
             }
@@ -129,6 +136,7 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
 
         app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
         app.route('/api', createAdminRoutes(sessions, new AdminManager(auth)));
+        app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
 
         if(services)
         {
