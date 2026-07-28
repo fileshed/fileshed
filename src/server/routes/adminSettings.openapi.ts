@@ -20,7 +20,7 @@ export const getSettingsSpec = describeRoute({
     tags: [ SETTINGS_TAG ],
     summary: 'Read the instance settings',
     description: 'Every admin-tunable key with its effective value, source (config default vs admin override), and '
-        + 'application tier. Secret values arrive masked and never leave the server whole.',
+        + 'whether a change waits on a restart. Secret values arrive masked and never leave the server whole.',
     responses: {
         200: jsonResponse('The instance settings.', adminSettingsResponseCodec),
         401: errorResponse('No session.'),
@@ -31,9 +31,9 @@ export const getSettingsSpec = describeRoute({
 export const patchSettingsSpec = describeRoute({
     tags: [ SETTINGS_TAG ],
     summary: 'Change instance settings',
-    description: 'Key-wise: a value overrides the config default; null resets the override away. Live-tier keys '
-        + 'apply to the next request; restart-tier keys flag the status surface until a restart. Answers the '
-        + 'refreshed view.',
+    description: 'Key-wise: a value overrides the config default; null resets the override away. Changes apply to '
+        + 'the next request, except requiresRestart keys, which flag the status surface until a restart. Answers '
+        + 'the refreshed view.',
     requestBody: jsonBody(patchSettingsRequestCodec),
     responses: {
         200: jsonResponse('The refreshed settings after the patch.', adminSettingsResponseCodec),

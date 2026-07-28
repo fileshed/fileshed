@@ -287,7 +287,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         startedAt: new Date(),
     });
 
-    // Live-tier caps are closures over the settings manager, resolved per use: an admin override applies to the very
+    // The caps are closures over the settings manager, resolved per use: an admin override applies to the very
     // next request, and with no override each supplier answers the config value it names.
     const uploadMaxBytes = () : Promise<number> => settings.numberValue('UPLOAD_MAX_BYTES', config.UPLOAD_MAX_BYTES);
     const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);

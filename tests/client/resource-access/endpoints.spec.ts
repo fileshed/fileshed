@@ -44,7 +44,14 @@ import {
 import { createPublicLink, listLinksForNode, revokePublicLink } from '@client/resource-access/publicLinks.ts';
 import { lookupUser } from '@client/resource-access/users.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
-import { adminStatus, listUsers, setQuota } from '@client/resource-access/admin.ts';
+import {
+    adminStatus,
+    fetchAdminSettings,
+    listUsers,
+    patchAdminSettings,
+    setQuota,
+} from '@client/resource-access/admin.ts';
+import { completeSetup, fetchInstance } from '@client/resource-access/instance.ts';
 import { downloadUrl } from '@client/resource-access/downloads.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -286,6 +293,24 @@ const rows : EndpointRow[] = [
         body: { quotaLimit: null },
     },
     { name: 'adminStatus', call: () => adminStatus(), method: 'GET', path: '/api/admin/status' },
+    { name: 'fetchAdminSettings', call: () => fetchAdminSettings(), method: 'GET', path: '/api/admin/settings' },
+    {
+        name: 'patchAdminSettings',
+        call: () => patchAdminSettings({ SIGN_UP_ENABLED: false }),
+        method: 'PATCH',
+        path: '/api/admin/settings',
+        body: { changes: { SIGN_UP_ENABLED: false } },
+    },
+
+    // Instance & first-run setup
+    { name: 'fetchInstance', call: () => fetchInstance(), method: 'GET', path: '/api/instance' },
+    {
+        name: 'completeSetup',
+        call: () => completeSetup({ token: 'tok', name: 'Admin', email: 'a@example.com', password: 'pw12345678' }),
+        method: 'POST',
+        path: '/api/setup',
+        body: { token: 'tok', name: 'Admin', email: 'a@example.com', password: 'pw12345678' },
+    },
 ];
 
 //----------------------------------------------------------------------------------------------------------------------

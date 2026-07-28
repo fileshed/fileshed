@@ -2,8 +2,8 @@
 // Migration 003 — Instance Settings
 //
 // Admin-set configuration overrides, one row per key, layered above the loaded config at runtime. Values are JSON
-// text; secret-tier values are stored encrypted (utils/secretBox). updated_at is per-key so the admin UI can show
-// what changed and the status surface can tell whether a restart-tier key moved since boot.
+// text; secret values are stored encrypted (utils/secretBox). updated_at is per-key so the admin UI can show what
+// changed and the status surface can tell whether a requiresRestart key moved since boot.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { Kysely } from 'kysely';

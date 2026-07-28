@@ -3,10 +3,10 @@
 //
 // The instance-settings brain: resolves each admin-tunable key as override-over-config (the loaded, substituted
 // yaml IS the default; a DB row beats it; deleting the row is "reset to default"), enforces the vocabulary's
-// per-key kind, seals secret-tier values through the SecretBox before they touch a row, and masks them on the way
+// per-key kind, seals secret values through the SecretBox before they touch a row, and masks them on the way
 // out -- a stored secret never crosses the wire again. Admin-only at this boundary, the same single-condition RBAC
-// the admin manager uses. Live-tier consumers read through value() at use time, which is what makes a changed cap
-// apply to the very next request.
+// the admin manager uses. Consumers read through value() at use time, which is what makes a changed cap apply to
+// the very next request; only requiresRestart keys (frozen into the auth instance at boot) wait.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -88,7 +88,7 @@ export class SettingsManager
         return stored as SettingValue | null;
     }
 
-    // The effective value, override-over-default. Live-tier consumers call this at use time.
+    // The effective value, override-over-default. Consumers call this at use time.
     async value(key : AdminSettingKey) : Promise<SettingValue | null>
     {
         const stored = await this.#ra.get(key);
@@ -133,9 +133,9 @@ export class SettingsManager
 
             return {
                 key,
-                tier: definition.tier,
                 kind: definition.kind,
                 secret: definition.secret,
+                requiresRestart: definition.requiresRestart,
                 value: definition.secret && typeof value === 'string' ? maskSecret(value) : value,
                 source: override !== undefined ? 'override' : 'default',
             };
@@ -144,7 +144,7 @@ export class SettingsManager
         const restartRequired = rows.some((row) =>
         {
             const definition = settingDefinitions[row.key as AdminSettingKey];
-            return definition?.tier === 'restart' && row.updatedAt > this.#startedAt;
+            return definition?.requiresRestart === true && row.updatedAt > this.#startedAt;
         });
 
         return { settings, restartRequired };
@@ -167,6 +167,12 @@ export class SettingsManager
             else if(typeof value !== definition.kind)
             {
                 throw new BadRequestError(`${ key } must be a ${ definition.kind }.`);
+            }
+            // Every number key is a cap or a day count; a negative or fractional value corrupts the comparisons
+            // built on it (a negative retention would put the purge cutoff in the future and eat all of trash).
+            else if(typeof value === 'number' && (!Number.isInteger(value) || value < 0))
+            {
+                throw new BadRequestError(`${ key } must be a non-negative integer.`);
             }
             else
             {

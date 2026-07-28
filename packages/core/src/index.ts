@@ -42,12 +42,10 @@ export {
     scopesFromStatement,
 } from './models/accessToken.ts';
 export {
-    type SettingTier,
     type SettingKind,
     type AdminSettingKey,
     type SettingDefinition,
     type SettingValue,
-    settingTiers,
     settingKinds,
     adminSettingKeys,
     settingDefinitions,

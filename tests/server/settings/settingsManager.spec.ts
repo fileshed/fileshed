@@ -97,6 +97,17 @@ describe('SettingsManager', () =>
         expect(view.settings.find((row) => row.key === 'SIGN_UP_ENABLED')?.source).toBe('default');
     });
 
+    it('rejects negative and fractional numbers -- caps and day counts are whole and non-negative', async () =>
+    {
+        await expect(manager.patch(admin, { changes: { TRASH_PURGE_DAYS: -1 } }))
+            .rejects.toThrow(BadRequestError);
+        await expect(manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: 1.5 } }))
+            .rejects.toThrow(BadRequestError);
+
+        expect(await manager.value('TRASH_PURGE_DAYS')).toBe(booted.config.TRASH_PURGE_DAYS);
+        expect(await manager.value('UPLOAD_MAX_BYTES')).toBe(booted.config.UPLOAD_MAX_BYTES);
+    });
+
     it('refuses the admin surface to a non-admin', async () =>
     {
         await expect(manager.adminView(civilian)).rejects.toThrow(ForbiddenError);
@@ -106,7 +117,7 @@ describe('SettingsManager', () =>
         expect(await manager.booleanValue('SIGN_UP_ENABLED', false)).toBe(true);
     });
 
-    it('does not flag a restart for live-tier overrides', async () =>
+    it('does not flag a restart for keys that apply live', async () =>
     {
         const view = await manager.patch(admin, {
             changes: { UPLOAD_MAX_BYTES: 1024, SIGN_UP_ENABLED: false },

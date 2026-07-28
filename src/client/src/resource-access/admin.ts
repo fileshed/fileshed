@@ -1,14 +1,18 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin Resource Access
 //
-// The typed client for the admin surface: list users, set (or clear) a user's quota, and read the server status.
+// The typed client for the admin surface: list users, set (or clear) a user's quota, read the server status, and
+// read or patch the instance settings.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
+    type AdminSettingsResponse,
     type AdminStatusResponse,
     type AdminUserPageResponse,
     type AdminUserResponse,
+    type PatchSettingsRequest,
     type SetQuotaRequest,
+    adminSettingsResponseCodec,
     adminStatusResponseCodec,
     adminUserPageResponseCodec,
     adminUserResponseCodec,
@@ -45,6 +49,18 @@ export async function setQuota(userID : string, quotaLimit : number | null) : Pr
 export async function adminStatus() : Promise<AdminStatusResponse>
 {
     return requestJson('/api/admin/status', { codec: adminStatusResponseCodec });
+}
+
+export async function fetchAdminSettings() : Promise<AdminSettingsResponse>
+{
+    return requestJson('/api/admin/settings', { codec: adminSettingsResponseCodec });
+}
+
+export async function patchAdminSettings(changes : PatchSettingsRequest['changes']) : Promise<AdminSettingsResponse>
+{
+    const body : PatchSettingsRequest = { changes };
+
+    return requestJson('/api/admin/settings', { method: 'PATCH', body, codec: adminSettingsResponseCodec });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

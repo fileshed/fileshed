@@ -3,21 +3,21 @@
 //
 // The admin's view of the instance settings and the patch that changes them. Secret values never cross the wire
 // outward -- a set secret reads as its masked tail -- and a patch value of null means "reset to the config default"
-// (delete the override). The response carries per-key source and tier so the UI can say where a value came from and
-// how a change takes effect.
+// (delete the override). The response carries per-key source and requiresRestart so the UI can say where a value
+// came from and whether a change waits on a restart.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { AdminSettingKey, SettingKind, SettingTier, SettingValue } from '../instanceSettings.ts';
+import type { AdminSettingKey, SettingKind, SettingValue } from '../instanceSettings.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface AdminSettingEntry
 {
     key : AdminSettingKey;
-    tier : SettingTier;
     kind : SettingKind;
     secret : boolean;
+    requiresRestart : boolean;
 
     // The effective value; a set secret arrives masked, an unset one as null.
     value : SettingValue | null;
@@ -30,7 +30,7 @@ export interface AdminSettingsResponse
 {
     settings : AdminSettingEntry[];
 
-    // True when a restart-tier key changed after the server started.
+    // True when a requiresRestart key changed after the server started.
     restartRequired : boolean;
 }
 

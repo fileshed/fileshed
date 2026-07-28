@@ -7,6 +7,7 @@ import { type RouteRecordRaw, createRouter, createWebHistory } from 'vue-router'
 // Layouts
 import MainLayout from '../layouts/mainLayout.vue';
 import AccountLayout from '../layouts/accountLayout.vue';
+import AdminLayout from '../layouts/adminLayout.vue';
 import EditorLayout from '../layouts/editorLayout.vue';
 
 // Pages
@@ -22,7 +23,12 @@ import ProfileTab from '../pages/account/profileTab.vue';
 import SettingsTab from '../pages/account/settingsTab.vue';
 import AccountTab from '../pages/account/accountTab.vue';
 import TokensTab from '../pages/account/tokensTab.vue';
-import AdminPage from '../pages/adminPage.vue';
+import AdminUsersTab from '../pages/admin/usersTab.vue';
+import AdminSettingsTab from '../pages/admin/settingsTab.vue';
+import AdminEmailTab from '../pages/admin/emailTab.vue';
+import AdminAuthenticationTab from '../pages/admin/authenticationTab.vue';
+import AdminBrandingTab from '../pages/admin/brandingTab.vue';
+import AdminStatusTab from '../pages/admin/statusTab.vue';
 
 // Stores
 import { useSessionStore } from '../stores/session.ts';
@@ -45,7 +51,20 @@ export const routes : RouteRecordRaw[] = [
             { path: 'shared', name: 'shared', component: SharedPage },
             { path: 'trash', name: 'trash', component: TrashPage },
             { path: 'search', name: 'search', component: SearchPage },
-            { path: 'admin', name: 'admin', component: AdminPage, meta: { admin: true } },
+        ],
+    },
+    {
+        path: '/admin',
+        component: AdminLayout,
+        meta: { admin: true },
+        children: [
+            { path: '', redirect: { name: 'admin-users' } },
+            { path: 'users', name: 'admin-users', component: AdminUsersTab },
+            { path: 'settings', name: 'admin-settings', component: AdminSettingsTab },
+            { path: 'email', name: 'admin-email', component: AdminEmailTab },
+            { path: 'authentication', name: 'admin-authentication', component: AdminAuthenticationTab },
+            { path: 'branding', name: 'admin-branding', component: AdminBrandingTab },
+            { path: 'status', name: 'admin-status', component: AdminStatusTab },
         ],
     },
     {

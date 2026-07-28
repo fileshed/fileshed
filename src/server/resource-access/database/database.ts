@@ -103,7 +103,7 @@ export interface BlobTable
     deleted_at : Timestamp | null;
 }
 
-// An admin-set configuration override, layered above the loaded config. Secret-tier values are stored encrypted.
+// An admin-set configuration override, layered above the loaded config. Secret values are stored encrypted.
 export interface InstanceSettingTable
 {
     key : string;

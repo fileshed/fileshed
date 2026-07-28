@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 // Models
-import { adminSettingKeys, settingKinds, settingTiers } from '../../instanceSettings.ts';
+import { adminSettingKeys, settingKinds } from '../../instanceSettings.ts';
 
 // Requests
 import {
@@ -22,9 +22,9 @@ const settingValueCodec = z.union([ z.number(), z.boolean(), z.string() ]);
 
 export const adminSettingEntryCodec = z.strictObject({
     key: z.enum(adminSettingKeys),
-    tier: z.enum(settingTiers),
     kind: z.enum(settingKinds),
     secret: z.boolean(),
+    requiresRestart: z.boolean(),
     value: settingValueCodec.nullable(),
     source: z.enum([ 'default', 'override' ]),
 });
