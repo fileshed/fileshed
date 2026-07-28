@@ -93,7 +93,7 @@ export interface ServerHandle
 
 export interface SpawnOptions
 {
-    // Extra environment for the child -- e.g. FILESHED_ADMIN_EMAIL/PASSWORD to exercise first-run admin bootstrap.
+    // Extra environment for the child -- e.g. FILESHED_SETUP_TOKEN to exercise the first-run setup flow.
     env ?: Record<string, string>;
 }
 

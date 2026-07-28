@@ -18,6 +18,7 @@ import { BlobRA } from '@server/resource-access/blob/index.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
+import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { UserRA } from '@server/resource-access/users/index.ts';
 import { createAuth } from '@server/resource-access/auth.ts';
 import { createDatabase } from '@server/resource-access/database/database.ts';
@@ -31,6 +32,8 @@ import { PublicLinkManager } from '@server/managers/publicLink.ts';
 import { ShareManager } from '@server/managers/share.ts';
 import { StatusManager } from '@server/managers/status.ts';
 import { LastRunTracker } from '@server/managers/lastRun.ts';
+import { MediaTagManager } from '@server/managers/mediaTags.ts';
+import { SetupManager } from '@server/managers/setup.ts';
 import { UserManager } from '@server/managers/user.ts';
 
 // App
@@ -53,6 +56,10 @@ const EXPECTED_ROUTES = [
 
     // Health
     'GET /api/health',
+
+    // Instance & first-run setup (anonymous by design)
+    'GET /api/instance',
+    'POST /api/setup',
 
     // Blobs (claim / proof-of-possession)
     'POST /api/blobs/claim',
@@ -147,6 +154,8 @@ const nodes = new NodeManager(handle, nodeRA, blob);
 
 const app = createApp(auth, {
     blobs: new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES }),
+    mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
+    setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
     avatars: new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES }),
     nodes,
     shares: new ShareManager(handle, nodeRA, shareRA, userRA),

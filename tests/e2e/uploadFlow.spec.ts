@@ -265,9 +265,15 @@ describe('quota enforcement over the wire', () =>
 
     beforeAll(async () =>
     {
-        quotaServer = await spawnServer({
-            env: { FILESHED_ADMIN_EMAIL: ADMIN_EMAIL, FILESHED_ADMIN_PASSWORD: ADMIN_PASSWORD },
+        quotaServer = await spawnServer({ env: { FILESHED_SETUP_TOKEN: 'e2e-setup-token-1234' } });
+
+        const setup = await new ApiClient(quotaServer.baseURL).post('/api/setup', {
+            token: 'e2e-setup-token-1234',
+            name: 'Administrator',
+            email: ADMIN_EMAIL,
+            password: ADMIN_PASSWORD,
         });
+        if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 
         const registrant = new ApiClient(quotaServer.baseURL);
         await registrant.signUp('quota-user@example.com', PASSWORD);

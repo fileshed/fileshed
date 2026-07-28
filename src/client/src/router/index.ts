@@ -10,6 +10,7 @@ import AccountLayout from '../layouts/accountLayout.vue';
 import EditorLayout from '../layouts/editorLayout.vue';
 
 // Pages
+import SetupPage from '../pages/setupPage.vue';
 import SignInPage from '../pages/signInPage.vue';
 import SignUpPage from '../pages/signUpPage.vue';
 import DrivePage from '../pages/drivePage.vue';
@@ -32,6 +33,7 @@ import { createAuthGuard } from './guard.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 export const routes : RouteRecordRaw[] = [
+    { path: '/setup', name: 'setup', component: SetupPage, meta: { public: true } },
     { path: '/signin', name: 'signin', component: SignInPage, meta: { public: true } },
     { path: '/signup', name: 'signup', component: SignUpPage, meta: { public: true } },
     {

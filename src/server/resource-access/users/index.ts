@@ -54,6 +54,19 @@ export class UserRA
         this.#db = handle.db;
     }
 
+    // Whether ANY account exists -- the first-run question. Live per call: the setup surface must vanish the
+    // instant the first account lands, never a boot-time snapshot later.
+    async anyUserExists() : Promise<boolean>
+    {
+        const row = await this.#db
+            .selectFrom('user')
+            .select('id')
+            .limit(1)
+            .executeTakeFirst();
+
+        return row !== undefined;
+    }
+
     // The per-user byte cap (null = unlimited) straight from the user row. A missing user reads as null (unlimited),
     // but node ownership carries a real FK to user.id, so an owner looked up here always exists.
     async quotaLimitOf(userID : string) : Promise<number | null>

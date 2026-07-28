@@ -17,9 +17,9 @@ services:
       BASE_URL: http://localhost:3000
       DATABASE_KIND: postgres
       DATABASE_URL: postgres://fileshed:change-me@postgres:5432/fileshed
-      # Optional first-run admin (created and promoted at boot when both are set).
-      # FILESHED_ADMIN_EMAIL: admin@example.com
-      # FILESHED_ADMIN_PASSWORD: change-me-too
+      # First run: the console log prints a one-time setup code — finish setup in the browser at /setup.
+      # For non-interactive provisioning, set FILESHED_SETUP_TOKEN and POST /api/setup instead.
+      # FILESHED_SETUP_TOKEN: choose-a-setup-token
     volumes:
       - fileshed-data:/data
     depends_on:

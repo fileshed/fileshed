@@ -139,6 +139,7 @@ export {
     type DeletionOfferListResponse,
     type AcceptDeletionOfferRequest,
 } from './models/requests/deletionOffers.ts';
+export { type InstanceResponse, type SetupRequest, type SetupResponse } from './models/requests/setup.ts';
 export {
     type CreateAccessTokenRequest,
     type AccessTokenResponse,
@@ -224,6 +225,7 @@ export {
     toDeletionOfferResponse,
     toDeletionOfferListResponse,
 } from './models/requests/schemas/deletionOffers.ts';
+export { instanceResponseCodec, setupRequestCodec, setupResponseCodec } from './models/requests/schemas/setup.ts';
 export {
     createAccessTokenRequestCodec,
     accessTokenResponseCodec,

@@ -79,14 +79,13 @@ const configSchema = z.object({
         .positive()
         .default(DEFAULT_AVATAR_MAX_BYTES),
 
-    // First-run admin bootstrap. Both-or-neither: setting one without the other is a misconfiguration, caught below.
-    // When both are present and no user owns the email yet, boot creates the admin.
-    FILESHED_ADMIN_EMAIL: z.email().optional(),
-    FILESHED_ADMIN_PASSWORD: z.string().min(8, 'FILESHED_ADMIN_PASSWORD must be at least 8 characters')
+    // First-run automation: an operator-chosen token that gates POST /api/setup instead of the boot-printed code,
+    // so IaC can complete setup non-interactively. The admin PASSWORD still never rides the environment.
+    FILESHED_SETUP_TOKEN: z.string().min(8, 'FILESHED_SETUP_TOKEN must be at least 8 characters')
         .optional(),
 
     // OAuth social providers are config, not code: each activates only when BOTH halves of its env pair are present.
-    // Setting one half without the other is a misconfiguration, caught below (both-or-neither, like the admin pair).
+    // Setting one half without the other is a misconfiguration, caught below (both-or-neither).
     GITHUB_CLIENT_ID: z.string().optional(),
     GITHUB_CLIENT_SECRET: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
@@ -99,15 +98,6 @@ const configSchema = z.object({
             code: 'custom',
             path: [ 'DATABASE_URL' ],
             message: 'DATABASE_URL is required when DATABASE_KIND=postgres',
-        });
-    }
-
-    if(Boolean(config.FILESHED_ADMIN_EMAIL) !== Boolean(config.FILESHED_ADMIN_PASSWORD))
-    {
-        ctx.addIssue({
-            code: 'custom',
-            path: [ 'FILESHED_ADMIN_EMAIL' ],
-            message: 'FILESHED_ADMIN_EMAIL and FILESHED_ADMIN_PASSWORD must be set together, or not at all',
         });
     }
 

@@ -4,7 +4,7 @@
 // Real sign-up/sign-in over a real socket with real Set-Cookie/Cookie round-trips, then the admin surface end to end:
 // the /api/admin/users authn/authz ladder and the gate that refuses better-auth's own admin endpoints externally even
 // to a valid admin (app.ts). The admin account is planted by first-run bootstrap through the
-// FILESHED_ADMIN_EMAIL/PASSWORD env pair, so a successful admin session also proves bootstrap.
+// FILESHED_SETUP_TOKEN-gated first-run setup, so a successful admin session also proves the wizard's backend.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -22,9 +22,16 @@ let server : ServerHandle;
 
 beforeAll(async () =>
 {
-    server = await spawnServer({
-        env: { FILESHED_ADMIN_EMAIL: ADMIN_EMAIL, FILESHED_ADMIN_PASSWORD: ADMIN_PASSWORD },
+    server = await spawnServer({ env: { FILESHED_SETUP_TOKEN: 'e2e-setup-token-1234' } });
+
+    // First-run setup over the wire: the operator token gates admin creation, the password rides only this POST.
+    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+        token: 'e2e-setup-token-1234',
+        name: 'Administrator',
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
     });
+    if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 });
 
 afterAll(async () =>

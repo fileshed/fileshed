@@ -33,8 +33,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         DATABASE_URL: undefined,
         AUTH_SECRET: 'test-auth-secret-test-auth-secret-test',
         BASE_URL: ORIGIN,
-        FILESHED_ADMIN_EMAIL: undefined,
-        FILESHED_ADMIN_PASSWORD: undefined,
+        FILESHED_SETUP_TOKEN: undefined,
         STORAGE_ROOT: './data/blobs',
         GC_GRACE_DAYS: 7,
         GC_INTERVAL_MINUTES: 60,
@@ -61,7 +60,7 @@ export async function bootTestApp(overrides : Partial<Config> = {}) : Promise<Bo
     const handle = createDatabase(config);
     const auth = createAuth(handle, config);
 
-    await initialize(handle, auth, config);
+    await initialize(handle, auth);
 
     return { config, handle, auth, app: createApp(auth) };
 }

@@ -128,7 +128,7 @@ export async function bootServeApp() : Promise<BootedServeApp>
 
     const handle = createDatabase(config);
     const auth = createAuth(handle, config);
-    await initialize(handle, auth, config);
+    await initialize(handle, auth);
     await seedDefaultBackend(handle, config);
 
     const blob = new BlobRA(handle);

@@ -106,7 +106,7 @@ export async function bootShareApp() : Promise<BootedShareApp>
 
     const handle = createDatabase(config);
     const auth = createAuth(handle, config);
-    await initialize(handle, auth, config);
+    await initialize(handle, auth);
 
     const backendID = await seedDefaultBackend(handle, config);
     const blob = new BlobRA(handle);

@@ -25,8 +25,17 @@ docker compose up -d
 
 (The `.env` file sits next to the compose file, is read by compose natively, and must never be committed.)
 
-First run creates the database (migrations run at every boot and are idempotent). Set `FILESHED_ADMIN_EMAIL` and
-`FILESHED_ADMIN_PASSWORD` together to create and promote an admin account on boot.
+First run creates the database (migrations run at every boot and are idempotent), then prints a **one-time setup
+code** to the container log:
+
+```bash
+docker logs fileshed | grep "setup code"
+```
+
+Open `/setup` in the browser, enter the code, and create your admin account — the password is typed there and never
+lives in an environment or a log. The code regenerates on every boot until setup completes, and the setup page
+disappears permanently the moment the first account exists. For non-interactive provisioning, set
+`FILESHED_SETUP_TOKEN` and `POST /api/setup` with `{ token, name, email, password }` instead.
 
 ## Environment
 
@@ -44,7 +53,7 @@ First run creates the database (migrations run at every boot and are idempotent)
 | `AVATAR_MAX_BYTES` | no | 2 MiB | Avatar image cap. |
 | `GC_GRACE_DAYS` | no | 7 | Days a dereferenced blob lingers before deletion. |
 | `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). |
-| `FILESHED_ADMIN_EMAIL` / `FILESHED_ADMIN_PASSWORD` | no | — | Set both for first-run admin bootstrap. |
+| `FILESHED_SETUP_TOKEN` | no | — | Operator-chosen first-run setup token (for automation); omit to use the boot-printed code. |
 | `LOG_LEVEL` | no | `info` | pino levels: trace … silent. |
 
 ## Put HTTPS in front

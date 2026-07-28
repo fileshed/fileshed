@@ -43,7 +43,7 @@ export async function bootUserApp() : Promise<BootedUserApp>
     const config = testConfig();
     const handle = createDatabase(config);
     const auth = createAuth(handle, config);
-    await initialize(handle, auth, config);
+    await initialize(handle, auth);
 
     const sessions = new SessionManager(auth);
     const users = new UserManager(new UserRA(handle));

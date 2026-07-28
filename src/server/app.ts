@@ -32,6 +32,7 @@ import { createNodeRoutes } from './routes/nodes.ts';
 import { mountOpenApiDocs } from './routes/openapi.ts';
 import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
+import { createSetupRoutes } from './routes/setup.ts';
 import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
 import { createUserRoutes } from './routes/users.ts';
@@ -59,6 +60,7 @@ import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
 import { SessionManager } from './managers/session.ts';
+import { SetupManager } from './managers/setup.ts';
 import { UserManager } from './managers/user.ts';
 import { StatusManager } from './managers/status.ts';
 import { LastRunTracker } from './managers/lastRun.ts';
@@ -111,6 +113,7 @@ export interface AppServices
     deletionOffers : DeletionOfferManager;
     adminStatus : StatusManager;
     users : UserManager;
+    setup : SetupManager;
 }
 
 export interface AppOptions
@@ -154,6 +157,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
 
         if(services)
         {
+            app.route('/api', createSetupRoutes(services.setup));
             app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
             app.route('/api', createBlobRoutes(sessions, services.blobs, services.mediaTags));
             app.route('/api', createUploadRoutes(sessions, services.blobs, services.mediaTags));
@@ -234,7 +238,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const handle = createDatabase(config);
     const auth = createAuth(handle, config);
 
-    await initialize(handle, auth, config);
+    await initialize(handle, auth);
     await seedDefaultBackend(handle, config);
 
     const blob = new BlobRA(handle);
@@ -250,6 +254,14 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const users = new UserManager(userRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
     const adminStatus = new StatusManager(blob, tracker);
+    const setup = new SetupManager({
+        auth,
+        handle,
+        users: userRA,
+        operatorToken: config.FILESHED_SETUP_TOKEN ?? null,
+    });
+    await setup.announce(config.BASE_URL);
+
     const publicLinks = new PublicLinkManager(
         nodeRA,
         blob,
@@ -279,7 +291,9 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         stopMediaTags();
     };
 
-    const services = { blobs, mediaTags, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users };
+    const services = {
+        blobs, mediaTags, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users, setup,
+    };
 
     return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };
 }
