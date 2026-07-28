@@ -34,7 +34,14 @@ const configSchema = z.object({
     DATABASE_PATH: z.string().default(DEFAULT_DATABASE_PATH),
     DATABASE_URL: z.string().optional(),
 
-    AUTH_SECRET: z.string().min(32, 'AUTH_SECRET must be at least 32 characters'),
+    // Length alone cannot catch a copied sample file, and the sample placeholder is deliberately long enough to
+    // pass it -- a deployment signing sessions with a string published in this repo is forgeable by anyone, so the
+    // known placeholder fails boot outright.
+    AUTH_SECRET: z.string().min(32, 'AUTH_SECRET must be at least 32 characters')
+        .refine(
+            (secret) => secret !== 'CHANGE_ME_this_is_a_placeholder_not_a_real_secret',
+            'AUTH_SECRET is still the sample placeholder — generate a real one: openssl rand -base64 32'
+        ),
 
     BASE_URL: z.url().default(DEFAULT_BASE_URL),
 
@@ -46,6 +53,11 @@ const configSchema = z.object({
     STORAGE_ROOT: z.string()
         .min(1)
         .default(DEFAULT_STORAGE_ROOT),
+
+    // The built client's directory. Set in production (the Docker image serves the SPA from the API process);
+    // absent in development, where Vite owns the client and this server is API-only.
+    CLIENT_DIST: z.string().min(1)
+        .optional(),
     GC_GRACE_DAYS: z.coerce.number()
         .int()
         .nonnegative()

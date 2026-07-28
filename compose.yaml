@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# FileShed — SQLite deployment: one container, one volume. For Postgres, use compose.postgres.yaml instead.
+# ---------------------------------------------------------------------------------------------------------------------
+
+services:
+  fileshed:
+    build: .
+    # image: <registry>/fileshed:latest   # once published, use the image instead of building locally
+    ports:
+      - "3000:3000"
+    environment:
+      # REQUIRED — no default on purpose: compose refuses to start until you provide one. Put it in a .env file
+      # next to this compose file (AUTH_SECRET=...) or export it in your shell. Rotating it signs everyone out.
+      AUTH_SECRET: ${AUTH_SECRET:?generate one with `openssl rand -base64 32` and put it in .env next to this file}
+      # The externally reachable URL (scheme + host + port). Behind a reverse proxy, this is the public URL.
+      BASE_URL: http://localhost:3000
+      # Optional first-run admin (created and promoted at boot when both are set).
+      # FILESHED_ADMIN_EMAIL: admin@example.com
+      # FILESHED_ADMIN_PASSWORD: change-me-too
+    volumes:
+      - fileshed-data:/data
+    restart: unless-stopped
+
+volumes:
+  fileshed-data:
+
+# ---------------------------------------------------------------------------------------------------------------------

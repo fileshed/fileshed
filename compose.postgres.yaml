@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# FileShed — Postgres deployment: the app container plus a Postgres 17 service. The blob store still lives on the
+# fileshed-data volume; only the database moves. Run with: docker compose -f compose.postgres.yaml up -d
+# ---------------------------------------------------------------------------------------------------------------------
+
+services:
+  fileshed:
+    build: .
+    # image: <registry>/fileshed:latest   # once published, use the image instead of building locally
+    ports:
+      - "3000:3000"
+    environment:
+      # REQUIRED — no default on purpose: compose refuses to start until you provide one. Put it in a .env file
+      # next to this compose file (AUTH_SECRET=...) or export it in your shell. Rotating it signs everyone out.
+      AUTH_SECRET: ${AUTH_SECRET:?generate one with `openssl rand -base64 32` and put it in .env next to this file}
+      # The externally reachable URL (scheme + host + port). Behind a reverse proxy, this is the public URL.
+      BASE_URL: http://localhost:3000
+      DATABASE_KIND: postgres
+      DATABASE_URL: postgres://fileshed:change-me@postgres:5432/fileshed
+      # Optional first-run admin (created and promoted at boot when both are set).
+      # FILESHED_ADMIN_EMAIL: admin@example.com
+      # FILESHED_ADMIN_PASSWORD: change-me-too
+    volumes:
+      - fileshed-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fileshed
+      POSTGRES_USER: fileshed
+      POSTGRES_PASSWORD: change-me
+    volumes:
+      - fileshed-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fileshed -d fileshed"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  fileshed-data:
+  fileshed-pg:
+
+# ---------------------------------------------------------------------------------------------------------------------

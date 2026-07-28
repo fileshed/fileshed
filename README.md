@@ -14,6 +14,23 @@ Self-hosted, multi-user file hosting, inspired by cloud file management tools li
 
 ## Quickstart
 
+Run it in Docker — one image, one volume:
+
+```bash
+docker build -t fileshed .
+docker run -d --name fileshed \
+  -p 3000:3000 \
+  -e AUTH_SECRET="$(openssl rand -base64 32)" \
+  -e BASE_URL=http://localhost:3000 \
+  -v fileshed-data:/data \
+  fileshed
+```
+
+Or `docker compose up -d` after editing `compose.yaml`. See [docs/deployment.md](docs/deployment.md) for the full
+environment reference, HTTPS guidance, and what to back up.
+
+### Development
+
 ```bash
 git clone <repo-url> fileshed
 cd fileshed
@@ -36,6 +53,10 @@ npm run dev              # client dev server with the API in-process
 | `npm run test` | Run tests |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with coverage |
+| `npm run test:e2e` | Run the end-to-end suite (real server, real HTTP) |
+
+CI runs `lint`, `lint:types`, `test`, and `test:e2e` as four parallel jobs — a red build names its failing
+dimension directly.
 
 ## Layout
 

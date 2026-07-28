@@ -51,6 +51,27 @@ afterEach(() =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+describe('loadConfig AUTH_SECRET validation', () =>
+{
+    // The sample placeholder is long enough to pass the length floor on purpose (so length is tested separately),
+    // which is exactly why it must be rejected by name: a secret published in the repo signs forgeable sessions.
+    it('rejects the sample placeholder even though it satisfies the length requirement', () =>
+    {
+        process.env['AUTH_SECRET'] = 'CHANGE_ME_this_is_a_placeholder_not_a_real_secret';
+
+        expect(() => loadConfig()).toThrow(/placeholder/);
+    });
+
+    it('rejects a secret under 32 characters', () =>
+    {
+        process.env['AUTH_SECRET'] = 'too-short';
+
+        expect(() => loadConfig()).toThrow(/32 characters/);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('loadConfig social provider validation', () =>
 {
     it('accepts github when both client id and secret are set', () =>

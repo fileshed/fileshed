@@ -9,7 +9,11 @@
 // exists so the health/smoke path is exercisable without a database or secret.
 //----------------------------------------------------------------------------------------------------------------------
 
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { Hono } from 'hono';
+import { serveStatic } from '@hono/node-server/serve-static';
 
 import { MEDIA_TAG_SWEEP_BATCH, MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
 
@@ -109,7 +113,14 @@ export interface AppServices
     users : UserManager;
 }
 
-export function createApp(auth ?: Auth, services ?: AppServices) : Hono
+export interface AppOptions
+{
+    // The built client's directory (resolved from the working directory). Present only in production, where this
+    // process serves the SPA alongside the API; development leaves the client to Vite.
+    clientDist ?: string;
+}
+
+export function createApp(auth ?: Auth, services ?: AppServices, options : AppOptions = {}) : Hono
 {
     const app = new Hono();
 
@@ -163,6 +174,30 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
     }
 
     app.route('/api', health);
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Static client -- the production single-image mode: hashed assets straight from the built client, and the SPA
+    // history fallback for everything that is not an API or direct-link path. /api and /d keep their JSON 404s: a
+    // fallback that served index.html for a mistyped API route or a dead /d token would turn every such error into
+    // a confusing 200. The vue-router owns everything else.
+    //------------------------------------------------------------------------------------------------------------------
+
+    const clientDist = options.clientDist;
+    if(clientDist !== undefined)
+    {
+        app.use('*', serveStatic({ root: clientDist }));
+
+        app.get('*', async (ctx) =>
+        {
+            const path = new URL(ctx.req.url).pathname;
+            if(path === '/api' || path.startsWith('/api/') || path === '/d' || path.startsWith('/d/'))
+            {
+                return ctx.json({ error: 'Not Found' }, 404);
+            }
+
+            return ctx.html(await readFile(join(clientDist, 'index.html'), 'utf8'));
+        });
+    }
 
     //------------------------------------------------------------------------------------------------------------------
     // Error Handling
@@ -246,7 +281,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
 
     const services = { blobs, mediaTags, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users };
 
-    return { app: createApp(auth, services), config, shutdown };
+    return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
