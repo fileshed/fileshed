@@ -21,13 +21,13 @@ import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function createSetupRoutes(setup : SetupManager) : Hono
+export function createSetupRoutes(setup : SetupManager, signUpEnabled : () => Promise<boolean>) : Hono
 {
     const router = new Hono();
 
     router.get('/instance', instanceSpec, async (ctx) =>
     {
-        return ctx.json({ needsSetup: await setup.needsSetup() });
+        return ctx.json({ needsSetup: await setup.needsSetup(), signUpEnabled: await signUpEnabled() });
     });
 
     router.post('/setup', setupSpec, async (ctx) =>

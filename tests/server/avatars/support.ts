@@ -87,7 +87,7 @@ export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAv
 
     const backendID = await seedDefaultBackend(handle, config);
     const blob = new BlobRA(handle);
-    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES });
+    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES });
     const nodes = new NodeManager(handle, new NodeRA(handle), blob);
 
     return {

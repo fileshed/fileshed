@@ -1,16 +1,17 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Config — social provider env pairs
+// Config — the yaml-substitution layer and its validations
 //
-// loadConfig parses process.env, so these drive it through the real environment (each provider key saved and restored
-// around the run). The contract under test: a social provider activates only when BOTH halves of its env pair are
-// present -- one half without the other is a boot-time misconfiguration that fails the parse, exactly like the admin
-// email/password pair.
+// loadConfig reads the committed config.yaml with ${VAR}/${VAR:-fallback} substitution against the real
+// environment (each managed key saved and restored around the run), so these specs prove that environment
+// variables genuinely flow THROUGH the file into the validated config. The contracts under test: substitution
+// semantics, the AUTH_SECRET placeholder rejection, and social providers activating only when BOTH halves of
+// their env pair are present.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Utils
-import { loadConfig } from '@server/utils/config.ts';
+import { loadConfig, substituteEnv } from '@server/utils/config.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -47,6 +48,23 @@ afterEach(() =>
         if(original === undefined) { Reflect.deleteProperty(process.env, key); }
         else { process.env[key] = original; }
     }
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('substituteEnv', () =>
+{
+    // The contract: a set, non-empty environment variable wins; the ${VAR:-fallback} fallback covers unset AND
+    // empty (matching shell semantics); ${VAR} with nothing behind it substitutes to empty, which the loader then
+    // reads as unset. Substitution happens on raw text, so numeric fallbacks become real yaml numbers downstream.
+    it('prefers the environment, falls back per-variable, and empties bare misses', () =>
+    {
+        const text = 'a: ${ALPHA:-default-a}\nb: ${BRAVO:-3000}\nc: ${CHARLIE}';
+
+        expect(substituteEnv(text, { ALPHA: 'from-env' })).toBe('a: from-env\nb: 3000\nc: ');
+        expect(substituteEnv(text, { ALPHA: '', BRAVO: '4000', CHARLIE: 'set' }))
+            .toBe('a: default-a\nb: 4000\nc: set');
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

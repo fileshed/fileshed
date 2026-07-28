@@ -83,7 +83,7 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     const userRA = new UserRA(handle);
     const linkRA = new PublicLinkRA(handle);
 
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: 5 * 1024 * 1024 * 1024 });
+    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: async () => 5 * 1024 * 1024 * 1024 });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
     const nodes = new NodeManager(handle, nodeRA, noopOrphanedBlobs);
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);

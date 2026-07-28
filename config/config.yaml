@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# FileShed configuration defaults.
+#
+# This committed file IS the defaults. Values use ${VAR} / ${VAR:-fallback} substitution against the process
+# environment at boot: set an environment variable at deployment and it flows in here; otherwise the fallback after
+# `:-` applies. An empty result reads as unset (exactly like an absent environment variable). Admin-set overrides in
+# the database sit ABOVE everything here; "reset to default" in the admin UI returns to this file's substituted
+# value. Point FILESHED_CONFIG at another file to replace this one wholesale.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# Bind address and port.
+HOST: ${HOST:-0.0.0.0}
+PORT: ${PORT:-3950}
+
+# Database: sqlite (default) or postgres. DATABASE_URL is required for postgres.
+DATABASE_KIND: ${DATABASE_KIND:-sqlite}
+DATABASE_PATH: ${DATABASE_PATH:-./data/fileshed.db}
+DATABASE_URL: ${DATABASE_URL:-}
+
+# REQUIRED, no fallback on purpose: sessions are signed with this. Generate one: openssl rand -base64 32
+AUTH_SECRET: ${AUTH_SECRET:-}
+
+# The externally reachable URL (behind a reverse proxy, the public one).
+BASE_URL: ${BASE_URL:-http://localhost:5173}
+
+# Blob storage and maintenance.
+STORAGE_ROOT: ${STORAGE_ROOT:-./data/blobs}
+GC_GRACE_DAYS: ${GC_GRACE_DAYS:-7}
+GC_INTERVAL_MINUTES: ${GC_INTERVAL_MINUTES:-60}
+TRASH_PURGE_DAYS: ${TRASH_PURGE_DAYS:-30}
+
+# Size caps.
+UPLOAD_MAX_BYTES: ${UPLOAD_MAX_BYTES:-5368709120}
+AVATAR_MAX_BYTES: ${AVATAR_MAX_BYTES:-2097152}
+
+# Production client serving: the built client's directory; empty leaves the server API-only (development).
+CLIENT_DIST: ${CLIENT_DIST:-}
+
+# First-run automation token (see docs/deployment.md); empty uses the boot-printed setup code.
+FILESHED_SETUP_TOKEN: ${FILESHED_SETUP_TOKEN:-}
+
+# OAuth social providers: both halves of a pair, or neither.
+GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+
+# ---------------------------------------------------------------------------------------------------------------------

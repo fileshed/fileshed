@@ -103,6 +103,14 @@ export interface BlobTable
     deleted_at : Timestamp | null;
 }
 
+// An admin-set configuration override, layered above the loaded config. Secret-tier values are stored encrypted.
+export interface InstanceSettingTable
+{
+    key : string;
+    value : string;
+    updated_at : string;
+}
+
 // Embedded audio metadata keyed by content: deduplicated copies share one row, and the row's existence means
 // extraction ran -- all-null is "carries no tags", not "not yet tried".
 export interface MediaTagsTable
@@ -195,6 +203,9 @@ export interface Database
 
     // Owned by migration 002.
     media_tags : MediaTagsTable;
+
+    // Owned by migration 003.
+    instance_setting : InstanceSettingTable;
 }
 
 // The dialect discriminator. A subset of BetterAuth's KyselyDatabaseType, so it drops straight into the

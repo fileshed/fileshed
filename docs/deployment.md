@@ -39,6 +39,10 @@ disappears permanently the moment the first account exists. For non-interactive 
 
 ## Environment
 
+Configuration is layered: the committed `config/config.yaml` holds the defaults with `${VAR:-fallback}` substitution, the
+environment variables below flow through it at boot, and admin-set overrides (stored in the database) sit above
+both. `FILESHED_CONFIG` points at an alternative yaml file.
+
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `AUTH_SECRET` | **yes** | — | ≥ 32 chars. Signs sessions. **Rotating it signs every user out.** |

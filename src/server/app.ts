@@ -32,6 +32,7 @@ import { createNodeRoutes } from './routes/nodes.ts';
 import { mountOpenApiDocs } from './routes/openapi.ts';
 import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
+import { createAdminSettingsRoutes } from './routes/adminSettings.ts';
 import { createSetupRoutes } from './routes/setup.ts';
 import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
@@ -45,6 +46,7 @@ import { seedDefaultBackend } from './resource-access/database/seeds.ts';
 import { BlobRA } from './resource-access/blob/index.ts';
 import { NodeRA } from './resource-access/nodes/node.ts';
 import { MediaTagsRA } from './resource-access/mediaTags/index.ts';
+import { SettingsRA } from './resource-access/settings/index.ts';
 import { PublicLinkRA } from './resource-access/publicLinks/index.ts';
 import { ShareRA } from './resource-access/shares/index.ts';
 import { UserRA } from './resource-access/users/index.ts';
@@ -60,6 +62,7 @@ import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
 import { SessionManager } from './managers/session.ts';
+import { SettingsManager } from './managers/settings.ts';
 import { SetupManager } from './managers/setup.ts';
 import { UserManager } from './managers/user.ts';
 import { StatusManager } from './managers/status.ts';
@@ -70,6 +73,7 @@ import { startTrashPurgeTimer } from './managers/trashPurge.ts';
 
 // Utils
 import { type Config, loadConfig } from './utils/config.ts';
+import { SecretBox } from './utils/secretBox.ts';
 import { getLogger } from './utils/logger.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -89,15 +93,29 @@ const logger = getLogger('server');
 // traverse HTTP, so internal minting is unaffected.
 const gatedAuthPrefixes = [ '/api/auth/admin', '/api/auth/api-key' ];
 
-export function targetsGatedAuthSurface(pathname : string) : boolean
+const signUpPrefix = '/api/auth/sign-up';
+
+function normalizeAuthPath(pathname : string) : string
 {
     let path = pathname;
     try { path = decodeURIComponent(pathname); }
     catch { /* malformed encoding: fall through with the raw path, which better-auth would 404 anyway */ }
 
-    path = path.replace(/\/{2,}/g, '/').toLowerCase();
+    return path.replace(/\/{2,}/g, '/').toLowerCase();
+}
+
+export function targetsGatedAuthSurface(pathname : string) : boolean
+{
+    const path = normalizeAuthPath(pathname);
 
     return gatedAuthPrefixes.some((prefix) => path === prefix || path.startsWith(`${ prefix }/`));
+}
+
+export function targetsSignUpSurface(pathname : string) : boolean
+{
+    const path = normalizeAuthPath(pathname);
+
+    return path === signUpPrefix || path.startsWith(`${ signUpPrefix }/`);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -114,6 +132,7 @@ export interface AppServices
     adminStatus : StatusManager;
     users : UserManager;
     setup : SetupManager;
+    settings : SettingsManager;
 }
 
 export interface AppOptions
@@ -135,10 +154,21 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
     {
         app.use('*', async (ctx, next) =>
         {
-            if(targetsGatedAuthSurface(new URL(ctx.req.url).pathname))
+            const pathname = new URL(ctx.req.url).pathname;
+
+            if(targetsGatedAuthSurface(pathname))
             {
                 return ctx.json({ error: 'Not Found' }, 404);
             }
+
+            // The sign-up switch, checked live per request so flipping it needs no restart. The first-run wizard is
+            // unaffected: it creates its admin through a server-side auth.api call, which never traverses HTTP.
+            if(services && targetsSignUpSurface(pathname)
+                && !(await services.settings.booleanValue('SIGN_UP_ENABLED', true)))
+            {
+                return ctx.json({ error: 'Sign-ups are disabled on this instance.' }, 403);
+            }
+
             return next();
         });
     }
@@ -157,7 +187,11 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
 
         if(services)
         {
-            app.route('/api', createSetupRoutes(services.setup));
+            app.route('/api', createSetupRoutes(
+                services.setup,
+                () => services.settings.booleanValue('SIGN_UP_ENABLED', true)
+            ));
+            app.route('/api', createAdminSettingsRoutes(sessions, services.settings));
             app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
             app.route('/api', createBlobRoutes(sessions, services.blobs, services.mediaTags));
             app.route('/api', createUploadRoutes(sessions, services.blobs, services.mediaTags));
@@ -246,14 +280,28 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const shareRA = new ShareRA(handle);
     const userRA = new UserRA(handle);
     const tracker = new LastRunTracker();
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
+    const settings = new SettingsManager({
+        settings: new SettingsRA(handle),
+        config,
+        box: new SecretBox(config.AUTH_SECRET),
+        startedAt: new Date(),
+    });
+
+    // Live-tier caps are closures over the settings manager, resolved per use: an admin override applies to the very
+    // next request, and with no override each supplier answers the config value it names.
+    const uploadMaxBytes = () : Promise<number> => settings.numberValue('UPLOAD_MAX_BYTES', config.UPLOAD_MAX_BYTES);
+    const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);
+    const trashPurgeDays = () : Promise<number> => settings.numberValue('TRASH_PURGE_DAYS', config.TRASH_PURGE_DAYS);
+
+    const blobs = new BlobManager({ handle, blob, uploadMaxBytes });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
-    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES });
-    const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY, config.TRASH_PURGE_DAYS);
+    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
+    const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY, trashPurgeDays);
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
     const users = new UserManager(userRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
     const adminStatus = new StatusManager(blob, tracker);
+
     const setup = new SetupManager({
         auth,
         handle,
@@ -276,7 +324,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         (summary) => tracker.recordGc(summary)
     );
     const stopTrashPurge = startTrashPurgeTimer(
-        { nodes: nodeRA, purger: nodes, graceMs: config.TRASH_PURGE_DAYS * MS_PER_DAY },
+        { nodes: nodeRA, purger: nodes, graceMs: async () => await trashPurgeDays() * MS_PER_DAY },
         sweepIntervalMs,
         (summary) => tracker.recordTrashPurge(summary)
     );
@@ -292,7 +340,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     };
 
     const services = {
-        blobs, mediaTags, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users, setup,
+        blobs, mediaTags, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users, setup, settings,
     };
 
     return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };

@@ -101,14 +101,14 @@ export class NodeManager
     readonly #users : UserRA;
     readonly #orphanedBlobs : OrphanedBlobs;
     readonly #offerGraceMs : number;
-    readonly #trashRetentionDays : number;
+    readonly #trashRetentionDays : () => Promise<number>;
 
     constructor(
         handle : DatabaseHandle,
         nodes : NodeRA,
         orphanedBlobs : OrphanedBlobs,
         offerGraceMs : number = DEFAULT_GC_GRACE_DAYS * MS_PER_DAY,
-        trashRetentionDays : number = DEFAULT_TRASH_PURGE_DAYS
+        trashRetentionDays : () => Promise<number> = async () => DEFAULT_TRASH_PURGE_DAYS
     )
     {
         this.#db = handle.db;
@@ -320,10 +320,11 @@ export class NodeManager
     {
         // Preferences and the avatar are read from the row, not the session snapshot: the cookie cache lags a just-
         // saved value, so a page reload right after a change would otherwise show the stale one.
-        const [ used, stored, avatarSha256 ] = await Promise.all([
+        const [ used, stored, avatarSha256, trashRetentionDays ] = await Promise.all([
             this.#nodes.ownedBytes(actor.id),
             this.#users.preferencesOf(actor.id),
             this.#users.avatarSha256Of(actor.id),
+            this.#trashRetentionDays(),
         ]);
 
         return {
@@ -332,7 +333,7 @@ export class NodeManager
             name: actor.name,
             role: actor.role === 'admin' ? 'admin' : 'user',
             quota: { used, limit: actor.quotaLimit ?? null },
-            limits: { trashRetentionDays: this.#trashRetentionDays },
+            limits: { trashRetentionDays },
             preferences: toUserPreferences(stored),
             image: avatarImage(avatarSha256),
             createdAt: new Date(actor.createdAt).toISOString(),

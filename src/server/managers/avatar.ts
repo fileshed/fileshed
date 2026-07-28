@@ -28,7 +28,9 @@ export interface AvatarManagerDeps
 {
     handle : DatabaseHandle;
     blob : BlobRA;
-    avatarMaxBytes : number;
+
+    // Read at use time, per request, so an admin raising or lowering the cap needs no restart.
+    avatarMaxBytes : () => Promise<number>;
 }
 
 // The bytes and metadata to serve for a GET, or null when the hash is not any user's avatar (the serve gate).
@@ -63,7 +65,7 @@ export class AvatarManager
     readonly #handle : DatabaseHandle;
     readonly #blob : BlobRA;
     readonly #users : UserRA;
-    readonly #maxBytes : number;
+    readonly #maxBytes : () => Promise<number>;
 
     constructor(deps : AvatarManagerDeps)
     {
@@ -90,12 +92,15 @@ export class AvatarManager
             throw new BadRequestError('Avatar must be a PNG, JPEG, WebP, GIF, or BMP image.');
         }
 
-        if(declaredLength !== undefined && declaredLength > this.#maxBytes)
+        // Resolved once, so the declared-length check and the streaming cap judge the same request by the same number.
+        const maxBytes = await this.#maxBytes();
+
+        if(declaredLength !== undefined && declaredLength > maxBytes)
         {
             throw new PayloadTooLargeError('Avatar exceeds the maximum size.');
         }
 
-        const bytes = await this.#collect(source);
+        const bytes = await this.#collect(source, maxBytes);
         const sha256 = createHash('sha256')
             .update(bytes)
             .digest('hex');
@@ -165,7 +170,7 @@ export class AvatarManager
     // Buffer the source into memory, aborting past the byte cap so an undeclared or lying Content-Length can never push
     // more than the ceiling onto the heap. Avatars are small (a couple of MiB at most), so full buffering is fine and
     // lets the bytes be hashed before they are stored.
-    async #collect(source : Readable) : Promise<Buffer>
+    async #collect(source : Readable, maxBytes : number) : Promise<Buffer>
     {
         const chunks : Buffer[] = [];
         let seen = 0;
@@ -174,7 +179,7 @@ export class AvatarManager
         {
             const buffer = chunk as Buffer;
             seen += buffer.length;
-            if(seen > this.#maxBytes)
+            if(seen > maxBytes)
             {
                 source.destroy();
                 throw new PayloadTooLargeError('Avatar exceeds the maximum size.');

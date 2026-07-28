@@ -37,6 +37,7 @@ ENV NODE_ENV=production \
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
+COPY config ./config
 COPY --from=build /app/packages ./packages
 COPY --from=build /app/src/server ./src/server
 COPY --from=build /app/src/client/dist ./client-dist

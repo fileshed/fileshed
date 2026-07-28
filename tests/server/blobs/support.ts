@@ -87,7 +87,7 @@ export async function bootBlobApp(uploadMaxBytes ?: number) : Promise<BootedBlob
 
     const backendID = await seedDefaultBackend(handle, config);
     const blob = new BlobRA(handle);
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
+    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES });
 
     return {
         app: composeApp(auth, blobs, new MediaTagManager({ blob, tags: new MediaTagsRA(handle) })),

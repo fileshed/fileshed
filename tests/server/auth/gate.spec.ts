@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 
 // App
-import { targetsGatedAuthSurface } from '@server/app.ts';
+import { targetsGatedAuthSurface, targetsSignUpSurface } from '@server/app.ts';
 
 // Support
 import { ORIGIN, bootTestApp, makeAdmin } from './support.ts';
@@ -53,6 +53,30 @@ describe('targetsGatedAuthSurface', () =>
         expect(targetsGatedAuthSurface('/api/auth/administrator')).toBe(false);
         expect(targetsGatedAuthSurface('/api/auth/api-keychain')).toBe(false);
         expect(targetsGatedAuthSurface('/api/health')).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// Same adversarial normalization as the plugin gate: when an admin switches sign-ups off, an evasion-spelled path
+// must not slip a registration through.
+describe('targetsSignUpSurface', () =>
+{
+    it('matches the sign-up prefix, its endpoints, and evasion variants', () =>
+    {
+        expect(targetsSignUpSurface('/api/auth/sign-up')).toBe(true);
+        expect(targetsSignUpSurface('/api/auth/sign-up/email')).toBe(true);
+        expect(targetsSignUpSurface('/api/auth//sign-up/email')).toBe(true);
+        expect(targetsSignUpSurface('/api/auth/sign-up%2Femail')).toBe(true);
+        expect(targetsSignUpSurface('/api/auth/SIGN-UP/email')).toBe(true);
+        expect(targetsSignUpSurface('/api/auth/sign-up/email/')).toBe(true);
+    });
+
+    it('does not match sign-in or lookalikes', () =>
+    {
+        expect(targetsSignUpSurface('/api/auth/sign-in/email')).toBe(false);
+        expect(targetsSignUpSurface('/api/auth/sign-upgrade')).toBe(false);
+        expect(targetsSignUpSurface('/api/setup')).toBe(false);
     });
 });
 

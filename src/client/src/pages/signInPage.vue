@@ -53,7 +53,7 @@
                 />
             </UForm>
 
-            <template #footer>
+            <template v-if="signUpEnabled" #footer>
                 <p class="text-sm text-muted">
                     Need an account?
                     <RouterLink to="/signup" class="font-medium text-primary">
@@ -99,6 +99,9 @@
     const state = reactive({ email: '', password: '' });
     const errorMessage = ref<string | null>(null);
 
+    // Optimistically true so the link doesn't pop in on the common (enabled) case.
+    const signUpEnabled = ref(true);
+
     // A fresh instance has no accounts to sign into -- the visitor belongs at the first-run wizard instead.
     onMounted(async () =>
     {
@@ -106,6 +109,7 @@
         {
             const instance = await fetchInstance();
             if(instance.needsSetup) { await router.replace('/setup'); }
+            signUpEnabled.value = instance.signUpEnabled;
         }
         catch { /* an unreachable API leaves sign-in up; submitting will surface the real error */ }
     });

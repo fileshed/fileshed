@@ -19,6 +19,7 @@ import type { Database, DatabaseKind } from './database.ts';
 // Migrations
 import * as initial001 from './migrations/001_initial.ts';
 import * as mediaTags002 from './migrations/002_media_tags.ts';
+import * as instanceSettings003 from './migrations/003_instance_settings.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -39,6 +40,10 @@ function migrationList(kind : DatabaseKind) : Record<string, Migration>
         '002_media_tags': {
             up: (db) => mediaTags002.up(db),
             down: (db) => mediaTags002.down(db),
+        },
+        '003_instance_settings': {
+            up: (db) => instanceSettings003.up(db),
+            down: (db) => instanceSettings003.down(db),
         },
     };
 }

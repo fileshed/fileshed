@@ -120,9 +120,10 @@ const authOptionsShape = {
     socialProviders: undefined as BetterAuthOptions['socialProviders'],
     session: {
         // Serve the session from a short-lived signed cookie so getSession on hot paths skips a DB round-trip.
-        // Conscious tradeoff: role changes and bans lag until the cookie refreshes (~5 min) -- a just-demoted admin
-        // keeps admin access for that window. Revisit before ban/impersonation surfaces ship.
-        cookieCache: { enabled: true },
+        // The cookie lives in the BROWSER, so revoking DB sessions (a ban does) cannot reach it before it expires
+        // -- 60 seconds caps that window at a cost of one session read per user per minute. Access tokens have no
+        // such lag: the ban hooks delete them outright.
+        cookieCache: { enabled: true, maxAge: 60 },
     },
     plugins: [ admin(), apiKey(apiKeyConfigurations) ],
     // Placeholder for the type only, like socialProviders: createAuth supplies the live hooks, which need the

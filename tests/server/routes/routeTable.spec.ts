@@ -20,6 +20,7 @@ import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
 import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { UserRA } from '@server/resource-access/users/index.ts';
+import { SettingsRA } from '@server/resource-access/settings/index.ts';
 import { createAuth } from '@server/resource-access/auth.ts';
 import { createDatabase } from '@server/resource-access/database/database.ts';
 
@@ -33,8 +34,12 @@ import { ShareManager } from '@server/managers/share.ts';
 import { StatusManager } from '@server/managers/status.ts';
 import { LastRunTracker } from '@server/managers/lastRun.ts';
 import { MediaTagManager } from '@server/managers/mediaTags.ts';
+import { SettingsManager } from '@server/managers/settings.ts';
 import { SetupManager } from '@server/managers/setup.ts';
 import { UserManager } from '@server/managers/user.ts';
+
+// Utils
+import { SecretBox } from '@server/utils/secretBox.ts';
 
 // App
 import { createApp } from '@server/app.ts';
@@ -53,6 +58,8 @@ const EXPECTED_ROUTES = [
     'GET /api/admin/users',
     'PATCH /api/admin/users/:id',
     'GET /api/admin/status',
+    'GET /api/admin/settings',
+    'PATCH /api/admin/settings',
 
     // Health
     'GET /api/health',
@@ -153,10 +160,10 @@ const userRA = new UserRA(handle);
 const nodes = new NodeManager(handle, nodeRA, blob);
 
 const app = createApp(auth, {
-    blobs: new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES }),
+    blobs: new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES }),
     mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
     setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
-    avatars: new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES }),
+    avatars: new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES }),
     nodes,
     shares: new ShareManager(handle, nodeRA, shareRA, userRA),
     publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
@@ -164,6 +171,12 @@ const app = createApp(auth, {
     deletionOffers: new DeletionOfferManager(handle, nodes),
     adminStatus: new StatusManager(blob, new LastRunTracker()),
     users: new UserManager(userRA),
+    settings: new SettingsManager({
+        settings: new SettingsRA(handle),
+        config,
+        box: new SecretBox(config.AUTH_SECRET),
+        startedAt: new Date(),
+    }),
 });
 
 afterAll(async () =>

@@ -91,7 +91,7 @@ describe('NodeManager.me', () =>
     // shipped default a deployment has overridden.
     it('reports the configured trash retention, not the shipped default', async () =>
     {
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), undefined, 2);
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), undefined, async () => 2);
         const me = await manager.me(testActor({ id: 'alice' }));
 
         expect(me.limits).toEqual({ trashRetentionDays: 2 });

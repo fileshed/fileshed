@@ -78,7 +78,7 @@ async function recordSweeps() : Promise<void>
     const nodes = new NodeManager(booted.handle, nodeRA, booted.blob);
 
     tracker.recordGc(await runGcOnce({ handle: booted.handle, blob: booted.blob, graceMs: GRACE_MS }));
-    tracker.recordTrashPurge(await runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: GRACE_MS }));
+    tracker.recordTrashPurge(await runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: async () => GRACE_MS }));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

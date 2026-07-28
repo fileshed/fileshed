@@ -71,7 +71,7 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
     const sharesRA = new ShareRA(handle);
     const usersRA = new UserRA(handle);
 
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes });
+    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: async () => uploadMaxBytes });
     const nodes = new NodeManager(handle, nodesRA, blob);
     const shares = new ShareManager(handle, nodesRA, sharesRA, usersRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);

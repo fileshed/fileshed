@@ -14,6 +14,7 @@ import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
 export const instanceResponseCodec = z.strictObject({
     needsSetup: z.boolean(),
+    signUpEnabled: z.boolean(),
 });
 
 typeAssert<Equals<z.output<typeof instanceResponseCodec>, InstanceResponse>>();

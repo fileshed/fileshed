@@ -76,7 +76,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { reactive, ref } from 'vue';
+    import { onMounted, reactive, ref } from 'vue';
     import { RouterLink, useRouter } from 'vue-router';
     import { z } from 'zod';
     import type { FormSubmitEvent } from '@nuxt/ui';
@@ -84,6 +84,9 @@
     // Stores
     import { useAppStore } from '../stores/app.ts';
     import { useSessionStore } from '../stores/session.ts';
+
+    // Resource Access
+    import { fetchInstance } from '../resource-access/instance.ts';
 
     //------------------------------------------------------------------------------------------------------------------
     // Setup
@@ -103,6 +106,18 @@
 
     const state = reactive({ name: '', email: '', password: '' });
     const errorMessage = ref<string | null>(null);
+
+    // An instance with sign-ups switched off has no business showing this form; the server would refuse the
+    // submission anyway, so bounce to sign-in rather than let anyone fill it out for nothing.
+    onMounted(async () =>
+    {
+        try
+        {
+            const instance = await fetchInstance();
+            if(!instance.signUpEnabled) { await router.replace('/signin'); }
+        }
+        catch { /* an unreachable API leaves the form up; submitting will surface the real error */ }
+    });
 
     //------------------------------------------------------------------------------------------------------------------
     // Submit

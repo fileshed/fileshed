@@ -10,6 +10,9 @@
 export interface InstanceResponse
 {
     needsSetup : boolean;
+
+    // Whether this instance accepts self-service sign-ups; the sign-up page hides itself when not.
+    signUpEnabled : boolean;
 }
 
 export interface SetupRequest

@@ -41,6 +41,17 @@ export {
     statementForScopes,
     scopesFromStatement,
 } from './models/accessToken.ts';
+export {
+    type SettingTier,
+    type SettingKind,
+    type AdminSettingKey,
+    type SettingDefinition,
+    type SettingValue,
+    settingTiers,
+    settingKinds,
+    adminSettingKeys,
+    settingDefinitions,
+} from './models/instanceSettings.ts';
 export type { Blob } from './models/blob.ts';
 export type { DeletionOffer } from './models/deletionOffer.ts';
 export { type StorageBackend, type StorageBackendKind, storageBackendKinds } from './models/storageBackend.ts';
@@ -141,6 +152,11 @@ export {
 } from './models/requests/deletionOffers.ts';
 export { type InstanceResponse, type SetupRequest, type SetupResponse } from './models/requests/setup.ts';
 export {
+    type AdminSettingEntry,
+    type AdminSettingsResponse,
+    type PatchSettingsRequest,
+} from './models/requests/adminSettings.ts';
+export {
     type CreateAccessTokenRequest,
     type AccessTokenResponse,
     type CreateAccessTokenResponse,
@@ -226,6 +242,11 @@ export {
     toDeletionOfferListResponse,
 } from './models/requests/schemas/deletionOffers.ts';
 export { instanceResponseCodec, setupRequestCodec, setupResponseCodec } from './models/requests/schemas/setup.ts';
+export {
+    adminSettingEntryCodec,
+    adminSettingsResponseCodec,
+    patchSettingsRequestCodec,
+} from './models/requests/schemas/adminSettings.ts';
 export {
     createAccessTokenRequestCodec,
     accessTokenResponseCodec,

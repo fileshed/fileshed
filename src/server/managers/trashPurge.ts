@@ -30,7 +30,9 @@ export interface TrashPurgeDeps
 {
     nodes : NodeRA;
     purger : TrashRootPurger;
-    graceMs : number;
+
+    // Read at the start of each sweep, so an admin changing the retention window needs no restart.
+    graceMs : () => Promise<number>;
 }
 
 export interface TrashPurgeSummary
@@ -44,7 +46,7 @@ export interface TrashPurgeSummary
 
 export async function runTrashPurgeOnce(deps : TrashPurgeDeps) : Promise<TrashPurgeSummary>
 {
-    const cutoff = new Date(Date.now() - deps.graceMs);
+    const cutoff = new Date(Date.now() - await deps.graceMs());
     const roots = await deps.nodes.expiredTrashRootIDs(cutoff);
 
     // Roots are disjoint subtrees (a trashed node whose parent is also trashed is never selected), so they purge

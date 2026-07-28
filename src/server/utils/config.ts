@@ -1,7 +1,17 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Configuration
+//
+// The committed config.yaml IS the defaults: its values carry ${VAR} / ${VAR:-fallback} substitutions resolved
+// against the process environment at load, so an environment variable set at deployment and a fallback written in
+// the file are indistinguishable downstream -- one substituted, parsed object, validated by the schema below.
+// Admin-set database overrides layer ABOVE the loaded config at runtime (the settings manager's job, not this
+// file's). An empty substitution result reads as unset, exactly like an absent environment variable.
 //----------------------------------------------------------------------------------------------------------------------
 
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
 // Constants
@@ -124,12 +134,72 @@ export type Config = z.infer<typeof configSchema>;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function loadConfig() : Config
+const DEFAULT_CONFIG_FILE = './config/config.yaml';
+
+// The default path is found by walking up from the working directory: the server binary and the container both run
+// from the directory holding config/, but the Vite dev server runs the API in-process from src/client, two
+// directories down. FILESHED_CONFIG bypasses the walk entirely; a fruitless walk falls back to the plain default so
+// the not-found error names the expected location.
+function findDefaultConfigFile() : string
 {
-    const result = configSchema.safeParse(process.env);
+    let dir = process.cwd();
+
+    for(;;)
+    {
+        const candidate = join(dir, 'config', 'config.yaml');
+        if(existsSync(candidate)) { return candidate; }
+
+        const parent = dirname(dir);
+        if(parent === dir) { return DEFAULT_CONFIG_FILE; }
+        dir = parent;
+    }
+}
+
+// ${VAR} substitutes the environment variable, ${VAR:-fallback} falls back when it is unset or empty. Substitution
+// runs over the raw text BEFORE the yaml parse, so a numeric fallback lands as a real yaml number.
+export function substituteEnv(text : string, env : Record<string, string | undefined>) : string
+{
+    return text.replace(/\$\{([A-Z0-9_]+)(?::-([^}]*))?\}/g, (match, name : string, fallback : string | undefined) =>
+    {
+        const value = env[name];
+        if(value !== undefined && value !== '') { return value; }
+
+        return fallback ?? '';
+    });
+}
+
+// The parsed document with empty-string values dropped: an empty substitution result means "unset", the same as an
+// absent environment variable -- optional schema fields must see undefined, not ''.
+function loadConfigDocument(path : string, env : Record<string, string | undefined>) : Record<string, unknown>
+{
+    let text : string;
+    try
+    {
+        text = readFileSync(path, 'utf8');
+    }
+    catch
+    {
+        throw new Error(`Cannot read the configuration file at '${ path }'. The committed config.yaml is the `
+            + 'defaults; point FILESHED_CONFIG at yours if it lives elsewhere.');
+    }
+
+    const parsed : unknown = parseYaml(substituteEnv(text, env));
+    if(typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+    {
+        throw new Error(`The configuration file at '${ path }' must be a yaml mapping.`);
+    }
+
+    return Object.fromEntries(Object.entries(parsed).filter(([ , value ]) => value !== '' && value !== null));
+}
+
+export function loadConfig(env : Record<string, string | undefined> = process.env) : Config
+{
+    const path = env['FILESHED_CONFIG'] ?? findDefaultConfigFile();
+    const result = configSchema.safeParse(loadConfigDocument(path, env));
+
     if(!result.success)
     {
-        throw new Error(`Invalid environment configuration:\n${ z.prettifyError(result.error) }`);
+        throw new Error(`Invalid configuration:\n${ z.prettifyError(result.error) }`);
     }
 
     return result.data;

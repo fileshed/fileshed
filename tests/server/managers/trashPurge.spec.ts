@@ -83,7 +83,7 @@ describe('runTrashPurgeOnce', () =>
         await ra.insert(folderNode({ id: 'sub', ownerID: 'alice', parentID: 'dir', trashedAt: EXPIRED }));
         await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', parentID: 'sub', blobID: 'sha-b', trashedAt: EXPIRED }));
 
-        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: GRACE_MS });
+        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
         expect(summary).toEqual({ candidates: 1, purged: 1, failed: 0 });
 
@@ -102,7 +102,7 @@ describe('runTrashPurgeOnce', () =>
     {
         await ra.insert(fileNode({ id: 'solo', ownerID: 'alice', blobID: 'sha-a', trashedAt: EXPIRED }));
 
-        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: GRACE_MS });
+        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
         expect(summary).toEqual({ candidates: 1, purged: 1, failed: 0 });
         expect(await ra.get('solo')).toBeUndefined();
@@ -114,7 +114,7 @@ describe('runTrashPurgeOnce', () =>
         await ra.insert(folderNode({ id: 'fresh', ownerID: 'alice', trashedAt: now }));
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'fresh', blobID: 'sha-a', trashedAt: now }));
 
-        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: GRACE_MS });
+        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
         expect(summary).toEqual({ candidates: 0, purged: 0, failed: 0 });
         expect(await ra.get('fresh')).toBeDefined();
@@ -127,7 +127,7 @@ describe('runTrashPurgeOnce', () =>
         await ra.insert(folderNode({ id: 'live', ownerID: 'alice' }));
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'live', blobID: 'sha-a' }));
 
-        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: GRACE_MS });
+        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
         expect(summary).toEqual({ candidates: 0, purged: 0, failed: 0 });
         expect(await ra.get('live')).toBeDefined();
@@ -143,7 +143,7 @@ describe('runTrashPurgeOnce', () =>
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashedAt: EXPIRED }));
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'bob', targetNodeID: 'f1' }));
 
-        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: GRACE_MS });
+        const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
         expect(summary).toEqual({ candidates: 1, purged: 1, failed: 0 });
         expect(await ra.get('f1')).toBeUndefined();
@@ -165,7 +165,7 @@ describe('runTrashPurgeOnce', () =>
             },
         };
 
-        const summary = await runTrashPurgeOnce({ nodes: ra, purger, graceMs: GRACE_MS });
+        const summary = await runTrashPurgeOnce({ nodes: ra, purger, graceMs: async () => GRACE_MS });
 
         expect(summary).toEqual({ candidates: 2, purged: 1, failed: 1 });
         expect(await ra.get('alpha')).toBeUndefined();

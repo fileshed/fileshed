@@ -264,7 +264,9 @@ export interface BlobManagerDeps
 {
     handle : DatabaseHandle;
     blob : BlobRA;
-    uploadMaxBytes : number;
+
+    // Read at use time, per request, so an admin raising or lowering the cap needs no restart.
+    uploadMaxBytes : () => Promise<number>;
 }
 
 // A committed file node with the caller's effective role on it, so the route stamps the real role rather than
@@ -282,7 +284,7 @@ export class BlobManager
 {
     readonly #handle : DatabaseHandle;
     readonly #blob : BlobRA;
-    readonly #uploadMaxBytes : number;
+    readonly #uploadMaxBytes : () => Promise<number>;
 
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
@@ -329,7 +331,7 @@ export class BlobManager
 
         if(existing === undefined)
         {
-            if(size > this.#uploadMaxBytes)
+            if(size > await this.#uploadMaxBytes())
             {
                 throw new PayloadTooLargeError('File exceeds the maximum upload size.');
             }
@@ -448,7 +450,7 @@ export class BlobManager
         {
             throw new BadRequestError('Content-Length does not match the claimed size.');
         }
-        if(contentLength !== undefined && contentLength > this.#uploadMaxBytes)
+        if(contentLength !== undefined && contentLength > await this.#uploadMaxBytes())
         {
             throw new PayloadTooLargeError('Upload exceeds the maximum allowed size.');
         }
