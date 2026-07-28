@@ -221,7 +221,9 @@ REST, JSON, cookie session auth (BetterAuth). Sketch — exact DTOs defined in c
 - `POST /api/nodes/:id/copy` (save a copy) · `POST /api/nodes/:id/purge-broken-links` (folder-scoped, user-initiated)
 - `POST /api/nodes/:id/access-requests` · `GET /api/access-requests` (incoming for owners, outgoing for requesters) · `POST /api/access-requests/:id/grant` · `POST /api/access-requests/:id/decline`
 - `GET /api/deletion-offers` · `POST /api/deletion-offers/:id/accept` · `POST /api/deletion-offers/:id/decline`
-- `GET /api/search?q=` (name match, scoped to accessible nodes)
+- `GET /api/search?q=` (name OR embedded-tag match — title/artist/album extracted from audio content at upload,
+  keyed by blob so dedup'd copies share tags; a background sweep backfills pre-existing libraries — scoped to
+  accessible nodes)
 - `GET /api/me` (profile, quota used/limit) · admin: user CRUD, quota management, backend status, GC status
 
 All node-returning endpoints include the caller's effective role on each item.

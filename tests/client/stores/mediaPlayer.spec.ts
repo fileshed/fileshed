@@ -896,7 +896,7 @@ describe('MediaPlayerStore playback token', () =>
         expect(store.playToken).toBe(mountsBefore + 1);
     });
 
-    it('skips on a track error while the token is alive -- dead media, not a dead credential', async () =>
+    it('skips on a track error while the token is alive, marking the seat so playback never walks back in', async () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
@@ -907,6 +907,41 @@ describe('MediaPlayerStore playback token', () =>
         store.handleTrackError();
 
         expect(store.currentIndex).toBe(1);
+        expect(store.tracks[0]?.failed).toBe(true);
+    });
+
+    it('clears the failed mark when the user deliberately selects the track again -- a click is a retry', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'f1' }), 'audio');
+        await flushPromises();
+        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.handleTrackError();
+        expect(store.tracks[0]?.failed).toBe(true);
+
+        store.select(0);
+
+        expect(store.currentIndex).toBe(0);
+        expect(store.tracks[0]?.failed).toBe(false);
+        expect(store.autoplay).toBe(true);
+    });
+
+    it('reorders seats without remounting or arming playback', async () =>
+    {
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'f1' }), 'audio');
+        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.add(fileNode({ id: 'f3', name: 'third.mp3' }));
+        const mountsBefore = store.playToken;
+
+        store.move(2, 0);
+
+        expect(store.tracks.map((entry) => entry.nodeID)).toEqual([ 'f3', 'f1', 'f2' ]);
+        expect(store.track?.nodeID).toBe('f1');
+        expect(store.currentIndex).toBe(1);
+        expect(store.playToken).toBe(mountsBefore);
+        expect(store.autoplay).toBe(false);
     });
 
     it('drops the token on reset', async () =>

@@ -20,6 +20,7 @@ import { Hono } from 'hono';
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
+import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 import { initialize } from '@server/resource-access/boot.ts';
@@ -29,6 +30,7 @@ import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
 import { BlobManager } from '@server/managers/blob.ts';
+import { MediaTagManager } from '@server/managers/mediaTags.ts';
 import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { ShareManager } from '@server/managers/share.ts';
@@ -79,8 +81,9 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
     app.route('/api', createNodeRoutes(sessions, nodes));
     app.route('/api', createMeRoutes(sessions, nodes));
-    app.route('/api', createBlobRoutes(sessions, blobs));
-    app.route('/api', createUploadRoutes(sessions, blobs));
+    const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
+    app.route('/api', createBlobRoutes(sessions, blobs, mediaTags));
+    app.route('/api', createUploadRoutes(sessions, blobs, mediaTags));
     app.route('/api', createShareRoutes(sessions, shares));
     app.route('/api', createAccessRequestRoutes(sessions, shares));
     app.route('/api', createDeletionOfferRoutes(sessions, deletionOffers));

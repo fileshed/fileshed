@@ -21,12 +21,14 @@ import { Hono } from 'hono';
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { type BlobLocation, BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
+import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 
 // Managers
 import { BlobManager } from '@server/managers/blob.ts';
+import { MediaTagManager } from '@server/managers/mediaTags.ts';
 import { mapManagerError } from '@server/managers/errors.ts';
 import { SessionManager } from '@server/managers/session.ts';
 
@@ -53,14 +55,14 @@ export interface BootedBlobApp
     cleanup : () => Promise<void>;
 }
 
-function composeApp(auth : Auth, blobs : BlobManager) : Hono
+function composeApp(auth : Auth, blobs : BlobManager, mediaTags : MediaTagManager) : Hono
 {
     const app = new Hono();
     const sessions = new SessionManager(auth);
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-    app.route('/api', createBlobRoutes(sessions, blobs));
-    app.route('/api', createUploadRoutes(sessions, blobs));
+    app.route('/api', createBlobRoutes(sessions, blobs, mediaTags));
+    app.route('/api', createUploadRoutes(sessions, blobs, mediaTags));
 
     app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
     app.onError((error, ctx) =>
@@ -88,7 +90,7 @@ export async function bootBlobApp(uploadMaxBytes ?: number) : Promise<BootedBlob
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
 
     return {
-        app: composeApp(auth, blobs),
+        app: composeApp(auth, blobs, new MediaTagManager({ blob, tags: new MediaTagsRA(handle) })),
         handle,
         auth,
         blob,

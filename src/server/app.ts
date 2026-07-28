@@ -11,7 +11,7 @@
 
 import { Hono } from 'hono';
 
-import { MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
+import { MEDIA_TAG_SWEEP_BATCH, MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
 
 // Routes
 import health from './routes/health.ts';
@@ -39,6 +39,7 @@ import { initialize } from './resource-access/boot.ts';
 import { seedDefaultBackend } from './resource-access/database/seeds.ts';
 import { BlobRA } from './resource-access/blob/index.ts';
 import { NodeRA } from './resource-access/nodes/node.ts';
+import { MediaTagsRA } from './resource-access/mediaTags/index.ts';
 import { PublicLinkRA } from './resource-access/publicLinks/index.ts';
 import { ShareRA } from './resource-access/shares/index.ts';
 import { UserRA } from './resource-access/users/index.ts';
@@ -49,6 +50,7 @@ import { AdminManager } from './managers/admin.ts';
 import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
 import { DeletionOfferManager } from './managers/deletionOffer.ts';
+import { MediaTagManager, startMediaTagTimer } from './managers/mediaTags.ts';
 import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
@@ -97,6 +99,7 @@ export function targetsGatedAuthSurface(pathname : string) : boolean
 export interface AppServices
 {
     blobs : BlobManager;
+    mediaTags : MediaTagManager;
     avatars : AvatarManager;
     nodes : NodeManager;
     shares : ShareManager;
@@ -141,8 +144,8 @@ export function createApp(auth ?: Auth, services ?: AppServices) : Hono
         if(services)
         {
             app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
-            app.route('/api', createBlobRoutes(sessions, services.blobs));
-            app.route('/api', createUploadRoutes(sessions, services.blobs));
+            app.route('/api', createBlobRoutes(sessions, services.blobs, services.mediaTags));
+            app.route('/api', createUploadRoutes(sessions, services.blobs, services.mediaTags));
             app.route('/api', createNodeRoutes(sessions, services.nodes));
             app.route('/api', createSearchRoutes(sessions, services.nodes));
             app.route('/api', createMeRoutes(sessions, services.nodes));
@@ -205,6 +208,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const userRA = new UserRA(handle);
     const tracker = new LastRunTracker();
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: config.UPLOAD_MAX_BYTES });
+    const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: config.AVATAR_MAX_BYTES });
     const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY, config.TRASH_PURGE_DAYS);
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
@@ -230,15 +234,17 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         (summary) => tracker.recordTrashPurge(summary)
     );
     const stopSweeps = blobs.startSweeps();
+    const stopMediaTags = startMediaTagTimer(mediaTags, sweepIntervalMs, MEDIA_TAG_SWEEP_BATCH);
 
     const shutdown = () : void =>
     {
         stopGc();
         stopTrashPurge();
         stopSweeps();
+        stopMediaTags();
     };
 
-    const services = { blobs, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users };
+    const services = { blobs, mediaTags, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users };
 
     return { app: createApp(auth, services), config, shutdown };
 }

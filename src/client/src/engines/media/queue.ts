@@ -18,15 +18,19 @@ export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface MediaTrack
 {
-    // The track's stable identity within the queue: a drive node's id -- or, for a remote stream, the URL itself,
-    // and for an unresolvable playlist entry, a synthetic broken key. Everything keyed per track (tags, the shuffle
-    // played-set, row removal) hangs off this.
+    // The SEAT's identity: unique per queue entry, so the same file queued twice is two reorderable, removable
+    // rows. Row keys, drag-reorder, and failure marking hang off this.
+    entryID : string;
+
+    // The FILE's identity: a drive node's id -- or, for a remote stream, the URL itself, and for an unresolvable
+    // playlist entry, a synthetic broken key. Facts about the file (tags, the shuffle played-set) hang off this,
+    // so duplicate entries share them.
     nodeID : string;
 
     name : string;
 
-    // null means unknown -- the source element then omits its type attribute so the browser sniffs the bytes,
-    // rather than refusing a type it doesn't recognize without ever fetching them.
+    // null means unknown -- the browser then sniffs the bytes rather than refusing a type it doesn't recognize
+    // without ever fetching them.
     mimeType : string | null;
 
     kind : MediaKind;
@@ -36,6 +40,10 @@ export interface MediaTrack
 
     // A playlist entry whose file couldn't be resolved: rendered dimmed, skipped when playback reaches it.
     broken : boolean;
+
+    // A track the browser tried and could not play this session: marked at the moment the skip happens, skipped
+    // by queue-driven arrivals like broken -- but a deliberate click retries it and clears the mark.
+    failed : boolean;
 }
 
 export interface MediaQueue
@@ -49,6 +57,16 @@ export interface MediaQueue
 // Track shaping
 //----------------------------------------------------------------------------------------------------------------------
 
+// Seat identities are minted here so every shaper stamps one; a plain sequence keeps the engine deterministic
+// under test. Uniqueness only matters within a session -- queues do not outlive the page.
+let entrySequence = 0;
+
+function mintEntryID() : string
+{
+    entrySequence += 1;
+    return `entry-${ entrySequence }`;
+}
+
 // A playlist addition: only concrete files with a media mime become tracks; anything else has no seat in the queue.
 export function trackFromNode(node : NodeResponse) : MediaTrack | null
 {
@@ -60,7 +78,16 @@ export function trackFromNode(node : NodeResponse) : MediaTrack | null
 
     if(kind === null) { return null; }
 
-    return { nodeID: node.id, name: node.name, mimeType: node.mimeType, kind, remoteUrl: null, broken: false };
+    return {
+        entryID: mintEntryID(),
+        nodeID: node.id,
+        name: node.name,
+        mimeType: node.mimeType,
+        kind,
+        remoteUrl: null,
+        broken: false,
+        failed: false,
+    };
 }
 
 // The track a resolved play action opens with. The kind is the intent registry's verdict, not re-derived here. A
@@ -71,18 +98,29 @@ export function trackForPlay(node : NodeResponse, kind : MediaKind) : MediaTrack
     if(node.type === 'link' && node.target !== null)
     {
         return {
+            entryID: mintEntryID(),
             nodeID: node.target.id,
             name: node.name,
             mimeType: node.target.mimeType ?? null,
             kind,
             remoteUrl: null,
             broken: false,
+            failed: false,
         };
     }
 
     const mimeType = node.type === 'file' ? node.mimeType : null;
 
-    return { nodeID: node.id, name: node.name, mimeType, kind, remoteUrl: null, broken: false };
+    return {
+        entryID: mintEntryID(),
+        nodeID: node.id,
+        name: node.name,
+        mimeType,
+        kind,
+        remoteUrl: null,
+        broken: false,
+        failed: false,
+    };
 }
 
 const REMOTE_VIDEO_EXTENSIONS = [ '.mp4', '.m4v', '.webm', '.mkv', '.mov', '.avi' ] as const;
@@ -104,14 +142,32 @@ export function trackFromUrl(url : string) : MediaTrack
     const lower = name.toLowerCase();
     const kind = REMOTE_VIDEO_EXTENSIONS.some((extension) => lower.endsWith(extension)) ? 'video' : 'audio';
 
-    return { nodeID: url, name, mimeType: null, kind, remoteUrl: url, broken: false };
+    return {
+        entryID: mintEntryID(),
+        nodeID: url,
+        name,
+        mimeType: null,
+        kind,
+        remoteUrl: url,
+        broken: false,
+        failed: false,
+    };
 }
 
 // The visible stand-in for a playlist entry that resolved to nothing: it keeps the row (and the user's knowledge
 // that something is missing) without anything to play.
 export function brokenTrack(label : string, key : string) : MediaTrack
 {
-    return { nodeID: `broken:${ key }`, name: label, mimeType: null, kind: 'audio', remoteUrl: null, broken: true };
+    return {
+        entryID: mintEntryID(),
+        nodeID: `broken:${ key }`,
+        name: label,
+        mimeType: null,
+        kind: 'audio',
+        remoteUrl: null,
+        broken: true,
+        failed: false,
+    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -177,6 +233,39 @@ export function unplayedIndexes(queue : MediaQueue, playedIDs : ReadonlySet<stri
         .map((track, index) => ({ track, index }))
         .filter(({ track, index }) => index !== current && !playedIDs.has(track.nodeID))
         .map(({ index }) => index);
+}
+
+// Reorder one seat to a new position. The current entry travels with the move -- what is PLAYING never changes,
+// only where it sits -- so the zipper is rebuilt around the current entry's new position. Out-of-range or
+// no-op moves hand back the queue unchanged.
+export function moveEntry(queue : MediaQueue, from : number, to : number) : MediaQueue
+{
+    const tracks = tracksOf(queue);
+    const moved = tracks[from];
+
+    if(moved === undefined || tracks[to] === undefined || from === to) { return queue; }
+
+    const remaining = [ ...tracks.slice(0, from), ...tracks.slice(from + 1) ];
+    const reordered = [ ...remaining.slice(0, to), moved, ...remaining.slice(to) ];
+
+    const currentEntryID = queue.current.entryID;
+    const currentIndex = reordered.findIndex((track) => track.entryID === currentEntryID);
+    const current = reordered[currentIndex];
+
+    if(current === undefined) { return queue; }
+
+    return { before: reordered.slice(0, currentIndex), current, after: reordered.slice(currentIndex + 1) };
+}
+
+// Flip one seat's failed mark, preserving the zipper. An unknown entryID hands back the queue unchanged.
+export function withEntryFailed(queue : MediaQueue, entryID : string, failed : boolean) : MediaQueue
+{
+    const stamp = (track : MediaTrack) : MediaTrack =>
+    {
+        return track.entryID === entryID ? { ...track, failed } : track;
+    };
+
+    return { before: queue.before.map(stamp), current: stamp(queue.current), after: queue.after.map(stamp) };
 }
 
 // Removing the current track promotes its successor (or, at the end of the queue, its predecessor); removing the

@@ -17,6 +17,7 @@ import {
     type MediaTrack,
     appendTrack,
     currentIndexOf,
+    moveEntry,
     nextTrack,
     previousTrack,
     queueFromTrack,
@@ -25,6 +26,7 @@ import {
     trackForPlay,
     trackFromNode,
     tracksOf,
+    withEntryFailed,
 } from '@client/engines/media/queue.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -68,12 +70,14 @@ function linkNode() : NodeResponse
 function track(id : string, kind : 'audio' | 'video' = 'audio') : MediaTrack
 {
     return {
+        entryID: `seat-${ id }`,
         nodeID: id,
         name: `${ id }.media`,
         mimeType: kind === 'audio' ? 'audio/mpeg' : 'video/mp4',
         kind,
         remoteUrl: null,
         broken: false,
+        failed: false,
     };
 }
 
@@ -96,12 +100,14 @@ describe('trackFromNode', () =>
         const node = fileNode({ id: 'a1', name: 'song.mp3', mimeType: 'audio/mpeg' });
 
         expect(trackFromNode(node)).toEqual({
+            entryID: expect.any(String),
             nodeID: 'a1',
             name: 'song.mp3',
             mimeType: 'audio/mpeg',
             kind: 'audio',
             remoteUrl: null,
             broken: false,
+            failed: false,
         });
     });
 
@@ -130,12 +136,14 @@ describe('trackForPlay', () =>
         const node = fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' });
 
         expect(trackForPlay(node, 'video')).toEqual({
+            entryID: expect.any(String),
             nodeID: 'v1',
             name: 'clip.mp4',
             mimeType: 'video/mp4',
             kind: 'video',
             remoteUrl: null,
             broken: false,
+            failed: false,
         });
     });
 
@@ -144,12 +152,14 @@ describe('trackForPlay', () =>
         const played = trackForPlay(linkNode(), 'video');
 
         expect(played).toEqual({
+            entryID: expect.any(String),
             nodeID: 'f9',
             name: 'shared-movie',
             mimeType: 'video/mp4',
             kind: 'video',
             remoteUrl: null,
             broken: false,
+            failed: false,
         });
     });
 
@@ -308,6 +318,80 @@ describe('removeAt', () =>
         const queue = queueOf([ 'a' ], 'b', []);
 
         expect(removeAt(queue, 5)).toBe(queue);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('entry identity', () =>
+{
+    it('gives the same file a distinct seat every time it joins the queue', () =>
+    {
+        const node = fileNode({ id: 'dup' });
+
+        const first = trackFromNode(node);
+        const second = trackFromNode(node);
+
+        expect(first?.nodeID).toBe(second?.nodeID);
+        expect(first?.entryID).not.toBe(second?.entryID);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('moveEntry', () =>
+{
+    it('reorders a seat without changing what is playing', () =>
+    {
+        const queue = queueOf([ 'a' ], 'b', [ 'c', 'd' ]);
+
+        const moved = moveEntry(queue, 3, 0);
+
+        expect(ids(moved)).toEqual([ 'd', 'a', 'b', 'c' ]);
+        expect(moved.current.nodeID).toBe('b');
+        expect(currentIndexOf(moved)).toBe(2);
+    });
+
+    it('lets the current seat itself travel, staying current at its new position', () =>
+    {
+        const queue = queueOf([ 'a' ], 'b', [ 'c' ]);
+
+        const moved = moveEntry(queue, 1, 2);
+
+        expect(ids(moved)).toEqual([ 'a', 'c', 'b' ]);
+        expect(moved.current.nodeID).toBe('b');
+        expect(currentIndexOf(moved)).toBe(2);
+    });
+
+    it('hands back the queue unchanged for out-of-range or same-place moves', () =>
+    {
+        const queue = queueOf([ 'a' ], 'b', [ 'c' ]);
+
+        expect(moveEntry(queue, 0, 9)).toBe(queue);
+        expect(moveEntry(queue, 9, 0)).toBe(queue);
+        expect(moveEntry(queue, 1, 1)).toBe(queue);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('withEntryFailed', () =>
+{
+    it('marks exactly the named seat, wherever it sits in the zipper', () =>
+    {
+        const queue = queueOf([ 'a' ], 'b', [ 'c' ]);
+
+        const marked = withEntryFailed(queue, 'seat-c', true);
+
+        expect(tracksOf(marked).map((entry) => entry.failed)).toEqual([ false, false, true ]);
+        expect(withEntryFailed(marked, 'seat-c', false).after[0]?.failed).toBe(false);
+    });
+
+    it('hands back an equivalent queue for an unknown seat', () =>
+    {
+        const queue = queueOf([], 'a', [ 'b' ]);
+
+        expect(tracksOf(withEntryFailed(queue, 'seat-nope', true)).every((entry) => !entry.failed)).toBe(true);
     });
 });
 

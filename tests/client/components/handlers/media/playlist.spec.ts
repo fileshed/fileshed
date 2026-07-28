@@ -198,6 +198,45 @@ describe('MediaPlaylist rows', () =>
         expect(store.autoplay).toBe(true);
     });
 
+    it('wears the failed mark with a retry hint, and a click retries the track', async () =>
+    {
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
+        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
+        store.handleTrackError();
+
+        const wrapper = mountPanel();
+        await nextTick();
+
+        const failedRow = rows(wrapper)[0];
+        expect(failedRow?.text()).toContain('Couldn\'t play — click to retry');
+        expect(failedRow?.find('button[disabled]').exists()).toBe(false);
+
+        await failedRow?.get('button[type="button"]').trigger('click');
+
+        expect(store.currentIndex).toBe(0);
+        expect(store.tracks[0]?.failed).toBe(false);
+    });
+
+    it('drags a row to a new position without touching what is playing', async () =>
+    {
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
+        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
+        store.add(fileNode({ id: 'a3', name: 'three.mp3' }));
+        const mountsBefore = store.playToken;
+
+        const wrapper = mountPanel();
+        await nextTick();
+
+        await rows(wrapper)[2]?.trigger('dragstart');
+        await rows(wrapper)[0]?.trigger('drop');
+
+        expect(store.tracks.map((entry) => entry.name)).toEqual([ 'three.mp3', 'one.mp3', 'two.mp3' ]);
+        expect(store.track?.name).toBe('one.mp3');
+        expect(store.playToken).toBe(mountsBefore);
+    });
+
     it('removes a row without stopping the current track', async () =>
     {
         const store = useMediaPlayerStore();

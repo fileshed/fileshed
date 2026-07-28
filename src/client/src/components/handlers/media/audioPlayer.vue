@@ -3,10 +3,13 @@
   --
   -- Mount contract: pass the already-resolved facts of the track to play -- the src the element streams (a drive
   -- inline-download URL or a remote stream), the download fallback href, name, and mimeType -- plus the queue
-  -- context: whether neighbours exist for the transport's previous/next, whether this track should start on its
-  -- own, and the volume/mute/rate the listener already chose. The host remounts a fresh player per track, so those
-  -- settings arrive as initial values and every later change is emitted back up (volume-change, rate-change) for
-  -- the host to carry into the next mount; ended/previous/next are the queue asks. An unplayable file shows its own
+  -- context: whether neighbours exist for the transport's previous/next, whether an arriving track should start on
+  -- its own, and the volume/mute/rate the listener chose before this player existed. The player PERSISTS across
+  -- track changes -- the element survives, so the browser's media session and any remote-playback session ride
+  -- through queue advances -- watching [src, playToken]: a new src reloads the element (state reset, autoplay when
+  -- queue-driven), while a playToken bump with the same src restarts it (repeat-one, an explicit replay).
+  -- Volume/mute/rate simply persist on the living element; the initial props only matter on first mount, and every
+  -- later change is still emitted up so the host can seed a cross-kind remount. An unplayable file shows its own
   -- in-card fallback rather than asking the host to react.
   --
   -- Unlike the video family this is a compact, artwork-less card sized to its content, not a viewport-filling
@@ -28,6 +31,7 @@
             ref="mediaEl"
             class="hidden"
             preload="auto"
+            :src="src"
             @play="onPlay"
             @pause="onPause"
             @ended="onEnded"
@@ -38,9 +42,7 @@
             @volumechange="onVolumeChange"
             @ratechange="onRateChange"
             @error="onError"
-        >
-            <source :src="src" :type="mimeType ?? undefined">
-        </audio>
+        />
 
         <AudioControls
             v-if="!errored"
@@ -90,7 +92,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { useToast } from '@nuxt/ui/composables';
 
     // Engines
@@ -107,7 +109,7 @@
         src : string;
         downloadHref : string;
         name : string;
-        mimeType : string | null;
+        playToken : number;
         hasPrevious : boolean;
         hasNext : boolean;
         shuffle : boolean;
@@ -361,8 +363,10 @@
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    // Fresh mount per track: the listener's settings arrive as props rather than element defaults, and a queue-driven
-    // arrival starts on its own.
+    // The persistent element's track lifecycle. First mount seeds the listener's settings and honours a queue-driven
+    // start; after that, tracks arrive through the watcher: a src change reloads the living element (post-flush, so
+    // the DOM carries the new src before load() adopts it), while a playToken bump alone restarts the same track.
+    // Either way the per-track state resets -- including errored, so one failed track does not poison the next.
     //------------------------------------------------------------------------------------------------------------------
 
     onMounted(() =>
@@ -381,8 +385,24 @@
         if(props.autoplay) { mediaEl.value.play().catch(ignoreBlockedAutoplay); }
     });
 
-    // Track churn leaves detached elements holding their network request open in some browsers; stopping playback
-    // and reloading an emptied element on the way out aborts the fetch.
+    watch([ () => props.src, () => props.playToken ], ([ nextSrc ], [ previousSrc ]) =>
+    {
+        if(mediaEl.value === null) { return; }
+
+        errored.value = false;
+        playing.value = false;
+        currentTime.value = 0;
+        duration.value = 0;
+        bufferedPercentValue.value = 0;
+
+        if(nextSrc !== previousSrc) { mediaEl.value.load(); }
+        else { mediaEl.value.currentTime = 0; }
+
+        if(props.autoplay) { mediaEl.value.play().catch(ignoreBlockedAutoplay); }
+    }, { flush: 'post' });
+
+    // A detached element can hold its network request open in some browsers; stopping playback and reloading an
+    // emptied element on the way out aborts the fetch.
     onBeforeUnmount(() =>
     {
         unwatchCast();
@@ -390,9 +410,11 @@
         if(mediaEl.value === null) { return; }
 
         mediaEl.value.pause();
-        for(const child of Array.from(mediaEl.value.children)) { child.remove(); }
+        mediaEl.value.removeAttribute('src');
         mediaEl.value.load();
     });
+
+    defineExpose({ togglePlay, seekBy, adjustVolume });
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

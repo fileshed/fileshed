@@ -2,13 +2,14 @@
   -- Video Player
   --
   -- Mount contract: pass the already-resolved facts of the track to play -- the src the element streams (a drive
-  -- inline-download URL or a remote stream), the download fallback href, name, and mimeType -- plus the queue
-  -- context: whether neighbours exist for the transport's previous/next, whether this track should start on its
-  -- own, and the volume/mute/rate the listener already chose. The host remounts a fresh player per track, so those
-  -- settings arrive as initial values and every later change is emitted back up (volume-change, rate-change) for
-  -- the host to carry into the next mount; ended/previous/next are the queue asks. An unplayable file shows its own
-  -- in-card fallback rather than asking the host to react. The component fills whatever size its host gives it and
-  -- cards itself (rounded, bordered, clipped) so it reads as complete standing alone.
+  -- inline-download URL or a remote stream), the download fallback href, and name -- plus the queue context:
+  -- whether neighbours exist for the transport's previous/next, whether an arriving track should start on its own,
+  -- and the volume/mute/rate the listener chose before this player existed. The player PERSISTS across track
+  -- changes -- the element survives queue advances, which is what lets fullscreen and a cast/AirPlay session ride
+  -- through track boundaries -- watching [src, playToken]: a new src reloads the living element, a playToken bump
+  -- with the same src restarts it. The element outlives even an unplayable track (hidden behind the in-card
+  -- fallback, never unmounted), so the next arrival recovers it. The component fills whatever size its host gives
+  -- it and cards itself (rounded, bordered, clipped) so it reads as complete standing alone.
   --
   -- The src is the node's inline-download URL, not fetched bytes: the browser streams it directly against the
   -- Range-supporting download endpoint, so scrubbing never waits on the whole file.
@@ -22,29 +23,29 @@
             outline-none"
         @keydown="onKeydown"
     >
-        <template v-if="!errored">
-            <video
-                ref="mediaEl"
-                class="min-h-0 flex-1 bg-black"
-                preload="auto"
-                playsinline
-                :aria-label="name"
-                @click="togglePlay"
-                @dblclick="toggleFullscreen"
-                @play="onPlay"
-                @pause="onPause"
-                @ended="onEnded"
-                @timeupdate="onTimeUpdate"
-                @progress="onProgress"
-                @loadedmetadata="onLoadedMetadata"
-                @durationchange="onLoadedMetadata"
-                @volumechange="onVolumeChange"
-                @ratechange="onRateChange"
-                @error="onError"
-            >
-                <source :src="src" :type="mimeType ?? undefined">
-            </video>
+        <video
+            v-show="!errored"
+            ref="mediaEl"
+            class="min-h-0 flex-1 bg-black"
+            preload="auto"
+            playsinline
+            :src="src"
+            :aria-label="name"
+            @click="togglePlay"
+            @dblclick="toggleFullscreen"
+            @play="onPlay"
+            @pause="onPause"
+            @ended="onEnded"
+            @timeupdate="onTimeUpdate"
+            @progress="onProgress"
+            @loadedmetadata="onLoadedMetadata"
+            @durationchange="onLoadedMetadata"
+            @volumechange="onVolumeChange"
+            @ratechange="onRateChange"
+            @error="onError"
+        />
 
+        <template v-if="!errored">
             <VideoControls
                 class="absolute inset-x-0 bottom-0"
                 :playing="playing"
@@ -97,7 +98,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { useToast } from '@nuxt/ui/composables';
 
     // Engines
@@ -114,7 +115,7 @@
         src : string;
         downloadHref : string;
         name : string;
-        mimeType : string | null;
+        playToken : number;
         hasPrevious : boolean;
         hasNext : boolean;
         shuffle : boolean;
@@ -398,8 +399,8 @@
     {
         document.addEventListener('fullscreenchange', onFullscreenChange);
 
-        // Fresh mount per track: the listener's settings arrive as props rather than element defaults, and a
-        // queue-driven arrival starts on its own.
+        // First mount seeds the listener's settings and honours a queue-driven start; later tracks arrive through
+        // the watcher below on the same living element.
         if(mediaEl.value !== null)
         {
             mediaEl.value.volume = props.initialVolume;
@@ -415,8 +416,27 @@
         }
     });
 
-    // Track churn leaves detached elements holding their network request open in some browsers; stopping playback
-    // and reloading an emptied element on the way out aborts the fetch.
+    // A src change reloads the living element (post-flush, so the DOM carries the new src before load() adopts
+    // it); a playToken bump with the same src restarts it. Per-track state resets either way -- including errored,
+    // so one failed track does not poison the next.
+    watch([ () => props.src, () => props.playToken ], ([ nextSrc ], [ previousSrc ]) =>
+    {
+        if(mediaEl.value === null) { return; }
+
+        errored.value = false;
+        playing.value = false;
+        currentTime.value = 0;
+        duration.value = 0;
+        bufferedPercentValue.value = 0;
+
+        if(nextSrc !== previousSrc) { mediaEl.value.load(); }
+        else { mediaEl.value.currentTime = 0; }
+
+        if(props.autoplay) { mediaEl.value.play().catch(ignoreBlockedAutoplay); }
+    }, { flush: 'post' });
+
+    // A detached element can hold its network request open in some browsers; stopping playback and reloading an
+    // emptied element on the way out aborts the fetch.
     onBeforeUnmount(() =>
     {
         document.removeEventListener('fullscreenchange', onFullscreenChange);
@@ -425,9 +445,11 @@
         if(mediaEl.value === null) { return; }
 
         mediaEl.value.pause();
-        for(const child of Array.from(mediaEl.value.children)) { child.remove(); }
+        mediaEl.value.removeAttribute('src');
         mediaEl.value.load();
     });
+
+    defineExpose({ togglePlay, seekBy, adjustVolume });
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

@@ -3,10 +3,12 @@
   --
   -- The media family's host: the playing surface (video canvas, or the compact audio card centered where a canvas
   -- would be) beside the playlist, under an identity header that follows the queue. It owns the playlist session --
-  -- opening the routed file into the store on mount, resetting on leave -- and the listener's settings: each change
-  -- of playback intent remounts a fresh player (keyed on the store's play token), so volume, mute, and rate are
-  -- caught on the way out of one mount and handed to the next, a queue-driven arrival starts playing on its own,
-  -- and a track the browser can't decode is skipped rather than stalling the queue.
+  -- opening the routed file into the store on mount, resetting on leave. Players PERSIST across track changes --
+  -- src and playToken flow as reactive props into a living element, so fullscreen and cast sessions survive queue
+  -- advances; only crossing between audio and video swaps the surface (an element type change cannot survive
+  -- anyway). Volume, mute, and rate live on the persistent element and are caught here only to seed a cross-kind
+  -- remount. A queue-driven arrival starts playing on its own, and a track the browser can't decode is skipped
+  -- rather than stalling the queue.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -20,12 +22,12 @@
             >
                 <VideoPlayer
                     v-if="store.track !== null && !store.track.broken && store.track.kind === 'video'"
-                    :key="playKey"
+                    ref="player"
                     v-bind="{
                         src: srcFor(store.track),
                         downloadHref: downloadHrefFor(store.track),
                         name: store.track.name,
-                        mimeType: store.track.mimeType,
+                        playToken: store.playToken,
                     }"
                     :has-previous="store.hasPrevious"
                     :has-next="store.hasNext"
@@ -91,12 +93,12 @@
                         </div>
 
                         <AudioPlayer
-                            :key="playKey"
+                            ref="player"
                             v-bind="{
                                 src: srcFor(store.track),
                                 downloadHref: downloadHrefFor(store.track),
                                 name: store.track.name,
-                                mimeType: store.track.mimeType,
+                                playToken: store.playToken,
                             }"
                             :has-previous="store.hasPrevious"
                             :has-next="store.hasNext"
@@ -142,12 +144,13 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, onUnmounted, ref, watch } from 'vue';
+    import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
     import { useToast } from '@nuxt/ui/composables';
 
     import type { NodeResponse } from '@fileshed/core';
 
     // Engines
+    import { resolveMediaShortcut } from '../../../engines/media/keyboard.ts';
     import type { MediaKind, MediaTrack } from '../../../engines/media/queue.ts';
 
     // Stores
@@ -208,11 +211,6 @@
     // would just be a smaller page.
     const playlistHidden = ref(false);
 
-    // Keyed on the store's play token -- which moves only when playback intent changes -- so editing the rest of
-    // the playlist never remounts (and never restarts) the playing track, while re-selecting the same file at
-    // another queue position still does.
-    const playKey = computed(() => store.playToken);
-
     const currentTags = computed(() => { return store.track === null ? null : store.tagsFor(store.track.nodeID); });
 
     function onVolumeChange(nextVolume : number, nextMuted : boolean) : void
@@ -264,14 +262,61 @@
     openSession();
 
     watch(() => props.node.id, openSession);
-    onUnmounted(() => { store.reset(); });
 
-    // A queue-driven arrival on a broken playlist entry moves along to something playable rather than stalling --
-    // but only while something playable exists, or an all-broken playlist would chase its own tail forever.
+    //------------------------------------------------------------------------------------------------------------------
+    // Page-scoped keyboard shortcuts. The players' own focus-scoped handlers still work, but focus wanders -- a
+    // playlist row click strands it on that row -- so the page listens at the window and drives the mounted player
+    // through its exposed transport. Typing surfaces are exempt, and space defers to a focused button (activating
+    // it is what the user meant); an event a player already handled is not handled twice.
+    //------------------------------------------------------------------------------------------------------------------
+
+    interface PlayerHandle
+    {
+        togglePlay : () => void;
+        seekBy : (deltaSeconds : number) => void;
+        adjustVolume : (delta : number) => void;
+    }
+
+    const player = useTemplateRef<PlayerHandle>('player');
+
+    function shortcutsDeferTo(target : EventTarget | null, key : string) : boolean
+    {
+        if(!(target instanceof HTMLElement)) { return false; }
+        if(target.isContentEditable) { return true; }
+        if([ 'INPUT', 'TEXTAREA', 'SELECT' ].includes(target.tagName)) { return true; }
+
+        return key === ' ' && (target.tagName === 'BUTTON' || target.tagName === 'A');
+    }
+
+    function onWindowKeydown(event : KeyboardEvent) : void
+    {
+        if(event.defaultPrevented || shortcutsDeferTo(event.target, event.key)) { return; }
+
+        const shortcut = resolveMediaShortcut(event.key);
+        if(shortcut === null || player.value === null) { return; }
+
+        event.preventDefault();
+
+        if(shortcut.type === 'toggle-play') { player.value.togglePlay(); }
+        else if(shortcut.type === 'seek') { player.value.seekBy(shortcut.deltaSeconds); }
+        else { player.value.adjustVolume(shortcut.delta); }
+    }
+
+    onMounted(() => { window.addEventListener('keydown', onWindowKeydown); });
+
+    onUnmounted(() =>
+    {
+        window.removeEventListener('keydown', onWindowKeydown);
+        store.reset();
+    });
+
+    // A queue-driven arrival on a broken playlist entry -- or one that already failed to play this session --
+    // moves along to something playable rather than stalling, but only while something playable exists, or an
+    // all-unplayable playlist would chase its own tail forever.
     watch(() => store.track, (current) =>
     {
-        if(current === null || !current.broken || !store.autoplay) { return; }
-        if(!store.tracks.some((entry) => !entry.broken)) { return; }
+        if(current === null || !(current.broken || current.failed) || !store.autoplay) { return; }
+        if(!store.tracks.some((entry) => !entry.broken && !entry.failed)) { return; }
 
         store.next();
     });

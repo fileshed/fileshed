@@ -37,6 +37,7 @@ import {
     appendTrack,
     brokenTrack,
     currentIndexOf,
+    moveEntry,
     nextTrack,
     previousTrack,
     queueFromTrack,
@@ -47,6 +48,7 @@ import {
     trackFromUrl,
     tracksOf,
     unplayedIndexes,
+    withEntryFailed,
 } from '../engines/media/queue.ts';
 
 // Resource Access
@@ -260,10 +262,21 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         const selected = selectAt(queue.value, index);
         if(selected === queue.value) { return; }
 
-        queue.value = selected;
+        // A deliberate click on a failed track is a retry: the mark clears so playback actually attempts it.
+        queue.value = selected.current.failed
+            ? withEntryFailed(selected, selected.current.entryID, false)
+            : selected;
         autoplay.value = true;
         playToken.value += 1;
         refreshPlaybackTokenIfNeeded();
+    }
+
+    // Reordering never changes WHAT is playing -- the current entry travels -- so no remount and no autoplay.
+    function move(from : number, to : number) : void
+    {
+        if(queue.value === null) { return; }
+
+        queue.value = moveEntry(queue.value, from, to);
     }
 
     // Restart whatever is current: a fresh mount of the same track, playing.
@@ -398,7 +411,8 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
 
     // A track error while the session's token is dead is a credential problem, not a media problem: re-mint and
     // remount the same track rather than letting the skip path eat the queue. (Playback position is not restored;
-    // only a single file outlasting the whole token lifetime can land here.)
+    // only a single file outlasting the whole token lifetime can land here.) A genuine media failure marks the
+    // seat before skipping, so queue-driven playback never walks into it again -- a deliberate click retries.
     function handleTrackError() : void
     {
         const stamp = playbackToken.value;
@@ -414,6 +428,11 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
                 }
             });
             return;
+        }
+
+        if(queue.value !== null)
+        {
+            queue.value = withEntryFailed(queue.value, queue.value.current.entryID, true);
         }
 
         next();
@@ -806,6 +825,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         add,
         addFolder,
         select,
+        move,
         next,
         previous,
         advance,

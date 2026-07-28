@@ -8,8 +8,8 @@
 // elements — only play/pause are spied, every event is dispatched at the element.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type VueWrapper, enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
@@ -97,6 +97,10 @@ function mountPlayer(node : NodeResponse, media : 'audio' | 'video' = 'audio') :
     return mount(MediaPlayer, { props: { node, media }, global: { stubs } });
 }
 
+// The host installs a window keydown listener per mount; without unmounting between tests, every prior host in
+// the file keeps listening and playback shortcuts fire once per leaked instance.
+enableAutoUnmount(afterEach);
+
 beforeEach(() =>
 {
     vi.clearAllMocks();
@@ -116,7 +120,7 @@ describe('MediaPlayer surfaces', () =>
         store.playbackToken = { id: 'k1', token: 'fsplay_sessionkey', expiresAt: Date.now() + 3_600_000 };
 
         const wrapper = mountPlayer(fileNode());
-        const src = wrapper.get('source').attributes('src') ?? '';
+        const src = wrapper.get('audio').attributes('src') ?? '';
 
         expect(src).toContain('disposition=inline');
         expect(src).toContain('token=fsplay_sessionkey');
@@ -180,6 +184,27 @@ describe('MediaPlayer surfaces', () =>
         expect(wrapper.text()).toContain('one.mp3');
     });
 
+    // Focus wanders on a media page -- a playlist row click strands it on that row's button -- so the shortcuts
+    // listen at the window: playback keys work from anywhere on the page except typing surfaces.
+    it('drives the player from window-level shortcuts, deferring to typing surfaces', async () =>
+    {
+        const wrapper = mountPlayer(fileNode());
+        wrapper.element.ownerDocument.body.appendChild(wrapper.element);
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+        expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
+
+        const field = document.createElement('input');
+        document.body.appendChild(field);
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
+
+        field.remove();
+        wrapper.unmount();
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+        expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
+    });
+
     it('resets the session when the page unmounts', () =>
     {
         const wrapper = mountPlayer(fileNode());
@@ -196,24 +221,27 @@ describe('MediaPlayer surfaces', () =>
 
 describe('MediaPlayer queue playback', () =>
 {
-    it('advances to the next track when one ends, starting it with the carried volume', async () =>
+    it('advances to the next track on the same living element, the listener\'s volume riding along', async () =>
     {
         const wrapper = mountPlayer(fileNode({ id: 'a1' }));
         const store = useMediaPlayerStore();
         store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
         await nextTick();
 
-        const first = wrapper.get('audio').element as HTMLAudioElement;
-        first.volume = 0.3;
-        first.dispatchEvent(new Event('volumechange'));
-        first.dispatchEvent(new Event('ended'));
+        const element = wrapper.get('audio').element as HTMLAudioElement;
+        element.volume = 0.3;
+        element.dispatchEvent(new Event('volumechange'));
+        element.dispatchEvent(new Event('ended'));
+        await nextTick();
         await nextTick();
 
         expect(store.track?.nodeID).toBe('a2');
 
-        const second = wrapper.get('audio').element as HTMLAudioElement;
-        expect(second).not.toBe(first);
-        expect(second.volume).toBeCloseTo(0.3);
+        // The element persists across the advance -- that is what keeps fullscreen and cast sessions alive -- so
+        // the listener's volume needs no carrying at all, and the new src is adopted with a reload.
+        expect(wrapper.get('audio').element).toBe(element);
+        expect(element.volume).toBeCloseTo(0.3);
+        expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
         expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
     });
 
@@ -273,19 +301,22 @@ describe('MediaPlayer queue playback', () =>
         expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
     });
 
-    it('remounts the same track playing when it ends under repeat-one', async () =>
+    it('restarts the same track on the same element when it ends under repeat-one', async () =>
     {
         const wrapper = mountPlayer(fileNode({ id: 'a1' }));
         const store = useMediaPlayerStore();
         store.cycleRepeat();
         store.cycleRepeat();
 
-        const first = wrapper.get('audio').element;
-        first.dispatchEvent(new Event('ended'));
+        const element = wrapper.get('audio').element as HTMLAudioElement;
+        element.currentTime = 100;
+        element.dispatchEvent(new Event('ended'));
+        await nextTick();
         await nextTick();
 
         expect(store.track?.nodeID).toBe('a1');
-        expect(wrapper.get('audio').element).not.toBe(first);
+        expect(wrapper.get('audio').element).toBe(element);
+        expect(element.currentTime).toBe(0);
         expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
     });
 

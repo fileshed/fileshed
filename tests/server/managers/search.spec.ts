@@ -108,6 +108,26 @@ describe('NodeManager.search', () =>
         expect(lower.nodes.every((node) => node.role === 'owner')).toBe(true);
     });
 
+    // Search reaches through to the content's embedded tags: a file whose NAME says nothing still surfaces when its
+    // extracted artist/title/album matches -- the point of extracting tags at all -- while access scoping and the
+    // trash exclusion behave exactly as they do for name matches.
+    it('matches a file by its extracted artist, title, or album when the name says nothing', async () =>
+    {
+        await ra.insert(fileNode({ id: 't1', ownerID: 'alice', blobID: 'sha-a', name: '01-track.mp3' }));
+        await handle.db
+            .insertInto('media_tags')
+            .values({ blob_id: 'sha-a', title: 'Neon Skyline', artist: 'The Sample Band', album: 'Fixtures' })
+            .execute();
+
+        expect(idsOf((await search('alice', 'sample band')).nodes)).toEqual([ 't1' ]);
+        expect(idsOf((await search('alice', 'neon')).nodes)).toEqual([ 't1' ]);
+        expect(idsOf((await search('alice', 'fixtures')).nodes)).toEqual([ 't1' ]);
+        expect((await search('alice', 'zeppelin')).nodes).toHaveLength(0);
+
+        // Tag matches obey the same access scoping as names: no reach, no result.
+        expect((await search('carol', 'sample band')).nodes).toHaveLength(0);
+    });
+
     // Scope is the caller: two users own a file with the same name; each sees only their own, a stranger with no access
     // sees neither.
     it('excludes nodes the caller cannot resolve, so a stranger\'s files never surface', async () =>

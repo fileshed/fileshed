@@ -2,9 +2,11 @@
   -- Playlist Panel
   --
   -- The queue beside the playing surface: one row per track in play order, the current one highlighted, a click
-  -- anywhere on a row jumps playback there, and each row can be removed without stopping what's playing. Rows wear
-  -- the file's embedded title and artist once the store has read them, falling back to the filename; a broken
-  -- playlist entry sits dimmed and unclickable. The header carries the playlist's display title (its file name
+  -- anywhere on a row jumps playback there, rows drag to reorder (what's playing never changes, only where it
+  -- sits), and each row can be removed without stopping what's playing. Rows wear the file's embedded title and
+  -- artist once the store has read them, falling back to the filename; a broken playlist entry sits dimmed and
+  -- unclickable, while a track that failed to play wears a warning and a click retries it. The header carries the
+  -- playlist's display title (its file name
   -- until one is set) once a file is adopted -- click-to-edit, Docs-style, written through to the file's #PLAYLIST
   -- line -- and the session's file actions: Open (replace or append via prompt), Save (overwrite the adopted
   -- file), Save As, and Add. The rows read from and act on the media player store directly -- this panel is the
@@ -75,9 +77,18 @@
             <div
                 v-for="(entry, index) in store.tracks"
                 v-else
-                :key="`${ index }:${ entry.nodeID }`"
+                :key="entry.entryID"
                 class="group flex items-center gap-1 border-b border-default last:border-b-0"
-                :class="{ 'bg-primary/10': index === store.currentIndex }"
+                :class="{
+                    'bg-primary/10': index === store.currentIndex,
+                    'border-t-2 border-t-primary': dropTarget === index,
+                }"
+                draggable="true"
+                @dragstart="onDragStart(index, $event)"
+                @dragover.prevent="dropTarget = index"
+                @dragleave="dropTarget = dropTarget === index ? null : dropTarget"
+                @drop.prevent="onDrop(index)"
+                @dragend="onDragEnd"
             >
                 <button
                     type="button"
@@ -90,14 +101,23 @@
                     <UIcon
                         :name="rowIcon(entry)"
                         class="size-4 shrink-0"
-                        :class="index === store.currentIndex ? 'text-primary' : 'text-dimmed'"
+                        :class="iconTone(entry, index)"
                     />
                     <span class="flex min-w-0 flex-col">
-                        <span class="truncate" :class="{ 'text-primary': index === store.currentIndex }">
+                        <span
+                            class="truncate"
+                            :class="{
+                                'text-primary': index === store.currentIndex,
+                                'text-dimmed': entry.failed,
+                            }"
+                        >
                             {{ store.tagsFor(entry.nodeID)?.title ?? entry.name }}
                         </span>
+                        <span v-if="entry.failed" class="truncate text-xs text-warning">
+                            Couldn't play — click to retry
+                        </span>
                         <span
-                            v-if="store.tagsFor(entry.nodeID)?.artist"
+                            v-else-if="store.tagsFor(entry.nodeID)?.artist"
                             class="truncate text-xs text-dimmed"
                         >
                             {{ store.tagsFor(entry.nodeID)?.artist }}
@@ -126,7 +146,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { useTemplateRef } from 'vue';
+    import { ref, useTemplateRef } from 'vue';
 
     // Engines
     import type { MediaTrack } from '../../../engines/media/queue.ts';
@@ -157,8 +177,46 @@
     function rowIcon(entry : MediaTrack) : string
     {
         if(entry.broken) { return 'i-lucide-file-question'; }
+        if(entry.failed) { return 'i-lucide-triangle-alert'; }
 
         return entry.kind === 'video' ? 'i-lucide-film' : 'i-lucide-music';
+    }
+
+    function iconTone(entry : MediaTrack, index : number) : string
+    {
+        if(entry.failed) { return 'text-warning'; }
+
+        return index === store.currentIndex ? 'text-primary' : 'text-dimmed';
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Drag reorder -- native HTML5 drag, row-to-row. The drop target row shows an insertion edge; dropping moves
+    // the dragged seat there. Reordering never touches what is playing.
+    //------------------------------------------------------------------------------------------------------------------
+
+    const dragging = ref<number | null>(null);
+    const dropTarget = ref<number | null>(null);
+
+    function onDragStart(index : number, event : DragEvent) : void
+    {
+        dragging.value = index;
+        if(event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; }
+    }
+
+    function onDragEnd() : void
+    {
+        dragging.value = null;
+        dropTarget.value = null;
+    }
+
+    function onDrop(index : number) : void
+    {
+        if(dragging.value !== null && dragging.value !== index)
+        {
+            store.move(dragging.value, index);
+        }
+
+        onDragEnd();
     }
 
     function save() : void

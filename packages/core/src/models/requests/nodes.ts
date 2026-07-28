@@ -115,7 +115,7 @@ export type SortDirection = typeof sortDirections[number];
 // intent ("images") rather than enumerating mimes. 'folders' and 'links' select by node type; the rest select file
 // nodes by mime. Multi-select ORs the chosen families together.
 export const nodeTypeFamilies
-    = [ 'folders', 'documents', 'pdfs', 'images', 'video', 'audio', 'archives', 'links' ] as const;
+    = [ 'folders', 'documents', 'pdfs', 'images', 'video', 'playlists', 'audio', 'archives', 'links' ] as const;
 export type NodeTypeFamily = typeof nodeTypeFamilies[number];
 
 // The filters ride the query string alongside pagination and sort, AND-combined. `types` is always present (empty =

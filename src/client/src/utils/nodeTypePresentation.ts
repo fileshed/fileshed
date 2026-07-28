@@ -34,6 +34,7 @@ const FAMILY_PRESENTATION : Readonly<Record<NodeTypeFamily, NodeTypePresentation
     pdfs: { label: 'PDFs', noun: 'PDF', icon: 'i-lucide-file-type', color: 'text-red-500' },
     images: { label: 'Images', noun: 'Image', icon: 'i-lucide-image', color: 'text-emerald-500' },
     video: { label: 'Video', noun: 'Video', icon: 'i-lucide-video', color: 'text-rose-500' },
+    playlists: { label: 'Playlists', noun: 'Playlist', icon: 'i-lucide-list-music', color: 'text-fuchsia-500' },
     audio: { label: 'Audio', noun: 'Audio', icon: 'i-lucide-music', color: 'text-violet-500' },
     archives: { label: 'Archives', noun: 'Archive', icon: 'i-lucide-file-archive', color: 'text-stone-500' },
     links: { label: 'Links', noun: 'Link', icon: 'i-lucide-link', color: 'text-cyan-500' },

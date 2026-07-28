@@ -19,6 +19,7 @@ import {
 
 // Managers
 import type { BlobManager } from '../managers/blob.ts';
+import type { MediaTagManager } from '../managers/mediaTags.ts';
 import type { SessionManager } from '../managers/session.ts';
 
 // Routes
@@ -42,7 +43,7 @@ async function readJson(ctx : Context) : Promise<unknown>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager) : Hono
+export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager, tags : MediaTagManager) : Hono
 {
     const router = new Hono();
 
@@ -65,6 +66,10 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
 
         const { answer, ...metadata } = parsed.data;
         const { node, role } = await blobs.answerChallenge(caller.user, ctx.req.param('challengeID'), answer, metadata);
+
+        // A dedup claim usually lands on an already-extracted blob; ensureFor's existence check makes this a no-op
+        // then, and covers the first-claim-after-resurrection case when it is not.
+        if(node.type === 'file') { tags.enrichInBackground(node.blobID, node.mimeType); }
 
         return ctx.json(toNodeResponse(node, role));
     });

@@ -303,6 +303,11 @@ describe('NodeRA.children filters', () =>
         await ra.insert(file('zip', { parentID: 'p', mimeType: 'application/zip' }));
         await ra.insert(file('rar', { parentID: 'p', mimeType: 'application/x-rar-compressed' }));
         await ra.insert(file('bin', { parentID: 'p', mimeType: 'application/octet-stream' }));
+
+        // Two playlists, one per witness: a proper m3u mime, and an extension-only file whose uploader supplied a
+        // useless generic mime -- the common shape of an m3u dragged in from disk. Uppercase extension on purpose.
+        await ra.insert(file('plmime', { parentID: 'p', mimeType: 'audio/x-mpegurl', name: 'mix.m3u8' }));
+        await ra.insert(file('plext', { parentID: 'p', mimeType: 'application/octet-stream', name: 'Road.M3U' }));
     }
 
     const at = { parentID: 'p', ownerID: 'u1' };
@@ -336,6 +341,15 @@ describe('NodeRA.children filters', () =>
         expect(await filtered([ 'images' ])).toEqual([ 'img' ]);
         expect(await filtered([ 'video' ])).toEqual([ 'vid' ]);
         expect(await filtered([ 'audio' ])).toEqual([ 'aud' ]);
+    });
+
+    // The audio assertion above is itself the carve-out's proof: plmime carries an audio/-prefixed mime and would
+    // pollute the Audio filter without the exclusion.
+    it('selects playlists by mime or by extension alone, whatever the stored mime says', async () =>
+    {
+        await seedFamilies();
+
+        expect((await filtered([ 'playlists' ])).sort()).toEqual([ 'plext', 'plmime' ]);
     });
 
     it('selects archives as the fixed archive-mime set, excluding an unclassified binary', async () =>

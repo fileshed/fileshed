@@ -26,6 +26,7 @@ import type { ClaimResponse, NodeResponse, ShareRole } from '@fileshed/core';
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
+import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
@@ -37,6 +38,7 @@ import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
 // Managers
 import { AccessTokenManager } from '@server/managers/accessToken.ts';
 import { BlobManager } from '@server/managers/blob.ts';
+import { MediaTagManager } from '@server/managers/mediaTags.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { PublicLinkManager } from '@server/managers/publicLink.ts';
 import { SessionManager } from '@server/managers/session.ts';
@@ -82,6 +84,7 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     const linkRA = new PublicLinkRA(handle);
 
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes: 5 * 1024 * 1024 * 1024 });
+    const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
     const nodes = new NodeManager(handle, nodeRA, noopOrphanedBlobs);
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
 
@@ -99,8 +102,8 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
     app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
     app.route('/api', createMeRoutes(sessions, nodes));
-    app.route('/api', createBlobRoutes(sessions, blobs));
-    app.route('/api', createUploadRoutes(sessions, blobs));
+    app.route('/api', createBlobRoutes(sessions, blobs, mediaTags));
+    app.route('/api', createUploadRoutes(sessions, blobs, mediaTags));
     app.route('/api', createNodeRoutes(sessions, nodes));
     app.route('/api', createShareRoutes(sessions, shares));
     app.route('/api', createDownloadRoutes(sessions, links));

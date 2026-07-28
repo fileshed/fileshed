@@ -24,6 +24,7 @@ import {
 
 // Managers
 import type { BlobManager } from '../managers/blob.ts';
+import type { MediaTagManager } from '../managers/mediaTags.ts';
 import type { SessionManager } from '../managers/session.ts';
 
 // Routes
@@ -67,7 +68,7 @@ function parseContentLength(header : string | undefined) : number | undefined
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function createUploadRoutes(sessions : SessionManager, blobs : BlobManager) : Hono
+export function createUploadRoutes(sessions : SessionManager, blobs : BlobManager, tags : MediaTagManager) : Hono
 {
     const router = new Hono();
 
@@ -88,6 +89,8 @@ export function createUploadRoutes(sessions : SessionManager, blobs : BlobManage
             metadata,
             contentLength
         );
+
+        if(node.type === 'file') { tags.enrichInBackground(node.blobID, node.mimeType); }
 
         return ctx.json(toNodeResponse(node, role));
     });

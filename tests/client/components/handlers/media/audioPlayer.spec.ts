@@ -60,7 +60,7 @@ function mountPlayer(overrides : Partial<PlayerProps> = {}) : VueWrapper
             src: '/api/nodes/node1/download?disposition=inline',
             downloadHref: '/api/nodes/node1/download',
             name: 'track.mp3',
-            mimeType: 'audio/mpeg',
+            playToken: 0,
             hasPrevious: false,
             hasNext: false,
             shuffle: false,
@@ -79,13 +79,11 @@ function mountPlayer(overrides : Partial<PlayerProps> = {}) : VueWrapper
 
 describe('AudioPlayer source', () =>
 {
-    it('streams from the src it is handed, typed with the given mime', () =>
+    it('streams from the src it is handed, straight on the element', () =>
     {
-        const wrapper = mountPlayer({ src: '/api/nodes/n42/download?disposition=inline', mimeType: 'audio/ogg' });
-        const source = wrapper.get('source');
+        const wrapper = mountPlayer({ src: '/api/nodes/n42/download?disposition=inline' });
 
-        expect(source.attributes('src')).toBe('/api/nodes/n42/download?disposition=inline');
-        expect(source.attributes('type')).toBe('audio/ogg');
+        expect(wrapper.get('audio').attributes('src')).toBe('/api/nodes/n42/download?disposition=inline');
     });
 
     // The file name rides the layout header now, not the card -- the transport is all the card carries, so it does not
@@ -233,6 +231,26 @@ describe('AudioPlayer unplayable format', () =>
 
 describe('AudioPlayer queue behavior', () =>
 {
+    // The persistent-element contract: one unplayable track must not poison the next -- a new src arriving on the
+    // living element clears the error fallback, reloads, and honours a queue-driven start.
+    it('recovers from an unplayable track when the next src arrives on the same element', async () =>
+    {
+        const wrapper = mountPlayer();
+        const audio = wrapper.get('audio').element;
+
+        audio.dispatchEvent(new Event('error'));
+        await wrapper.vm.$nextTick();
+        expect(wrapper.text()).toContain('Can\'t be played here.');
+
+        await wrapper.setProps({ src: '/api/nodes/n2/download?disposition=inline', playToken: 1, autoplay: true });
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.text()).not.toContain('Can\'t be played here.');
+        expect(wrapper.get('audio').element).toBe(audio);
+        expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
+        expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    });
+
     it('starts playback on mount only when the arriving track was queue-driven', () =>
     {
         mountPlayer({ autoplay: true });
@@ -287,13 +305,6 @@ describe('AudioPlayer queue behavior', () =>
         await wrapper.vm.$nextTick();
 
         expect(wrapper.emitted('error')).toHaveLength(1);
-    });
-
-    it('omits the source type when the mime is unknown, letting the browser sniff instead of refusing', () =>
-    {
-        const wrapper = mountPlayer({ mimeType: null });
-
-        expect(wrapper.get('source').attributes('type')).toBeUndefined();
     });
 
     it('stops playback and empties the element on unmount, so a discarded track aborts its fetch', () =>

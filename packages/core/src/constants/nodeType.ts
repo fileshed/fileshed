@@ -9,6 +9,8 @@
 
 import type { NodeTypeFamily } from '../models/requests/nodes.ts';
 
+import { PLAYLIST_MIME_LIST } from './media.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // One representative mime per common archive format -- a file is an archive when its stored mime equals one exactly.
@@ -22,9 +24,18 @@ export const ARCHIVE_MIME_TYPES
     ] as const;
 
 // The file type-families, in the order familyOfMimeType tests them. A curated subset of nodeTypeFamilies: the node-type
-// families (folders, links) are absent here because they classify by node type, not by mime.
+// families (folders, links) are absent here because they classify by node type, not by mime. Order carries one real
+// tie: playlist mimes also match audio's prefix (audio/x-mpegurl), so playlists sits before audio and wins.
 export const mimeFamilies
-    = [ 'documents', 'pdfs', 'images', 'video', 'audio', 'archives' ] as const satisfies readonly NodeTypeFamily[];
+    = [
+        'documents',
+        'pdfs',
+        'images',
+        'video',
+        'playlists',
+        'audio',
+        'archives',
+    ] as const satisfies readonly NodeTypeFamily[];
 export type MimeFamily = typeof mimeFamilies[number];
 
 // A family's mime membership: a mime belongs when its leading text matches one of the prefixes, or when it equals one
@@ -47,6 +58,7 @@ export const MIME_FAMILY_SPECS : Readonly<Record<MimeFamily, MimeFamilySpec>> = 
     pdfs: { prefixes: [], exact: [ 'application/pdf' ] },
     images: { prefixes: [ 'image/' ], exact: [] },
     video: { prefixes: [ 'video/' ], exact: [] },
+    playlists: { prefixes: [], exact: PLAYLIST_MIME_LIST },
     audio: { prefixes: [ 'audio/' ], exact: [] },
     archives: { prefixes: [], exact: ARCHIVE_MIME_TYPES },
 };

@@ -60,7 +60,7 @@ function mountPlayer(overrides : Partial<PlayerProps> = {}) : VueWrapper
             src: '/api/nodes/node1/download?disposition=inline',
             downloadHref: '/api/nodes/node1/download',
             name: 'clip.mp4',
-            mimeType: 'video/mp4',
+            playToken: 0,
             hasPrevious: false,
             hasNext: false,
             shuffle: false,
@@ -80,13 +80,11 @@ function mountPlayer(overrides : Partial<PlayerProps> = {}) : VueWrapper
 
 describe('VideoPlayer source', () =>
 {
-    it('streams from the src it is handed, typed with the given mime', () =>
+    it('streams from the src it is handed, straight on the element', () =>
     {
-        const wrapper = mountPlayer({ src: '/api/nodes/n42/download?disposition=inline', mimeType: 'video/webm' });
-        const source = wrapper.get('source');
+        const wrapper = mountPlayer({ src: '/api/nodes/n42/download?disposition=inline' });
 
-        expect(source.attributes('src')).toBe('/api/nodes/n42/download?disposition=inline');
-        expect(source.attributes('type')).toBe('video/webm');
+        expect(wrapper.get('video').attributes('src')).toBe('/api/nodes/n42/download?disposition=inline');
     });
 });
 
@@ -239,15 +237,18 @@ describe('VideoPlayer keyboard shortcuts', () =>
 
 describe('VideoPlayer unplayable format', () =>
 {
-    it('replaces the player with an in-card message and a Download affordance on an error event', async () =>
+    it('hides the surface behind the in-card fallback on error, keeping the element alive', async () =>
     {
         const wrapper = mountPlayer({ downloadHref: '/api/nodes/n9/download', name: 'broken.mov' });
-        const video = wrapper.get('video').element;
+        const video = wrapper.get('video');
 
-        video.dispatchEvent(new Event('error'));
+        video.element.dispatchEvent(new Event('error'));
         await wrapper.vm.$nextTick();
 
-        expect(wrapper.find('video').exists()).toBe(false);
+        // The element survives an unplayable track (hidden, never unmounted) so the next arrival can recover it
+        // without tearing down fullscreen or a cast session.
+        expect(wrapper.find('video').exists()).toBe(true);
+        expect(video.isVisible()).toBe(false);
         expect(wrapper.text()).toContain('broken.mov can\'t be played here.');
 
         const download = wrapper.get('[data-icon="i-lucide-download"]');
@@ -314,13 +315,6 @@ describe('VideoPlayer queue behavior', () =>
         await wrapper.vm.$nextTick();
 
         expect(wrapper.emitted('error')).toHaveLength(1);
-    });
-
-    it('omits the source type when the mime is unknown, letting the browser sniff instead of refusing', () =>
-    {
-        const wrapper = mountPlayer({ mimeType: null });
-
-        expect(wrapper.get('source').attributes('type')).toBeUndefined();
     });
 
     it('stops playback and empties the element on unmount, so a discarded track aborts its fetch', () =>

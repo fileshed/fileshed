@@ -22,6 +22,8 @@ import {
     MIME_FAMILY_SPECS,
     type Node,
     type NodeTypeFamily,
+    PLAYLIST_EXTENSIONS,
+    PLAYLIST_MIME_LIST,
     type UserSummary,
 } from '@fileshed/core';
 
@@ -97,14 +99,28 @@ function escapeLikePattern(term : string) : string
 
 type NodeExpressionBuilder = ExpressionBuilder<Database, 'node'>;
 
+// Membership in the playlists family goes beyond mime: browsers and servers disagree on m3u mimes often enough
+// that uploads arrive with empty or generic types, so the file EXTENSION is the more reliable witness -- the same
+// verdict isPlaylistFile renders client-side. The extension patterns are literal constants, so no LIKE escaping.
+function playlistCondition(eb : NodeExpressionBuilder) : Expression<SqlBool>
+{
+    return eb.or([
+        eb('mime_type', 'in', [ ...PLAYLIST_MIME_LIST ]),
+        ...PLAYLIST_EXTENSIONS.map((extension) => sql<SqlBool>`lower(name) like ${ `%${ extension }` }`),
+    ]);
+}
+
 // The WHERE fragment one type-family selects. 'folders' and 'links' select by node type outright; every other family
 // selects file nodes and narrows by mime, built from the same MIME_FAMILY_SPECS the client classifies with -- a LIKE
 // prefix per prefix spec (text/%, image/%) OR-ed with an IN over the exact mimes. The mime patterns are literal (no
-// user input), so no LIKE escaping is needed.
+// user input), so no LIKE escaping is needed. Playlists and audio are the one entangled pair: playlist mimes match
+// the audio/ prefix, so audio explicitly excludes what playlists claims -- filtering by Audio must not surface the
+// playlists the user asked us to make distinguishable.
 function familyCondition(eb : NodeExpressionBuilder, family : NodeTypeFamily) : Expression<SqlBool>
 {
     if(family === 'folders') { return eb('type', '=', 'folder'); }
     if(family === 'links') { return eb('type', '=', 'link'); }
+    if(family === 'playlists') { return eb.and([ eb('type', '=', 'file'), playlistCondition(eb) ]); }
 
     const spec = MIME_FAMILY_SPECS[family];
     const mimeTerms : Expression<SqlBool>[] = spec.prefixes.map(
@@ -112,7 +128,10 @@ function familyCondition(eb : NodeExpressionBuilder, family : NodeTypeFamily) : 
     );
     if(spec.exact.length > 0) { mimeTerms.push(eb('mime_type', 'in', [ ...spec.exact ])); }
 
-    return eb.and([ eb('type', '=', 'file'), eb.or(mimeTerms) ]);
+    const conditions = [ eb('type', '=', 'file'), eb.or(mimeTerms) ];
+    if(family === 'audio') { conditions.push(eb.not(playlistCondition(eb))); }
+
+    return eb.and(conditions);
 }
 
 function hasFilters(filters : NodeFilters) : boolean
@@ -384,25 +403,35 @@ export class NodeRA
         return rows.map(nodeFromRow).filter((node) : node is LinkNode => node.type === 'link');
     }
 
-    // A case-insensitive substring match on node name, capped at `limit`, excluding trashed nodes. The match is
-    // dialect-aware: Postgres LIKE is case-sensitive so it needs ILIKE, while SQLite LIKE is already case-insensitive
-    // for ASCII; both take an explicit ESCAPE so the pattern's escaped metacharacters behave identically. This is a
-    // name-only superset -- the caller resolves and filters these to the nodes it may actually see.
+    // A case-insensitive substring match on node name OR the content's embedded tags (title/artist/album, when
+    // extraction has run for the blob), capped at `limit`, excluding trashed nodes. The match is dialect-aware:
+    // Postgres LIKE is case-sensitive so it needs ILIKE, while SQLite LIKE is already case-insensitive for ASCII;
+    // both take an explicit ESCAPE so the pattern's escaped metacharacters behave identically. This is a
+    // match superset -- the caller resolves and filters these to the nodes it may actually see.
     async searchByName(term : string, limit : number) : Promise<Node[]>
     {
         const pattern = `%${ escapeLikePattern(term) }%`;
-        const nameColumn = sql.ref('name');
-        const condition = this.#kind === 'postgres'
-            ? sql<SqlBool>`${ nameColumn } ilike ${ pattern } escape '\\'`
-            : sql<SqlBool>`${ nameColumn } like ${ pattern } escape '\\'`;
+        const matches = (column : string) : Expression<SqlBool> =>
+        {
+            const ref = sql.ref(column);
+            return this.#kind === 'postgres'
+                ? sql<SqlBool>`${ ref } ilike ${ pattern } escape '\\'`
+                : sql<SqlBool>`${ ref } like ${ pattern } escape '\\'`;
+        };
 
         const rows = await this.#db
             .selectFrom('node')
-            .selectAll()
-            .where('trashed_at', 'is', null)
-            .where(condition)
-            .orderBy('name', 'asc')
-            .orderBy('id', 'asc')
+            .leftJoin('media_tags', 'media_tags.blob_id', 'node.blob_id')
+            .selectAll('node')
+            .where('node.trashed_at', 'is', null)
+            .where((eb) => eb.or([
+                matches('node.name'),
+                matches('media_tags.title'),
+                matches('media_tags.artist'),
+                matches('media_tags.album'),
+            ]))
+            .orderBy('node.name', 'asc')
+            .orderBy('node.id', 'asc')
             .limit(limit)
             .execute();
 

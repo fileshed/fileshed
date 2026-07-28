@@ -43,6 +43,16 @@ describe('familyOfMimeType', () =>
         }
     });
 
+    // The one deliberate mime-family tie: playlist mimes also match audio's prefix, and playlists must win it, or
+    // the Type column and filter would call every playlist "Audio" -- the exact ambiguity the family exists to end.
+    it('classifies the m3u mimes as playlists, never as audio', () =>
+    {
+        expect(familyOfMimeType('audio/x-mpegurl')).toBe('playlists');
+        expect(familyOfMimeType('audio/mpegurl')).toBe('playlists');
+        expect(familyOfMimeType('application/vnd.apple.mpegurl')).toBe('playlists');
+        expect(familyOfMimeType('audio/mpeg')).toBe('audio');
+    });
+
     it('returns null for a mime that belongs to no family', () =>
     {
         expect(familyOfMimeType('application/octet-stream')).toBeNull();

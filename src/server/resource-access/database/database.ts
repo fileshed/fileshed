@@ -103,6 +103,16 @@ export interface BlobTable
     deleted_at : Timestamp | null;
 }
 
+// Embedded audio metadata keyed by content: deduplicated copies share one row, and the row's existence means
+// extraction ran -- all-null is "carries no tags", not "not yet tried".
+export interface MediaTagsTable
+{
+    blob_id : string;
+    title : string | null;
+    artist : string | null;
+    album : string | null;
+}
+
 export interface NodeTable
 {
     id : string;
@@ -182,6 +192,9 @@ export interface Database
     share_request : ShareRequestTable;
     public_link : PublicLinkTable;
     deletion_offer : DeletionOfferTable;
+
+    // Owned by migration 002.
+    media_tags : MediaTagsTable;
 }
 
 // The dialect discriminator. A subset of BetterAuth's KyselyDatabaseType, so it drops straight into the
