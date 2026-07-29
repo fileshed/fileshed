@@ -19,6 +19,7 @@ import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
 import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { UserRA } from '@server/resource-access/users/index.ts';
+import { MailRA } from '@server/resource-access/mail/index.ts';
 import { SettingsRA } from '@server/resource-access/settings/index.ts';
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 import { createAuth } from '@server/resource-access/auth.ts';
@@ -27,6 +28,7 @@ import { initialize } from '@server/resource-access/boot.ts';
 // Managers
 import { AdminManager } from '@server/managers/admin.ts';
 import { AvatarManager } from '@server/managers/avatar.ts';
+import { MailManager } from '@server/managers/mail.ts';
 import { BlobManager } from '@server/managers/blob.ts';
 import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
 import { NodeManager } from '@server/managers/node.ts';
@@ -86,6 +88,7 @@ async function bootSettingsApp() : Promise<BootedApp>
         users: new UserManager(userRA),
         settings,
         admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
+        mail: new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' }),
     });
 
     return { config, handle, auth, app };

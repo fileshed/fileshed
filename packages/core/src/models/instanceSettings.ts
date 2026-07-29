@@ -17,6 +17,13 @@ export const adminSettingKeys = [
     'AVATAR_MAX_BYTES',
     'TRASH_PURGE_DAYS',
     'SIGN_UP_ENABLED',
+    'SMTP_HOST',
+    'SMTP_PORT',
+    'SMTP_SECURE',
+    'SMTP_USER',
+    'SMTP_PASSWORD',
+    'SMTP_FROM',
+    'EMAIL_VERIFICATION_REQUIRED',
 ] as const;
 export type AdminSettingKey = typeof adminSettingKeys[number];
 
@@ -43,6 +50,26 @@ export const settingDefinitions : Readonly<Record<AdminSettingKey, SettingDefini
         { key: 'TRASH_PURGE_DAYS', kind: 'number', secret: false, requiresRestart: false, fallback: null },
     SIGN_UP_ENABLED:
         { key: 'SIGN_UP_ENABLED', kind: 'boolean', secret: false, requiresRestart: false, fallback: true },
+
+    // Mail is read at send time (the auth callbacks and the test-send build the transport per send), so every SMTP
+    // knob applies to the next email without a restart. An unset SMTP_HOST or SMTP_FROM means mail is off.
+    SMTP_HOST:
+        { key: 'SMTP_HOST', kind: 'string', secret: false, requiresRestart: false, fallback: null },
+    SMTP_PORT:
+        { key: 'SMTP_PORT', kind: 'number', secret: false, requiresRestart: false, fallback: 587 },
+    SMTP_SECURE:
+        { key: 'SMTP_SECURE', kind: 'boolean', secret: false, requiresRestart: false, fallback: false },
+    SMTP_USER:
+        { key: 'SMTP_USER', kind: 'string', secret: false, requiresRestart: false, fallback: null },
+    SMTP_PASSWORD:
+        { key: 'SMTP_PASSWORD', kind: 'string', secret: true, requiresRestart: false, fallback: null },
+    SMTP_FROM:
+        { key: 'SMTP_FROM', kind: 'string', secret: false, requiresRestart: false, fallback: null },
+
+    // better-auth freezes requireEmailVerification into the instance at construction -- the one mail knob that
+    // waits on a restart.
+    EMAIL_VERIFICATION_REQUIRED:
+        { key: 'EMAIL_VERIFICATION_REQUIRED', kind: 'boolean', secret: false, requiresRestart: true, fallback: false },
 };
 
 export type SettingValue = number | boolean | string;

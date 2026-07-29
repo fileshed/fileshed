@@ -14,6 +14,8 @@ import EditorLayout from '../layouts/editorLayout.vue';
 import SetupPage from '../pages/setupPage.vue';
 import SignInPage from '../pages/signInPage.vue';
 import SignUpPage from '../pages/signUpPage.vue';
+import ForgotPasswordPage from '../pages/forgotPasswordPage.vue';
+import ResetPasswordPage from '../pages/resetPasswordPage.vue';
 import DrivePage from '../pages/drivePage.vue';
 import FilePage from '../pages/filePage.vue';
 import SharedPage from '../pages/sharedPage.vue';
@@ -46,6 +48,8 @@ export const routes : RouteRecordRaw[] = [
     { path: '/setup', name: 'setup', component: SetupPage, meta: { public: true } },
     { path: '/signin', name: 'signin', component: SignInPage, meta: { public: true } },
     { path: '/signup', name: 'signup', component: SignUpPage, meta: { public: true } },
+    { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage, meta: { public: true } },
+    { path: '/reset-password', name: 'reset-password', component: ResetPasswordPage, meta: { public: true } },
     {
         path: '/',
         component: MainLayout,

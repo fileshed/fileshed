@@ -17,11 +17,13 @@ import {
     type SetPasswordRequest,
     type SetQuotaRequest,
     type SetRoleRequest,
+    type TestEmailResponse,
     type UserRole,
     adminSettingsResponseCodec,
     adminStatusResponseCodec,
     adminUserPageResponseCodec,
     adminUserResponseCodec,
+    testEmailResponseCodec,
 } from '@fileshed/core';
 
 // Resource Access
@@ -98,6 +100,11 @@ export async function setUserPassword(userID : string, password : string) : Prom
 export async function revokeUserSessions(userID : string) : Promise<void>
 {
     await requestVoid(`/api/admin/users/${ userID }/revoke-sessions`, { method: 'POST' });
+}
+
+export async function sendTestEmail() : Promise<TestEmailResponse>
+{
+    return requestJson('/api/admin/email/test', { method: 'POST', codec: testEmailResponseCodec });
 }
 
 export async function adminStatus() : Promise<AdminStatusResponse>

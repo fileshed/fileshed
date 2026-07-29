@@ -23,12 +23,23 @@ import {
     DEFAULT_GC_INTERVAL_MINUTES,
     DEFAULT_HOST,
     DEFAULT_PORT,
+    DEFAULT_SMTP_PORT,
     DEFAULT_STORAGE_ROOT,
     DEFAULT_TRASH_PURGE_DAYS,
     DEFAULT_UPLOAD_MAX_BYTES,
 } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
+
+// Boolean-ish yaml/env values, honestly: the substitution is textual, so yaml hands us real booleans for bare
+// true/false but strings for anything else -- and z.coerce.boolean would read the STRING "no" as true. Map the
+// common negative spellings explicitly; everything else follows plain truthiness.
+const booleanish = z.preprocess((value) =>
+{
+    if(typeof value === 'string') { return ![ 'false', 'no', 'off', '0', '' ].includes(value.toLowerCase()); }
+
+    return Boolean(value);
+}, z.boolean());
 
 // LOG_LEVEL and NODE_ENV are deliberately absent: the logger initializes at import time, before loadConfig() can
 // run, so it owns those two directly (see utils/logger.ts).
@@ -100,6 +111,20 @@ const configSchema = z.object({
     GITHUB_CLIENT_SECRET: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
+
+    // Outgoing email. These are the config-side defaults for the SMTP_* admin settings (same names); an unset
+    // SMTP_HOST or SMTP_FROM leaves mail off. EMAIL_VERIFICATION_REQUIRED is captured at boot -- better-auth
+    // freezes it into the auth instance.
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number()
+        .int()
+        .positive()
+        .default(DEFAULT_SMTP_PORT),
+    SMTP_SECURE: booleanish.default(false),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM: z.string().optional(),
+    EMAIL_VERIFICATION_REQUIRED: booleanish.default(false),
 }).superRefine((config, ctx) =>
 {
     if(config.DATABASE_KIND === 'postgres' && !config.DATABASE_URL)

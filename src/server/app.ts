@@ -32,6 +32,7 @@ import { createNodeRoutes } from './routes/nodes.ts';
 import { mountOpenApiDocs } from './routes/openapi.ts';
 import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
+import { createAdminEmailRoutes } from './routes/adminEmail.ts';
 import { createAdminSettingsRoutes } from './routes/adminSettings.ts';
 import { createSetupRoutes } from './routes/setup.ts';
 import { createShareRoutes } from './routes/shares.ts';
@@ -45,6 +46,7 @@ import { initialize } from './resource-access/boot.ts';
 import { seedDefaultBackend } from './resource-access/database/seeds.ts';
 import { BlobRA } from './resource-access/blob/index.ts';
 import { NodeRA } from './resource-access/nodes/node.ts';
+import { MailRA } from './resource-access/mail/index.ts';
 import { MediaTagsRA } from './resource-access/mediaTags/index.ts';
 import { SettingsRA } from './resource-access/settings/index.ts';
 import { PublicLinkRA } from './resource-access/publicLinks/index.ts';
@@ -57,6 +59,7 @@ import { AdminManager } from './managers/admin.ts';
 import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
 import { DeletionOfferManager } from './managers/deletionOffer.ts';
+import { MailManager } from './managers/mail.ts';
 import { MediaTagManager, startMediaTagTimer } from './managers/mediaTags.ts';
 import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
@@ -134,6 +137,7 @@ export interface AppServices
     setup : SetupManager;
     settings : SettingsManager;
     admins : AdminManager;
+    mail : MailManager;
 }
 
 export interface AppOptions
@@ -195,9 +199,11 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
         {
             app.route('/api', createSetupRoutes(
                 services.setup,
-                () => services.settings.booleanValue('SIGN_UP_ENABLED', true)
+                () => services.settings.booleanValue('SIGN_UP_ENABLED', true),
+                () => services.mail.isConfigured()
             ));
             app.route('/api', createAdminSettingsRoutes(sessions, services.settings));
+            app.route('/api', createAdminEmailRoutes(sessions, services.mail));
             app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
             app.route('/api', createBlobRoutes(sessions, services.blobs, services.mediaTags));
             app.route('/api', createUploadRoutes(sessions, services.blobs, services.mediaTags));
@@ -276,7 +282,23 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
 {
     const config = loadConfig();
     const handle = createDatabase(config);
-    const auth = createAuth(handle, config);
+    const settings = new SettingsManager({
+        settings: new SettingsRA(handle),
+        config,
+        box: new SecretBox(config.AUTH_SECRET),
+        startedAt: new Date(),
+    });
+    const mail = new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' });
+
+    // better-auth freezes requireEmailVerification at construction, and construction happens before the
+    // migrations -- the boot-tolerant read answers the config default on a first boot with no settings table.
+    const auth = createAuth(handle, config, {
+        mail,
+        requireEmailVerification: await settings.booleanValueAtBoot(
+            'EMAIL_VERIFICATION_REQUIRED',
+            config.EMAIL_VERIFICATION_REQUIRED
+        ),
+    });
 
     await initialize(handle, auth);
     await seedDefaultBackend(handle, config);
@@ -286,12 +308,6 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const shareRA = new ShareRA(handle);
     const userRA = new UserRA(handle);
     const tracker = new LastRunTracker();
-    const settings = new SettingsManager({
-        settings: new SettingsRA(handle),
-        config,
-        box: new SecretBox(config.AUTH_SECRET),
-        startedAt: new Date(),
-    });
 
     // The caps are closures over the settings manager, resolved per use: an admin override applies to the very
     // next request, and with no override each supplier answers the config value it names.
@@ -359,6 +375,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         setup,
         settings,
         admins,
+        mail,
     };
 
     return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };

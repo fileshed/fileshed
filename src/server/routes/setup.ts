@@ -21,13 +21,23 @@ import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function createSetupRoutes(setup : SetupManager, signUpEnabled : () => Promise<boolean>) : Hono
+export function createSetupRoutes(
+    setup : SetupManager,
+    signUpEnabled : () => Promise<boolean>,
+    emailEnabled : () => Promise<boolean>
+) : Hono
 {
     const router = new Hono();
 
     router.get('/instance', instanceSpec, async (ctx) =>
     {
-        return ctx.json({ needsSetup: await setup.needsSetup(), signUpEnabled: await signUpEnabled() });
+        const [ needsSetup, signUp, email ] = await Promise.all([
+            setup.needsSetup(),
+            signUpEnabled(),
+            emailEnabled(),
+        ]);
+
+        return ctx.json({ needsSetup, signUpEnabled: signUp, emailEnabled: email });
     });
 
     router.post('/setup', setupSpec, async (ctx) =>

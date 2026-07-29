@@ -58,7 +58,17 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `GC_GRACE_DAYS` | no | 7 | Days a dereferenced blob lingers before deletion. |
 | `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). |
 | `FILESHED_SETUP_TOKEN` | no | — | Operator-chosen first-run setup token (for automation); omit to use the boot-printed code. |
+| `SMTP_HOST` | no | — | Outgoing mail server; unset leaves email off. Also settable in the admin Email tab. |
+| `SMTP_PORT` | no | 587 | 587 (STARTTLS) or 465 (TLS). |
+| `SMTP_SECURE` | no | `false` | `true` for implicit TLS (port 465). |
+| `SMTP_USER` / `SMTP_PASSWORD` | no | — | SMTP credentials; omit for unauthenticated servers. |
+| `SMTP_FROM` | no | — | Sender address on outgoing email; required (with `SMTP_HOST`) for email to be on. |
+| `EMAIL_VERIFICATION_REQUIRED` | no | `false` | New accounts must verify their address before signing in. Applied at boot. |
 | `LOG_LEVEL` | no | `info` | pino levels: trace … silent. |
+
+Everything email can also be configured at runtime from the admin **Email** tab — values set there override these,
+the password is stored encrypted, and changes apply to the next email without a restart (except
+`EMAIL_VERIFICATION_REQUIRED`, which takes effect on the next one).
 
 ## Put HTTPS in front
 

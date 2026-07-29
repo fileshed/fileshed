@@ -125,6 +125,38 @@ describe('SettingsManager', () =>
 
         expect(view.restartRequired).toBe(false);
     });
+
+    it('flags a restart once a restart-tier key changes, until a restart absorbs it', async () =>
+    {
+        function managerStartedAt(startedAt : Date) : SettingsManager
+        {
+            return new SettingsManager({
+                settings: new SettingsRA(booted.handle),
+                config: booted.config,
+                box: new SecretBox(booted.config.AUTH_SECRET),
+                startedAt,
+            });
+        }
+
+        // A process that booted before the change sees it as pending; one that booted after (a restart) sees the
+        // same row as settled history.
+        const runningSinceEarlier = managerStartedAt(new Date(Date.now() - 60_000));
+        const view = await runningSinceEarlier.patch(admin, { changes: { EMAIL_VERIFICATION_REQUIRED: true } });
+        expect(view.restartRequired).toBe(true);
+
+        const restarted = managerStartedAt(new Date(Date.now() + 60_000));
+        expect((await restarted.adminView(admin)).restartRequired).toBe(false);
+    });
+
+    it('masks a stored secret in the admin view -- the plaintext never crosses the wire again', async () =>
+    {
+        const view = await manager.patch(admin, { changes: { SMTP_PASSWORD: 'hunter2-smtp-secret' } });
+        const entry = view.settings.find((row) => row.key === 'SMTP_PASSWORD');
+
+        expect(entry?.value).toBe('••••cret');
+        expect(entry?.source).toBe('override');
+        expect(await manager.value('SMTP_PASSWORD')).toBe('hunter2-smtp-secret');
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

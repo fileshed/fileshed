@@ -114,7 +114,19 @@ const authOptionsShape = {
     secret: '',
     baseURL: '',
     trustedOrigins: [] as string[],
-    emailAndPassword: { enabled: true },
+    // Placeholders past `enabled`, for the type only: createAuth supplies the live mail callbacks and the boot-read
+    // verification flag.
+    emailAndPassword: {
+        enabled: true,
+        requireEmailVerification: false as boolean,
+        revokeSessionsOnPasswordReset: true,
+        sendResetPassword: undefined as NonNullable<BetterAuthOptions['emailAndPassword']>['sendResetPassword'],
+        customSyntheticUser: undefined as NonNullable<BetterAuthOptions['emailAndPassword']>['customSyntheticUser'],
+    },
+    emailVerification: {
+        sendVerificationEmail:
+            undefined as NonNullable<BetterAuthOptions['emailVerification']>['sendVerificationEmail'],
+    },
     // Placeholder for the type only: createAuth supplies the config-derived value. Carried here so the Auth type
     // reflects that social providers may be configured.
     socialProviders: undefined as BetterAuthOptions['socialProviders'],
@@ -197,7 +209,64 @@ function accessTokenCleanupHooks(handle : DatabaseHandle) : BetterAuthOptions['d
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function createAuth(handle : DatabaseHandle, config : Config) : Auth
+// The mail hooks better-auth calls mid-flow. Deliberately a tiny interface rather than the MailManager type:
+// resource access must not import managers, so the manager satisfies this structurally at composition. Both
+// senders are fire-and-forget by contract -- a reset request must answer identically whether the send worked.
+export interface AuthMailHooks
+{
+    sendPasswordReset(to : string, url : string) : void;
+    sendVerification(to : string, url : string) : void;
+}
+
+export interface AuthExtras
+{
+    mail ?: AuthMailHooks;
+
+    // Read from settings-over-config at boot; better-auth freezes it into the instance, which is why the setting
+    // is restart-tier.
+    requireEmailVerification ?: boolean;
+}
+
+// The live email options, annotated with the shape's own types so the betterAuth generic stays pinned to the
+// shape (the same trick socialProviders and databaseHooks use).
+function emailAndPasswordOptions(
+    mail : AuthMailHooks | undefined,
+    requireEmailVerification : boolean
+) : typeof authOptionsShape['emailAndPassword']
+{
+    return {
+        enabled: true,
+        requireEmailVerification,
+        // A reset means the credential may have been compromised; every other session dies with it.
+        revokeSessionsOnPasswordReset: true,
+        sendResetPassword: mail === undefined
+            ? undefined
+            : async ({ user, url }) => { mail.sendPasswordReset(user.email, url); },
+        // With enumeration protection active (requireEmailVerification), the synthetic sign-up response must
+        // carry every field a real one would: the admin plugin's columns in schema order, then our
+        // additionalFields, then the id (the documented assembly order).
+        customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+            ...coreFields,
+            role: 'user',
+            banned: false,
+            banReason: null,
+            banExpires: null,
+            ...additionalFields,
+            id,
+        }),
+    };
+}
+
+function emailVerificationOptions(mail : AuthMailHooks | undefined) : typeof authOptionsShape['emailVerification']
+{
+    return {
+        sendVerificationEmail: mail === undefined
+            ? undefined
+            : async ({ user, url }) => { mail.sendVerification(user.email, url); },
+    };
+}
+
+export function createAuth(handle : DatabaseHandle, config : Config, extras : AuthExtras = {}) : Auth
 {
     return betterAuth({
         ...authOptionsShape,
@@ -206,6 +275,8 @@ export function createAuth(handle : DatabaseHandle, config : Config) : Auth
         baseURL: config.BASE_URL,
         trustedOrigins: resolveTrustedOrigins(config),
         socialProviders: socialProvidersFromConfig(config),
+        emailAndPassword: emailAndPasswordOptions(extras.mail, extras.requireEmailVerification ?? false),
+        emailVerification: emailVerificationOptions(extras.mail),
         // Fresh plugin instances per auth instance; the shape above supplies only their type.
         plugins: [ admin(), apiKey(apiKeyConfigurations) ],
         databaseHooks: accessTokenCleanupHooks(handle),

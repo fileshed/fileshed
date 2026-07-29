@@ -45,4 +45,17 @@ GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
 GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
 GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
 
+# Outgoing email (password reset, verification). Unset SMTP_HOST or SMTP_FROM leaves mail off; all of these can
+# also be set from the admin Email tab, where values entered there win over these.
+SMTP_HOST: ${SMTP_HOST:-}
+SMTP_PORT: ${SMTP_PORT:-587}
+SMTP_SECURE: ${SMTP_SECURE:-false}
+SMTP_USER: ${SMTP_USER:-}
+SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+SMTP_FROM: ${SMTP_FROM:-}
+
+# Require new accounts to verify their email before signing in. Needs working SMTP; applied at boot (a change from
+# the admin UI takes effect after a restart).
+EMAIL_VERIFICATION_REQUIRED: ${EMAIL_VERIFICATION_REQUIRED:-false}
+
 # ---------------------------------------------------------------------------------------------------------------------

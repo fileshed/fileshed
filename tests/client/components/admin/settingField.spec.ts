@@ -68,9 +68,9 @@ function response(entries : AdminSettingEntry[]) : AdminSettingsResponse
 
 const UInputStub = {
     name: 'UInput',
-    props: [ 'modelValue' ],
+    props: [ 'modelValue', 'placeholder' ],
     emits: [ 'update:modelValue' ],
-    template: '<input class="value-input" :value="modelValue" '
+    template: '<input class="value-input" :value="modelValue" :placeholder="placeholder" '
         + '@input="$emit(\'update:modelValue\', $event.target.value)" />',
 };
 
@@ -216,6 +216,59 @@ describe('SettingField', () =>
         const badges = wrapper.findAll('.badge').map((badge) => badge.text());
         expect(badges).toContain('Overridden');
         expect(badges).toContain('Needs restart');
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // String and secret fields
+    //------------------------------------------------------------------------------------------------------------------
+
+    function stringEntry(overrides : Partial<AdminSettingEntry> = {}) : AdminSettingEntry
+    {
+        return {
+            key: 'SMTP_HOST',
+            kind: 'string',
+            secret: false,
+            requiresRestart: false,
+            value: null,
+            source: 'default',
+            ...overrides,
+        };
+    }
+
+    it('saves a trimmed string and refuses an empty or unchanged draft', async () =>
+    {
+        patchMock.mockResolvedValue(response([ stringEntry({ value: 'smtp.example.com', source: 'override' }) ]));
+        const wrapper = mountField(stringEntry());
+
+        expect(saveButton(wrapper).disabled).toBe(true);
+
+        await wrapper.find('.value-input').setValue('  smtp.example.com  ');
+        await wrapper.find('.btn-save').trigger('click');
+        await flushPromises();
+
+        expect(patchMock).toHaveBeenCalledWith({ SMTP_HOST: 'smtp.example.com' });
+        expect(saveButton(wrapper).disabled).toBe(true);
+    });
+
+    it('keeps a secret write-only: empty field, the mask as placeholder, and any entry saveable', async () =>
+    {
+        patchMock.mockResolvedValue(response([
+            stringEntry({ key: 'SMTP_PASSWORD', secret: true, value: '••••cret', source: 'override' }),
+        ]));
+        const wrapper = mountField(stringEntry({ key: 'SMTP_PASSWORD', secret: true, value: '••••ord2' }));
+
+        const input = wrapper.find('.value-input').element as HTMLInputElement;
+        expect(input.value).toBe('');
+        expect(input.placeholder).toBe('••••ord2');
+
+        await wrapper.find('.value-input').setValue('hunter2-smtp-secret');
+        expect(saveButton(wrapper).disabled).toBe(false);
+
+        await wrapper.find('.btn-save').trigger('click');
+        await flushPromises();
+
+        expect(patchMock).toHaveBeenCalledWith({ SMTP_PASSWORD: 'hunter2-smtp-secret' });
+        expect((wrapper.find('.value-input').element as HTMLInputElement).value).toBe('');
     });
 });
 

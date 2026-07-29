@@ -64,6 +64,22 @@
             />
         </div>
 
+        <div v-if="entry.kind === 'string'" class="mt-3 flex items-start gap-2">
+            <UInput
+                v-model="draft"
+                :placeholder="stringPlaceholder"
+                :autocomplete="entry.secret ? 'off' : undefined"
+                class="flex-1"
+                @keydown.enter="saveString"
+            />
+            <UButton
+                label="Save"
+                :loading="pending"
+                :disabled="!stringDirty"
+                @click="saveString"
+            />
+        </div>
+
         <div v-if="entry.source === 'override'" class="mt-3">
             <UButton
                 label="Reset to default"
@@ -113,15 +129,26 @@
     // Number editing
     //------------------------------------------------------------------------------------------------------------------
 
-    // A text input on purpose: UInput type=number emits numbers (its runtime coerces) while its prop typing says
-    // string, and a spinner is useless on byte-sized values anyway. The draft stays a plain string.
-    const draft = ref(props.entry.kind === 'number' ? String(props.entry.value ?? '') : '');
+    // A secret's stored value never comes back (the server answers a masked tail), so its field is write-only: the
+    // draft starts empty and the mask rides the placeholder instead.
+    const secret = computed(() => props.entry.secret);
+
+    function draftFor(value : typeof props.entry.value) : string
+    {
+        if(secret.value) { return ''; }
+
+        return value === null ? '' : String(value);
+    }
+
+    // A text input on purpose even for numbers: UInput type=number emits numbers (its runtime coerces) while its
+    // prop typing says string, and a spinner is useless on byte-sized values anyway. The draft stays a plain string.
+    const draft = ref(props.entry.kind === 'boolean' ? '' : draftFor(props.entry.value));
 
     // Every save and reset replaces the entry with the server's refreshed view; the draft follows it so the field
-    // always shows what is actually in effect.
+    // always shows what is actually in effect -- and a secret's field empties again, staying write-only.
     watch(() => props.entry.value, (value) =>
     {
-        if(props.entry.kind === 'number') { draft.value = String(value ?? ''); }
+        if(props.entry.kind !== 'boolean') { draft.value = draftFor(value); }
     });
 
     // The draft as a storable number, or null while it isn't one. Byte fields take human sizes ("20gb", "500mb")
@@ -144,6 +171,34 @@
         if(value === null || !dirty.value) { return; }
 
         void runMutation(() => settings.save(props.entry.key, value), pending);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // String editing
+    //------------------------------------------------------------------------------------------------------------------
+
+    const stringPlaceholder = computed(() =>
+    {
+        if(secret.value) { return typeof props.entry.value === 'string' ? props.entry.value : 'Not set'; }
+
+        return props.entry.value === null ? 'Not set' : undefined;
+    });
+
+    // For a secret any non-empty entry is a change (the stored value is unknowable here); otherwise the usual
+    // differs-from-effective rule. Clearing a value is Reset to default, not an empty save.
+    const stringDirty = computed(() =>
+    {
+        const trimmed = draft.value.trim();
+        if(trimmed === '') { return false; }
+
+        return secret.value || trimmed !== props.entry.value;
+    });
+
+    function saveString() : void
+    {
+        if(!stringDirty.value) { return; }
+
+        void runMutation(() => settings.save(props.entry.key, draft.value.trim()), pending);
     }
 
     //------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,175 @@
+//----------------------------------------------------------------------------------------------------------------------
+// Mail Manager — SMTP over live settings
+//
+// The contract: mail is configured exactly when SMTP_HOST and SMTP_FROM are both set; every send reads the
+// settings at send time, so an admin's patch applies to the next email; the sealed SMTP password leaves the store
+// as the plaintext the transport needs (the SecretBox round trip through the settings layer); the admin test-send
+// surfaces unconfigured mail and transport refusals as actionable errors; and the auth-flow senders never throw
+// into the flow that triggered them.
+//----------------------------------------------------------------------------------------------------------------------
+
+import { beforeEach, describe, expect, it } from 'vitest';
+import { flushPromises } from '@vue/test-utils';
+
+import { BadRequestError, ForbiddenError } from '@fileshed/core';
+
+// Resource Access
+import type { MailDelivery, MailRA } from '@server/resource-access/mail/index.ts';
+import { SettingsRA } from '@server/resource-access/settings/index.ts';
+
+// Managers
+import { MailManager } from '@server/managers/mail.ts';
+import { SettingsManager } from '@server/managers/settings.ts';
+
+// Utils
+import { SecretBox } from '@server/utils/secretBox.ts';
+
+// Support
+import { type BootedApp, bootTestApp } from '../auth/support.ts';
+import { testActor } from '../nodes/support.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+
+const admin = testActor({ id: 'admin1', role: 'admin', email: 'root@example.com' });
+const civilian = testActor({ id: 'user1', role: 'user' });
+
+// The RA boundary as a recorder: deliveries land here instead of a socket, and `refuse` simulates the SMTP server
+// rejecting the send.
+class RecordingMailRA
+{
+    readonly deliveries : MailDelivery[] = [];
+    refuse : string | null = null;
+
+    async send(delivery : MailDelivery) : Promise<void>
+    {
+        if(this.refuse !== null) { throw new Error(this.refuse); }
+
+        this.deliveries.push(delivery);
+    }
+}
+
+let booted : BootedApp;
+let settings : SettingsManager;
+let transport : RecordingMailRA;
+let mail : MailManager;
+
+beforeEach(async () =>
+{
+    booted = await bootTestApp();
+    settings = new SettingsManager({
+        settings: new SettingsRA(booted.handle),
+        config: booted.config,
+        box: new SecretBox(booted.config.AUTH_SECRET),
+        startedAt: new Date(),
+    });
+    transport = new RecordingMailRA();
+    mail = new MailManager({ settings, mail: transport as unknown as MailRA, appName: 'FileShed' });
+});
+
+async function configureSmtp() : Promise<void>
+{
+    await settings.patch(admin, {
+        changes: {
+            SMTP_HOST: 'smtp.example.com',
+            SMTP_FROM: 'shed@example.com',
+            SMTP_USER: 'mailer',
+            SMTP_PASSWORD: 'hunter2-smtp-secret',
+        },
+    });
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('MailManager', () =>
+{
+    it('is unconfigured until both a host and a from address exist', async () =>
+    {
+        expect(await mail.isConfigured()).toBe(false);
+
+        await settings.patch(admin, { changes: { SMTP_HOST: 'smtp.example.com' } });
+        expect(await mail.isConfigured()).toBe(false);
+
+        await settings.patch(admin, { changes: { SMTP_FROM: 'shed@example.com' } });
+        expect(await mail.isConfigured()).toBe(true);
+    });
+
+    it('refuses the test-send to a non-admin', async () =>
+    {
+        await expect(mail.sendTest(civilian)).rejects.toThrow(ForbiddenError);
+        expect(transport.deliveries).toHaveLength(0);
+    });
+
+    it('tells the admin mail is not configured instead of pretending to send', async () =>
+    {
+        await expect(mail.sendTest(admin)).rejects.toThrow(/not configured/i);
+        expect(transport.deliveries).toHaveLength(0);
+    });
+
+    it('delivers the test email with the settings as they stand, sealed password included', async () =>
+    {
+        await configureSmtp();
+
+        const result = await mail.sendTest(admin);
+
+        expect(result).toEqual({ to: 'root@example.com' });
+        const delivery = transport.deliveries[0];
+        expect(delivery).toMatchObject({
+            host: 'smtp.example.com',
+            port: 587,
+            secure: false,
+            user: 'mailer',
+            from: 'shed@example.com',
+            to: 'root@example.com',
+        });
+
+        // The password crossed the settings store sealed (AES-GCM at rest) and must come back out as the exact
+        // plaintext the SMTP server expects.
+        expect(delivery?.password).toBe('hunter2-smtp-secret');
+        const stored = await new SettingsRA(booted.handle).get('SMTP_PASSWORD');
+        expect(String(stored)).toMatch(/^v1:/);
+    });
+
+    it('applies a changed server to the very next send, no restart', async () =>
+    {
+        await configureSmtp();
+        await mail.sendTest(admin);
+
+        await settings.patch(admin, { changes: { SMTP_HOST: 'smtp2.example.com', SMTP_PORT: 2525 } });
+        await mail.sendTest(admin);
+
+        expect(transport.deliveries[1]).toMatchObject({ host: 'smtp2.example.com', port: 2525 });
+    });
+
+    it('surfaces a transport refusal to the admin with its real reason', async () =>
+    {
+        await configureSmtp();
+        transport.refuse = 'Invalid login: 535 Authentication failed';
+
+        await expect(mail.sendTest(admin)).rejects.toThrow(/535 Authentication failed/);
+        await expect(mail.sendTest(admin)).rejects.toThrow(BadRequestError);
+    });
+
+    it('sends the password-reset email carrying the reset link', async () =>
+    {
+        await configureSmtp();
+
+        mail.sendPasswordReset('member@example.com', 'https://shed.example.com/reset?token=abc');
+        await flushPromises();
+
+        expect(transport.deliveries[0]?.to).toBe('member@example.com');
+        expect(transport.deliveries[0]?.text).toContain('https://shed.example.com/reset?token=abc');
+    });
+
+    it('never throws a send failure into the auth flow that triggered it', async () =>
+    {
+        transport.refuse = 'connection refused';
+
+        expect(() => mail.sendPasswordReset('member@example.com', 'https://x/reset')).not.toThrow();
+        expect(() => mail.sendVerification('member@example.com', 'https://x/verify')).not.toThrow();
+        await flushPromises();
+
+        expect(transport.deliveries).toHaveLength(0);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------

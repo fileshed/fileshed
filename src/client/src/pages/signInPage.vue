@@ -52,6 +52,12 @@
                     />
                 </UFormField>
 
+                <p v-if="emailEnabled" class="text-right text-sm">
+                    <RouterLink to="/forgot-password" class="font-medium text-primary">
+                        Forgot password?
+                    </RouterLink>
+                </p>
+
                 <UButton
                     type="submit"
                     block
@@ -109,6 +115,9 @@
     // Optimistically true so the link doesn't pop in on the common (enabled) case.
     const signUpEnabled = ref(true);
 
+    // Off until the instance says mail works: a "Forgot password?" that leads nowhere is worse than none.
+    const emailEnabled = ref(false);
+
     // The session-kick redirect carries reason=signed-out so this page can say why the visitor landed here.
     const wasSignedOut = computed(() => route.query.reason === 'signed-out');
 
@@ -120,6 +129,7 @@
             const instance = await fetchInstance();
             if(instance.needsSetup) { await router.replace('/setup'); }
             signUpEnabled.value = instance.signUpEnabled;
+            emailEnabled.value = instance.emailEnabled;
         }
         catch { /* an unreachable API leaves sign-in up; submitting will surface the real error */ }
     });

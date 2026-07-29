@@ -20,6 +20,7 @@ import type {
     SetPasswordRequest,
     SetQuotaRequest,
     SetRoleRequest,
+    TestEmailResponse,
 } from '../admin.ts';
 
 // Request Schemas
@@ -72,6 +73,12 @@ export const setPasswordRequestCodec = z.strictObject({
 });
 
 typeAssert<Equals<z.output<typeof setPasswordRequestCodec>, SetPasswordRequest>>();
+
+export const testEmailResponseCodec = z.strictObject({
+    to: z.string(),
+});
+
+typeAssert<Equals<z.output<typeof testEmailResponseCodec>, TestEmailResponse>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 

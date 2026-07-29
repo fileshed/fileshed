@@ -13,6 +13,9 @@ export interface InstanceResponse
 
     // Whether this instance accepts self-service sign-ups; the sign-up page hides itself when not.
     signUpEnabled : boolean;
+
+    // Whether outgoing email is configured; the sign-in page offers "Forgot password?" only when it is.
+    emailEnabled : boolean;
 }
 
 export interface SetupRequest

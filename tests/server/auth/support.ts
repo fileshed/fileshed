@@ -10,7 +10,7 @@ import type { Hono } from 'hono';
 
 // Resource Access
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
-import { type Auth, createAuth } from '@server/resource-access/auth.ts';
+import { type Auth, type AuthExtras, createAuth } from '@server/resource-access/auth.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 
 // App
@@ -40,6 +40,13 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         TRASH_PURGE_DAYS: 30,
         UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
         AVATAR_MAX_BYTES: 2 * 1024 * 1024,
+        SMTP_HOST: undefined,
+        SMTP_PORT: 587,
+        SMTP_SECURE: false,
+        SMTP_USER: undefined,
+        SMTP_PASSWORD: undefined,
+        SMTP_FROM: undefined,
+        EMAIL_VERIFICATION_REQUIRED: false,
         ...overrides,
     };
 }
@@ -54,11 +61,11 @@ export interface BootedApp
     app : Hono;
 }
 
-export async function bootTestApp(overrides : Partial<Config> = {}) : Promise<BootedApp>
+export async function bootTestApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
 {
     const config = testConfig(overrides);
     const handle = createDatabase(config);
-    const auth = createAuth(handle, config);
+    const auth = createAuth(handle, config, extras);
 
     await initialize(handle, auth);
 

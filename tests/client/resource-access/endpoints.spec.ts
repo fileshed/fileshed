@@ -51,6 +51,7 @@ import {
     listUsers,
     patchAdminSettings,
     revokeUserSessions,
+    sendTestEmail,
     setQuota,
     setUserPassword,
     setUserRole,
@@ -333,6 +334,7 @@ const rows : EndpointRow[] = [
         body: { quotaLimit: null },
     },
     { name: 'adminStatus', call: () => adminStatus(), method: 'GET', path: '/api/admin/status' },
+    { name: 'sendTestEmail', call: () => sendTestEmail(), method: 'POST', path: '/api/admin/email/test' },
     { name: 'fetchAdminSettings', call: () => fetchAdminSettings(), method: 'GET', path: '/api/admin/settings' },
     {
         name: 'patchAdminSettings',
