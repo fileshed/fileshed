@@ -14,6 +14,7 @@
             </h2>
             <FilesRootName />
             <TimeFormat />
+            <ColorModePreference />
         </section>
 
         <section class="flex flex-col gap-3">
@@ -32,6 +33,7 @@
     // Components
     import FilesRootName from '../../components/account/filesRootName.vue';
     import TimeFormat from '../../components/account/timeFormat.vue';
+    import ColorModePreference from '../../components/account/colorModePreference.vue';
     import EditorColorScheme from '../../components/account/editorColorScheme.vue';
     import EditorGutter from '../../components/account/editorGutter.vue';
 </script>

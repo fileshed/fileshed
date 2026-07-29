@@ -8,9 +8,22 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
+import type { ColorMode } from '../instanceTheme.ts';
 import type { SocialProviderID } from '../instanceSettings.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
+
+// The branding facts pre-auth pages need: the instance's display name, the color-mode policy, and the uploaded
+// logo's hash (null = the stock mark; the client builds /api/branding/logo?v=<hash> from it, so the URL busts
+// itself on every change). Colors travel separately as /api/branding.css -- this is only what requires
+// client-side behavior.
+export interface InstanceBranding
+{
+    instanceName : string;
+    mode : ColorMode;
+    forcedMode : boolean;
+    logo : string | null;
+}
 
 export interface InstanceResponse
 {
@@ -24,6 +37,9 @@ export interface InstanceResponse
 
     // The OAuth providers the RUNNING instance registered at boot -- the sign-in page's provider buttons.
     providers : SocialProviderID[];
+
+    // Read live, unlike the boot-frozen facts above: name and mode changes apply on the next load, no restart.
+    branding : InstanceBranding;
 }
 
 export interface SetupRequest

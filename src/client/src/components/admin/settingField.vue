@@ -36,12 +36,24 @@
                 </p>
             </div>
 
-            <USwitch
-                v-if="entry.kind === 'boolean'"
-                :model-value="entry.value === true"
-                :disabled="pending"
-                @update:model-value="saveBoolean"
-            />
+            <div class="flex shrink-0 items-center gap-2">
+                <UButton
+                    v-if="entry.source === 'override' && entry.hasDefault"
+                    label="Reset to default"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-lucide-undo-2"
+                    :loading="pending"
+                    @click="resetToDefault"
+                />
+                <USwitch
+                    v-if="entry.kind === 'boolean'"
+                    :model-value="entry.value === true"
+                    :disabled="pending"
+                    @update:model-value="saveBoolean"
+                />
+            </div>
         </div>
 
         <div v-if="entry.kind === 'number'" class="mt-3 flex items-start gap-2">
@@ -78,18 +90,6 @@
                 :loading="pending"
                 :disabled="!stringDirty"
                 @click="saveString"
-            />
-        </div>
-
-        <div v-if="entry.source === 'override' && entry.hasDefault" class="mt-3">
-            <UButton
-                label="Reset to default"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                icon="i-lucide-undo-2"
-                :loading="pending"
-                @click="resetToDefault"
             />
         </div>
     </div>

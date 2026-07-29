@@ -4,7 +4,7 @@
 // The documentation surface is a contract. GET /api/openapi.json must emit a well-formed OpenAPI 3.x document in which
 // every registered feature route -- everything but better-auth's delegated wildcard -- appears as an operation with a
 // summary; an undecorated route is absent from the emitted paths, so that presence check is the drift backstop. The
-// document declares one security scheme (the better-auth session cookie), applies it globally, and the four anonymous
+// document declares one security scheme (the better-auth session cookie), applies it globally, and the anonymous
 // surfaces override to require none. The shared error shape is hoisted once into components and referenced by $ref, and
 // the POST /api/nodes body round-trips the createNodeRequest discriminated union -- the point of feeding the spec from
 // the same codecs the handlers validate against. GET /api/docs serves the Scalar reference UI. The spec is pure
@@ -14,41 +14,11 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Resource Access
-import { BlobRA } from '@server/resource-access/blob/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
-import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
-import { ShareRA } from '@server/resource-access/shares/index.ts';
-import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
-import { MailRA } from '@server/resource-access/mail/index.ts';
-import { SettingsRA } from '@server/resource-access/settings/index.ts';
 import { createAuth } from '@server/resource-access/auth.ts';
 import { createDatabase } from '@server/resource-access/database/database.ts';
 
-// Managers
-import { AvatarManager } from '@server/managers/avatar.ts';
-import { BlobManager } from '@server/managers/blob.ts';
-import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
-import { NodeManager } from '@server/managers/node.ts';
-import { PublicLinkManager } from '@server/managers/publicLink.ts';
-import { ShareManager } from '@server/managers/share.ts';
-import { StatusManager } from '@server/managers/status.ts';
-import { LastRunTracker } from '@server/managers/lastRun.ts';
-import { AdminManager } from '@server/managers/admin.ts';
-import { MailManager } from '@server/managers/mail.ts';
-import { MediaTagManager } from '@server/managers/mediaTags.ts';
-import { SettingsManager } from '@server/managers/settings.ts';
-import { SetupManager } from '@server/managers/setup.ts';
-import { UserManager } from '@server/managers/user.ts';
-
-// Utils
-import { SecretBox } from '@server/utils/secretBox.ts';
-
-// App
-import { createApp } from '@server/app.ts';
-
 // Support
-import { testConfig } from '../auth/support.ts';
+import { composeFullApp, testConfig } from '../auth/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -56,35 +26,7 @@ const config = testConfig();
 const handle = createDatabase(config);
 const auth = createAuth(handle, config);
 
-const blob = new BlobRA(handle);
-const nodeRA = new NodeRA(handle);
-const shareRA = new ShareRA(handle);
-const userRA = new UserRA(handle);
-const nodes = new NodeManager(handle, nodeRA, blob);
-const settings = new SettingsManager({
-    settings: new SettingsRA(handle),
-    config,
-    box: new SecretBox(config.AUTH_SECRET),
-    startedAt: new Date(),
-});
-
-const app = createApp(auth, {
-    blobs: new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES }),
-    mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
-    setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
-    avatars: new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES }),
-    nodes,
-    shares: new ShareManager(handle, nodeRA, shareRA, userRA),
-    publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
-        shareRA.effectiveRole(userID, nodeID)),
-    deletionOffers: new DeletionOfferManager(handle, nodes),
-    adminStatus: new StatusManager(blob, new LastRunTracker()),
-    users: new UserManager(userRA),
-    settings,
-    admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
-    mail: new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' }),
-    providers: [],
-});
+const app = composeFullApp(auth, handle, config);
 
 afterAll(async () =>
 {
@@ -295,11 +237,20 @@ describe('security', () =>
         expect(spec.security).toContainEqual({ sessionCookie: [] });
     });
 
-    it('overrides the four anonymous surfaces to require no security', async () =>
+    it('overrides the anonymous surfaces to require no security', async () =>
     {
         const spec = await fetchSpec();
 
-        for(const path of [ '/d/{token}', '/api/health', '/api/openapi.json', '/api/docs' ])
+        const anonymous = [
+            '/d/{token}',
+            '/api/health',
+            '/api/openapi.json',
+            '/api/docs',
+            '/api/branding.css',
+            '/api/branding/logo',
+        ];
+
+        for(const path of anonymous)
         {
             expect(spec.paths[path]?.get?.security, `${ path } should be anonymous`).toEqual([]);
         }

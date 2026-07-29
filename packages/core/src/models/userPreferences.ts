@@ -6,8 +6,14 @@
 // storage property enforced by the key-wise merge on the server, not a shape the app reasons about. rootLabel is the
 // name shown for the files root; timeFormat is the clock style for node timestamps; editorTheme is the id of the
 // editor colorscheme and editorGutter whether its line-number gutter shows; viewMode is the drive's grid-vs-list
-// choice. Any key absent means the default, which is resolved on the client -- the blob stores only what the user has
-// chosen.
+// choice; colorMode is the user's light/dark/system choice (overridden by an instance-forced mode, overriding the
+// instance default). Any key absent means the default, which is resolved on the client -- the blob stores only what
+// the user has chosen.
+//----------------------------------------------------------------------------------------------------------------------
+
+// Models
+import type { ColorMode } from './instanceTheme.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export const timeFormats = [ '12h', '24h' ] as const;
@@ -23,6 +29,7 @@ export interface UserPreferences
     editorTheme ?: string;
     editorGutter ?: boolean;
     viewMode ?: ViewMode;
+    colorMode ?: ColorMode;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

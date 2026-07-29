@@ -2,8 +2,10 @@
 // Admin Resource Access
 //
 // The typed client for the admin surface: list users, set (or clear) a user's quota, read the server status, and
-// read or patch the instance settings.
+// read or patch the instance settings, theme, and logo.
 //----------------------------------------------------------------------------------------------------------------------
+
+import { z } from 'zod';
 
 import {
     type AdminSettingsResponse,
@@ -13,21 +15,24 @@ import {
     type AdminUserSearchField,
     type AdminUserSortKey,
     type BanUserRequest,
+    type InstanceTheme,
     type PatchSettingsRequest,
     type SetPasswordRequest,
     type SetQuotaRequest,
     type SetRoleRequest,
     type TestEmailResponse,
+    type UpdateBrandingRequest,
     type UserRole,
     adminSettingsResponseCodec,
     adminStatusResponseCodec,
     adminUserPageResponseCodec,
     adminUserResponseCodec,
+    instanceThemeCodec,
     testEmailResponseCodec,
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestVoid } from './request.ts';
+import { requestJson, requestUpload, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -122,6 +127,31 @@ export async function patchAdminSettings(changes : PatchSettingsRequest['changes
     const body : PatchSettingsRequest = { changes };
 
     return requestJson('/api/admin/settings', { method: 'PATCH', body, codec: adminSettingsResponseCodec });
+}
+
+export async function fetchBranding() : Promise<InstanceTheme>
+{
+    return requestJson('/api/admin/branding', { codec: instanceThemeCodec });
+}
+
+export async function patchBranding(patch : UpdateBrandingRequest) : Promise<InstanceTheme>
+{
+    return requestJson('/api/admin/branding', { method: 'PATCH', body: patch, codec: instanceThemeCodec });
+}
+
+export async function uploadBrandingLogo(file : File) : Promise<void>
+{
+    await requestUpload('/api/admin/branding/logo', {
+        method: 'POST',
+        body: file,
+        contentType: file.type,
+        codec: z.object({ logo: z.string().nullable() }),
+    });
+}
+
+export async function deleteBrandingLogo() : Promise<void>
+{
+    return requestVoid('/api/admin/branding/logo', { method: 'DELETE' });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

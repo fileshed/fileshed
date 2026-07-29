@@ -13,87 +13,12 @@ import type { Hono } from 'hono';
 import { adminSettingKeys, adminSettingsResponseCodec } from '@fileshed/core';
 
 // Resource Access
-import { BlobRA } from '@server/resource-access/blob/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
-import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
-import { ShareRA } from '@server/resource-access/shares/index.ts';
-import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
-import { MailRA } from '@server/resource-access/mail/index.ts';
-import { SettingsRA } from '@server/resource-access/settings/index.ts';
-import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
-import { createAuth } from '@server/resource-access/auth.ts';
-import { initialize } from '@server/resource-access/boot.ts';
-
-// Managers
-import { AdminManager } from '@server/managers/admin.ts';
-import { AvatarManager } from '@server/managers/avatar.ts';
-import { MailManager } from '@server/managers/mail.ts';
-import { BlobManager } from '@server/managers/blob.ts';
-import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
-import { NodeManager } from '@server/managers/node.ts';
-import { PublicLinkManager } from '@server/managers/publicLink.ts';
-import { ShareManager } from '@server/managers/share.ts';
-import { StatusManager } from '@server/managers/status.ts';
-import { LastRunTracker } from '@server/managers/lastRun.ts';
-import { MediaTagManager } from '@server/managers/mediaTags.ts';
-import { SettingsManager } from '@server/managers/settings.ts';
-import { SetupManager } from '@server/managers/setup.ts';
-import { UserManager } from '@server/managers/user.ts';
-
-// Utils
-import { SecretBox } from '@server/utils/secretBox.ts';
-
-// App
-import { createApp } from '@server/app.ts';
+import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 
 // Support
-import { type BootedApp, ORIGIN, cookieFrom, makeAdmin, signIn, signUp, testConfig } from '../auth/support.ts';
+import { type BootedApp, ORIGIN, bootFullApp, cookieFrom, makeAdmin, signIn, signUp } from '../auth/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
-
-// The bootApp composition in miniature: full services over an in-memory database, with the settings manager feeding
-// the app's own instance, so a patch through the route is what the gate middleware reads.
-async function bootSettingsApp() : Promise<BootedApp>
-{
-    const config = testConfig();
-    const handle = createDatabase(config);
-    const auth = createAuth(handle, config);
-
-    await initialize(handle, auth);
-
-    const blob = new BlobRA(handle);
-    const nodeRA = new NodeRA(handle);
-    const shareRA = new ShareRA(handle);
-    const userRA = new UserRA(handle);
-    const nodes = new NodeManager(handle, nodeRA, blob);
-    const settings = new SettingsManager({
-        settings: new SettingsRA(handle),
-        config,
-        box: new SecretBox(config.AUTH_SECRET),
-        startedAt: new Date(),
-    });
-
-    const app = createApp(auth, {
-        blobs: new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES }),
-        mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
-        setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
-        avatars: new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES }),
-        nodes,
-        shares: new ShareManager(handle, nodeRA, shareRA, userRA),
-        publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
-            shareRA.effectiveRole(userID, nodeID)),
-        deletionOffers: new DeletionOfferManager(handle, nodes),
-        adminStatus: new StatusManager(blob, new LastRunTracker()),
-        users: new UserManager(userRA),
-        settings,
-        admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
-        mail: new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' }),
-        providers: [],
-    });
-
-    return { config, handle, auth, app };
-}
 
 function getSettings(app : Hono, cookie ?: string) : Promise<Response>
 {
@@ -123,7 +48,7 @@ const handles : DatabaseHandle[] = [];
 
 async function boot() : Promise<BootedApp>
 {
-    const booted = await bootSettingsApp();
+    const booted = await bootFullApp();
     handles.push(booted.handle);
 
     return booted;

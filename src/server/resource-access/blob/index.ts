@@ -9,6 +9,8 @@
 
 import type { Readable } from 'node:stream';
 
+import { sql } from 'kysely';
+
 // Models
 import {
     BackendNotFoundError,
@@ -275,6 +277,14 @@ export class BlobRA
                 eb.selectFrom('user')
                     .select('user.id')
                     .whereRef('user.avatar_sha256', '=', 'blob.sha256')
+            )))
+            // The instance logo's reference row stores the hash JSON-encoded (the settings store quotes every
+            // value), so the comparison wraps the candidate hash in literal quotes.
+            .where((eb) => eb.not(eb.exists(
+                eb.selectFrom('instance_setting')
+                    .select('instance_setting.key')
+                    .where('instance_setting.key', '=', 'BRANDING_LOGO_SHA')
+                    .where(sql<boolean>`instance_setting.value = '"' || blob.sha256 || '"'`)
             )))
             .execute();
     }

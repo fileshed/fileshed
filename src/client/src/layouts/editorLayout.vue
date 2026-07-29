@@ -14,8 +14,8 @@
 <template>
     <div class="flex h-screen flex-col overflow-hidden bg-default text-default">
         <header class="flex items-center gap-4 border-b border-default px-4 py-2">
-            <RouterLink to="/" class="flex shrink-0 items-center" aria-label="FileShed home">
-                <img src="/fileshed.svg" alt="FileShed" class="size-8">
+            <RouterLink to="/" class="flex shrink-0 items-center" :aria-label="`${ app.name } home`">
+                <img :src="app.logoUrl" :alt="app.name" class="size-8">
             </RouterLink>
 
             <div id="editor-header-center" class="flex min-w-0 flex-1 items-center justify-center gap-3" />
@@ -34,8 +34,15 @@
 <script setup lang="ts">
     import { RouterLink, RouterView } from 'vue-router';
 
+    // Stores
+    import { useAppStore } from '../stores/app.ts';
+
     // Components
     import UserMenu from '../components/layout/userMenu.vue';
+
+    //------------------------------------------------------------------------------------------------------------------
+
+    const app = useAppStore();
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

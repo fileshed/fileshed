@@ -39,7 +39,13 @@ const fetchInstanceMock = fetchInstance as unknown as Mock;
 
 function instanceFixture(providers : InstanceResponse['providers']) : InstanceResponse
 {
-    return { needsSetup: false, signUpEnabled: true, emailEnabled: false, providers };
+    return {
+        needsSetup: false,
+        signUpEnabled: true,
+        emailEnabled: false,
+        providers,
+        branding: { instanceName: 'FileShed', mode: 'system', forcedMode: false, logo: null },
+    };
 }
 
 function accountsFixture(providerIDs : string[]) : { data : { providerId : string }[]; error : null }

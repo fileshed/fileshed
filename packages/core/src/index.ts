@@ -71,6 +71,14 @@ export {
     type ViewMode,
     viewModes,
 } from './models/userPreferences.ts';
+export {
+    type ColorMode,
+    type InstanceTheme,
+    type NeutralFamily,
+    colorModes,
+    defaultInstanceTheme,
+    neutralFamilies,
+} from './models/instanceTheme.ts';
 
 // Schemas
 export { nodeCodec, parseNode } from './models/schemas/node.ts';
@@ -83,6 +91,7 @@ export { deletionOfferCodec, parseDeletionOffer } from './models/schemas/deletio
 export { storageBackendCodec, parseStorageBackend } from './models/schemas/storageBackend.ts';
 export { userProfileCodec, parseUserProfile } from './models/schemas/userProfile.ts';
 export { userPreferencesCodec, toUserPreferences } from './models/schemas/userPreferences.ts';
+export { hexColorCodec, instanceThemeCodec, toInstanceTheme } from './models/schemas/instanceTheme.ts';
 
 // Requests
 export {
@@ -166,12 +175,18 @@ export {
     type DeletionOfferListResponse,
     type AcceptDeletionOfferRequest,
 } from './models/requests/deletionOffers.ts';
-export { type InstanceResponse, type SetupRequest, type SetupResponse } from './models/requests/setup.ts';
+export {
+    type InstanceBranding,
+    type InstanceResponse,
+    type SetupRequest,
+    type SetupResponse,
+} from './models/requests/setup.ts';
 export {
     type AdminSettingEntry,
     type AdminSettingsResponse,
     type PatchSettingsRequest,
 } from './models/requests/adminSettings.ts';
+export { type UpdateBrandingRequest } from './models/requests/branding.ts';
 export {
     type CreateAccessTokenRequest,
     type AccessTokenResponse,
@@ -267,6 +282,7 @@ export {
     adminSettingsResponseCodec,
     patchSettingsRequestCodec,
 } from './models/requests/schemas/adminSettings.ts';
+export { updateBrandingRequestCodec } from './models/requests/schemas/branding.ts';
 export {
     createAccessTokenRequestCodec,
     accessTokenResponseCodec,
@@ -280,6 +296,16 @@ export {
 
 // Utils
 export { type Equals, typeAssert } from './utils/typeAssert.ts';
+export {
+    type ColorRamp,
+    type ShadeKey,
+    colorRamp,
+    contrastRatio,
+    parseHexColor,
+    shadeKeys,
+    themeColorToHex,
+} from './utils/colorRamp.ts';
+export { buildThemeVariables, neutralPalettes, stockBrandRamps } from './utils/themeVariables.ts';
 
 // Constants
 export * from './constants/index.ts';

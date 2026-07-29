@@ -188,7 +188,9 @@ export class SettingsManager
         {
             const definition = settingDefinitions[key];
 
-            if(value === null)
+            // Writing the default value IS a reset: storing an override that equals what lies beneath it would
+            // make the key read as Overridden while being indistinguishable from default.
+            if(value === null || value === this.#defaultFor(key))
             {
                 // eslint-disable-next-line no-await-in-loop -- a handful of keys, applied in order
                 await this.#ra.remove(key);

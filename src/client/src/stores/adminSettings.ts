@@ -13,6 +13,9 @@ import { defineStore } from 'pinia';
 
 import type { AdminSettingEntry, AdminSettingKey, PatchSettingsRequest, SettingValue } from '@fileshed/core';
 
+// Stores
+import { useAppStore } from './app.ts';
+
 // Resource Access
 import { fetchAdminSettings, patchAdminSettings } from '../resource-access/admin.ts';
 
@@ -53,6 +56,10 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
     async function apply(changes : PatchSettingsRequest['changes']) : Promise<void>
     {
         adopt(await patchAdminSettings(changes));
+
+        // The one settings key with pre-auth surfaces: renaming the instance should rename the wordmark and
+        // title the admin is looking at, not wait for a reload.
+        if('INSTANCE_NAME' in changes) { void useAppStore().initialize(); }
     }
 
     async function save(key : AdminSettingKey, value : SettingValue) : Promise<void>

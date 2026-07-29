@@ -9,6 +9,7 @@ import { EDITOR_THEME_MAX_LENGTH, ROOT_LABEL_MAX_LENGTH } from '../../constants/
 
 // Models
 import { type UserPreferences, timeFormats, viewModes } from '../userPreferences.ts';
+import { colorModes } from '../instanceTheme.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../utils/typeAssert.ts';
@@ -29,6 +30,7 @@ export const userPreferencesCodec = z.object({
         .optional(),
     editorGutter: z.boolean().optional(),
     viewMode: z.enum(viewModes).optional(),
+    colorMode: z.enum(colorModes).optional(),
 });
 
 typeAssert<Equals<z.output<typeof userPreferencesCodec>, UserPreferences>>();

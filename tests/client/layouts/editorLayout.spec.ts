@@ -8,9 +8,13 @@
 // and none of the drive chrome (no New button, no drive nav, no storage gauge, no search box) leaks into the editor.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+
+//----------------------------------------------------------------------------------------------------------------------
+
+vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 // Under test
 import EditorLayout from '@client/layouts/editorLayout.vue';

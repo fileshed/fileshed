@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 
 // Models
-import { type SocialProviderID, setupRequestCodec } from '@fileshed/core';
+import { type InstanceBranding, type SocialProviderID, setupRequestCodec } from '@fileshed/core';
 
 // Managers
 import type { SetupManager } from '../managers/setup.ts';
@@ -21,12 +21,13 @@ import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// What /api/instance reports beside the setup gate: the live sign-up and email switches, and the provider list
-// this process froze in at boot.
+// What /api/instance reports beside the setup gate: the live sign-up and email switches, the live branding
+// facts, and the provider list this process froze in at boot.
 export interface InstanceFacts
 {
     signUpEnabled : () => Promise<boolean>;
     emailEnabled : () => Promise<boolean>;
+    branding : () => Promise<InstanceBranding>;
     providers : SocialProviderID[];
 }
 
@@ -36,13 +37,20 @@ export function createSetupRoutes(setup : SetupManager, facts : InstanceFacts) :
 
     router.get('/instance', instanceSpec, async (ctx) =>
     {
-        const [ needsSetup, signUp, email ] = await Promise.all([
+        const [ needsSetup, signUp, email, branding ] = await Promise.all([
             setup.needsSetup(),
             facts.signUpEnabled(),
             facts.emailEnabled(),
+            facts.branding(),
         ]);
 
-        return ctx.json({ needsSetup, signUpEnabled: signUp, emailEnabled: email, providers: facts.providers });
+        return ctx.json({
+            needsSetup,
+            signUpEnabled: signUp,
+            emailEnabled: email,
+            providers: facts.providers,
+            branding,
+        });
     });
 
     router.post('/setup', setupSpec, async (ctx) =>

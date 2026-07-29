@@ -8,9 +8,13 @@
 // hatch and logo point home, a RouterView carries the active tab, and no drive chrome leaks into the account context.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+
+//----------------------------------------------------------------------------------------------------------------------
+
+vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 // Under test
 import AccountLayout from '@client/layouts/accountLayout.vue';

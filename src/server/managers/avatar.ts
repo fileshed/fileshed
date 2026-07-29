@@ -22,6 +22,9 @@ import { BlobRA } from '../resource-access/blob/index.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { UserRA } from '../resource-access/users/index.ts';
 
+// Utils
+import { collectCapped, mediaType } from '../utils/uploadBody.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface AvatarManagerDeps
@@ -42,16 +45,6 @@ export interface ServedAvatar
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-
-// The media type off a Content-Type header, lowercased and stripped of any parameters (`image/png; charset=...`), or
-// null when the header is absent. Membership in the whitelist is judged by the caller.
-function mediaType(contentType : string | undefined) : string | null
-{
-    if(contentType === undefined) { return null; }
-
-    const [ media ] = contentType.split(';');
-    return media === undefined ? null : media.trim().toLowerCase();
-}
 
 function isAvatarMime(value : string | null) : value is AvatarMimeType
 {
@@ -100,7 +93,7 @@ export class AvatarManager
             throw new PayloadTooLargeError('Avatar exceeds the maximum size.');
         }
 
-        const bytes = await this.#collect(source, maxBytes);
+        const bytes = await collectCapped(source, maxBytes, 'Avatar exceeds the maximum size.');
         const sha256 = createHash('sha256')
             .update(bytes)
             .digest('hex');
@@ -165,29 +158,6 @@ export class AvatarManager
 
         const stream = await this.#blob.getStream({ backendID: row.backendID, storageKey: row.storageKey });
         return { stream, mime, size: row.size };
-    }
-
-    // Buffer the source into memory, aborting past the byte cap so an undeclared or lying Content-Length can never push
-    // more than the ceiling onto the heap. Avatars are small (a couple of MiB at most), so full buffering is fine and
-    // lets the bytes be hashed before they are stored.
-    async #collect(source : Readable, maxBytes : number) : Promise<Buffer>
-    {
-        const chunks : Buffer[] = [];
-        let seen = 0;
-
-        for await (const chunk of source)
-        {
-            const buffer = chunk as Buffer;
-            seen += buffer.length;
-            if(seen > maxBytes)
-            {
-                source.destroy();
-                throw new PayloadTooLargeError('Avatar exceeds the maximum size.');
-            }
-            chunks.push(buffer);
-        }
-
-        return Buffer.concat(chunks);
     }
 }
 

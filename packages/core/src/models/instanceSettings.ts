@@ -135,6 +135,7 @@ export function providerOwnedKeys(provider : SocialProviderID) : readonly Provid
 //----------------------------------------------------------------------------------------------------------------------
 
 const staticSettingKeys = [
+    'INSTANCE_NAME',
     'UPLOAD_MAX_BYTES',
     'AVATAR_MAX_BYTES',
     'TRASH_PURGE_DAYS',
@@ -177,6 +178,10 @@ const providerDefinitions = Object.fromEntries(providerSettingKeys.map((key) => 
 } satisfies SettingDefinition ])) as Record<ProviderSettingKey, SettingDefinition>;
 
 export const settingDefinitions : Readonly<Record<AdminSettingKey, SettingDefinition>> = {
+    // The instance's display name: page titles, the sidebar wordmark, outgoing email. Settings-only, no config
+    // twin -- a deployment brands through the admin surface, not the environment.
+    INSTANCE_NAME:
+        { key: 'INSTANCE_NAME', kind: 'string', secret: false, requiresRestart: false, fallback: 'FileShed' },
     UPLOAD_MAX_BYTES:
         { key: 'UPLOAD_MAX_BYTES', kind: 'number', secret: false, requiresRestart: false, fallback: null },
     AVATAR_MAX_BYTES:

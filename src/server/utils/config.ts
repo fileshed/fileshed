@@ -113,6 +113,10 @@ const configSchema = z.object({
     FILESHED_SETUP_TOKEN: z.string().min(8, 'FILESHED_SETUP_TOKEN must be at least 8 characters')
         .optional(),
 
+    // The theme rescue hatch: serves an empty /api/branding.css so an admin who bricked the UI with custom CSS
+    // can reach the Branding tab and fix it.
+    FILESHED_SAFE_THEME: booleanish.default(false),
+
     // OAuth provider settings, one optional string per key, generated from the provider vocabulary -- 35 providers
     // would be 70 lines of noise written out. They reach here through the env overlay in loadConfig rather than
     // yaml lines; a provider activates only when every key its contract requires is set (judged at boot, not

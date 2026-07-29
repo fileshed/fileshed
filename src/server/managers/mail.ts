@@ -28,7 +28,6 @@ export interface MailManagerDeps
 {
     settings : SettingsManager;
     mail : MailRA;
-    appName : string;
 }
 
 interface SmtpValues
@@ -47,13 +46,19 @@ export class MailManager
 {
     readonly #settings : SettingsManager;
     readonly #mail : MailRA;
-    readonly #appName : string;
 
     constructor(deps : MailManagerDeps)
     {
         this.#settings = deps.settings;
         this.#mail = deps.mail;
-        this.#appName = deps.appName;
+    }
+
+    // Resolved per send, like every other mail knob: renaming the instance renames the next email, no restart.
+    async #instanceName() : Promise<string>
+    {
+        const name = await this.#settings.value('INSTANCE_NAME');
+
+        return typeof name === 'string' && name !== '' ? name : 'FileShed';
     }
 
     // The effective SMTP values at this moment, or null while mail is off (no host or no from address).
@@ -97,25 +102,40 @@ export class MailManager
     }
 
     // The auth-flow senders never throw into the flow that triggered them: a reset request must answer identically
-    // whether the send worked or not (enumeration and timing), so failures land in the log for the operator.
+    // whether the send worked or not (enumeration and timing), so failures land in the log for the operator. The
+    // message is composed against the instance name, which is itself a live settings read.
+    #sendQuietly(
+        to : string,
+        failure : string,
+        compose : (name : string) => { subject : string; text : string }
+    ) : void
+    {
+        this.#instanceName()
+            .then((name) =>
+            {
+                const { subject, text } = compose(name);
+
+                return this.#send(to, subject, text);
+            })
+            .catch((error : unknown) => logger.error({ err: error, to }, failure));
+    }
+
     sendPasswordReset(to : string, url : string) : void
     {
-        this.#send(
-            to,
-            `Reset your ${ this.#appName } password`,
-            `Someone asked to reset the ${ this.#appName } password for this address. If that was you, open this `
+        this.#sendQuietly(to, 'password reset email failed', (name) => ({
+            subject: `Reset your ${ name } password`,
+            text: `Someone asked to reset the ${ name } password for this address. If that was you, open this `
                 + `link to choose a new one:\n\n${ url }\n\nIf it wasn't you, ignore this email; nothing changes `
-                + 'without the link.'
-        ).catch((error : unknown) => logger.error({ err: error, to }, 'password reset email failed'));
+                + 'without the link.',
+        }));
     }
 
     sendVerification(to : string, url : string) : void
     {
-        this.#send(
-            to,
-            `Verify your ${ this.#appName } email address`,
-            `Open this link to verify your email address for ${ this.#appName }:\n\n${ url }`
-        ).catch((error : unknown) => logger.error({ err: error, to }, 'verification email failed'));
+        this.#sendQuietly(to, 'verification email failed', (name) => ({
+            subject: `Verify your ${ name } email address`,
+            text: `Open this link to verify your email address for ${ name }:\n\n${ url }`,
+        }));
     }
 
     // The admin's plumbing check: sends to the admin's own address and lets every failure -- unconfigured SMTP or a
@@ -124,12 +144,14 @@ export class MailManager
     {
         if(actor.role !== 'admin') { throw new ForbiddenError('Admin access is required.'); }
 
+        const name = await this.#instanceName();
+
         try
         {
             await this.#send(
                 actor.email,
-                `${ this.#appName } test email`,
-                `This is a test email from ${ this.#appName }. If you are reading it, outgoing email works.`
+                `${ name } test email`,
+                `This is a test email from ${ name }. If you are reading it, outgoing email works.`
             );
         }
         catch(error)

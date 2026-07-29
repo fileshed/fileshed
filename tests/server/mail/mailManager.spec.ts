@@ -63,7 +63,7 @@ beforeEach(async () =>
         startedAt: new Date(),
     });
     transport = new RecordingMailRA();
-    mail = new MailManager({ settings, mail: transport as unknown as MailRA, appName: 'FileShed' });
+    mail = new MailManager({ settings, mail: transport as unknown as MailRA });
 });
 
 async function configureSmtp() : Promise<void>
@@ -103,6 +103,19 @@ describe('MailManager', () =>
     {
         await expect(mail.sendTest(admin)).rejects.toThrow(/not configured/i);
         expect(transport.deliveries).toHaveLength(0);
+    });
+
+    it('brands the very next email with a renamed instance, no restart', async () =>
+    {
+        await configureSmtp();
+
+        await mail.sendTest(admin);
+        expect(transport.deliveries[0]?.subject).toBe('FileShed test email');
+
+        await settings.patch(admin, { changes: { INSTANCE_NAME: 'Vale Files' } });
+
+        await mail.sendTest(admin);
+        expect(transport.deliveries[1]?.subject).toBe('Vale Files test email');
     });
 
     it('delivers the test email with the settings as they stand, sealed password included', async () =>

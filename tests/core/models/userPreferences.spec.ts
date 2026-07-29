@@ -96,6 +96,14 @@ describe('userPreferencesCodec', () =>
     {
         expect(userPreferencesCodec.safeParse({ viewMode: 'compact' }).success).toBe(false);
     });
+
+    it('accepts the three color-mode literals and rejects anything else', () =>
+    {
+        expect(userPreferencesCodec.parse({ colorMode: 'system' }).colorMode).toBe('system');
+        expect(userPreferencesCodec.parse({ colorMode: 'light' }).colorMode).toBe('light');
+        expect(userPreferencesCodec.parse({ colorMode: 'dark' }).colorMode).toBe('dark');
+        expect(userPreferencesCodec.safeParse({ colorMode: 'midnight' }).success).toBe(false);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

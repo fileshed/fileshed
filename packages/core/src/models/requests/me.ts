@@ -7,6 +7,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
+import type { ColorMode } from '../instanceTheme.ts';
 import type { TimeFormat, UserPreferences, ViewMode } from '../userPreferences.ts';
 import type { UserRole } from '../userProfile.ts';
 
@@ -49,6 +50,7 @@ export interface UpdatePreferencesRequest
     editorTheme ?: string | null;
     editorGutter ?: boolean | null;
     viewMode ?: ViewMode | null;
+    colorMode ?: ColorMode | null;
     [key : string] : unknown;
 }
 

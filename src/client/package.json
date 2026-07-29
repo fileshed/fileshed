@@ -10,6 +10,7 @@
     "lint:types": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-markdown": "^6.5.1",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.6",

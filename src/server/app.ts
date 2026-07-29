@@ -40,6 +40,7 @@ import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
 import { createAdminEmailRoutes } from './routes/adminEmail.ts';
 import { createAdminSettingsRoutes } from './routes/adminSettings.ts';
+import { createBrandingRoutes } from './routes/branding.ts';
 import { createSetupRoutes } from './routes/setup.ts';
 import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
@@ -78,6 +79,7 @@ import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
 import { SessionManager } from './managers/session.ts';
 import { SettingsManager } from './managers/settings.ts';
+import { BrandingManager } from './managers/branding.ts';
 import { SetupManager } from './managers/setup.ts';
 import { UserManager } from './managers/user.ts';
 import { StatusManager } from './managers/status.ts';
@@ -148,6 +150,7 @@ export interface AppServices
     users : UserManager;
     setup : SetupManager;
     settings : SettingsManager;
+    branding : BrandingManager;
     admins : AdminManager;
     mail : MailManager;
 
@@ -215,9 +218,28 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             app.route('/api', createSetupRoutes(services.setup, {
                 signUpEnabled: () => services.settings.booleanValue('SIGN_UP_ENABLED', true),
                 emailEnabled: () => services.mail.isConfigured(),
+                // Read live per request: a rename or mode change applies on the next page load, no restart. A
+                // corrupt theme row never throws (toInstanceTheme collapses it); a dead database fails the whole
+                // /api/instance alongside the setup check, which is the honest answer for a broken instance.
+                branding: async () =>
+                {
+                    const [ name, theme, logo ] = await Promise.all([
+                        services.settings.value('INSTANCE_NAME'),
+                        services.branding.theme(),
+                        services.branding.logoSha(),
+                    ]);
+
+                    return {
+                        instanceName: typeof name === 'string' && name !== '' ? name : 'FileShed',
+                        mode: theme.mode,
+                        forcedMode: theme.forcedMode,
+                        logo,
+                    };
+                },
                 providers: services.providers,
             }));
             app.route('/api', createAdminSettingsRoutes(sessions, services.settings));
+            app.route('/api', createBrandingRoutes(sessions, services.branding));
             app.route('/api', createAdminEmailRoutes(sessions, services.mail));
             app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
             app.route('/api', createBlobRoutes(sessions, services.blobs, services.mediaTags));
@@ -297,13 +319,14 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
 {
     const config = loadConfig();
     const handle = createDatabase(config);
+    const settingsRA = new SettingsRA(handle);
     const settings = new SettingsManager({
-        settings: new SettingsRA(handle),
+        settings: settingsRA,
         config,
         box: new SecretBox(config.AUTH_SECRET),
         startedAt: new Date(),
     });
-    const mail = new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' });
+    const mail = new MailManager({ settings, mail: new MailRA() });
 
     // better-auth freezes requireEmailVerification and the OAuth providers at construction, and construction
     // happens before the migrations -- the boot-tolerant reads answer the config defaults on a first boot with no
@@ -341,6 +364,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const blobs = new BlobManager({ handle, blob, uploadMaxBytes });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
+    const branding = new BrandingManager({ settings: settingsRA, config, handle, blob, maxBytes: avatarMaxBytes });
     const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY, trashPurgeDays);
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
     const users = new UserManager(userRA);
@@ -397,6 +421,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         users,
         setup,
         settings,
+        branding,
         admins,
         mail,
         providers: activeProviderIDs(providerValues),

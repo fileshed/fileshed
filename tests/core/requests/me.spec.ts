@@ -176,6 +176,17 @@ describe('updatePreferencesRequestCodec', () =>
     {
         expect(updatePreferencesRequestCodec.safeParse({ editorGutter: 1 }).success).toBe(false);
     });
+
+    // A colorMode outside the three literals must die HERE: the read side collapses the whole blob to empty on
+    // any invalid known value, so an unvalidated write would wipe every preference the user has.
+    it('accepts the three color-mode literals and a null delete, rejecting anything else', () =>
+    {
+        expect(updatePreferencesRequestCodec.parse({ colorMode: 'system' }).colorMode).toBe('system');
+        expect(updatePreferencesRequestCodec.parse({ colorMode: 'light' }).colorMode).toBe('light');
+        expect(updatePreferencesRequestCodec.parse({ colorMode: 'dark' }).colorMode).toBe('dark');
+        expect(updatePreferencesRequestCodec.parse({ colorMode: null }).colorMode).toBeNull();
+        expect(updatePreferencesRequestCodec.safeParse({ colorMode: 'neon-nightmare' }).success).toBe(false);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

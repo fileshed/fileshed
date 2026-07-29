@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 // Models
+import { colorModes } from '../../instanceTheme.ts';
 import { socialProviderIDs } from '../../instanceSettings.ts';
 
 // Requests
@@ -20,6 +21,12 @@ export const instanceResponseCodec = z.strictObject({
     signUpEnabled: z.boolean(),
     emailEnabled: z.boolean(),
     providers: z.array(z.enum(socialProviderIDs)),
+    branding: z.strictObject({
+        instanceName: z.string(),
+        mode: z.enum(colorModes),
+        forcedMode: z.boolean(),
+        logo: z.string().nullable(),
+    }),
 });
 
 typeAssert<Equals<z.output<typeof instanceResponseCodec>, InstanceResponse>>();

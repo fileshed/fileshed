@@ -10,7 +10,7 @@ import ui from '@nuxt/ui/vite';
 import devServer from '@hono/vite-dev-server';
 
 // Models
-import { socialProviderIDs } from '@fileshed/core';
+import { STOCK_THEME, socialProviderIDs } from '@fileshed/core';
 
 // Utils
 import { loadViteEnv } from './env.ts';
@@ -51,9 +51,9 @@ export default defineConfig(({ mode }) =>
                 },
                 ui: {
                     colors: {
-                        primary: 'shed',
-                        secondary: 'violet',
-                        neutral: 'zinc',
+                        primary: STOCK_THEME.primary,
+                        secondary: STOCK_THEME.secondary,
+                        neutral: STOCK_THEME.neutral,
                     },
                     // Stock neutral-ghost hovers with bg-elevated -- invisible on this app's chrome, which mostly
                     // sits ON elevated panels (dark mode's elevated and muted tokens collide). Hover one step up

@@ -103,6 +103,23 @@ describe('SettingsManager', () =>
         expect(view.settings.find((entry) => entry.key === 'GITHUB_CLIENT_ID')?.hasDefault).toBe(true);
     });
 
+    it('treats storing the default value as a reset, never an override', async () =>
+    {
+        await manager.patch(admin, { changes: { INSTANCE_NAME: 'FileShed' } });
+
+        const view = await manager.adminView(admin);
+        const entry = view.settings.find((row) => row.key === 'INSTANCE_NAME');
+
+        expect(entry).toMatchObject({ value: 'FileShed', source: 'default' });
+
+        // And an existing override written back to the default disappears the same way.
+        await manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: 1024 } });
+        await manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: booted.config.UPLOAD_MAX_BYTES } });
+
+        const after = await manager.adminView(admin);
+        expect(after.settings.find((row) => row.key === 'UPLOAD_MAX_BYTES')?.source).toBe('default');
+    });
+
     it('returns a key to its default when the override is patched to null', async () =>
     {
         await manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: 1024 } });

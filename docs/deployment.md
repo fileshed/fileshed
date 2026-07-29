@@ -58,6 +58,7 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `GC_GRACE_DAYS` | no | 7 | Days a dereferenced blob lingers before deletion. |
 | `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). |
 | `FILESHED_SETUP_TOKEN` | no | — | Operator-chosen first-run setup token (for automation); omit to use the boot-printed code. |
+| `FILESHED_SAFE_THEME` | no | `false` | Serve stock theming (empty branding stylesheet) — the rescue when custom CSS in the admin Branding tab breaks the UI. |
 | `SMTP_HOST` | no | — | Outgoing mail server; unset leaves email off. Also settable in the admin Email tab. |
 | `SMTP_PORT` | no | 587 | 587 (STARTTLS) or 465 (TLS). |
 | `SMTP_SECURE` | no | `false` | `true` for implicit TLS (port 465). |

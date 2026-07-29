@@ -11,6 +11,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import {
+    type ColorMode,
     DEFAULT_EDITOR_GUTTER,
     DEFAULT_EDITOR_THEME,
     DEFAULT_ROOT_LABEL,
@@ -61,6 +62,10 @@ export const useSessionStore = defineStore('session', () =>
     // The drive's grid-vs-list choice, defaulting until the user picks one. The single place that fallback lives; the
     // drive page reads it here.
     const viewMode = computed(() => me.value?.preferences.viewMode ?? DEFAULT_VIEW_MODE);
+
+    // The user's light/dark/system choice, deliberately WITHOUT a fallback: undefined means "never chose", which
+    // the color-mode resolver treats differently from any choice (the instance default applies instead).
+    const colorMode = computed(() => me.value?.preferences.colorMode);
 
     // The deployment's effective trash retention, defaulting only until the profile loads -- the server always sends
     // the configured value, so copy built on this never shows a shipped default an operator has overridden.
@@ -200,7 +205,9 @@ export const useSessionStore = defineStore('session', () =>
     // Merge a view preference into the in-memory profile at once, without a write, so the surface reflects a pick the
     // instant it happens. A savePreferences call follows to persist the settled value and reconcile against the
     // server's echo.
-    function applyPreferences(patch : { editorTheme ?: string; editorGutter ?: boolean; viewMode ?: ViewMode }) : void
+    function applyPreferences(
+        patch : { editorTheme ?: string; editorGutter ?: boolean; viewMode ?: ViewMode; colorMode ?: ColorMode }
+    ) : void
     {
         if(me.value === null) { return; }
         me.value = { ...me.value, preferences: { ...me.value.preferences, ...patch } };
@@ -217,6 +224,7 @@ export const useSessionStore = defineStore('session', () =>
         editorTheme,
         editorGutter,
         viewMode,
+        colorMode,
         trashRetentionDays,
         initialize,
         signIn,

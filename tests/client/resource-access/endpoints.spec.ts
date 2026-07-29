@@ -47,15 +47,19 @@ import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-acces
 import {
     adminStatus,
     banUser,
+    deleteBrandingLogo,
     fetchAdminSettings,
+    fetchBranding,
     listUsers,
     patchAdminSettings,
+    patchBranding,
     revokeUserSessions,
     sendTestEmail,
     setQuota,
     setUserPassword,
     setUserRole,
     unbanUser,
+    uploadBrandingLogo,
 } from '@client/resource-access/admin.ts';
 import { completeSetup, fetchInstance } from '@client/resource-access/instance.ts';
 import { downloadUrl } from '@client/resource-access/downloads.ts';
@@ -91,6 +95,7 @@ interface EndpointRow
 
 const sha256 = 'a'.repeat(64);
 const uploadBytes = new Blob([ 'file-bytes' ]);
+const logoFile = new File([ 'logo-bytes' ], 'logo.png', { type: 'image/png' });
 
 const rows : EndpointRow[] = [
     // Nodes
@@ -342,6 +347,27 @@ const rows : EndpointRow[] = [
         method: 'PATCH',
         path: '/api/admin/settings',
         body: { changes: { SIGN_UP_ENABLED: false } },
+    },
+    { name: 'fetchBranding', call: () => fetchBranding(), method: 'GET', path: '/api/admin/branding' },
+    {
+        name: 'patchBranding',
+        call: () => patchBranding({ primary: '#3b82f6' }),
+        method: 'PATCH',
+        path: '/api/admin/branding',
+        body: { primary: '#3b82f6' },
+    },
+    {
+        name: 'uploadBrandingLogo',
+        call: () => uploadBrandingLogo(logoFile),
+        method: 'POST',
+        path: '/api/admin/branding/logo',
+        rawBody: logoFile,
+    },
+    {
+        name: 'deleteBrandingLogo',
+        call: () => deleteBrandingLogo(),
+        method: 'DELETE',
+        path: '/api/admin/branding/logo',
     },
 
     // Instance & first-run setup

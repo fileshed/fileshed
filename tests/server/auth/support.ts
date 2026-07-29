@@ -12,12 +12,38 @@ import type { Hono } from 'hono';
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 import { type Auth, type AuthExtras, createAuth } from '@server/resource-access/auth.ts';
 import { initialize } from '@server/resource-access/boot.ts';
+import { BlobRA } from '@server/resource-access/blob/index.ts';
+import { MailRA } from '@server/resource-access/mail/index.ts';
+import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
+import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
+import { SettingsRA } from '@server/resource-access/settings/index.ts';
+import { ShareRA } from '@server/resource-access/shares/index.ts';
+import { UserRA } from '@server/resource-access/users/index.ts';
+
+// Managers
+import { AdminManager } from '@server/managers/admin.ts';
+import { AvatarManager } from '@server/managers/avatar.ts';
+import { BlobManager } from '@server/managers/blob.ts';
+import { BrandingManager } from '@server/managers/branding.ts';
+import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
+import { LastRunTracker } from '@server/managers/lastRun.ts';
+import { MailManager } from '@server/managers/mail.ts';
+import { MediaTagManager } from '@server/managers/mediaTags.ts';
+import { NodeManager } from '@server/managers/node.ts';
+import { PublicLinkManager } from '@server/managers/publicLink.ts';
+import { SettingsManager } from '@server/managers/settings.ts';
+import { SetupManager } from '@server/managers/setup.ts';
+import { ShareManager } from '@server/managers/share.ts';
+import { StatusManager } from '@server/managers/status.ts';
+import { UserManager } from '@server/managers/user.ts';
 
 // App
 import { createApp } from '@server/app.ts';
 
 // Utils
 import type { Config } from '@server/utils/config.ts';
+import { SecretBox } from '@server/utils/secretBox.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -47,6 +73,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         SMTP_PASSWORD: undefined,
         SMTP_FROM: undefined,
         EMAIL_VERIFICATION_REQUIRED: false,
+        FILESHED_SAFE_THEME: false,
         ...overrides,
     };
 }
@@ -70,6 +97,67 @@ export async function bootTestApp(overrides : Partial<Config> = {}, extras : Aut
     await initialize(handle, auth);
 
     return { config, handle, auth, app: createApp(auth) };
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Full composition
+//----------------------------------------------------------------------------------------------------------------------
+
+// bootApp's service composition in miniature: every manager over the one handle, with the settings manager feeding
+// the app's own instance -- so a patch through a route is what the gate middleware reads. Composition alone touches
+// neither the database nor the storage root, which is what lets the route-table and OpenAPI specs use it unmigrated.
+export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Config) : Hono
+{
+    const blob = new BlobRA(handle);
+    const nodeRA = new NodeRA(handle);
+    const shareRA = new ShareRA(handle);
+    const userRA = new UserRA(handle);
+    const settingsRA = new SettingsRA(handle);
+
+    const nodes = new NodeManager(handle, nodeRA, blob);
+    const settings = new SettingsManager({
+        settings: settingsRA,
+        config,
+        box: new SecretBox(config.AUTH_SECRET),
+        startedAt: new Date(),
+    });
+
+    return createApp(auth, {
+        blobs: new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES }),
+        mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
+        setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
+        avatars: new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES }),
+        nodes,
+        shares: new ShareManager(handle, nodeRA, shareRA, userRA),
+        publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
+            shareRA.effectiveRole(userID, nodeID)),
+        deletionOffers: new DeletionOfferManager(handle, nodes),
+        adminStatus: new StatusManager(blob, new LastRunTracker()),
+        users: new UserManager(userRA),
+        settings,
+        branding: new BrandingManager({
+            settings: settingsRA,
+            config,
+            handle,
+            blob,
+            maxBytes: async () => config.AVATAR_MAX_BYTES,
+        }),
+        admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
+        mail: new MailManager({ settings, mail: new MailRA() }),
+        providers: [],
+    });
+}
+
+// The fully-serviced counterpart to bootTestApp, for specs that drive real requests through the whole app.
+export async function bootFullApp(overrides : Partial<Config> = {}) : Promise<BootedApp>
+{
+    const config = testConfig(overrides);
+    const handle = createDatabase(config);
+    const auth = createAuth(handle, config);
+
+    await initialize(handle, auth);
+
+    return { config, handle, auth, app: composeFullApp(auth, handle, config) };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

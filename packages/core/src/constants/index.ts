@@ -11,6 +11,7 @@ export * from './media.ts';
 export * from './nodeType.ts';
 export * from './pagination.ts';
 export * from './pdf.ts';
+export * from './branding.ts';
 export * from './preferences.ts';
 export * from './publicLink.ts';
 export * from './quota.ts';
