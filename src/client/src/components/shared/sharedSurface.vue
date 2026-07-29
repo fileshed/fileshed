@@ -112,8 +112,7 @@
     import SharedTile from './sharedTile.vue';
 
     // Utils
-    import { type NodeTypePresentation, sharedTargetPresentation } from '../../utils/nodeTypePresentation.ts';
-    import { formatBytes } from '../../utils/formatters/index.ts';
+    import { type NodeTypePresentation, formatBytes, sharedTargetPresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

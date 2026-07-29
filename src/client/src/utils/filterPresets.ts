@@ -4,7 +4,8 @@
 // The pure vocabulary and math behind the drive's owner and modified-date filters: the modified-date presets and their
 // translation into the half-open [after, before) instants the server wants, and the chip summaries that report an
 // active selection. No Vue, no store, no I/O -- so the date math and the summaries are unit-testable in isolation, and
-// the filter bar and store share one source of truth. Type-family presentation lives in utils/nodeTypePresentation.ts.
+// the filter bar and store share one source of truth. Type-family presentation lives in
+// utils/formatters/nodeTypePresentation.ts.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { MS_PER_DAY, type UserSummary } from '@fileshed/core';

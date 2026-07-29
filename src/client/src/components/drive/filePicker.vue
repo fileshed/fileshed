@@ -119,7 +119,7 @@
     import { getChildren } from '../../resource-access/nodes.ts';
 
     // Utils
-    import { nodePresentation } from '../../utils/nodeTypePresentation.ts';
+    import { nodePresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

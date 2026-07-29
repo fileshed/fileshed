@@ -87,8 +87,13 @@
     import UserSummaryHover from '../userSummaryHover.vue';
 
     // Utils
-    import { formatBytes, formatNodeDate } from '../../utils/formatters/index.ts';
-    import { isDeadLink, nodeKindLabel, nodePresentation } from '../../utils/nodeTypePresentation.ts';
+    import {
+        formatBytes,
+        formatNodeDate,
+        isDeadLink,
+        nodeKindLabel,
+        nodePresentation,
+    } from '../../utils/formatters/index.ts';
     import { ownerIDFor, resolveOwner } from '../../utils/resolveOwner.ts';
 
     //------------------------------------------------------------------------------------------------------------------

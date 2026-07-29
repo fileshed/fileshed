@@ -63,7 +63,7 @@
     import { type UploadItem, isActiveStatus } from '../../stores/uploads.ts';
 
     // Utils
-    import { uploadStatusPresentation } from '../../utils/uploadStatusPresentation.ts';
+    import { uploadStatusPresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

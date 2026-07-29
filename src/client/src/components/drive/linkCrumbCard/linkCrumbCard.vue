@@ -52,7 +52,7 @@
     import type { NodeResponse, UserSummary } from '@fileshed/core';
 
     // Utils
-    import { isDeadLink, nodePresentation } from '../../../utils/nodeTypePresentation.ts';
+    import { isDeadLink, nodePresentation } from '../../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

@@ -102,13 +102,14 @@
     import { useSessionStore } from '../../stores/session.ts';
 
     // Utils
-    import { formatBytes, formatNodeDate } from '../../utils/formatters/index.ts';
     import {
         type NodeTypePresentation,
+        formatBytes,
+        formatNodeDate,
         isDeadLink,
         nodeKindLabel,
         nodePresentation,
-    } from '../../utils/nodeTypePresentation.ts';
+    } from '../../utils/formatters/index.ts';
     import { ownerIDFor, resolveOwner } from '../../utils/resolveOwner.ts';
 
     //------------------------------------------------------------------------------------------------------------------

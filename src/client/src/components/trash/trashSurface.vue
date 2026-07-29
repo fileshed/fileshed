@@ -112,8 +112,7 @@
     import TrashTile from './trashTile.vue';
 
     // Utils
-    import { type NodeTypePresentation, nodePresentation } from '../../utils/nodeTypePresentation.ts';
-    import { formatBytes } from '../../utils/formatters/index.ts';
+    import { type NodeTypePresentation, formatBytes, nodePresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

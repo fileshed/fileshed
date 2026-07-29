@@ -12,7 +12,7 @@ import {
     nodeKindLabel,
     nodePresentation,
     sharedTargetPresentation,
-} from '@client/utils/nodeTypePresentation.ts';
+} from '@client/utils/formatters/nodeTypePresentation.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 

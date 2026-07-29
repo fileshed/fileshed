@@ -94,7 +94,7 @@
     import { type SelectionState, intent } from '../engines/intent/index.ts';
 
     // Utils
-    import { isDeadLink } from '../utils/nodeTypePresentation.ts';
+    import { isDeadLink } from '../utils/formatters/index.ts';
     import { ownerIDFor, resolveOwner } from '../utils/resolveOwner.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
 

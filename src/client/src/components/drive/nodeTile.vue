@@ -74,8 +74,7 @@
     import { useSessionStore } from '../../stores/session.ts';
 
     // Utils
-    import { formatBytes, formatNodeDate } from '../../utils/formatters/index.ts';
-    import { isDeadLink, nodePresentation } from '../../utils/nodeTypePresentation.ts';
+    import { formatBytes, formatNodeDate, isDeadLink, nodePresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

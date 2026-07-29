@@ -36,7 +36,7 @@
     import { type NodeTypeFamily, nodeTypeFamilies } from '@fileshed/core';
 
     // Utils
-    import { familyPresentation } from '../../utils/nodeTypePresentation.ts';
+    import { familyPresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
