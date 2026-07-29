@@ -33,6 +33,7 @@ import { PublicLinkManager } from '@server/managers/publicLink.ts';
 import { ShareManager } from '@server/managers/share.ts';
 import { StatusManager } from '@server/managers/status.ts';
 import { LastRunTracker } from '@server/managers/lastRun.ts';
+import { AdminManager } from '@server/managers/admin.ts';
 import { MediaTagManager } from '@server/managers/mediaTags.ts';
 import { SettingsManager } from '@server/managers/settings.ts';
 import { SetupManager } from '@server/managers/setup.ts';
@@ -57,6 +58,11 @@ const EXPECTED_ROUTES = [
     // Admin
     'GET /api/admin/users',
     'PATCH /api/admin/users/:id',
+    'POST /api/admin/users/:id/ban',
+    'POST /api/admin/users/:id/unban',
+    'POST /api/admin/users/:id/role',
+    'POST /api/admin/users/:id/password',
+    'POST /api/admin/users/:id/revoke-sessions',
     'GET /api/admin/status',
     'GET /api/admin/settings',
     'PATCH /api/admin/settings',
@@ -177,6 +183,7 @@ const app = createApp(auth, {
         box: new SecretBox(config.AUTH_SECRET),
         startedAt: new Date(),
     }),
+    admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
 });
 
 afterAll(async () =>

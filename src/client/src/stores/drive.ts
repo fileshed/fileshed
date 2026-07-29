@@ -371,11 +371,13 @@ export const useDriveStore = defineStore('drive', () =>
         await refresh();
     }
 
-    // A file copied into the current folder unless a destination is named.
+    // A file copied into the current folder unless a destination is named. The copy charges the caller's quota, so
+    // the gauge refreshes.
     async function copy(id : string, destinationParentID : string | null = folderID.value) : Promise<void>
     {
         await copyNode(id, { parentID: destinationParentID });
         await refresh();
+        await session.refreshProfile().catch(() => undefined);
     }
 
     // A new empty file in the current folder, returned so a caller can navigate straight into it. Zero-byte content

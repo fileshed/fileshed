@@ -47,13 +47,13 @@
             <div class="flex-1">
                 <UInput
                     v-model="draft"
-                    type="number"
-                    min="0"
+                    inputmode="numeric"
+                    :placeholder="unit === 'bytes' ? 'e.g. 20gb, 500mb, or bytes' : undefined"
                     class="w-full"
                     @keydown.enter="saveNumber"
                 />
                 <p v-if="unit === 'bytes' && draftNumber !== null" class="mt-1 text-xs text-muted">
-                    = {{ formatBytes(draftNumber) }}
+                    = {{ describeByteSize(draftNumber) }} ({{ formatBytes(draftNumber) }})
                 </p>
             </div>
             <UButton
@@ -88,6 +88,9 @@
     // Stores
     import { useAdminSettingsStore } from '../../stores/adminSettings.ts';
 
+    // Engines
+    import { describeByteSize, parseByteSize } from '../../engines/byteSize.ts';
+
     // Utils
     import { useRunWithToast } from '../../utils/runWithToast.ts';
     import { formatBytes } from '../../utils/formatters/index.ts';
@@ -110,6 +113,8 @@
     // Number editing
     //------------------------------------------------------------------------------------------------------------------
 
+    // A text input on purpose: UInput type=number emits numbers (its runtime coerces) while its prop typing says
+    // string, and a spinner is useless on byte-sized values anyway. The draft stays a plain string.
     const draft = ref(props.entry.kind === 'number' ? String(props.entry.value ?? '') : '');
 
     // Every save and reset replaces the entry with the server's refreshed view; the draft follows it so the field
@@ -119,9 +124,12 @@
         if(props.entry.kind === 'number') { draft.value = String(value ?? ''); }
     });
 
-    // The draft as a storable number, or null while it isn't one (empty, negative, fractional).
+    // The draft as a storable number, or null while it isn't one. Byte fields take human sizes ("20gb", "500mb")
+    // or raw bytes; everything else (day counts) is a plain non-negative whole number.
     const draftNumber = computed<number | null>(() =>
     {
+        if(props.unit === 'bytes') { return parseByteSize(draft.value); }
+
         if(draft.value.trim() === '') { return null; }
 
         const value = Number(draft.value);

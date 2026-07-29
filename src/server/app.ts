@@ -133,6 +133,7 @@ export interface AppServices
     users : UserManager;
     setup : SetupManager;
     settings : SettingsManager;
+    admins : AdminManager;
 }
 
 export interface AppOptions
@@ -182,7 +183,12 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
         const sessions = new SessionManager(auth);
 
         app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-        app.route('/api', createAdminRoutes(sessions, new AdminManager(auth)));
+        // Auth-only compositions (no services) still get the admin surface; with no node store to charge against,
+        // every account truthfully reports zero usage.
+        app.route('/api', createAdminRoutes(
+            sessions,
+            services?.admins ?? new AdminManager({ auth, usage: async () => new Map() })
+        ));
         app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
 
         if(services)
@@ -301,6 +307,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const users = new UserManager(userRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
     const adminStatus = new StatusManager(blob, tracker);
+    const admins = new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) });
 
     const setup = new SetupManager({
         auth,
@@ -340,7 +347,18 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     };
 
     const services = {
-        blobs, mediaTags, avatars, nodes, shares, publicLinks, deletionOffers, adminStatus, users, setup, settings,
+        blobs,
+        mediaTags,
+        avatars,
+        nodes,
+        shares,
+        publicLinks,
+        deletionOffers,
+        adminStatus,
+        users,
+        setup,
+        settings,
+        admins,
     };
 
     return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };

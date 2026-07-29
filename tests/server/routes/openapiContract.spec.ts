@@ -33,6 +33,7 @@ import { PublicLinkManager } from '@server/managers/publicLink.ts';
 import { ShareManager } from '@server/managers/share.ts';
 import { StatusManager } from '@server/managers/status.ts';
 import { LastRunTracker } from '@server/managers/lastRun.ts';
+import { AdminManager } from '@server/managers/admin.ts';
 import { MediaTagManager } from '@server/managers/mediaTags.ts';
 import { SettingsManager } from '@server/managers/settings.ts';
 import { SetupManager } from '@server/managers/setup.ts';
@@ -77,6 +78,7 @@ const app = createApp(auth, {
         box: new SecretBox(config.AUTH_SECRET),
         startedAt: new Date(),
     }),
+    admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
 });
 
 afterAll(async () =>

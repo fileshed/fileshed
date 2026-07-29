@@ -173,7 +173,10 @@ describe('admin-set quota enforced by the blob claim flow', () =>
     {
         booted = await bootBlobApp();
         const sessions = new SessionManager(booted.auth);
-        booted.app.route('/api', createAdminRoutes(sessions, new AdminManager(booted.auth)));
+        booted.app.route('/api', createAdminRoutes(
+            sessions,
+            new AdminManager({ auth: booted.auth, usage: async () => new Map() })
+        ));
     });
 
     afterEach(async () =>

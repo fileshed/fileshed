@@ -21,6 +21,7 @@ import type { NodeResponse, UploadCommitMetadata } from '@fileshed/core';
 
 // Stores
 import { useDriveStore } from './drive.ts';
+import { useSessionStore } from './session.ts';
 
 // Resource Access
 import { answerChallenge, claimBlob } from '../resource-access/blobs.ts';
@@ -302,6 +303,10 @@ export const useUploadsStore = defineStore('uploads', () =>
 
             const drive = useDriveStore();
             if(item.folderID === drive.folderID) { await drive.refresh().catch(() => undefined); }
+
+            // The landed bytes moved the quota gauge; a failed refresh just leaves it stale until the next one.
+            await useSessionStore().refreshProfile()
+                .catch(() => undefined);
         }
         catch(caught)
         {
@@ -338,7 +343,20 @@ export const useUploadsStore = defineStore('uploads', () =>
     // Actions
     //------------------------------------------------------------------------------------------------------------------
 
-    function enqueue(files : readonly File[], folderID : string | null) : void
+    // A batch started while nothing is running opens a clean window: the previous batch's rows -- done, errored,
+    // or cancelled -- are history, not part of the new work. Rows join an existing window only while it still has
+    // active items.
+    function startFreshBatchIfIdle() : void
+    {
+        if(items.value.length > 0 && items.value.every((item) => TERMINAL.has(item.status)))
+        {
+            items.value = [];
+        }
+    }
+
+    // The shared row-appender behind the public entry points; deliberately no fresh-batch reset, so the multiple
+    // adds inside one payload (loose files, then each folder) never wipe rows the same payload just created.
+    function addFiles(files : readonly File[], folderID : string | null) : void
     {
         for(const file of files)
         {
@@ -356,6 +374,12 @@ export const useUploadsStore = defineStore('uploads', () =>
         }
 
         pump();
+    }
+
+    function enqueue(files : readonly File[], folderID : string | null) : void
+    {
+        startFreshBatchIfIdle();
+        addFiles(files, folderID);
     }
 
     // A folder that couldn't be created still needs a face in the panel -- an error row wearing the folder's name,
@@ -408,7 +432,7 @@ export const useUploadsStore = defineStore('uploads', () =>
 
             if(folderNodeID !== null)
             {
-                enqueue(folder.files, folderNodeID);
+                addFiles(folder.files, folderNodeID);
 
                 // eslint-disable-next-line no-await-in-loop -- the subtree needs its parent's id before it can start
                 await enqueueFolders(folder.folders, folderNodeID);
@@ -420,7 +444,8 @@ export const useUploadsStore = defineStore('uploads', () =>
     // files start immediately; each folder is created (or merged) first so its contents land inside it.
     async function enqueuePayload(payload : DroppedPayload, folderID : string | null) : Promise<void>
     {
-        enqueue(payload.files, folderID);
+        startFreshBatchIfIdle();
+        addFiles(payload.files, folderID);
         await enqueueFolders(payload.folders, folderID);
 
         const drive = useDriveStore();

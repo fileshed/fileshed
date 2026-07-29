@@ -66,6 +66,15 @@ export default defineConfig(({ mode }) =>
                 ],
             }),
         ],
+        server: {
+            // Poll instead of trusting macOS FSEvents: the kernel stream drops events under filesystem storms
+            // (full test runs alongside the dev server), leaving HMR serving stale modules until a restart. Polling
+            // has no event channel to lose; at this tree's size the interval costs nothing noticeable.
+            watch: {
+                usePolling: true,
+                interval: 300,
+            },
+        },
     };
 });
 

@@ -39,9 +39,15 @@ const UProgressStub = {
     template: '<div class="progress" :data-value="modelValue" :data-max="max" />',
 };
 
+const UTooltipStub = {
+    name: 'UTooltip',
+    props: [ 'text', 'disabled' ],
+    template: '<div class="tooltip" :data-text="text" :data-disabled="String(disabled)"><slot /></div>',
+};
+
 function mountStorage() : VueWrapper
 {
-    return mount(AccountStorage, { global: { stubs: { UProgress: UProgressStub } } });
+    return mount(AccountStorage, { global: { stubs: { UProgress: UProgressStub, UTooltip: UTooltipStub } } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -76,6 +82,16 @@ describe('AccountStorage', () =>
         const progress = wrapper.get('.progress');
         expect(progress.attributes('data-value')).toBe('1000000000');
         expect(progress.attributes('data-max')).toBe('5000000000');
+    });
+
+    it('carries the consumed percentage as the hover tooltip when capped', () =>
+    {
+        const session = useSessionStore();
+        session.me = meFixture({ quota: { used: 1_000_000_000, limit: 5_000_000_000 } });
+
+        const wrapper = mountStorage();
+
+        expect(wrapper.find('.tooltip').attributes('data-text')).toBe('20% of your storage used');
     });
 
     it('renders nothing before the profile loads', () =>

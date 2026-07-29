@@ -25,6 +25,7 @@ import { createAuth } from '@server/resource-access/auth.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 
 // Managers
+import { AdminManager } from '@server/managers/admin.ts';
 import { AvatarManager } from '@server/managers/avatar.ts';
 import { BlobManager } from '@server/managers/blob.ts';
 import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
@@ -84,6 +85,7 @@ async function bootSettingsApp() : Promise<BootedApp>
         adminStatus: new StatusManager(blob, new LastRunTracker()),
         users: new UserManager(userRA),
         settings,
+        admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
     });
 
     return { config, handle, auth, app };

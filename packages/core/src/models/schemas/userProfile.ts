@@ -18,6 +18,9 @@ export const userProfileCodec = z.strictObject({
     name: z.string().optional(),
     role: z.enum(userRoles),
     quotaLimit: z.number().nullable(),
+    banned: z.boolean(),
+    banReason: z.string().nullable(),
+    banExpires: z.date().nullable(),
     createdAt: z.date(),
 });
 

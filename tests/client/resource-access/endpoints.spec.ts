@@ -46,10 +46,15 @@ import { lookupUser } from '@client/resource-access/users.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
 import {
     adminStatus,
+    banUser,
     fetchAdminSettings,
     listUsers,
     patchAdminSettings,
+    revokeUserSessions,
     setQuota,
+    setUserPassword,
+    setUserRole,
+    unbanUser,
 } from '@client/resource-access/admin.ts';
 import { completeSetup, fetchInstance } from '@client/resource-access/instance.ts';
 import { downloadUrl } from '@client/resource-access/downloads.ts';
@@ -277,6 +282,41 @@ const rows : EndpointRow[] = [
         method: 'GET',
         path: '/api/admin/users',
         query: { limit: '25', offset: '0' },
+    },
+    {
+        name: 'listUsers (search + sort)',
+        call: () => listUsers({ search: 'ada', searchField: 'name', sortBy: 'email', sortDirection: 'desc' }),
+        method: 'GET',
+        path: '/api/admin/users',
+        query: { search: 'ada', searchField: 'name', sortBy: 'email', sortDirection: 'desc' },
+    },
+    {
+        name: 'banUser',
+        call: () => banUser('u1', { reason: 'Spamming', expiresInDays: 7 }),
+        method: 'POST',
+        path: '/api/admin/users/u1/ban',
+        body: { reason: 'Spamming', expiresInDays: 7 },
+    },
+    { name: 'unbanUser', call: () => unbanUser('u1'), method: 'POST', path: '/api/admin/users/u1/unban' },
+    {
+        name: 'setUserRole',
+        call: () => setUserRole('u1', 'admin'),
+        method: 'POST',
+        path: '/api/admin/users/u1/role',
+        body: { role: 'admin' },
+    },
+    {
+        name: 'setUserPassword',
+        call: () => setUserPassword('u1', 'a-brand-new-password'),
+        method: 'POST',
+        path: '/api/admin/users/u1/password',
+        body: { password: 'a-brand-new-password' },
+    },
+    {
+        name: 'revokeUserSessions',
+        call: () => revokeUserSessions('u1'),
+        method: 'POST',
+        path: '/api/admin/users/u1/revoke-sessions',
     },
     {
         name: 'setQuota (limit)',

@@ -639,6 +639,23 @@ export class NodeRA
 
         return Number(row.total);
     }
+
+    // The same charge for a batch of owners in one grouped aggregate -- the admin listing's usage column. Owners
+    // with no file nodes simply have no row; the map answers 0 for them.
+    async ownedBytesByOwner(ownerIDs : string[]) : Promise<Map<string, number>>
+    {
+        if(ownerIDs.length === 0) { return new Map(); }
+
+        const rows = await this.#db
+            .selectFrom('node')
+            .select([ 'owner_id', sql<string | number>`coalesce(sum(size), 0)`.as('total') ])
+            .where('owner_id', 'in', ownerIDs)
+            .where('type', '=', 'file')
+            .groupBy('owner_id')
+            .execute();
+
+        return new Map(rows.map((row) => [ row.owner_id, Number(row.total) ]));
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -134,6 +134,11 @@ export {
 } from './models/requests/accessRequests.ts';
 export {
     type SetQuotaRequest,
+    type BanUserRequest,
+    type SetRoleRequest,
+    type SetPasswordRequest,
+    type AdminUserSortKey,
+    type AdminUserSearchField,
     type StorageBackendStatus,
     type GcRunSummary,
     type TrashPurgeRunSummary,
@@ -142,6 +147,8 @@ export {
     type AdminStatusResponse,
     type AdminUserResponse,
     type AdminUserPageResponse,
+    adminUserSortKeys,
+    adminUserSearchFields,
 } from './models/requests/admin.ts';
 export {
     type DeletionOfferResponse,
@@ -226,6 +233,9 @@ export {
 } from './models/requests/schemas/accessRequests.ts';
 export {
     setQuotaRequestCodec,
+    banUserRequestCodec,
+    setRoleRequestCodec,
+    setPasswordRequestCodec,
     adminStatusResponseCodec,
     adminUserResponseCodec,
     adminUserPageResponseCodec,

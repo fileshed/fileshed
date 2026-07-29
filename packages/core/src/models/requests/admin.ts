@@ -19,10 +19,44 @@ export interface SetQuotaRequest
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// User rows (GET /api/admin/users, PATCH /api/admin/users/:id)
+// User management actions (POST /api/admin/users/:id/...)
 //
-// The wire form of a UserProfile: the same fields with createdAt as an ISO string. Both the listing page and the
-// set-quota response carry this shape, so neither side of the wire composes it ad hoc.
+// Ban, role, and password land as small dedicated actions rather than one grab-bag PATCH, because each carries its
+// own semantics: a ban optionally expires (days; absent = until lifted), a role change is guarded against
+// self-demotion, and a password set is the no-email password-reset fallback.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface BanUserRequest
+{
+    reason ?: string;
+    expiresInDays ?: number;
+}
+
+export interface SetRoleRequest
+{
+    role : UserRole;
+}
+
+export interface SetPasswordRequest
+{
+    password : string;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Listing query (GET /api/admin/users)
+//----------------------------------------------------------------------------------------------------------------------
+
+export const adminUserSortKeys = [ 'name', 'email', 'createdAt' ] as const;
+export type AdminUserSortKey = typeof adminUserSortKeys[number];
+
+export const adminUserSearchFields = [ 'email', 'name' ] as const;
+export type AdminUserSearchField = typeof adminUserSearchFields[number];
+
+//----------------------------------------------------------------------------------------------------------------------
+// User rows (GET /api/admin/users and every action's response)
+//
+// The wire form of a UserProfile plus the bytes the account's owned files charge: the same row shape everywhere, so
+// neither side of the wire composes it ad hoc. Dates are ISO strings.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface AdminUserResponse
@@ -32,6 +66,10 @@ export interface AdminUserResponse
     name ?: string;
     role : UserRole;
     quotaLimit : number | null;
+    banned : boolean;
+    banReason : string | null;
+    banExpires : string | null;
+    usedBytes : number;
     createdAt : string;
 }
 

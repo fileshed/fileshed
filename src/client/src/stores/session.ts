@@ -137,6 +137,20 @@ export const useSessionStore = defineStore('session', () =>
         finally { pending.value = false; }
     }
 
+    // Re-adopt the profile after something outside this store changed what it reports -- an upload or permanent
+    // delete moving the quota gauge. Failures propagate to the caller, who usually fires-and-forgets this.
+    async function refreshProfile() : Promise<void>
+    {
+        me.value = await fetchMe();
+    }
+
+    // Drop the signed-in state without a sign-out round trip -- for when the server already killed the session
+    // (revocation, ban) and calling the sign-out endpoint would just 401 again.
+    function clearSession() : void
+    {
+        me.value = null;
+    }
+
     // Save a preferences patch and adopt the refreshed profile the server returns, so every surface reading `me`
     // (sidebar root label, quota) reacts at once. Failures propagate to the caller to toast.
     async function savePreferences(patch : UpdatePreferencesRequest) : Promise<void>
@@ -208,6 +222,8 @@ export const useSessionStore = defineStore('session', () =>
         signIn,
         signUp,
         signOut,
+        clearSession,
+        refreshProfile,
         savePreferences,
         applyPreferences,
         updateName,

@@ -658,6 +658,28 @@ describe('NodeRA.ownedBytes', () =>
     });
 });
 
+describe('NodeRA.ownedBytesByOwner', () =>
+{
+    it('groups the same charge per owner, with no row for an owner with nothing', async () =>
+    {
+        await ra.insert(file('a1', { size: 100, ownerID: 'u1' }));
+        await ra.insert(file('a2', { size: 50, ownerID: 'u1' }));
+        await ra.setTrashed('a2', new Date('2026-04-01T00:00:00.000Z'));
+        await ra.insert(folderNode({ id: 'folder', ownerID: 'u2' }));
+
+        const usage = await ra.ownedBytesByOwner([ 'u1', 'u2' ]);
+
+        // u1 charges 150 (trashed still counts); u2 owns only a sizeless folder, so no row at all.
+        expect(usage.get('u1')).toBe(150);
+        expect(usage.has('u2')).toBe(false);
+    });
+
+    it('answers an empty map for an empty owner list without touching the database', async () =>
+    {
+        expect((await ra.ownedBytesByOwner([])).size).toBe(0);
+    });
+});
+
 //----------------------------------------------------------------------------------------------------------------------
 // get / getMany
 //----------------------------------------------------------------------------------------------------------------------

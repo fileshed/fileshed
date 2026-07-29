@@ -6,13 +6,21 @@ import { z } from 'zod';
 
 // Models
 import { storageBackendKinds } from '../../storageBackend.ts';
-import type { UserProfile } from '../../userProfile.ts';
+import { type UserProfile, userRoles } from '../../userProfile.ts';
 
 // Schemas
 import { userProfileCodec } from '../../schemas/userProfile.ts';
 
 // Requests
-import type { AdminStatusResponse, AdminUserPageResponse, AdminUserResponse, SetQuotaRequest } from '../admin.ts';
+import type {
+    AdminStatusResponse,
+    AdminUserPageResponse,
+    AdminUserResponse,
+    BanUserRequest,
+    SetPasswordRequest,
+    SetQuotaRequest,
+    SetRoleRequest,
+} from '../admin.ts';
 
 // Request Schemas
 import { isoDateTimeCodec } from './common.ts';
@@ -35,7 +43,45 @@ typeAssert<Equals<z.output<typeof setQuotaRequestCodec>, SetQuotaRequest>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export const adminUserResponseCodec = userProfileCodec.extend({ createdAt: isoDateTimeCodec });
+// A ban expiry is whole days, 1..365 -- longer bans are the no-expiry kind, lifted by hand. The reason is optional
+// and capped to keep it a note, not an essay.
+export const banUserRequestCodec = z.strictObject({
+    reason: z.string()
+        .trim()
+        .min(1)
+        .max(500)
+        .optional(),
+    expiresInDays: z.number()
+        .int()
+        .min(1)
+        .max(365)
+        .optional(),
+});
+
+typeAssert<Equals<z.output<typeof banUserRequestCodec>, BanUserRequest>>();
+
+export const setRoleRequestCodec = z.strictObject({
+    role: z.enum(userRoles),
+});
+
+typeAssert<Equals<z.output<typeof setRoleRequestCodec>, SetRoleRequest>>();
+
+// The password floor matches better-auth's own sign-up minimum.
+export const setPasswordRequestCodec = z.strictObject({
+    password: z.string().min(8),
+});
+
+typeAssert<Equals<z.output<typeof setPasswordRequestCodec>, SetPasswordRequest>>();
+
+//----------------------------------------------------------------------------------------------------------------------
+
+export const adminUserResponseCodec = userProfileCodec.extend({
+    banExpires: isoDateTimeCodec.nullable(),
+    usedBytes: z.number()
+        .int()
+        .nonnegative(),
+    createdAt: isoDateTimeCodec,
+});
 
 typeAssert<Equals<z.output<typeof adminUserResponseCodec>, AdminUserResponse>>();
 
@@ -56,20 +102,31 @@ typeAssert<Equals<z.output<typeof adminUserPageResponseCodec>, AdminUserPageResp
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function toAdminUserResponse(profile : UserProfile) : AdminUserResponse
+export function toAdminUserResponse(entry : { profile : UserProfile; usedBytes : number }) : AdminUserResponse
 {
+    const { profile, usedBytes } = entry;
+
     return {
         id: profile.id,
         email: profile.email,
         ...profile.name === undefined ? {} : { name: profile.name },
         role: profile.role,
         quotaLimit: profile.quotaLimit,
+        banned: profile.banned,
+        banReason: profile.banReason,
+        banExpires: profile.banExpires === null ? null : profile.banExpires.toISOString(),
+        usedBytes,
         createdAt: profile.createdAt.toISOString(),
     };
 }
 
 export function toAdminUserPageResponse(
-    page : { users : UserProfile[]; total : number; limit : number; offset : number }
+    page : {
+        users : { profile : UserProfile; usedBytes : number }[];
+        total : number;
+        limit : number;
+        offset : number;
+    }
 ) : AdminUserPageResponse
 {
     return {

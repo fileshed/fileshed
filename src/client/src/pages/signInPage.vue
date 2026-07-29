@@ -21,6 +21,13 @@
                 @submit="onSubmit"
             >
                 <UAlert
+                    v-if="wasSignedOut && !errorMessage"
+                    color="warning"
+                    variant="soft"
+                    description="Your session ended — you may have been signed out elsewhere. Sign in to continue."
+                />
+
+                <UAlert
                     v-if="errorMessage"
                     color="error"
                     variant="soft"
@@ -68,7 +75,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { onMounted, reactive, ref } from 'vue';
+    import { computed, onMounted, reactive, ref } from 'vue';
     import { RouterLink, useRoute, useRouter } from 'vue-router';
     import { z } from 'zod';
     import type { FormSubmitEvent } from '@nuxt/ui';
@@ -101,6 +108,9 @@
 
     // Optimistically true so the link doesn't pop in on the common (enabled) case.
     const signUpEnabled = ref(true);
+
+    // The session-kick redirect carries reason=signed-out so this page can say why the visitor landed here.
+    const wasSignedOut = computed(() => route.query.reason === 'signed-out');
 
     // A fresh instance has no accounts to sign into -- the visitor belongs at the first-run wizard instead.
     onMounted(async () =>

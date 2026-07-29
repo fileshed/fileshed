@@ -33,8 +33,12 @@ import AdminStatusTab from '../pages/admin/statusTab.vue';
 // Stores
 import { useSessionStore } from '../stores/session.ts';
 
+// Resource Access
+import { SESSION_LOST_EVENT } from '../resource-access/request.ts';
+
 // Router
 import { createAuthGuard } from './guard.ts';
+import { createSessionKick } from './sessionKick.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -95,5 +99,10 @@ export const router = createRouter({
 // useSessionStore is resolved lazily inside the guard so Pinia is already installed by the time it runs.
 const guard = createAuthGuard(useSessionStore);
 router.beforeEach((to) => guard(to));
+
+// A 401 on any credentialed request means the session died (revoked, banned, expired): drop the signed-in state
+// and land on sign-in instead of letting every surface fail one call at a time.
+const kick = createSessionKick(router, useSessionStore);
+window.addEventListener(SESSION_LOST_EVENT, () => { void kick(); });
 
 //----------------------------------------------------------------------------------------------------------------------

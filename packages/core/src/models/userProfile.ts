@@ -16,6 +16,13 @@ export interface UserProfile
     name ?: string;
     role : UserRole;
     quotaLimit : number | null;
+
+    // Ban state, admin-set. A banned account cannot sign in and its access tokens are deleted the moment the ban
+    // lands; banExpires null means the ban holds until an admin lifts it.
+    banned : boolean;
+    banReason : string | null;
+    banExpires : Date | null;
+
     createdAt : Date;
 }
 

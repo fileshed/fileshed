@@ -52,6 +52,12 @@ interface UploadRequestOptions<T>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// Fired on the window whenever a credentialed request answers 401: the session died out from under us (revoked,
+// banned, expired). The router-side listener owns the reaction.
+export const SESSION_LOST_EVENT = 'fileshed:session-lost';
+
+//----------------------------------------------------------------------------------------------------------------------
+
 export function buildUrl(path : string, query ?: QueryParams) : string
 {
     if(query === undefined) { return path; }
@@ -69,7 +75,14 @@ export function buildUrl(path : string, query ?: QueryParams) : string
 async function apiFetch(url : string, init : FetchInit) : Promise<Response>
 {
     const response = await fetch(url, { ...init, credentials: 'include' });
-    if(!response.ok) { throw await apiErrorFromResponse(response); }
+    if(!response.ok)
+    {
+        // A 401 means the session this fetch rode is dead -- revoked, banned, or expired. The shell listens for
+        // this and bounces to sign-in; announcing it as a window event keeps resource access router-ignorant.
+        if(response.status === 401) { window.dispatchEvent(new CustomEvent(SESSION_LOST_EVENT)); }
+
+        throw await apiErrorFromResponse(response);
+    }
 
     return response;
 }

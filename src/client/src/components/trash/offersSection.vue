@@ -114,7 +114,8 @@
         return formatNodeDate(expiresAt, session.timeFormat);
     }
 
-    // Accept places the copy in My Files (root); the copy is fully independent of the deleted original thereafter.
+    // Accept places the copy in My Files (root); the copy is fully independent of the deleted original thereafter --
+    // and it charges the acceptor's quota, so the gauge refreshes.
     async function accept(offer : DeletionOfferResponse) : Promise<void>
     {
         busyID.value = offer.id;
@@ -124,6 +125,7 @@
             () =>
             {
                 remove(offer.id);
+                void session.refreshProfile().catch(() => undefined);
                 toast.add({
                     title: 'Saved to your files',
                     description: `"${ offer.name }" is now in My Files.`,

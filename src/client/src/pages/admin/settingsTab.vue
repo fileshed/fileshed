@@ -85,13 +85,13 @@
                 {
                     key: 'UPLOAD_MAX_BYTES',
                     label: 'Maximum upload size',
-                    description: 'The largest single file an upload may be, in bytes.',
+                    description: 'The largest single file an upload may be. A size like 20gb or 500mb, or raw bytes.',
                     unit: 'bytes',
                 },
                 {
                     key: 'AVATAR_MAX_BYTES',
                     label: 'Maximum avatar size',
-                    description: 'The largest avatar image an account may upload, in bytes.',
+                    description: 'The largest avatar image an account may upload. A size like 2mb, or raw bytes.',
                     unit: 'bytes',
                 },
             ],

@@ -10,8 +10,14 @@ import {
     type AdminStatusResponse,
     type AdminUserPageResponse,
     type AdminUserResponse,
+    type AdminUserSearchField,
+    type AdminUserSortKey,
+    type BanUserRequest,
     type PatchSettingsRequest,
+    type SetPasswordRequest,
     type SetQuotaRequest,
+    type SetRoleRequest,
+    type UserRole,
     adminSettingsResponseCodec,
     adminStatusResponseCodec,
     adminUserPageResponseCodec,
@@ -19,22 +25,33 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson } from './request.ts';
+import { requestJson, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export interface ListUsersPagination
+export interface ListUsersOptions
 {
     limit ?: number;
     offset ?: number;
+    search ?: string;
+    searchField ?: AdminUserSearchField;
+    sortBy ?: AdminUserSortKey;
+    sortDirection ?: 'asc' | 'desc';
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function listUsers(pagination : ListUsersPagination = {}) : Promise<AdminUserPageResponse>
+export async function listUsers(options : ListUsersOptions = {}) : Promise<AdminUserPageResponse>
 {
     return requestJson('/api/admin/users', {
-        query: { limit: pagination.limit, offset: pagination.offset },
+        query: {
+            limit: options.limit,
+            offset: options.offset,
+            search: options.search,
+            searchField: options.searchField,
+            sortBy: options.sortBy,
+            sortDirection: options.sortDirection,
+        },
         codec: adminUserPageResponseCodec,
     });
 }
@@ -44,6 +61,43 @@ export async function setQuota(userID : string, quotaLimit : number | null) : Pr
     const body : SetQuotaRequest = { quotaLimit };
 
     return requestJson(`/api/admin/users/${ userID }`, { method: 'PATCH', body, codec: adminUserResponseCodec });
+}
+
+export async function banUser(userID : string, request : BanUserRequest) : Promise<AdminUserResponse>
+{
+    return requestJson(`/api/admin/users/${ userID }/ban`, {
+        method: 'POST',
+        body: request,
+        codec: adminUserResponseCodec,
+    });
+}
+
+export async function unbanUser(userID : string) : Promise<AdminUserResponse>
+{
+    return requestJson(`/api/admin/users/${ userID }/unban`, { method: 'POST', codec: adminUserResponseCodec });
+}
+
+export async function setUserRole(userID : string, role : UserRole) : Promise<AdminUserResponse>
+{
+    const body : SetRoleRequest = { role };
+
+    return requestJson(`/api/admin/users/${ userID }/role`, {
+        method: 'POST',
+        body,
+        codec: adminUserResponseCodec,
+    });
+}
+
+export async function setUserPassword(userID : string, password : string) : Promise<void>
+{
+    const body : SetPasswordRequest = { password };
+
+    await requestVoid(`/api/admin/users/${ userID }/password`, { method: 'POST', body });
+}
+
+export async function revokeUserSessions(userID : string) : Promise<void>
+{
+    await requestVoid(`/api/admin/users/${ userID }/revoke-sessions`, { method: 'POST' });
 }
 
 export async function adminStatus() : Promise<AdminStatusResponse>

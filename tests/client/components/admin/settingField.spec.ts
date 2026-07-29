@@ -172,6 +172,31 @@ describe('SettingField', () =>
         expect((wrapper.find('.value-input').element as HTMLInputElement).value).toBe('3000');
     });
 
+    it('takes a human size on a bytes field, echoing the parsed byte count, and saves the bytes', async () =>
+    {
+        patchMock.mockResolvedValue(response([ numberEntry({ value: 20_000_000_000, source: 'override' }) ]));
+        const wrapper = mountField(numberEntry({ value: 1000 }), 'bytes');
+
+        await wrapper.find('.value-input').setValue('20gb');
+
+        expect(wrapper.text()).toContain(`= ${ (20_000_000_000).toLocaleString() } bytes`);
+        expect(saveButton(wrapper).disabled).toBe(false);
+
+        await wrapper.find('.btn-save').trigger('click');
+        await flushPromises();
+
+        expect(patchMock).toHaveBeenCalledWith({ UPLOAD_MAX_BYTES: 20_000_000_000 });
+    });
+
+    it('refuses a draft that is not a size on a bytes field', async () =>
+    {
+        const wrapper = mountField(numberEntry({ value: 1000 }), 'bytes');
+
+        await wrapper.find('.value-input').setValue('20 gigawatts');
+
+        expect(saveButton(wrapper).disabled).toBe(true);
+    });
+
     it('offers Reset only while an override is in play, and resets with the null patch', async () =>
     {
         patchMock.mockResolvedValue(response([ numberEntry({ value: 1000, source: 'default' }) ]));

@@ -13,7 +13,7 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { ApiError } from '@client/resource-access/apiError.ts';
@@ -21,12 +21,14 @@ import { readDroppedPayload } from '@client/resource-access/droppedEntries.ts';
 import { createNode, getChildren } from '@client/resource-access/nodes.ts';
 import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
 import { uploadWithProgress } from '@client/resource-access/uploadWithProgress.ts';
+import { fetchMe } from '@client/resource-access/me.ts';
 
 // Utils
 import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
 
 // Stores
 import { useDriveStore } from '@client/stores/drive.ts';
+import { useSessionStore } from '@client/stores/session.ts';
 import { useUploadsStore } from '@client/stores/uploads.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -53,6 +55,8 @@ vi.mock('@client/resource-access/droppedEntries.ts', () => ({ readDroppedPayload
 
 vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 
+vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const getChildrenMock = getChildren as unknown as Mock;
@@ -63,6 +67,7 @@ const answerChallengeMock = answerChallenge as unknown as Mock;
 const uploadMock = uploadWithProgress as unknown as Mock;
 const hashFileMock = hashFile as unknown as Mock;
 const readWindowsMock = readSampleWindows as unknown as Mock;
+const fetchMeMock = fetchMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -185,6 +190,28 @@ describe('useUploadsStore', () =>
         expect(refresh).toHaveBeenCalled();
     });
 
+    it('refreshes the session quota when an upload lands, so the gauge moves', async () =>
+    {
+        mockHappyPipeline();
+        const refreshedProfile : MeResponse = {
+            id: 'u1',
+            email: 'member@example.com',
+            role: 'user',
+            quota: { used: 4096, limit: 10_000 },
+            limits: { trashRetentionDays: 30 },
+            preferences: {},
+            createdAt: ISO,
+        };
+        fetchMeMock.mockResolvedValue(refreshedProfile);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('report.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'done', 'done');
+        await waitFor(() => useSessionStore().me?.quota.used === 4096, 'quota adopted');
+
+        expect(useSessionStore().me?.quota).toEqual({ used: 4096, limit: 10_000 });
+    });
+
     it('does not refresh the drive when the upload lands in a different folder', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
@@ -201,6 +228,58 @@ describe('useUploadsStore', () =>
         await waitFor(() => store.items[0]?.status === 'done', 'done');
 
         expect(refresh).not.toHaveBeenCalled();
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Batch windows -- a new batch started when nothing is running opens a clean panel; rows join an existing
+    // window only while it still has active items.
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('drops the finished history when a new batch starts after everything settled', async () =>
+    {
+        mockHappyPipeline();
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('first.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'done', 'first done');
+
+        store.enqueue([ uploadFile('second.txt') ], null);
+        await waitFor(() => store.items.every((item) => item.status === 'done'), 'second done');
+
+        expect(store.items.map((item) => item.name)).toEqual([ 'second.txt' ]);
+    });
+
+    it('drops a previous batch\'s error rows too -- they are history once a new batch begins', async () =>
+    {
+        hashFileMock.mockResolvedValueOnce('sha-1');
+        getChildrenMock.mockResolvedValue(listing(0));
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        uploadMock.mockRejectedValueOnce(new ApiError(403, 'You are over your storage quota.'));
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('too-big.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'error', 'error');
+
+        hashFileMock.mockResolvedValue('sha-2');
+        uploadMock.mockResolvedValue(fileNode('n2'));
+        store.enqueue([ uploadFile('fits.txt') ], null);
+        await waitFor(() => store.items.every((item) => item.status === 'done'), 'second done');
+
+        expect(store.items.map((item) => item.name)).toEqual([ 'fits.txt' ]);
+    });
+
+    it('joins the window of a batch that is still running instead of wiping it', async () =>
+    {
+        const releases : ((sha : string) => void)[] = [];
+        hashFileMock.mockImplementation(() => new Promise<string>((resolve) => { releases.push(resolve); }));
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('running.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'hashing', 'first hashing');
+
+        store.enqueue([ uploadFile('joined.txt') ], null);
+
+        expect(store.items.map((item) => item.name)).toEqual([ 'running.txt', 'joined.txt' ]);
     });
 
     //------------------------------------------------------------------------------------------------------------------

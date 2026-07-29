@@ -21,6 +21,9 @@ import {
 // Resource Access
 import { emptyTrash, getTrash, hardDeleteNode, restoreNode } from '../resource-access/nodes.ts';
 
+// Stores
+import { useSessionStore } from './session.ts';
+
 // Utils
 import { type ModifiedFilter, modifiedRange } from '../utils/filterPresets.ts';
 
@@ -160,11 +163,14 @@ export const useTrashStore = defineStore('trash', () =>
     }
 
     // Permanent delete for everyone. The recipients-may-copy opt-in belongs to deleting a live shared file, not to
-    // emptying trash, so a purge here never mints deletion offers.
+    // emptying trash, so a purge here never mints deletion offers. Trashed bytes still charge the quota, so the
+    // gauge only moves now, at the permanent delete.
     async function purge(id : string) : Promise<void>
     {
         await hardDeleteNode(id);
         await refresh();
+        await useSessionStore().refreshProfile()
+            .catch(() => undefined);
     }
 
     // Every one of the caller's trashed roots, gone in one call. The whole listing just emptied, so the window
@@ -174,6 +180,8 @@ export const useTrashStore = defineStore('trash', () =>
         await emptyTrash();
         items.value = [];
         total.value = 0;
+        await useSessionStore().refreshProfile()
+            .catch(() => undefined);
     }
 
     return {

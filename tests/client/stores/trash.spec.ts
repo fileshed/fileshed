@@ -11,12 +11,14 @@
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { emptyTrash, getTrash } from '@client/resource-access/nodes.ts';
+import { fetchMe } from '@client/resource-access/me.ts';
 
 // Stores
+import { useSessionStore } from '@client/stores/session.ts';
 import { useTrashStore } from '@client/stores/trash.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -28,8 +30,11 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     emptyTrash: vi.fn(),
 }));
 
+vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+
 const getTrashMock = getTrash as unknown as Mock;
 const emptyTrashMock = emptyTrash as unknown as Mock;
+const fetchMeMock = fetchMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -91,6 +96,30 @@ describe('useTrashStore.emptyAll', () =>
         await expect(store.emptyAll()).rejects.toThrow('boom');
         expect(store.items).toHaveLength(1);
         expect(store.total).toBe(1);
+    });
+
+    // Trashed bytes still charge the quota; the permanent delete is the moment the gauge moves.
+    it('refreshes the session quota after emptying, so the gauge drops', async () =>
+    {
+        const refreshedProfile : MeResponse = {
+            id: 'u1',
+            email: 'member@example.com',
+            role: 'user',
+            quota: { used: 0, limit: 10_000 },
+            limits: { trashRetentionDays: 30 },
+            preferences: {},
+            createdAt: ISO,
+        };
+        fetchMeMock.mockResolvedValue(refreshedProfile);
+
+        const store = useTrashStore();
+        getTrashMock.mockResolvedValue(page([ folder('a') ]));
+        await store.load();
+
+        emptyTrashMock.mockResolvedValue({ purged: 1 });
+        await store.emptyAll();
+
+        expect(useSessionStore().me?.quota).toEqual({ used: 0, limit: 10_000 });
     });
 });
 

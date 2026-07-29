@@ -10,6 +10,9 @@ import { userProfileCodec } from '@fileshed/core';
 
 describe('userProfileCodec', () =>
 {
+    // The ban trio is part of every profile: an account never banned carries banned false with null reason/expiry.
+    const neverBanned = { banned: false, banReason: null, banExpires: null };
+
     // quotaLimit null means unlimited, and name is optional.
     it('parses a profile with a null quota and no name', () =>
     {
@@ -18,13 +21,14 @@ describe('userProfileCodec', () =>
             email: 'nobody@example.com',
             role: 'user',
             quotaLimit: null,
+            ...neverBanned,
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(userProfileCodec.safeParse(profile).success).toBe(true);
     });
 
-    it('parses an admin profile with a byte quota', () =>
+    it('parses a banned admin profile with a byte quota and an expiring ban', () =>
     {
         const profile = {
             id: 'user_2',
@@ -32,6 +36,9 @@ describe('userProfileCodec', () =>
             name: 'Ada',
             role: 'admin',
             quotaLimit: 10_737_418_240,
+            banned: true,
+            banReason: 'Spamming',
+            banExpires: new Date('2026-08-01T00:00:00.000Z'),
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
         };
 
@@ -46,6 +53,7 @@ describe('userProfileCodec', () =>
             email: 'someone@example.com',
             role: 'superuser',
             quotaLimit: null,
+            ...neverBanned,
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
         };
 
