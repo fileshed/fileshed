@@ -39,11 +39,10 @@ CLIENT_DIST: ${CLIENT_DIST:-}
 # First-run automation token (see docs/deployment.md); empty uses the boot-printed setup code.
 FILESHED_SETUP_TOKEN: ${FILESHED_SETUP_TOKEN:-}
 
-# OAuth social providers: both halves of a pair, or neither.
-GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
-GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+# OAuth social providers need no lines here: any provider credential set in the environment is picked up
+# directly by its setting name -- e.g. GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET enables GitHub, GITLAB_* GitLab,
+# and so on for every provider better-auth supports. They can also be entered at runtime from the admin
+# Authentication tab. Provider changes take effect on the next restart.
 
 # Outgoing email (password reset, verification). Unset SMTP_HOST or SMTP_FROM leaves mail off; all of these can
 # also be set from the admin Email tab, where values entered there win over these.

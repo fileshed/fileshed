@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Account Tab
   --
-  -- The account area's account-management tab: the storage summary and the password change control. Each owns its own
-  -- data and mutation; the tab only groups them under section headings.
+  -- The account area's account-management tab: the storage summary, the password change control, and the connected
+  -- sign-in methods. Each owns its own data and mutation; the tab only groups them under section headings.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -20,6 +20,13 @@
             </h2>
             <ChangePassword />
         </section>
+
+        <section class="flex flex-col gap-3">
+            <h2 class="text-lg font-semibold text-highlighted">
+                Connected accounts
+            </h2>
+            <ConnectedAccounts />
+        </section>
     </div>
 </template>
 
@@ -29,6 +36,7 @@
     // Components
     import AccountStorage from '../../components/account/accountStorage.vue';
     import ChangePassword from '../../components/account/changePassword.vue';
+    import ConnectedAccounts from '../../components/account/connectedAccounts.vue';
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

@@ -189,6 +189,7 @@ const app = createApp(auth, {
     settings,
     admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
     mail: new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' }),
+    providers: [],
 });
 
 afterAll(async () =>

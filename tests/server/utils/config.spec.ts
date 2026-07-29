@@ -4,8 +4,9 @@
 // loadConfig reads the committed config.yaml with ${VAR}/${VAR:-fallback} substitution against the real
 // environment (each managed key saved and restored around the run), so these specs prove that environment
 // variables genuinely flow THROUGH the file into the validated config. The contracts under test: substitution
-// semantics, the AUTH_SECRET placeholder rejection, and social providers activating only when BOTH halves of
-// their env pair are present.
+// semantics, the AUTH_SECRET placeholder rejection, and the provider env overlay -- any provider credential in
+// the environment reaches the config by its setting name without a yaml line, and a partial pair loads fine
+// (whether it activates is boot's judgement, not the loader's).
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -20,8 +21,9 @@ const MANAGED_KEYS = [
     'BASE_URL',
     'GITHUB_CLIENT_ID',
     'GITHUB_CLIENT_SECRET',
-    'GOOGLE_CLIENT_ID',
-    'GOOGLE_CLIENT_SECRET',
+    'GITLAB_CLIENT_ID',
+    'GITLAB_CLIENT_SECRET',
+    'GITLAB_ISSUER',
 ] as const;
 
 const saved : Record<string, string | undefined> = {};
@@ -90,9 +92,9 @@ describe('loadConfig AUTH_SECRET validation', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('loadConfig social provider validation', () =>
+describe('loadConfig provider env overlay', () =>
 {
-    it('accepts github when both client id and secret are set', () =>
+    it('carries a provider env pair into the config without a yaml line', () =>
     {
         process.env['GITHUB_CLIENT_ID'] = 'gh-id';
         process.env['GITHUB_CLIENT_SECRET'] = 'gh-secret';
@@ -103,51 +105,35 @@ describe('loadConfig social provider validation', () =>
         expect(config.GITHUB_CLIENT_SECRET).toBe('gh-secret');
     });
 
-    it('rejects a github client id set without its secret', () =>
+    it('works for any provider on the list, extras included -- nothing is special-cased to github', () =>
+    {
+        process.env['GITLAB_CLIENT_ID'] = 'gl-id';
+        process.env['GITLAB_CLIENT_SECRET'] = 'gl-secret';
+        process.env['GITLAB_ISSUER'] = 'https://gitlab.example.com';
+
+        const config = loadConfig();
+
+        expect(config.GITLAB_CLIENT_ID).toBe('gl-id');
+        expect(config.GITLAB_CLIENT_SECRET).toBe('gl-secret');
+        expect(config.GITLAB_ISSUER).toBe('https://gitlab.example.com');
+    });
+
+    it('loads a partial pair without failing -- activation is judged at boot, not here', () =>
     {
         process.env['GITHUB_CLIENT_ID'] = 'gh-id';
 
-        expect(() => loadConfig()).toThrow(/GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET/);
+        const config = loadConfig();
+
+        expect(config.GITHUB_CLIENT_ID).toBe('gh-id');
+        expect(config.GITHUB_CLIENT_SECRET).toBeUndefined();
     });
 
-    it('rejects a github client secret set without its id', () =>
-    {
-        process.env['GITHUB_CLIENT_SECRET'] = 'gh-secret';
-
-        expect(() => loadConfig()).toThrow(/GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET/);
-    });
-
-    it('accepts an environment with no github vars at all', () =>
+    it('leaves every provider key unset with a clean environment', () =>
     {
         const config = loadConfig();
 
         expect(config.GITHUB_CLIENT_ID).toBeUndefined();
-        expect(config.GITHUB_CLIENT_SECRET).toBeUndefined();
-    });
-
-    it('accepts google when both client id and secret are set', () =>
-    {
-        process.env['GOOGLE_CLIENT_ID'] = 'goog-id';
-        process.env['GOOGLE_CLIENT_SECRET'] = 'goog-secret';
-
-        const config = loadConfig();
-
-        expect(config.GOOGLE_CLIENT_ID).toBe('goog-id');
-        expect(config.GOOGLE_CLIENT_SECRET).toBe('goog-secret');
-    });
-
-    it('rejects a google client id set without its secret', () =>
-    {
-        process.env['GOOGLE_CLIENT_ID'] = 'goog-id';
-
-        expect(() => loadConfig()).toThrow(/GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET/);
-    });
-
-    it('rejects a google client secret set without its id', () =>
-    {
-        process.env['GOOGLE_CLIENT_SECRET'] = 'goog-secret';
-
-        expect(() => loadConfig()).toThrow(/GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET/);
+        expect(config.GITLAB_CLIENT_ID).toBeUndefined();
     });
 });
 

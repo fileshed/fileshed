@@ -66,6 +66,21 @@
                 />
             </UForm>
 
+            <div v-if="providers.length > 0" class="mt-4 space-y-3">
+                <USeparator label="or" />
+                <UButton
+                    v-for="provider of providers"
+                    :key="provider"
+                    block
+                    color="neutral"
+                    variant="soft"
+                    :icon="providerIcon(provider)"
+                    :label="`Continue with ${ providerLabel(provider) }`"
+                    :loading="socialPending === provider"
+                    @click="signInWith(provider)"
+                />
+            </div>
+
             <template v-if="signUpEnabled" #footer>
                 <p class="text-sm text-muted">
                     Need an account?
@@ -86,12 +101,18 @@
     import { z } from 'zod';
     import type { FormSubmitEvent } from '@nuxt/ui';
 
+    import type { SocialProviderID } from '@fileshed/core';
+
     // Stores
     import { useAppStore } from '../stores/app.ts';
     import { useSessionStore } from '../stores/session.ts';
 
     // Resource Access
+    import { authClient } from '../resource-access/authClient.ts';
     import { fetchInstance } from '../resource-access/instance.ts';
+
+    // Utils
+    import { providerIcon, providerLabel } from '../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
     // Setup
@@ -118,8 +139,20 @@
     // Off until the instance says mail works: a "Forgot password?" that leads nowhere is worse than none.
     const emailEnabled = ref(false);
 
+    // The provider buttons mirror exactly what the running instance registered at boot.
+    const providers = ref<SocialProviderID[]>([]);
+    const socialPending = ref<SocialProviderID | null>(null);
+
     // The session-kick redirect carries reason=signed-out so this page can say why the visitor landed here.
     const wasSignedOut = computed(() => route.query.reason === 'signed-out');
+
+    // Only same-origin absolute paths are honoured, so a crafted ?redirect can't bounce a fresh sign-in off-site.
+    function redirectTarget() : string
+    {
+        const target = route.query.redirect;
+
+        return typeof target === 'string' && target.startsWith('/') ? target : '/';
+    }
 
     // A fresh instance has no accounts to sign into -- the visitor belongs at the first-run wizard instead.
     onMounted(async () =>
@@ -130,21 +163,36 @@
             if(instance.needsSetup) { await router.replace('/setup'); }
             signUpEnabled.value = instance.signUpEnabled;
             emailEnabled.value = instance.emailEnabled;
+            providers.value = instance.providers;
         }
         catch { /* an unreachable API leaves sign-in up; submitting will surface the real error */ }
     });
 
+    // The OAuth doorway: better-auth answers a provider URL and the browser leaves; the pending flag holds until
+    // the navigation happens. Errors (misconfigured provider) land in the same message slot as a failed password.
+    async function signInWith(provider : SocialProviderID) : Promise<void>
+    {
+        errorMessage.value = null;
+        socialPending.value = provider;
+
+        try
+        {
+            const { error } = await authClient.signIn.social({
+                provider,
+                callbackURL: `${ window.location.origin }${ redirectTarget() }`,
+            });
+            if(error) { throw new Error(error.message ?? `Unable to sign in with ${ provider }.`); }
+        }
+        catch(error)
+        {
+            errorMessage.value = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+            socialPending.value = null;
+        }
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Submit
     //------------------------------------------------------------------------------------------------------------------
-
-    // Only same-origin absolute paths are honoured, so a crafted ?redirect can't bounce a fresh sign-in off-site.
-    function redirectTarget() : string
-    {
-        const target = route.query.redirect;
-
-        return typeof target === 'string' && target.startsWith('/') ? target : '/';
-    }
 
     async function onSubmit(event : FormSubmitEvent<SignInFields>) : Promise<void>
     {

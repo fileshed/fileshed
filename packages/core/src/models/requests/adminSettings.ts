@@ -24,6 +24,11 @@ export interface AdminSettingEntry
 
     // Where the effective value came from: the loaded config (or vocabulary fallback), or an admin override.
     source : 'default' | 'override';
+
+    // Whether deleting the override would leave a value behind (a config twin or vocabulary fallback). Existence
+    // only -- the default itself never crosses the wire, so a config-supplied secret stays unreadable. The UI
+    // offers Reset to default only when this is true: with nothing underneath, there is no default to reset to.
+    hasDefault : boolean;
 }
 
 export interface AdminSettingsResponse

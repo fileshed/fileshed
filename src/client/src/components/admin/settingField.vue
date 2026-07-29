@@ -2,9 +2,10 @@
   -- Setting Field
   --
   -- One instance setting as an editable card, driven entirely by its vocabulary entry: a switch for boolean keys
-  -- (saving on toggle), a number input with an explicit Save for numeric ones. The card tells the admin where the
-  -- value came from -- an Overridden badge and a Reset control appear only when a database override is in play --
-  -- and flags the rare key whose change waits on a restart.
+  -- (saving on toggle), a number input with an explicit Save for numeric ones. The Overridden badge and the Reset
+  -- control appear only when an override hides an actual default underneath -- a stored value with nothing
+  -- beneath it is not overriding anything, and there is nothing to reset to. The card also flags the rare key
+  -- whose change waits on a restart.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -16,7 +17,7 @@
                         {{ label }}
                     </h3>
                     <UBadge
-                        v-if="entry.source === 'override'"
+                        v-if="entry.source === 'override' && entry.hasDefault"
                         label="Overridden"
                         color="primary"
                         variant="subtle"
@@ -80,7 +81,7 @@
             />
         </div>
 
-        <div v-if="entry.source === 'override'" class="mt-3">
+        <div v-if="entry.source === 'override' && entry.hasDefault" class="mt-3">
             <UButton
                 label="Reset to default"
                 color="neutral"

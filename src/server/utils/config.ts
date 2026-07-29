@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
-// Constants
+// Models
 import {
     DEFAULT_AVATAR_MAX_BYTES,
     DEFAULT_BASE_URL,
@@ -27,9 +27,17 @@ import {
     DEFAULT_STORAGE_ROOT,
     DEFAULT_TRASH_PURGE_DAYS,
     DEFAULT_UPLOAD_MAX_BYTES,
+    type ProviderSettingKey,
+    providerSettingKeys,
 } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
+
+// One optional string per provider setting key, generated so the schema tracks the provider vocabulary instead of
+// hand-listing seventy keys.
+const providerConfigShape = Object.fromEntries(
+    providerSettingKeys.map((key) => [ key, z.string().optional() ])
+) as Record<ProviderSettingKey, z.ZodOptional<z.ZodString>>;
 
 // Boolean-ish yaml/env values, honestly: the substitution is textual, so yaml hands us real booleans for bare
 // true/false but strings for anything else -- and z.coerce.boolean would read the STRING "no" as true. Map the
@@ -105,12 +113,11 @@ const configSchema = z.object({
     FILESHED_SETUP_TOKEN: z.string().min(8, 'FILESHED_SETUP_TOKEN must be at least 8 characters')
         .optional(),
 
-    // OAuth social providers are config, not code: each activates only when BOTH halves of its env pair are present.
-    // Setting one half without the other is a misconfiguration, caught below (both-or-neither).
-    GITHUB_CLIENT_ID: z.string().optional(),
-    GITHUB_CLIENT_SECRET: z.string().optional(),
-    GOOGLE_CLIENT_ID: z.string().optional(),
-    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    // OAuth provider settings, one optional string per key, generated from the provider vocabulary -- 35 providers
+    // would be 70 lines of noise written out. They reach here through the env overlay in loadConfig rather than
+    // yaml lines; a provider activates only when every key its contract requires is set (judged at boot, not
+    // here -- a partial pair is an admin mid-entry, not a misconfiguration).
+    ...providerConfigShape,
 
     // Outgoing email. These are the config-side defaults for the SMTP_* admin settings (same names); an unset
     // SMTP_HOST or SMTP_FROM leaves mail off. EMAIL_VERIFICATION_REQUIRED is captured at boot -- better-auth
@@ -133,24 +140,6 @@ const configSchema = z.object({
             code: 'custom',
             path: [ 'DATABASE_URL' ],
             message: 'DATABASE_URL is required when DATABASE_KIND=postgres',
-        });
-    }
-
-    if(Boolean(config.GITHUB_CLIENT_ID) !== Boolean(config.GITHUB_CLIENT_SECRET))
-    {
-        ctx.addIssue({
-            code: 'custom',
-            path: [ 'GITHUB_CLIENT_ID' ],
-            message: 'GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set together, or not at all',
-        });
-    }
-
-    if(Boolean(config.GOOGLE_CLIENT_ID) !== Boolean(config.GOOGLE_CLIENT_SECRET))
-    {
-        ctx.addIssue({
-            code: 'custom',
-            path: [ 'GOOGLE_CLIENT_ID' ],
-            message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together, or not at all',
         });
     }
 });
@@ -217,10 +206,29 @@ function loadConfigDocument(path : string, env : Record<string, string | undefin
     return Object.fromEntries(Object.entries(parsed).filter(([ , value ]) => value !== '' && value !== null));
 }
 
+// Provider credentials skip the yaml: with 35 providers the file would be mostly ${VAR:-} noise. Instead any
+// provider setting key set in the environment flows straight into the document (yaml still wins if a deployment
+// chose to write the key there), so `GITLAB_CLIENT_ID=... GITLAB_CLIENT_SECRET=...` alone enables a provider.
+function overlayProviderEnv(
+    document : Record<string, unknown>,
+    env : Record<string, string | undefined>
+) : Record<string, unknown>
+{
+    const overlaid = { ...document };
+
+    for(const key of providerSettingKeys)
+    {
+        const value = env[key];
+        if(overlaid[key] === undefined && value !== undefined && value !== '') { overlaid[key] = value; }
+    }
+
+    return overlaid;
+}
+
 export function loadConfig(env : Record<string, string | undefined> = process.env) : Config
 {
     const path = env['FILESHED_CONFIG'] ?? findDefaultConfigFile();
-    const result = configSchema.safeParse(loadConfigDocument(path, env));
+    const result = configSchema.safeParse(overlayProviderEnv(loadConfigDocument(path, env), env));
 
     if(!result.success)
     {

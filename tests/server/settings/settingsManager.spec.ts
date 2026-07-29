@@ -76,6 +76,33 @@ describe('SettingsManager', () =>
         expect(entry).toMatchObject({ value: false, source: 'override' });
     });
 
+    it('marks whether a default lies beneath each key: config or fallback yes, bare provider keys no', async () =>
+    {
+        const view = await manager.adminView(admin);
+        const byKey = new Map(view.settings.map((entry) => [ entry.key, entry ]));
+
+        expect(byKey.get('UPLOAD_MAX_BYTES')?.hasDefault).toBe(true);
+        expect(byKey.get('SIGN_UP_ENABLED')?.hasDefault).toBe(true);
+        expect(byKey.get('GITLAB_CLIENT_ID')?.hasDefault).toBe(false);
+
+        // An override on a defaultless key does not conjure a default -- there is still nothing to reset to.
+        const after = await manager.patch(admin, { changes: { GITLAB_CLIENT_ID: 'gl-id' } });
+        expect(after.settings.find((entry) => entry.key === 'GITLAB_CLIENT_ID')?.hasDefault).toBe(false);
+    });
+
+    it('reports a config-supplied provider credential as a real default', async () =>
+    {
+        const configured = new SettingsManager({
+            settings: new SettingsRA(booted.handle),
+            config: { ...booted.config, GITHUB_CLIENT_ID: 'gh-from-env' },
+            box: new SecretBox(booted.config.AUTH_SECRET),
+            startedAt: new Date(),
+        });
+
+        const view = await configured.adminView(admin);
+        expect(view.settings.find((entry) => entry.key === 'GITHUB_CLIENT_ID')?.hasDefault).toBe(true);
+    });
+
     it('returns a key to its default when the override is patched to null', async () =>
     {
         await manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: 1024 } });
@@ -146,6 +173,35 @@ describe('SettingsManager', () =>
 
         const restarted = managerStartedAt(new Date(Date.now() + 60_000));
         expect((await restarted.adminView(admin)).restartRequired).toBe(false);
+    });
+
+    it(
+        'boot reads prefer a stored override, fall back to the given default, and never leak an empty string',
+        async () =>
+        {
+            expect(await manager.stringValueAtBoot('GITHUB_CLIENT_ID', 'env-id')).toBe('env-id');
+
+            await manager.patch(admin, { changes: { GITHUB_CLIENT_ID: 'settings-id' } });
+            expect(await manager.stringValueAtBoot('GITHUB_CLIENT_ID', 'env-id')).toBe('settings-id');
+        }
+    );
+
+    it('boot reads answer the fallback instead of failing when the settings table does not exist yet', async () =>
+    {
+        // A first boot reads before the migrations run; model it with a database that never migrated.
+        const { createDatabase } = await import('@server/resource-access/database/database.ts');
+        const bare = createDatabase(booted.config);
+        const unmigrated = new SettingsManager({
+            settings: new SettingsRA(bare),
+            config: booted.config,
+            box: new SecretBox(booted.config.AUTH_SECRET),
+            startedAt: new Date(),
+        });
+
+        expect(await unmigrated.stringValueAtBoot('GITHUB_CLIENT_ID', 'env-id')).toBe('env-id');
+        expect(await unmigrated.booleanValueAtBoot('EMAIL_VERIFICATION_REQUIRED', false)).toBe(false);
+
+        await bare.db.destroy();
     });
 
     it('masks a stored secret in the admin view -- the plaintext never crosses the wire again', async () =>

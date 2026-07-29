@@ -28,6 +28,12 @@ import {
     MS_PER_SECOND,
     PLAYBACK_TOKEN_PREFIX,
     PLAYBACK_TOKEN_TTL_MS,
+    type ProviderSettingKey,
+    type SocialProviderID,
+    providerCredentialKeys,
+    providerRequiredKeys,
+    providerSettingKeys,
+    socialProviderIDs,
 } from '@fileshed/core';
 
 // Resource Access
@@ -52,25 +58,91 @@ function resolveTrustedOrigins(config : Config) : string[]
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// The social sign-in providers better-auth should offer, derived entirely from config: a provider is included only
-// when BOTH halves of its env pair are present (the config schema enforces both-or-neither, so a single half is a boot
-// failure long before here). No pair configured yields undefined, so better-auth sees no social providers at all --
-// email/password stays the only sign-in surface unless a deployment opts one in.
-export function socialProvidersFromConfig(config : Config) : BetterAuthOptions['socialProviders']
+// The provider setting values as resolved at boot -- settings-over-config-over-env, since admins can enter them
+// at runtime (they take effect on the next boot; the routes are frozen into the auth instance).
+export type ProviderBootValues = Partial<Record<ProviderSettingKey, string | null>>;
+
+export function providerValuesFromConfig(config : Config) : ProviderBootValues
 {
-    const providers : NonNullable<BetterAuthOptions['socialProviders']> = {};
+    const values : ProviderBootValues = {};
 
-    if(config.GITHUB_CLIENT_ID && config.GITHUB_CLIENT_SECRET)
+    for(const key of providerSettingKeys)
     {
-        providers.github = { clientId: config.GITHUB_CLIENT_ID, clientSecret: config.GITHUB_CLIENT_SECRET };
+        const value = (config as Partial<Record<ProviderSettingKey, string>>)[key];
+        values[key] = value ?? null;
     }
 
-    if(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET)
+    return values;
+}
+
+// One provider's better-auth options from the resolved values. The generic shape (id + secret) fits almost every
+// provider; the exceptions carry the extra fields their OAuth contract genuinely uses. Called only after the
+// required-key gate, so every field a case reads is present.
+function providerOptions(provider : SocialProviderID, values : ProviderBootValues) : Record<string, unknown>
+{
+    const keys = providerCredentialKeys(provider);
+    const generic = { clientId: values[keys.clientID], clientSecret: values[keys.clientSecret] };
+
+    switch (provider)
     {
-        providers.google = { clientId: config.GOOGLE_CLIENT_ID, clientSecret: config.GOOGLE_CLIENT_SECRET };
+        case 'apple':
+            return {
+                ...generic,
+                ...values.APPLE_APP_BUNDLE_IDENTIFIER
+                    ? { appBundleIdentifier: values.APPLE_APP_BUNDLE_IDENTIFIER }
+                    : {},
+            };
+        case 'cognito':
+            return {
+                ...generic,
+                domain: values.COGNITO_DOMAIN,
+                region: values.COGNITO_REGION,
+                userPoolId: values.COGNITO_USER_POOL_ID,
+            };
+        case 'gitlab':
+            return { ...generic, ...values.GITLAB_ISSUER ? { issuer: values.GITLAB_ISSUER } : {} };
+        case 'microsoft':
+            return { ...generic, ...values.MICROSOFT_TENANT_ID ? { tenantId: values.MICROSOFT_TENANT_ID } : {} };
+        case 'tiktok':
+            return { clientKey: values.TIKTOK_CLIENT_KEY, clientSecret: values[keys.clientSecret] };
+        default:
+            return generic;
+    }
+}
+
+// The provider ids the same values activate, for /api/instance -- the sign-in page's buttons must mirror exactly
+// what the running instance registered.
+export function activeProviderIDs(values : ProviderBootValues) : SocialProviderID[]
+{
+    return socialProviderIDs.filter((provider) =>
+    {
+        return providerRequiredKeys(provider).every((key) =>
+        {
+            const value = values[key];
+            return typeof value === 'string' && value !== '';
+        });
+    });
+}
+
+// A provider activates only when every key its contract requires is set -- a partially configured provider is
+// silently inactive rather than a boot failure, because settings overrides legitimately hold some fields while
+// the admin types the rest. No provider complete yields undefined, so better-auth sees no social providers at
+// all: email/password stays the only sign-in surface unless a deployment opts one in.
+//
+// The one cast: better-auth types each provider's options separately, and this builds them dynamically; the
+// required-key gate plus the createAuth specs are what keep the shapes honest.
+export function socialProvidersFromValues(values : ProviderBootValues) : BetterAuthOptions['socialProviders']
+{
+    const providers : Record<string, Record<string, unknown>> = {};
+
+    for(const provider of activeProviderIDs(values))
+    {
+        providers[provider] = providerOptions(provider, values);
     }
 
-    return Object.keys(providers).length > 0 ? providers : undefined;
+    return Object.keys(providers).length > 0
+        ? providers as BetterAuthOptions['socialProviders']
+        : undefined;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -225,6 +297,10 @@ export interface AuthExtras
     // Read from settings-over-config at boot; better-auth freezes it into the instance, which is why the setting
     // is restart-tier.
     requireEmailVerification ?: boolean;
+
+    // Provider credentials resolved settings-over-config at boot -- same freezing, same restart tier. Absent falls
+    // back to config alone (the auth-only test compositions).
+    providerValues ?: ProviderBootValues;
 }
 
 // The live email options, annotated with the shape's own types so the betterAuth generic stays pinned to the
@@ -274,7 +350,7 @@ export function createAuth(handle : DatabaseHandle, config : Config, extras : Au
         secret: config.AUTH_SECRET,
         baseURL: config.BASE_URL,
         trustedOrigins: resolveTrustedOrigins(config),
-        socialProviders: socialProvidersFromConfig(config),
+        socialProviders: socialProvidersFromValues(extras.providerValues ?? providerValuesFromConfig(config)),
         emailAndPassword: emailAndPasswordOptions(extras.mail, extras.requireEmailVerification ?? false),
         emailVerification: emailVerificationOptions(extras.mail),
         // Fresh plugin instances per auth instance; the shape above supplies only their type.

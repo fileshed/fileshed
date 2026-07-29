@@ -5,7 +5,7 @@
 // store.entries[0], the way the settings tab does -- so a save proves the whole path: the field dispatches the
 // patch, the store adopts the refreshed view, and the card re-renders what the server settled on. Boolean keys
 // save on toggle; number keys demand an explicit Save that stays dead until the draft is a changed, whole,
-// non-negative number; the Reset control exists only while an override is in play.
+// non-negative number; the Reset control exists only while an override hides an actual default underneath.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +44,7 @@ function numberEntry(overrides : Partial<AdminSettingEntry> = {}) : AdminSetting
         requiresRestart: false,
         value: 1000,
         source: 'default',
+        hasDefault: true,
         ...overrides,
     };
 }
@@ -57,6 +58,7 @@ function booleanEntry(overrides : Partial<AdminSettingEntry> = {}) : AdminSettin
         requiresRestart: false,
         value: true,
         source: 'default',
+        hasDefault: true,
         ...overrides,
     };
 }
@@ -209,6 +211,20 @@ describe('SettingField', () =>
         expect(wrapper.find('.btn-reset-to-default').exists()).toBe(false);
     });
 
+    it('shows neither Overridden nor Reset when no default lies underneath the stored value', () =>
+    {
+        const wrapper = mountField(numberEntry({
+            key: 'GITLAB_CLIENT_ID',
+            kind: 'string',
+            value: 'gl-id',
+            source: 'override',
+            hasDefault: false,
+        }));
+
+        expect(wrapper.find('.btn-reset-to-default').exists()).toBe(false);
+        expect(wrapper.findAll('.badge').map((badge) => badge.text())).not.toContain('Overridden');
+    });
+
     it('badges an override and a restart-requiring key', () =>
     {
         const wrapper = mountField(numberEntry({ source: 'override', requiresRestart: true }));
@@ -231,6 +247,7 @@ describe('SettingField', () =>
             requiresRestart: false,
             value: null,
             source: 'default',
+            hasDefault: false,
             ...overrides,
         };
     }

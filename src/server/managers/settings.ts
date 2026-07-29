@@ -109,7 +109,7 @@ export class SettingsManager
         return typeof value === 'boolean' ? value : fallback;
     }
 
-    // The boot-time read for values better-auth freezes at construction: it runs BEFORE the migrations, so on a
+    // The boot-time reads for values better-auth freezes at construction: they run BEFORE the migrations, so on a
     // first boot the settings table may not exist yet -- an unreadable store answers the fallback instead of
     // failing the boot. Restart-tier settings tolerate this by definition: whatever was stored applies next boot.
     async booleanValueAtBoot(key : AdminSettingKey, fallback : boolean) : Promise<boolean>
@@ -117,6 +117,19 @@ export class SettingsManager
         try
         {
             return await this.booleanValue(key, fallback);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    async stringValueAtBoot(key : AdminSettingKey, fallback : string | null) : Promise<string | null>
+    {
+        try
+        {
+            const value = await this.value(key);
+            return typeof value === 'string' && value !== '' ? value : fallback;
         }
         catch
         {
@@ -153,6 +166,7 @@ export class SettingsManager
                 requiresRestart: definition.requiresRestart,
                 value: definition.secret && typeof value === 'string' ? maskSecret(value) : value,
                 source: override !== undefined ? 'override' : 'default',
+                hasDefault: this.#defaultFor(key) !== null,
             };
         });
 

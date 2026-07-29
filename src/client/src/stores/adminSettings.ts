@@ -65,7 +65,13 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
         await apply({ [key]: null });
     }
 
-    return { entries, restartRequired, loading, error, load, save, reset };
+    // One PATCH, so a multi-key removal lands atomically instead of racing refreshed views.
+    async function resetAll(keys : readonly AdminSettingKey[]) : Promise<void>
+    {
+        await apply(Object.fromEntries(keys.map((key) => [ key, null ])));
+    }
+
+    return { entries, restartRequired, loading, error, load, save, reset, resetAll };
 });
 
 //----------------------------------------------------------------------------------------------------------------------

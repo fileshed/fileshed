@@ -18,13 +18,14 @@ import AccountTab from '@client/pages/account/accountTab.vue';
 // Composed controls
 import AccountStorage from '@client/components/account/accountStorage.vue';
 import ChangePassword from '@client/components/account/changePassword.vue';
+import ConnectedAccounts from '@client/components/account/connectedAccounts.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 function mountTab() : VueWrapper
 {
     return mount(AccountTab, {
-        global: { stubs: { AccountStorage: true, ChangePassword: true } },
+        global: { stubs: { AccountStorage: true, ChangePassword: true, ConnectedAccounts: true } },
     });
 }
 
@@ -32,19 +33,21 @@ function mountTab() : VueWrapper
 
 describe('AccountTab', () =>
 {
-    it('groups the controls under the Storage and Password headings in order', () =>
+    it('groups the controls under the Storage, Password, and Connected accounts headings in order', () =>
     {
         const wrapper = mountTab();
 
-        expect(wrapper.findAll('h2').map((heading) => heading.text())).toEqual([ 'Storage', 'Password' ]);
+        expect(wrapper.findAll('h2').map((heading) => heading.text()))
+            .toEqual([ 'Storage', 'Password', 'Connected accounts' ]);
     });
 
-    it('keeps the storage summary and the password-change control', () =>
+    it('keeps the storage summary, the password-change control, and the connected accounts', () =>
     {
         const wrapper = mountTab();
 
         expect(wrapper.findComponent(AccountStorage).exists()).toBe(true);
         expect(wrapper.findComponent(ChangePassword).exists()).toBe(true);
+        expect(wrapper.findComponent(ConnectedAccounts).exists()).toBe(true);
     });
 });
 

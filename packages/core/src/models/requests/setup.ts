@@ -7,6 +7,11 @@
 // the wire exactly once, here, and lands only as a hash.
 //----------------------------------------------------------------------------------------------------------------------
 
+// Models
+import type { SocialProviderID } from '../instanceSettings.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+
 export interface InstanceResponse
 {
     needsSetup : boolean;
@@ -16,6 +21,9 @@ export interface InstanceResponse
 
     // Whether outgoing email is configured; the sign-in page offers "Forgot password?" only when it is.
     emailEnabled : boolean;
+
+    // The OAuth providers the RUNNING instance registered at boot -- the sign-in page's provider buttons.
+    providers : SocialProviderID[];
 }
 
 export interface SetupRequest

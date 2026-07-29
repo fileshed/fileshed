@@ -27,6 +27,7 @@ export const adminSettingEntryCodec = z.strictObject({
     requiresRestart: z.boolean(),
     value: settingValueCodec.nullable(),
     source: z.enum([ 'default', 'override' ]),
+    hasDefault: z.boolean(),
 });
 
 export const adminSettingsResponseCodec = z.strictObject({

@@ -89,6 +89,7 @@ async function bootSettingsApp() : Promise<BootedApp>
         settings,
         admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
         mail: new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' }),
+        providers: [],
     });
 
     return { config, handle, auth, app };

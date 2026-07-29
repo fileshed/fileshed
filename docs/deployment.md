@@ -64,11 +64,19 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `SMTP_USER` / `SMTP_PASSWORD` | no | — | SMTP credentials; omit for unauthenticated servers. |
 | `SMTP_FROM` | no | — | Sender address on outgoing email; required (with `SMTP_HOST`) for email to be on. |
 | `EMAIL_VERIFICATION_REQUIRED` | no | `false` | New accounts must verify their address before signing in. Applied at boot. |
+| `<PROVIDER>_CLIENT_ID` / `<PROVIDER>_CLIENT_SECRET` | no | — | OAuth credentials for any social provider better-auth supports, e.g. `GITHUB_*`, `GOOGLE_*`, `DISCORD_*`. Applied at boot; a provider activates once every field it requires is set. |
 | `LOG_LEVEL` | no | `info` | pino levels: trace … silent. |
 
 Everything email can also be configured at runtime from the admin **Email** tab — values set there override these,
 the password is stored encrypted, and changes apply to the next email without a restart (except
 `EMAIL_VERIFICATION_REQUIRED`, which takes effect on the next one).
+
+Sign-in providers work the same way from the admin **Authentication** tab, which also spells out the callback URL
+and the handful of extra fields some providers need (Cognito's pool coordinates, TikTok's client key, Microsoft's
+tenant, GitLab's issuer, Apple's bundle identifier — as environment variables: `COGNITO_DOMAIN`, `COGNITO_REGION`,
+`COGNITO_USER_POOL_ID`, `TIKTOK_CLIENT_KEY`, `MICROSOFT_TENANT_ID`, `GITLAB_ISSUER`,
+`APPLE_APP_BUNDLE_IDENTIFIER`). Provider changes always wait on a restart — better-auth registers its OAuth routes
+at boot.
 
 ## Put HTTPS in front
 

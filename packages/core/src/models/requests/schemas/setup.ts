@@ -4,6 +4,9 @@
 
 import { z } from 'zod';
 
+// Models
+import { socialProviderIDs } from '../../instanceSettings.ts';
+
 // Requests
 import { type InstanceResponse, type SetupRequest, type SetupResponse } from '../setup.ts';
 
@@ -16,6 +19,7 @@ export const instanceResponseCodec = z.strictObject({
     needsSetup: z.boolean(),
     signUpEnabled: z.boolean(),
     emailEnabled: z.boolean(),
+    providers: z.array(z.enum(socialProviderIDs)),
 });
 
 typeAssert<Equals<z.output<typeof instanceResponseCodec>, InstanceResponse>>();

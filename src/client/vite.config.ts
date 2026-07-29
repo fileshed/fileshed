@@ -9,8 +9,12 @@ import vue from '@vitejs/plugin-vue';
 import ui from '@nuxt/ui/vite';
 import devServer from '@hono/vite-dev-server';
 
+// Models
+import { socialProviderIDs } from '@fileshed/core';
+
 // Utils
 import { loadViteEnv } from './env.ts';
+import { providerIcon } from './src/utils/formatters/providerPresentation.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -33,6 +37,18 @@ export default defineConfig(({ mode }) =>
             }),
             vue(),
             ui({
+                // Icons resolve from the build-time client bundle; anything missing falls back to a runtime fetch
+                // against api.iconify.design, which multi-dash collection names (i-simple-icons-*) cannot survive
+                // -- the resolver splits at the first dash and looks up a collection that does not exist. Scanning
+                // bundles every icon named literally in the source; the provider brand icons are built from
+                // dynamic ids a scan cannot see, so they are listed outright. Bundling everything also keeps a
+                // self-hosted deployment from leaking icon lookups to a third-party CDN.
+                icon: {
+                    clientBundle: {
+                        scan: true,
+                        icons: socialProviderIDs.map((provider) => providerIcon(provider)),
+                    },
+                },
                 ui: {
                     colors: {
                         primary: 'shed',

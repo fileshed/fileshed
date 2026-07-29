@@ -46,9 +46,19 @@ export {
     type AdminSettingKey,
     type SettingDefinition,
     type SettingValue,
+    type SocialProviderID,
+    type ProviderCredentialKey,
+    type ProviderExtraKey,
+    type ProviderSettingKey,
     settingKinds,
     adminSettingKeys,
     settingDefinitions,
+    socialProviderIDs,
+    providerCredentialKeys,
+    providerExtraKeys,
+    providerSettingKeys,
+    providerRequiredKeys,
+    providerOwnedKeys,
 } from './models/instanceSettings.ts';
 export type { Blob } from './models/blob.ts';
 export type { DeletionOffer } from './models/deletionOffer.ts';

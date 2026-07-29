@@ -15,7 +15,13 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { serveStatic } from '@hono/node-server/serve-static';
 
-import { MEDIA_TAG_SWEEP_BATCH, MS_PER_DAY, MS_PER_MINUTE } from '@fileshed/core';
+import {
+    MEDIA_TAG_SWEEP_BATCH,
+    MS_PER_DAY,
+    MS_PER_MINUTE,
+    type SocialProviderID,
+    providerSettingKeys,
+} from '@fileshed/core';
 
 // Routes
 import health from './routes/health.ts';
@@ -40,7 +46,13 @@ import { createUploadRoutes } from './routes/uploads.ts';
 import { createUserRoutes } from './routes/users.ts';
 
 // Resource Access
-import { type Auth, createAuth } from './resource-access/auth.ts';
+import {
+    type Auth,
+    type ProviderBootValues,
+    activeProviderIDs,
+    createAuth,
+    providerValuesFromConfig,
+} from './resource-access/auth.ts';
 import { createDatabase } from './resource-access/database/database.ts';
 import { initialize } from './resource-access/boot.ts';
 import { seedDefaultBackend } from './resource-access/database/seeds.ts';
@@ -138,6 +150,9 @@ export interface AppServices
     settings : SettingsManager;
     admins : AdminManager;
     mail : MailManager;
+
+    // The OAuth providers frozen into this process's auth instance at boot, for /api/instance.
+    providers : SocialProviderID[];
 }
 
 export interface AppOptions
@@ -197,11 +212,11 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
 
         if(services)
         {
-            app.route('/api', createSetupRoutes(
-                services.setup,
-                () => services.settings.booleanValue('SIGN_UP_ENABLED', true),
-                () => services.mail.isConfigured()
-            ));
+            app.route('/api', createSetupRoutes(services.setup, {
+                signUpEnabled: () => services.settings.booleanValue('SIGN_UP_ENABLED', true),
+                emailEnabled: () => services.mail.isConfigured(),
+                providers: services.providers,
+            }));
             app.route('/api', createAdminSettingsRoutes(sessions, services.settings));
             app.route('/api', createAdminEmailRoutes(sessions, services.mail));
             app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
@@ -290,14 +305,22 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     });
     const mail = new MailManager({ settings, mail: new MailRA(), appName: 'FileShed' });
 
-    // better-auth freezes requireEmailVerification at construction, and construction happens before the
-    // migrations -- the boot-tolerant read answers the config default on a first boot with no settings table.
+    // better-auth freezes requireEmailVerification and the OAuth providers at construction, and construction
+    // happens before the migrations -- the boot-tolerant reads answer the config defaults on a first boot with no
+    // settings table. providerValues also feeds /api/instance, so the sign-in buttons mirror exactly what this
+    // process registered.
+    const configProviderValues = providerValuesFromConfig(config);
+    const providerValues : ProviderBootValues = Object.fromEntries(await Promise.all(
+        providerSettingKeys.map(async (key) =>
+            [ key, await settings.stringValueAtBoot(key, configProviderValues[key] ?? null) ] as const)
+    ));
     const auth = createAuth(handle, config, {
         mail,
         requireEmailVerification: await settings.booleanValueAtBoot(
             'EMAIL_VERIFICATION_REQUIRED',
             config.EMAIL_VERIFICATION_REQUIRED
         ),
+        providerValues,
     });
 
     await initialize(handle, auth);
@@ -376,6 +399,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         settings,
         admins,
         mail,
+        providers: activeProviderIDs(providerValues),
     };
 
     return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };
