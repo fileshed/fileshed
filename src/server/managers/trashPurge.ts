@@ -8,6 +8,9 @@
 // the parent_id cascade takes it when its root goes. That is what keeps one trashed subtree from being deleted twice.
 //----------------------------------------------------------------------------------------------------------------------
 
+// Models
+import { MS_PER_SECOND } from '@fileshed/core';
+
 // Resource Access
 import type { NodeRA } from '../resource-access/nodes/node.ts';
 
@@ -76,24 +79,35 @@ export async function runTrashPurgeOnce(deps : TrashPurgeDeps) : Promise<TrashPu
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// Runs runTrashPurgeOnce on a fixed interval. Pure wiring: it owns no policy beyond the cadence, swallows a failed
-// sweep with a log so one bad run never kills the timer, unrefs so it does not hold the process open, and reports each
-// completed sweep's summary to `onComplete` (the status tracker). Returns a stop handle.
+// Runs runTrashPurgeOnce shortly after boot and then on a fixed interval. The boot pass keeps short-uptime
+// deployments honest: a box restarted more often than the interval would otherwise never purge, and thirty-day
+// trash would live forever. Pure wiring beyond that: swallows a failed sweep with a log so one bad run never
+// kills the timer, unrefs so it does not hold the process open, and reports each completed sweep's summary to
+// `onComplete` (the status tracker). Returns a stop handle.
 export function startTrashPurgeTimer(
     deps : TrashPurgeDeps,
     intervalMs : number,
     onComplete ?: (summary : TrashPurgeSummary) => void
 ) : () => void
 {
-    const timer = setInterval(() =>
+    const sweep = () : void =>
     {
         runTrashPurgeOnce(deps)
             .then((summary) => onComplete?.(summary))
             .catch((error) => logger.error({ err: error }, 'trash purge sweep failed'));
-    }, intervalMs);
+    };
 
+    const kickoff = setTimeout(sweep, MS_PER_SECOND);
+    kickoff.unref?.();
+
+    const timer = setInterval(sweep, intervalMs);
     timer.unref?.();
-    return () => clearInterval(timer);
+
+    return () =>
+    {
+        clearTimeout(kickoff);
+        clearInterval(timer);
+    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

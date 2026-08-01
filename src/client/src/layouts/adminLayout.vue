@@ -72,13 +72,15 @@
     // Navigation
     //------------------------------------------------------------------------------------------------------------------
 
+    // Lifecycle order, not alphabetical: the read-only glance an admin lands on first, then the pages they revisit
+    // (people and how they get in), then set-and-forget configuration.
     const navItems : NavigationMenuItem[] = [
+        { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: '/admin/overview' },
         { label: 'Users', icon: 'i-lucide-users', to: '/admin/users' },
+        { label: 'Authentication', icon: 'i-lucide-key-round', to: '/admin/authentication' },
         { label: 'Settings', icon: 'i-lucide-sliders-horizontal', to: '/admin/settings' },
         { label: 'Email', icon: 'i-lucide-mail', to: '/admin/email' },
-        { label: 'Authentication', icon: 'i-lucide-key-round', to: '/admin/authentication' },
         { label: 'Branding', icon: 'i-lucide-palette', to: '/admin/branding' },
-        { label: 'Status', icon: 'i-lucide-activity', to: '/admin/status' },
     ];
 </script>
 

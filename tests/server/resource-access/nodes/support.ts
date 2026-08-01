@@ -49,6 +49,8 @@ async function createUserStub(db : Kysely<Database>) : Promise<void>
         .addColumn('email', 'text', (col) => col.notNull())
         .addColumn('image', 'text')
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
+        .addColumn('banned', 'integer')
+        .addColumn('createdAt', 'text', (col) => col.notNull())
         .addColumn('quota_limit', 'integer')
         .addColumn('preferences', 'text')
         .addColumn('avatar_sha256', 'text')
@@ -85,6 +87,7 @@ export async function seedUser(
             email: `${ id }@t.test`,
             avatar_sha256: extra.avatarSha256 ?? null,
             role: 'user',
+            createdAt: isoNow(),
         })
         .execute();
 }

@@ -214,6 +214,30 @@ export class BlobRA
         });
     }
 
+    // Live bytes are the deduplicated footprint actually on disk -- every live record, including the avatar and
+    // branding blobs no file node references. The graveyarded pair is what a GC sweep stands to reclaim once each
+    // record's grace window closes.
+    async storageTotals() : Promise<{ liveBytes : number; graveyardBytes : number; graveyardCount : number }>
+    {
+        const row = await this.#db
+            .selectFrom('blob')
+            .select([
+                sql<string | number>`coalesce(sum(case when deleted_at is null then size else 0 end), 0)`
+                    .as('live_bytes'),
+                sql<string | number>`coalesce(sum(case when deleted_at is null then 0 else size end), 0)`
+                    .as('graveyard_bytes'),
+                sql<string | number>`coalesce(sum(case when deleted_at is null then 0 else 1 end), 0)`
+                    .as('graveyard_count'),
+            ])
+            .executeTakeFirstOrThrow();
+
+        return {
+            liveBytes: Number(row.live_bytes),
+            graveyardBytes: Number(row.graveyard_bytes),
+            graveyardCount: Number(row.graveyard_count),
+        };
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Row writes
     //------------------------------------------------------------------------------------------------------------------

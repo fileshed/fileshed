@@ -10,10 +10,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
-import type { AdminStatusResponse } from '@fileshed/core';
+import { type AdminStatusResponse, adminStatusResponseCodec } from '@fileshed/core';
 
 // Resource Access
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { ShareRA } from '@server/resource-access/shares/index.ts';
+import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
 import { LastRunTracker } from '@server/managers/lastRun.ts';
@@ -34,6 +36,10 @@ import { type BootedBlobApp, ORIGIN, bootBlobApp, cookieFrom, signIn, signUp } f
 const PASSWORD = 'correct-horse-battery';
 const GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Deliberately not the real VERSION: the route's job is to carry whatever the manager was built with out to the wire,
+// and an assertion against the live constant would hold even if the field were hardcoded downstream.
+const INJECTED_VERSION = '7.7.7-route-spec';
+
 let booted : BootedBlobApp;
 let tracker : LastRunTracker;
 
@@ -43,7 +49,21 @@ beforeEach(async () =>
     tracker = new LastRunTracker();
 
     const sessions = new SessionManager(booted.auth);
-    booted.app.route('/api', createAdminStatusRoutes(sessions, new StatusManager(booted.blob, tracker)));
+    const status = new StatusManager({
+        blob: booted.blob,
+        nodes: new NodeRA(booted.handle),
+        users: new UserRA(booted.handle),
+        shares: new ShareRA(booted.handle),
+        tracker,
+        version: INJECTED_VERSION,
+        databaseKind: booted.handle.kind,
+        startedAt: new Date(),
+        activeProviders: 0,
+        emailEnabled: async () => false,
+        signUpEnabled: async () => true,
+    });
+
+    booted.app.route('/api', createAdminStatusRoutes(sessions, status));
 });
 
 afterEach(async () =>
@@ -133,6 +153,32 @@ describe('GET /api/admin/status', () =>
             summary: { candidates: 0, purged: 0, failed: 0 },
         });
         expect(Number.isNaN(Date.parse(body.gc?.ranAt ?? ''))).toBe(false);
+    });
+
+    it('carries the overview alongside the backends, counting the admin who asked for it', async () =>
+    {
+        const adminCookie = await makeAdminCookie('root@example.com');
+
+        const res = await getStatus(adminCookie);
+        const body = await res.json() as AdminStatusResponse;
+
+        expect(res.status).toBe(200);
+        expect(body.overview.users).toEqual({ total: 1, admins: 1, banned: 0, newThisWeek: 1 });
+        expect(body.overview.instance.version).toBe(INJECTED_VERSION);
+        expect(body.overview.instance.databaseKind).toBe('sqlite');
+    });
+
+    // The client parses this response with the same codec, and it is a strictObject: a field the server adds without
+    // the codec knowing, or one the codec requires that the server omits, breaks the admin page at runtime while
+    // every shape-agnostic assertion above still passes.
+    it('answers a body the shared response codec accepts exactly', async () =>
+    {
+        const adminCookie = await makeAdminCookie('root@example.com');
+        await recordSweeps();
+
+        const body : unknown = await (await getStatus(adminCookie)).json();
+
+        expect(() => adminStatusResponseCodec.parse(body)).not.toThrow();
     });
 });
 

@@ -30,7 +30,7 @@ import AdminSettingsTab from '../pages/admin/settingsTab.vue';
 import AdminEmailTab from '../pages/admin/emailTab.vue';
 import AdminAuthenticationTab from '../pages/admin/authenticationTab.vue';
 import AdminBrandingTab from '../pages/admin/brandingTab.vue';
-import AdminStatusTab from '../pages/admin/statusTab.vue';
+import AdminOverviewTab from '../pages/admin/overviewTab.vue';
 
 // Stores
 import { useSessionStore } from '../stores/session.ts';
@@ -66,13 +66,13 @@ export const routes : RouteRecordRaw[] = [
         component: AdminLayout,
         meta: { admin: true },
         children: [
-            { path: '', redirect: { name: 'admin-users' } },
+            { path: '', redirect: { name: 'admin-overview' } },
+            { path: 'overview', name: 'admin-overview', component: AdminOverviewTab },
             { path: 'users', name: 'admin-users', component: AdminUsersTab },
             { path: 'settings', name: 'admin-settings', component: AdminSettingsTab },
             { path: 'email', name: 'admin-email', component: AdminEmailTab },
             { path: 'authentication', name: 'admin-authentication', component: AdminAuthenticationTab },
             { path: 'branding', name: 'admin-branding', component: AdminBrandingTab },
-            { path: 'status', name: 'admin-status', component: AdminStatusTab },
         ],
     },
     {

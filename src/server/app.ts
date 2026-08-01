@@ -92,6 +92,7 @@ import { startTrashPurgeTimer } from './managers/trashPurge.ts';
 import { type Config, loadConfig } from './utils/config.ts';
 import { SecretBox } from './utils/secretBox.ts';
 import { getLogger } from './utils/logger.ts';
+import { VERSION } from './utils/version.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -314,17 +315,20 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
 // The one composition path from empty process to serving app: config, database, auth, migrations + bootstrap, blob
 // storage, managers, timers, then the wired app. Both entries (server.ts and the Vite dev entry) consume this.
 // shutdown() stops the background timers -- anything booting more than once (specs, a future graceful-shutdown path)
-// must call it, or sweeps keep firing against a torn-down database.
+// must call it, or sweeps keep firing against a torn-down database. Known dev-only wart: the Vite runtime
+// re-imports the entry on server-file changes without disposing the old module, so sweep timers stack across
+// reloads until the dev server is bounced -- harmless (sweeps are idempotent) beyond log noise.
 export async function bootApp() : Promise<{ app : Hono; config : Config; shutdown : () => void }>
 {
     const config = loadConfig();
     const handle = createDatabase(config);
+    const startedAt = new Date();
     const settingsRA = new SettingsRA(handle);
     const settings = new SettingsManager({
         settings: settingsRA,
         config,
         box: new SecretBox(config.AUTH_SECRET),
-        startedAt: new Date(),
+        startedAt,
     });
     const mail = new MailManager({ settings, mail: new MailRA() });
 
@@ -369,7 +373,20 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
     const users = new UserManager(userRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
-    const adminStatus = new StatusManager(blob, tracker);
+    const providers = activeProviderIDs(providerValues);
+    const adminStatus = new StatusManager({
+        blob,
+        nodes: nodeRA,
+        users: userRA,
+        shares: shareRA,
+        tracker,
+        version: VERSION,
+        databaseKind: handle.kind,
+        startedAt,
+        activeProviders: providers.length,
+        emailEnabled: () => mail.isConfigured(),
+        signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),
+    });
     const admins = new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) });
 
     const setup = new SetupManager({
@@ -424,7 +441,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         branding,
         admins,
         mail,
-        providers: activeProviderIDs(providerValues),
+        providers,
     };
 
     return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };

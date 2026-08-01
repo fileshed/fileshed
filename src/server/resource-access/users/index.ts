@@ -45,6 +45,16 @@ function decodePreferences(stored : string | null) : Record<string, unknown>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+export interface UserCounts
+{
+    total : number;
+    admins : number;
+    banned : number;
+    createdSince : number;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 export class UserRA
 {
     readonly #db : DatabaseHandle['db'];
@@ -65,6 +75,32 @@ export class UserRA
             .executeTakeFirst();
 
         return row !== undefined;
+    }
+
+    // The account headcounts behind the admin overview, in one pass over the table. `since` is the caller's window
+    // boundary for a fresh signup -- the RA has no opinion on how wide that window is. banned is null on accounts the
+    // admin plugin has never touched, which the CASE reads as not banned. createdAt needs its quotes: better-auth
+    // emits that column in camelCase, and an unquoted mixed-case identifier folds to lower case on Postgres.
+    async counts(since : Date) : Promise<UserCounts>
+    {
+        const cutoff = since.toISOString();
+        const row = await this.#db
+            .selectFrom('user')
+            .select([
+                sql<string | number>`count(*)`.as('total'),
+                sql<string | number>`coalesce(sum(case when role = 'admin' then 1 else 0 end), 0)`.as('admins'),
+                sql<string | number>`coalesce(sum(case when banned then 1 else 0 end), 0)`.as('banned'),
+                sql<string | number>`coalesce(sum(case when "createdAt" >= ${ cutoff } then 1 else 0 end), 0)`
+                    .as('created_since'),
+            ])
+            .executeTakeFirstOrThrow();
+
+        return {
+            total: Number(row.total),
+            admins: Number(row.admins),
+            banned: Number(row.banned),
+            createdSince: Number(row.created_since),
+        };
     }
 
     // The per-user byte cap (null = unlimited) straight from the user row. A missing user reads as null (unlimited),

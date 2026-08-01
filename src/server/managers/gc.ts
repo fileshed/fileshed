@@ -14,6 +14,9 @@
 // dangling reference. A leak we can sweep; corruption we cannot.
 //----------------------------------------------------------------------------------------------------------------------
 
+// Models
+import { MS_PER_SECOND } from '@fileshed/core';
+
 // Resource Access
 import { BlobRA } from '../resource-access/blob/index.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
@@ -80,24 +83,35 @@ export async function runGcOnce(deps : GcDeps) : Promise<GcSummary>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// Runs runGcOnce on a fixed interval. Pure wiring: it owns no policy beyond the cadence, swallows a failed sweep with a
-// log so one bad run never kills the timer, unrefs so it does not hold the process open, and reports each completed
-// sweep's summary to `onComplete` (the status tracker). Returns a stop handle.
+// Runs runGcOnce shortly after boot and then on a fixed interval. The boot pass matters more than it looks: a
+// deployment restarted more often than the interval would otherwise never collect at all, and the admin status
+// page would report an eternal "never". Pure wiring beyond that: swallows a failed sweep with a log so one bad
+// run never kills the timer, unrefs so it does not hold the process open, and reports each completed sweep's
+// summary to `onComplete` (the status tracker). Returns a stop handle.
 export function startGcTimer(
     deps : GcDeps,
     intervalMs : number,
     onComplete ?: (summary : GcSummary) => void
 ) : () => void
 {
-    const timer = setInterval(() =>
+    const sweep = () : void =>
     {
         runGcOnce(deps)
             .then((summary) => onComplete?.(summary))
             .catch((error) => logger.error({ err: error }, 'GC sweep failed'));
-    }, intervalMs);
+    };
 
+    const kickoff = setTimeout(sweep, MS_PER_SECOND);
+    kickoff.unref?.();
+
+    const timer = setInterval(sweep, intervalMs);
     timer.unref?.();
-    return () => clearInterval(timer);
+
+    return () =>
+    {
+        clearTimeout(kickoff);
+        clearInterval(timer);
+    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

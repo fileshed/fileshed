@@ -15,6 +15,10 @@
 //
 // No orphaned processes: stop() terminates the child (SIGTERM, then SIGKILL) and removes the temp dirs; a process-exit
 // hook SIGKILLs any child still tracked, covering a spec that throws before afterAll or a worker torn down mid-run.
+//
+// Restarts: stop({ keep: true }) leaves the directories behind and spawnServer({ dirs }) boots a second child straight
+// onto them, which is how a spec drives state that only survives a real restart. Whoever stops last without `keep`
+// removes them -- the pair outlives any single child, so the spec, not the harness, decides when they go.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
@@ -82,19 +86,35 @@ process.once('exit', () =>
 // Server handle
 //----------------------------------------------------------------------------------------------------------------------
 
+// The pair of directories one server's state lives in: the SQLite database's home and the root of the blob tree.
+export interface ServerDirs
+{
+    dataDir : string;
+    storageRoot : string;
+}
+
 export interface ServerHandle
 {
     baseURL : string;
     dataDir : string;
     databasePath : string;
     storageRoot : string;
-    stop() : Promise<void>;
+    stop(options ?: StopOptions) : Promise<void>;
 }
 
 export interface SpawnOptions
 {
     // Extra environment for the child -- e.g. FILESHED_SETUP_TOKEN to exercise the first-run setup flow.
     env ?: Record<string, string>;
+
+    // Boot over an existing server's state instead of fresh temp dirs, for a spec that restarts a server.
+    dirs ?: ServerDirs;
+}
+
+export interface StopOptions
+{
+    // Leave the directories in place for a later spawn to reuse. The caller owns them from then on.
+    keep ?: boolean;
 }
 
 // Ask the OS for a free port by binding 0 on the loopback, then hand it back once the probe is closed.
@@ -201,8 +221,8 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
     const port = await reserveFreePort();
     const baseURL = `http://127.0.0.1:${ port }`;
 
-    const dataDir = await mkdtemp(join(tmpdir(), 'fileshed-e2e-db-'));
-    const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-e2e-blobs-'));
+    const dataDir = options.dirs?.dataDir ?? await mkdtemp(join(tmpdir(), 'fileshed-e2e-db-'));
+    const storageRoot = options.dirs?.storageRoot ?? await mkdtemp(join(tmpdir(), 'fileshed-e2e-blobs-'));
     const databasePath = join(dataDir, DATABASE_FILENAME);
 
     const child = spawn(process.execPath, [ SERVER_ENTRY ], {
@@ -243,9 +263,11 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
         dataDir,
         databasePath,
         storageRoot,
-        stop: async () =>
+        stop: async ({ keep = false } : StopOptions = {}) =>
         {
             await terminate(child);
+            if(keep) { return; }
+
             await rm(dataDir, { recursive: true, force: true });
             await rm(storageRoot, { recursive: true, force: true });
         },
@@ -257,7 +279,9 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
     }
     catch(error)
     {
-        await handle.stop();
+        // A failed boot still tears the child down, but never takes directories the caller handed in with it -- they
+        // are the caller's to keep, and a spec inspecting why the restart failed needs them intact.
+        await handle.stop({ keep: options.dirs !== undefined });
         throw error;
     }
 

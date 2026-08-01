@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 // Models
+import { databaseKinds } from '../../database.ts';
 import { storageBackendKinds } from '../../storageBackend.ts';
 import { type UserProfile, userRoles } from '../../userProfile.ts';
 
@@ -13,6 +14,7 @@ import { userProfileCodec } from '../../schemas/userProfile.ts';
 
 // Requests
 import type {
+    AdminOverview,
     AdminStatusResponse,
     AdminUserPageResponse,
     AdminUserResponse,
@@ -175,7 +177,42 @@ const trashPurgeRunStatusCodec = z.strictObject({
     }),
 });
 
+const adminOverviewCodec = z.strictObject({
+    users: z.strictObject({
+        total: wholeCount,
+        admins: wholeCount,
+        banned: wholeCount,
+        newThisWeek: wholeCount,
+    }),
+    nodes: z.strictObject({
+        files: wholeCount,
+        folders: wholeCount,
+    }),
+    storage: z.strictObject({
+        logicalBytes: wholeCount,
+        physicalBytes: wholeCount,
+        graveyardBytes: wholeCount,
+        graveyardCount: wholeCount,
+    }),
+    trash: z.strictObject({
+        count: wholeCount,
+        bytes: wholeCount,
+    }),
+    accessRequestsPending: wholeCount,
+    instance: z.strictObject({
+        version: z.string(),
+        databaseKind: z.enum(databaseKinds),
+        uptimeSeconds: wholeCount,
+        emailEnabled: z.boolean(),
+        activeProviders: wholeCount,
+        signUpEnabled: z.boolean(),
+    }),
+});
+
+typeAssert<Equals<z.output<typeof adminOverviewCodec>, AdminOverview>>();
+
 export const adminStatusResponseCodec = z.strictObject({
+    overview: adminOverviewCodec,
     backends: z.array(storageBackendStatusCodec),
     gc: gcRunStatusCodec.nullable(),
     trashPurge: trashPurgeRunStatusCodec.nullable(),

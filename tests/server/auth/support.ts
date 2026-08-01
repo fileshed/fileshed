@@ -44,6 +44,7 @@ import { createApp } from '@server/app.ts';
 // Utils
 import type { Config } from '@server/utils/config.ts';
 import { SecretBox } from '@server/utils/secretBox.ts';
+import { VERSION } from '@server/utils/version.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -114,13 +115,15 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
     const userRA = new UserRA(handle);
     const settingsRA = new SettingsRA(handle);
 
+    const startedAt = new Date();
     const nodes = new NodeManager(handle, nodeRA, blob);
     const settings = new SettingsManager({
         settings: settingsRA,
         config,
         box: new SecretBox(config.AUTH_SECRET),
-        startedAt: new Date(),
+        startedAt,
     });
+    const mail = new MailManager({ settings, mail: new MailRA() });
 
     return createApp(auth, {
         blobs: new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES }),
@@ -132,7 +135,19 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
         publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
             shareRA.effectiveRole(userID, nodeID)),
         deletionOffers: new DeletionOfferManager(handle, nodes),
-        adminStatus: new StatusManager(blob, new LastRunTracker()),
+        adminStatus: new StatusManager({
+            blob,
+            nodes: nodeRA,
+            users: userRA,
+            shares: shareRA,
+            tracker: new LastRunTracker(),
+            version: VERSION,
+            databaseKind: handle.kind,
+            startedAt,
+            activeProviders: 0,
+            emailEnabled: () => mail.isConfigured(),
+            signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),
+        }),
         users: new UserManager(userRA),
         settings,
         branding: new BrandingManager({
@@ -143,7 +158,7 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
             maxBytes: async () => config.AVATAR_MAX_BYTES,
         }),
         admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
-        mail: new MailManager({ settings, mail: new MailRA() }),
+        mail,
         providers: [],
     });
 }

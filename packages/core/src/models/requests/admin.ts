@@ -6,6 +6,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
+import type { DatabaseKind } from '../database.ts';
 import type { StorageBackendKind } from '../storageBackend.ts';
 import type { UserRole } from '../userProfile.ts';
 
@@ -132,8 +133,70 @@ export interface TrashPurgeRunStatus
     summary : TrashPurgeRunSummary;
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+// Overview aggregates (part of GET /api/admin/status)
+//
+// Every figure is a live COUNT or SUM, never a stored counter or a sampled history -- the readout is whatever the
+// tables say at request time.
+//
+// The three byte totals answer three different questions and will not agree: logicalBytes is what the instance
+// CHARGES (owned file nodes, trashed ones included -- the quota rule), physicalBytes is every live blob on disk after
+// dedup (avatars and the instance logo among them, which no file node charges anyone for), and graveyardBytes is what
+// a garbage-collection sweep would hand back once the grace window closes. The gap between the first two is mostly
+// dedup, but it is not only dedup -- do not present it as a pure dedup ratio.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface OverviewUsers
+{
+    total : number;
+    admins : number;
+    banned : number;
+    newThisWeek : number;
+}
+
+export interface OverviewNodes
+{
+    files : number;
+    folders : number;
+}
+
+export interface OverviewStorage
+{
+    logicalBytes : number;
+    physicalBytes : number;
+    graveyardBytes : number;
+    graveyardCount : number;
+}
+
+export interface OverviewTrash
+{
+    count : number;
+    bytes : number;
+}
+
+export interface OverviewInstance
+{
+    version : string;
+    databaseKind : DatabaseKind;
+    uptimeSeconds : number;
+    emailEnabled : boolean;
+    activeProviders : number;
+    signUpEnabled : boolean;
+}
+
+export interface AdminOverview
+{
+    users : OverviewUsers;
+    nodes : OverviewNodes;
+    storage : OverviewStorage;
+    trash : OverviewTrash;
+    accessRequestsPending : number;
+    instance : OverviewInstance;
+}
+
 export interface AdminStatusResponse
 {
+    overview : AdminOverview;
     backends : StorageBackendStatus[];
     gc : GcRunStatus | null;
     trashPurge : TrashPurgeRunStatus | null;

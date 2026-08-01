@@ -28,6 +28,7 @@ import {
     DEFAULT_TRASH_PURGE_DAYS,
     DEFAULT_UPLOAD_MAX_BYTES,
     type ProviderSettingKey,
+    databaseKinds,
     providerSettingKeys,
 } from '@fileshed/core';
 
@@ -58,7 +59,7 @@ const configSchema = z.object({
         .positive()
         .default(DEFAULT_PORT),
 
-    DATABASE_KIND: z.enum([ 'sqlite', 'postgres' ]).default('sqlite'),
+    DATABASE_KIND: z.enum(databaseKinds).default('sqlite'),
     // DATABASE_PATH applies only to the sqlite backend; DATABASE_URL is required for postgres (enforced below).
     DATABASE_PATH: z.string().default(DEFAULT_DATABASE_PATH),
     DATABASE_URL: z.string().optional(),

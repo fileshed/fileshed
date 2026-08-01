@@ -656,6 +656,52 @@ export class NodeRA
 
         return new Map(rows.map((row) => [ row.owner_id, Number(row.total) ]));
     }
+
+    // The same charge summed across every owner -- what the whole instance is holding on paper, before dedup. Trashed
+    // files still count, exactly as they still count against their owner's quota until a purge removes the row.
+    async totalOwnedBytes() : Promise<number>
+    {
+        const row = await this.#db
+            .selectFrom('node')
+            .select(sql<string | number>`coalesce(sum(size), 0)`.as('total'))
+            .where('type', '=', 'file')
+            .executeTakeFirstOrThrow();
+
+        return Number(row.total);
+    }
+
+    // How many live files and folders exist instance-wide. Trashed nodes are excluded -- they are counted (and
+    // charged) separately as trash -- and links are counted as neither, being pointers rather than content.
+    async liveTypeCounts() : Promise<{ files : number; folders : number }>
+    {
+        const row = await this.#db
+            .selectFrom('node')
+            .select([
+                sql<string | number>`coalesce(sum(case when type = 'file' then 1 else 0 end), 0)`.as('files'),
+                sql<string | number>`coalesce(sum(case when type = 'folder' then 1 else 0 end), 0)`.as('folders'),
+            ])
+            .where('trashed_at', 'is', null)
+            .executeTakeFirstOrThrow();
+
+        return { files: Number(row.files), folders: Number(row.folders) };
+    }
+
+    // What is sitting in trash instance-wide: file nodes trashed but not yet purged, and the bytes they still charge.
+    // Every node in a trashed subtree carries its own trashed_at, so nested files are counted individually.
+    async trashedFileTotals() : Promise<{ count : number; bytes : number }>
+    {
+        const row = await this.#db
+            .selectFrom('node')
+            .select([
+                sql<string | number>`count(*)`.as('count'),
+                sql<string | number>`coalesce(sum(size), 0)`.as('bytes'),
+            ])
+            .where('type', '=', 'file')
+            .where('trashed_at', 'is not', null)
+            .executeTakeFirstOrThrow();
+
+        return { count: Number(row.count), bytes: Number(row.bytes) };
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------

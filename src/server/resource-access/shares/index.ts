@@ -374,6 +374,19 @@ export class ShareRA
         return rows.map(shareRequestFromRow);
     }
 
+    // How many access requests are waiting on someone instance-wide -- the admin overview's queue depth, not scoped
+    // to any one owner.
+    async pendingRequestCount() : Promise<number>
+    {
+        const row = await this.#db
+            .selectFrom('share_request')
+            .select((eb) => eb.fn.countAll().as('count'))
+            .where('status', '=', 'pending')
+            .executeTakeFirstOrThrow();
+
+        return Number(row.count);
+    }
+
     // The caller's outstanding request on a node, if any -- the manager's guard against a duplicate pending request per
     // (node, requester) (the partial-unique constraint was deferred, so this is manager-enforced).
     async findPendingByNodeRequester(nodeID : string, requesterID : string) : Promise<ShareRequest | undefined>

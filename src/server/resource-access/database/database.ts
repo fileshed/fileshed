@@ -70,6 +70,11 @@ export interface UserTable
     role : 'admin' | 'user';
     quota_limit : number | null;
 
+    // The admin plugin's ban flag, null on every account it has never banned, and better-auth's account-creation
+    // stamp -- emitted in camelCase like the rest of its base columns, so any hand-written SQL must quote it.
+    banned : Bool | null;
+    createdAt : Timestamp;
+
     // The per-user preferences blob: JSON text, null when the account has set none. Written only by the app's own
     // preferences PATCH (see UserRA); read to assemble the /api/me profile.
     preferences : string | null;

@@ -62,6 +62,7 @@ export {
 } from './models/instanceSettings.ts';
 export type { Blob } from './models/blob.ts';
 export type { DeletionOffer } from './models/deletionOffer.ts';
+export { type DatabaseKind, databaseKinds } from './models/database.ts';
 export { type StorageBackend, type StorageBackendKind, storageBackendKinds } from './models/storageBackend.ts';
 export { type UserProfile, type UserRole, userRoles } from './models/userProfile.ts';
 export {
@@ -164,6 +165,12 @@ export {
     type TrashPurgeRunSummary,
     type GcRunStatus,
     type TrashPurgeRunStatus,
+    type OverviewUsers,
+    type OverviewNodes,
+    type OverviewStorage,
+    type OverviewTrash,
+    type OverviewInstance,
+    type AdminOverview,
     type AdminStatusResponse,
     type AdminUserResponse,
     type AdminUserPageResponse,

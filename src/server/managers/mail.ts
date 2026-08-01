@@ -40,6 +40,13 @@ interface SmtpValues
     from : string;
 }
 
+// A setting that is actually set. Shared by the send path and the configured check so the two can never disagree on
+// what "mail is set up" means.
+function isFilled(value : unknown) : value is string
+{
+    return typeof value === 'string' && value !== '';
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export class MailManager
@@ -73,21 +80,29 @@ export class MailManager
             this.#settings.value('SMTP_FROM'),
         ]);
 
-        if(typeof host !== 'string' || host === '' || typeof from !== 'string' || from === '') { return null; }
+        if(!isFilled(host) || !isFilled(from)) { return null; }
 
         return {
             host,
             port,
             secure,
-            user: typeof user === 'string' && user !== '' ? user : null,
-            password: typeof password === 'string' && password !== '' ? password : null,
+            user: isFilled(user) ? user : null,
+            password: isFilled(password) ? password : null,
             from,
         };
     }
 
+    // Reads only the two settings that decide the answer, never the credentials. The stored password is encrypted, so
+    // resolving it decrypts a secret into memory -- unacceptable on the read-only surfaces that ask this question
+    // (the sign-in page's instance banner, the admin overview) merely to render "Configured".
     async isConfigured() : Promise<boolean>
     {
-        return await this.#smtpValues() !== null;
+        const [ host, from ] = await Promise.all([
+            this.#settings.value('SMTP_HOST'),
+            this.#settings.value('SMTP_FROM'),
+        ]);
+
+        return isFilled(host) && isFilled(from);
     }
 
     async #send(to : string, subject : string, text : string) : Promise<void>

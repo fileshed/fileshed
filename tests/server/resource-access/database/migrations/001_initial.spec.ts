@@ -55,6 +55,8 @@ const createUserStub = async (db : Kysely<Database>) : Promise<void> =>
         .addColumn('name', 'text', (col) => col.notNull())
         .addColumn('email', 'text', (col) => col.notNull())
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
+        .addColumn('banned', 'integer')
+        .addColumn('createdAt', 'text', (col) => col.notNull())
         .addColumn('quota_limit', 'integer')
         .addColumn('preferences', 'text')
         .execute();
@@ -64,7 +66,7 @@ const insertUser = async (db : Kysely<Database>, id : string) : Promise<void> =>
 {
     await db
         .insertInto('user')
-        .values({ id, name: id, email: `${ id }@t.test`, role: 'user' })
+        .values({ id, name: id, email: `${ id }@t.test`, role: 'user', createdAt: new Date().toISOString() })
         .execute();
 };
 
