@@ -1,8 +1,8 @@
 # FileShed Individual Contributor License Agreement
 
-**Version 1.0 — 2026-08-01**
+**Version 1.1 — 2026-08-01**
 
-*Derived from the Apache Software Foundation's Individual Contributor License Agreement v2.0, restated in plain
+*Derived from the Apache Software Foundation's Individual Contributor License Agreement (V2.2), restated in plain
 English, with the beneficiary named in section 1.*
 
 Thank you for contributing to FileShed. This agreement sets out the terms under which contributions are accepted. It
@@ -35,9 +35,9 @@ tools like Dropbox or Google Drive — together with any work it forms part of o
 
 ## 2. Copyright license
 
-You grant Christopher a perpetual, worldwide, non-exclusive, royalty-free, irrevocable copyright license to reproduce,
-prepare derivative works of, publicly display, publicly perform, sublicense, and distribute Your Contributions and
-derivative works of them.
+You grant Christopher, and everyone who receives software distributed by Christopher, a perpetual, worldwide,
+non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of,
+publicly display, publicly perform, sublicense, and distribute Your Contributions and derivative works of them.
 
 That license includes the right to license and sublicense Your Contribution **under any license terms**, including
 terms different from the ones FileShed uses today, and including proprietary terms. This is the clause that makes dual
@@ -53,14 +53,17 @@ Two commitments run the other way:
 
 ## 3. Patent license
 
-You grant Christopher a perpetual, worldwide, non-exclusive, royalty-free, irrevocable patent license to make, have
+You grant Christopher, and everyone who receives software distributed by Christopher, a perpetual, worldwide,
+non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have
 made, use, offer to sell, sell, import, and otherwise transfer FileShed.
 
 This license reaches only those patent claims You own or control that are necessarily infringed by Your Contribution
 by itself, or by the combination of Your Contribution with FileShed. It touches no other patent You hold.
 
-If You start patent litigation against anyone, alleging that FileShed or a Contribution incorporated in it infringes a
-patent, the patent license You granted in this section terminates on the date the action is filed.
+If any entity institutes patent litigation against You or any other entity — including a cross-claim or counterclaim
+in a lawsuit — alleging that Your Contribution, or FileShed with Your Contribution in it, constitutes direct or
+contributory patent infringement, then any patent licenses granted to that entity under this agreement for that
+Contribution or for FileShed terminate as of the date the litigation is filed.
 
 ## 4. What you are promising
 
