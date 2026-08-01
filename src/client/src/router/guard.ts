@@ -5,6 +5,10 @@
 // post-sign-in redirect; already-authenticated visitors bounce off the public auth pages to the drive; /admin
 // additionally requires the admin role. Session restoration is awaited first, so a page reload carrying a valid cookie
 // is resolved before the decision -- a live session is never bounced to /signin.
+//
+// Two metas, easily confused: `public` marks the anonymous-only auth pages, which a signed-in visitor is bounced off
+// of; `unguarded` marks a route belonging to everyone -- the 404 -- which nobody is redirected away from in either
+// direction.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { RouteLocationRaw } from 'vue-router';
@@ -32,6 +36,11 @@ export type AuthGuard = (to : GuardRoute) => Promise<true | RouteLocationRaw>;
 
 export function guardDecision(to : GuardRoute, session : GuardSession) : true | RouteLocationRaw
 {
+    if(to.meta.unguarded === true)
+    {
+        return true;
+    }
+
     if(to.meta.public === true)
     {
         return session.isAuthenticated ? { path: '/' } : true;

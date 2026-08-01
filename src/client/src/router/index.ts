@@ -31,6 +31,7 @@ import AdminEmailTab from '../pages/admin/emailTab.vue';
 import AdminAuthenticationTab from '../pages/admin/authenticationTab.vue';
 import AdminBrandingTab from '../pages/admin/brandingTab.vue';
 import AdminOverviewTab from '../pages/admin/overviewTab.vue';
+import NotFoundPage from '../pages/notFoundPage.vue';
 
 // Stores
 import { useSessionStore } from '../stores/session.ts';
@@ -93,6 +94,9 @@ export const routes : RouteRecordRaw[] = [
             { path: 'tokens', name: 'account-tokens', component: TokensTab },
         ],
     },
+
+    // Last, so it only catches what nothing above claimed.
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundPage, meta: { unguarded: true } },
 ];
 
 export const router = createRouter({

@@ -62,13 +62,13 @@ describe('editor area routes', () =>
         expect(layout?.name).toBe('EditorLayout');
     });
 
-    it('requires an id segment -- bare /file matches nothing', async () =>
+    it('requires an id segment -- bare /file is a 404, not the editor', async () =>
     {
         const router = testRouter();
 
         await router.push('/file');
 
-        expect(router.currentRoute.value.matched).toHaveLength(0);
+        expect(router.currentRoute.value.name).toBe('not-found');
     });
 });
 
