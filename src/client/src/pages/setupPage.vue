@@ -87,6 +87,8 @@
     import { z } from 'zod';
     import type { FormSubmitEvent } from '@nuxt/ui';
 
+    import { PASSWORD_MIN_LENGTH } from '@fileshed/core';
+
     // Stores
     import { useAppStore } from '../stores/app.ts';
     import { useSessionStore } from '../stores/session.ts';
@@ -106,7 +108,7 @@
         token: z.string().min(1, 'Enter the setup code from the server log.'),
         name: z.string().min(1, 'Enter your name.'),
         email: z.email('Enter a valid email address.'),
-        password: z.string().min(8, 'At least 8 characters.'),
+        password: z.string().min(PASSWORD_MIN_LENGTH, `At least ${ PASSWORD_MIN_LENGTH } characters.`),
         confirm: z.string(),
     }).refine((fields) => fields.confirm === fields.password, {
         path: [ 'confirm' ],

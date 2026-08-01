@@ -35,6 +35,7 @@
                     :label="field.label"
                     :description="field.description"
                     :unit="field.unit"
+                    :zero-label="field.zeroLabel"
                 />
             </section>
         </template>
@@ -65,6 +66,7 @@
         label : string;
         description : string;
         unit ?: 'bytes' | 'days';
+        zeroLabel ?: string;
     }
 
     const groupLayout : { heading : string; keys : FieldPresentation[] }[] = [
@@ -94,16 +96,31 @@
                     description: 'The largest avatar image an account may upload. A size like 2mb, or raw bytes.',
                     unit: 'bytes',
                 },
+                {
+                    key: 'DEFAULT_QUOTA_BYTES',
+                    label: 'Default storage quota',
+                    description: 'The cap every account with no quota of its own inherits, and which they follow '
+                        + 'whenever this changes. A size like 20gb, or 0 for unlimited.',
+                    unit: 'bytes',
+                    zeroLabel: 'Unlimited',
+                },
             ],
         },
         {
-            heading: 'Trash',
+            heading: 'Retention',
             keys: [
                 {
                     key: 'TRASH_PURGE_DAYS',
                     label: 'Trash retention',
                     description: 'How many days a trashed item survives before it is permanently deleted. '
                         + '0 purges on the next sweep.',
+                    unit: 'days',
+                },
+                {
+                    key: 'GC_GRACE_DAYS',
+                    label: 'Deleted file grace period',
+                    description: 'How many days the bytes behind a deleted file are kept before collection, and how '
+                        + 'long an owner can still be offered them back. 0 collects on the next sweep.',
                     unit: 'days',
                 },
             ],

@@ -4,8 +4,7 @@
 // The theme document's owner: one JSON row under the BRANDING key, deliberately outside the settings vocabulary
 // so the generic settings PATCH can never write it unvalidated. Updates merge key-wise over the RAW stored
 // object -- keys this version does not know survive untouched, which is what lets a future theme package or a
-// newer client coexist with an older server. FILESHED_SAFE_THEME short-circuits the stylesheet to nothing: the
-// documented rescue when custom CSS bricks the UI.
+// newer client coexist with an older server.
 //
 // The logo rides the avatar pattern, not the document: bytes in the content-addressed blob store, referenced by
 // the BRANDING_LOGO_SHA row that graveyardUnreferenced counts, replaced-and-graveyarded in one transaction. Its
@@ -38,7 +37,6 @@ import type { SessionUser } from '../resource-access/auth.ts';
 import { SettingsRA } from '../resource-access/settings/index.ts';
 
 // Utils
-import type { Config } from '../utils/config.ts';
 import { collectCapped, mediaType } from '../utils/uploadBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -50,7 +48,6 @@ const LOGO_TYPE_KEY = 'BRANDING_LOGO_TYPE';
 export interface BrandingDeps
 {
     settings : SettingsRA;
-    config : Config;
     handle : DatabaseHandle;
     blob : BlobRA;
 
@@ -75,7 +72,6 @@ function isBrandingImageMime(value : string | null) : value is BrandingImageMime
 export class BrandingManager
 {
     readonly #ra : SettingsRA;
-    readonly #config : Config;
     readonly #handle : DatabaseHandle;
     readonly #blob : BlobRA;
     readonly #maxBytes : () => Promise<number>;
@@ -83,7 +79,6 @@ export class BrandingManager
     constructor(deps : BrandingDeps)
     {
         this.#ra = deps.settings;
-        this.#config = deps.config;
         this.#handle = deps.handle;
         this.#blob = deps.blob;
         this.#maxBytes = deps.maxBytes;
@@ -127,8 +122,6 @@ export class BrandingManager
 
     async css() : Promise<string>
     {
-        if(this.#config.FILESHED_SAFE_THEME) { return ''; }
-
         return renderBrandingCSS(await this.theme());
     }
 

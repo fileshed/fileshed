@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Byte Size Parsing — human-entered sizes for the byte-cap inputs
 //
-// The contract: decimal units (1 KB = 1000 B) in any case with or without a space, plain digits as raw bytes, a
+// The contract: decimal units (1 kB = 1000 B) in any case with or without a space, plain digits as raw bytes, a
 // fractional magnitude allowed only when the unit scales it back to whole bytes, and null -- never a guess -- for
 // everything else.
 //----------------------------------------------------------------------------------------------------------------------
@@ -23,6 +23,18 @@ describe('parseByteSize', () =>
         expect(parseByteSize('20mb')).toBe(20_000_000);
         expect(parseByteSize('2tb')).toBe(2_000_000_000_000);
         expect(parseByteSize('512b')).toBe(512);
+    });
+
+    // The byte inputs prefill from formatBytes, so every symbol it emits has to survive the trip back through here;
+    // a prefill that failed to parse would strand its own field.
+    it('parses every unit symbol formatBytes emits', () =>
+    {
+        expect(parseByteSize('999 B')).toBe(999);
+        expect(parseByteSize('20 kB')).toBe(20_000);
+        expect(parseByteSize('2.1 MB')).toBe(2_100_000);
+        expect(parseByteSize('4 GB')).toBe(4_000_000_000);
+        expect(parseByteSize('1.5 TB')).toBe(1_500_000_000_000);
+        expect(parseByteSize('9 PB')).toBe(9_000_000_000_000_000);
     });
 
     it('reads plain digits as raw bytes', () =>

@@ -6,7 +6,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 export const DEFAULT_HOST = '0.0.0.0';
-export const DEFAULT_PORT = 3000;
+export const DEFAULT_PORT = 3950;
 export const DEFAULT_DATABASE_PATH = './data/fileshed.db';
 export const DEFAULT_BASE_URL = 'http://localhost:5173';
 export const DEFAULT_STORAGE_ROOT = './data/blobs';

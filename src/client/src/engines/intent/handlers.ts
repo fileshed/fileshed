@@ -12,6 +12,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
+    EDITOR_MAX_BYTES,
     type NodeResponse,
     PDF_ANNOTATOR_MAX_BYTES,
     type SharedTarget,
@@ -25,10 +26,6 @@ const INLINE_EXACT = new Set([ 'application/pdf', 'application/json' ]);
 
 const MARKDOWN_MIME = new Set([ 'text/markdown', 'text/x-markdown' ]);
 const MARKDOWN_EXTENSIONS = [ '.md', '.markdown' ] as const;
-
-// One 3.5-inch HD floppy, to the byte. If a text file won't fit on a floppy, you have no business hand-editing it in a
-// browser -- open it in something that streams. Over this ceiling, editable types fall back to the native preview.
-export const EDITOR_MAX_BYTES = 1_474_560;
 
 export type EditorMode = 'markdown' | 'plain';
 

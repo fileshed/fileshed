@@ -79,17 +79,21 @@ export class UserRA
 
     // The account headcounts behind the admin overview, in one pass over the table. `since` is the caller's window
     // boundary for a fresh signup -- the RA has no opinion on how wide that window is. banned is null on accounts the
-    // admin plugin has never touched, which the CASE reads as not banned. createdAt needs its quotes: better-auth
-    // emits that column in camelCase, and an unquoted mixed-case identifier folds to lower case on Postgres.
+    // admin plugin has never touched, which the CASE reads as not banned; a dated ban past its expiry also reads as
+    // not banned (the ban engine's standing rule, restated in SQL because the row keeps the stale flag until the
+    // user's next sign-in). createdAt and banExpires need their quotes: better-auth emits those columns in
+    // camelCase, and an unquoted mixed-case identifier folds to lower case on Postgres.
     async counts(since : Date) : Promise<UserCounts>
     {
         const cutoff = since.toISOString();
+        const now = new Date().toISOString();
         const row = await this.#db
             .selectFrom('user')
             .select([
                 sql<string | number>`count(*)`.as('total'),
                 sql<string | number>`coalesce(sum(case when role = 'admin' then 1 else 0 end), 0)`.as('admins'),
-                sql<string | number>`coalesce(sum(case when banned then 1 else 0 end), 0)`.as('banned'),
+                sql<string | number>`coalesce(sum(case when banned and ("banExpires" is null or "banExpires" > ${ now })
+                        then 1 else 0 end), 0)`.as('banned'),
                 sql<string | number>`coalesce(sum(case when "createdAt" >= ${ cutoff } then 1 else 0 end), 0)`
                     .as('created_since'),
             ])

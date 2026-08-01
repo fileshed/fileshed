@@ -80,8 +80,9 @@ export const listUsersSpec = describeRoute({
 export const setQuotaSpec = describeRoute({
     tags: [ 'Admin' ],
     summary: 'Set a user\'s quota',
-    description: 'Sets (or clears, with null) a user\'s byte quota, admin-only. A negative or fractional limit is a '
-        + 'malformed request, rejected before any write.',
+    description: 'Sets a user\'s byte quota, admin-only: a cap of their own, 0 for explicitly unlimited, or null to '
+        + 'inherit the instance-wide DEFAULT_QUOTA_BYTES. A negative or fractional limit is a malformed request, '
+        + 'rejected before any write.',
     parameters: [ pathParam('id', 'The target user ID.') ],
     requestBody: jsonBody(setQuotaRequestCodec),
     responses: {

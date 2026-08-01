@@ -44,6 +44,7 @@ export {
 export {
     type SettingKind,
     type AdminSettingKey,
+    type SettingConstraints,
     type SettingDefinition,
     type SettingValue,
     type SocialProviderID,
@@ -174,6 +175,8 @@ export {
     type AdminStatusResponse,
     type AdminUserResponse,
     type AdminUserPageResponse,
+    type AdminUserEntry,
+    type AdminUserPage,
     adminUserSortKeys,
     adminUserSearchFields,
 } from './models/requests/admin.ts';
@@ -184,6 +187,7 @@ export {
 } from './models/requests/deletionOffers.ts';
 export {
     type InstanceBranding,
+    type InstanceLimits,
     type InstanceResponse,
     type SetupRequest,
     type SetupResponse,

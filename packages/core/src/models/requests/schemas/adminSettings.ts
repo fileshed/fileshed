@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 // Models
-import { adminSettingKeys, settingKinds } from '../../instanceSettings.ts';
+import { type SettingConstraints, adminSettingKeys, settingKinds } from '../../instanceSettings.ts';
 
 // Requests
 import {
@@ -20,6 +20,14 @@ import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
 const settingValueCodec = z.union([ z.number(), z.boolean(), z.string() ]);
 
+const settingConstraintsCodec = z.strictObject({
+    min: z.number().optional(),
+    max: z.number().optional(),
+    maxLength: z.number().optional(),
+});
+
+typeAssert<Equals<z.output<typeof settingConstraintsCodec>, SettingConstraints>>();
+
 export const adminSettingEntryCodec = z.strictObject({
     key: z.enum(adminSettingKeys),
     kind: z.enum(settingKinds),
@@ -28,6 +36,7 @@ export const adminSettingEntryCodec = z.strictObject({
     value: settingValueCodec.nullable(),
     source: z.enum([ 'default', 'override' ]),
     hasDefault: z.boolean(),
+    constraints: settingConstraintsCodec.optional(),
 });
 
 export const adminSettingsResponseCodec = z.strictObject({

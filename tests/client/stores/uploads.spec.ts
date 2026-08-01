@@ -27,6 +27,7 @@ import { fetchMe } from '@client/resource-access/me.ts';
 import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
 
 // Stores
+import { useAppStore } from '@client/stores/app.ts';
 import { useDriveStore } from '@client/stores/drive.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 import { useUploadsStore } from '@client/stores/uploads.ts';
@@ -197,7 +198,7 @@ describe('useUploadsStore', () =>
             id: 'u1',
             email: 'member@example.com',
             role: 'user',
-            quota: { used: 4096, limit: 10_000 },
+            quota: { used: 4096, effective: 10_000, limit: 10_000 },
             limits: { trashRetentionDays: 30 },
             preferences: {},
             createdAt: ISO,
@@ -209,7 +210,7 @@ describe('useUploadsStore', () =>
         await waitFor(() => store.items[0]?.status === 'done', 'done');
         await waitFor(() => useSessionStore().me?.quota.used === 4096, 'quota adopted');
 
-        expect(useSessionStore().me?.quota).toEqual({ used: 4096, limit: 10_000 });
+        expect(useSessionStore().me?.quota).toEqual({ used: 4096, effective: 10_000, limit: 10_000 });
     });
 
     it('does not refresh the drive when the upload lands in a different folder', async () =>
@@ -583,6 +584,107 @@ describe('useUploadsStore', () =>
 
         expect(store.items[0]?.name).toBe('one.mp3');
         expect(store.items[0]?.folderID).toBe('dir-music');
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Upload cap -- the instance limit is knowable before any bytes move, so an oversized file is refused up front
+    // rather than hashed and turned away at the claim.
+    //------------------------------------------------------------------------------------------------------------------
+
+    function capUploadsAt(maxBytes : number) : void
+    {
+        useAppStore().limits = { uploadMaxBytes: maxBytes, avatarMaxBytes: 2_000_000 };
+    }
+
+    it('refuses a file over the instance cap without hashing or claiming it', async () =>
+    {
+        mockHappyPipeline();
+        capUploadsAt(1000);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('big.bin', 2000) ], null);
+        await flushPromises();
+
+        expect(store.items[0]?.status).toBe('error');
+        expect(hashFileMock).not.toHaveBeenCalled();
+        expect(claimBlobMock).not.toHaveBeenCalled();
+        expect(uploadMock).not.toHaveBeenCalled();
+    });
+
+    it('names the file and the cap on the refusal', async () =>
+    {
+        capUploadsAt(1000);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('big.bin', 2000) ], null);
+        await flushPromises();
+
+        expect(store.items[0]?.error).toContain('big.bin');
+        expect(store.items[0]?.error).toContain('1 kB');
+    });
+
+    it('lets a file exactly at the cap through', async () =>
+    {
+        mockHappyPipeline();
+        capUploadsAt(1000);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('exact.bin', 1000) ], null);
+        await waitFor(() => store.items[0]?.status === 'done', 'done');
+
+        expect(store.items[0]?.status).toBe('done');
+    });
+
+    it('refuses an oversized file inside a dropped folder as well', async () =>
+    {
+        mockHappyPipeline();
+        createNodeMock.mockResolvedValue(folderNode('dir-1', 'Clips'));
+        capUploadsAt(1000);
+
+        const store = useUploadsStore();
+        await store.enqueuePayload({
+            files: [],
+            folders: [ { name: 'Clips', files: [ uploadFile('huge.mov', 5000) ], folders: [] } ],
+        }, null);
+        await flushPromises();
+
+        expect(store.items[0]?.status).toBe('error');
+        expect(claimBlobMock).not.toHaveBeenCalled();
+    });
+
+    it('lets a retry through once the cap has been raised', async () =>
+    {
+        mockHappyPipeline();
+        capUploadsAt(1000);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('big.bin', 2000) ], null);
+        await flushPromises();
+
+        const itemID = store.items[0]?.id ?? '';
+        expect(store.items[0]?.status).toBe('error');
+
+        capUploadsAt(5000);
+        store.retry(itemID);
+        await waitFor(() => store.items[0]?.status === 'done', 'done after the cap rose');
+
+        expect(store.items[0]?.error).toBe(null);
+    });
+
+    it('keeps refusing a retry while the file is still over the cap', async () =>
+    {
+        mockHappyPipeline();
+        capUploadsAt(1000);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('big.bin', 2000) ], null);
+        await flushPromises();
+
+        store.retry(store.items[0]?.id ?? '');
+        await flushPromises();
+
+        expect(store.items[0]?.status).toBe('error');
+        expect(hashFileMock).not.toHaveBeenCalled();
     });
 });
 

@@ -20,7 +20,8 @@ export const meSpec = describeRoute({
     tags: [ ME_TAG ],
     summary: 'Get the current user',
     description: 'The caller\'s own profile plus live quota usage, computed fresh from the bytes of the file nodes '
-        + 'they own. A null quota limit means unlimited.',
+        + 'they own. quota.effective is the cap actually enforced, with the instance default already folded in '
+        + '(null = unlimited); quota.limit is the raw per-user setting behind it (null = inherits the default).',
     responses: {
         200: jsonResponse('The caller\'s profile and quota.', meResponseCodec),
         401: errorResponse('No session.'),

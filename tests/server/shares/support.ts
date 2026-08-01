@@ -17,6 +17,9 @@ import { join } from 'node:path';
 
 import { Hono } from 'hono';
 
+// Models
+import { UNLIMITED_QUOTA } from '@fileshed/core';
+
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
@@ -71,8 +74,13 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
     const sharesRA = new ShareRA(handle);
     const usersRA = new UserRA(handle);
 
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: async () => uploadMaxBytes });
-    const nodes = new NodeManager(handle, nodesRA, blob);
+    const blobs = new BlobManager({
+        handle,
+        blob,
+        uploadMaxBytes: async () => uploadMaxBytes,
+        defaultQuota: async () => UNLIMITED_QUOTA,
+    });
+    const nodes = new NodeManager(handle, nodesRA, blob, { defaultQuota: async () => UNLIMITED_QUOTA });
     const shares = new ShareManager(handle, nodesRA, sharesRA, usersRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
 

@@ -4,6 +4,14 @@
 
 import { z } from 'zod';
 
+// Constants
+import {
+    DISPLAY_NAME_MAX_LENGTH,
+    EMAIL_MAX_LENGTH,
+    EMAIL_MIN_LENGTH,
+    PASSWORD_MIN_LENGTH,
+} from '../../../constants/user.ts';
+
 // Models
 import { colorModes } from '../../instanceTheme.ts';
 import { socialProviderIDs } from '../../instanceSettings.ts';
@@ -27,21 +35,28 @@ export const instanceResponseCodec = z.strictObject({
         forcedMode: z.boolean(),
         logo: z.string().nullable(),
     }),
+    limits: z.strictObject({
+        uploadMaxBytes: z.number()
+            .int()
+            .positive(),
+        avatarMaxBytes: z.number()
+            .int()
+            .positive(),
+    }),
 });
 
 typeAssert<Equals<z.output<typeof instanceResponseCodec>, InstanceResponse>>();
 
-// The password floor matches better-auth's own sign-up minimum; the token is opaque and only ever compared, so no
-// shape is imposed beyond presence.
+// The token is opaque and only ever compared, so no shape is imposed beyond presence.
 export const setupRequestCodec = z.strictObject({
     token: z.string().min(1),
     name: z.string().trim()
         .min(1)
-        .max(100),
+        .max(DISPLAY_NAME_MAX_LENGTH),
     email: z.string().trim()
-        .min(3)
-        .max(254),
-    password: z.string().min(8),
+        .min(EMAIL_MIN_LENGTH)
+        .max(EMAIL_MAX_LENGTH),
+    password: z.string().min(PASSWORD_MIN_LENGTH),
 });
 
 typeAssert<Equals<z.output<typeof setupRequestCodec>, SetupRequest>>();

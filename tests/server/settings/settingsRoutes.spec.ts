@@ -10,7 +10,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 
-import { adminSettingKeys, adminSettingsResponseCodec } from '@fileshed/core';
+import { type InstanceLimits, adminSettingKeys, adminSettingsResponseCodec } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -40,6 +40,13 @@ async function instanceSignUpEnabled(app : Hono) : Promise<boolean>
     const body = await res.json() as { signUpEnabled : boolean };
 
     return body.signUpEnabled;
+}
+
+async function instanceLimits(app : Hono) : Promise<InstanceLimits>
+{
+    const res = await app.request(`${ ORIGIN }/api/instance`);
+
+    return (await res.json() as { limits : InstanceLimits }).limits;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -162,6 +169,59 @@ describe('PATCH /api/admin/settings', () =>
 
         expect(entry).toMatchObject({ value: 1024, source: 'override' });
         expect(body.restartRequired).toBe(false);
+    });
+
+    // A value outside its key's bounds is refused the same way a wrong-typed one is -- and the message names the key,
+    // because a patch carries several and "invalid value" would not say which to fix.
+    it('rejects a cap below its floor with a 400 that names the key, storing nothing', async () =>
+    {
+        const booted = await boot();
+        const cookie = await makeAdmin(booted, 'root@example.com', 'correct-horse-battery');
+
+        const res = await patchSettings(booted.app, cookie, { UPLOAD_MAX_BYTES: 0 });
+        const body = await res.json() as { error : string };
+
+        expect(res.status).toBe(400);
+        expect(body.error).toContain('UPLOAD_MAX_BYTES');
+        expect(await instanceLimits(booted.app)).toMatchObject({ uploadMaxBytes: booted.config.UPLOAD_MAX_BYTES });
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// The pre-auth pages size their upload pickers from these, so a cap the admin moves has to reach them without a
+// restart -- the same live-read contract the sign-up switch above proves.
+describe('/api/instance limits', () =>
+{
+    it('answers the configured caps on a fresh instance', async () =>
+    {
+        const booted = await boot();
+
+        expect(await instanceLimits(booted.app)).toEqual({
+            uploadMaxBytes: booted.config.UPLOAD_MAX_BYTES,
+            avatarMaxBytes: booted.config.AVATAR_MAX_BYTES,
+        });
+    });
+
+    it('reflects a patched cap on the very next request', async () =>
+    {
+        const booted = await boot();
+        const cookie = await makeAdmin(booted, 'root@example.com', 'correct-horse-battery');
+
+        await patchSettings(booted.app, cookie, { UPLOAD_MAX_BYTES: 4096, AVATAR_MAX_BYTES: 2048 });
+
+        expect(await instanceLimits(booted.app)).toEqual({ uploadMaxBytes: 4096, avatarMaxBytes: 2048 });
+    });
+
+    it('falls back to the configured cap once the override is reset away', async () =>
+    {
+        const booted = await boot();
+        const cookie = await makeAdmin(booted, 'root@example.com', 'correct-horse-battery');
+
+        await patchSettings(booted.app, cookie, { UPLOAD_MAX_BYTES: 4096 });
+        await patchSettings(booted.app, cookie, { UPLOAD_MAX_BYTES: null });
+
+        expect(await instanceLimits(booted.app)).toMatchObject({ uploadMaxBytes: booted.config.UPLOAD_MAX_BYTES });
     });
 });
 

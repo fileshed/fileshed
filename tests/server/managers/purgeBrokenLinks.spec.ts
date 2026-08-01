@@ -31,7 +31,7 @@ import {
     seedBlob,
     seedUser,
 } from '../resource-access/nodes/support.ts';
-import { noopOrphanedBlobs, testActor } from '../nodes/support.ts';
+import { noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -86,7 +86,7 @@ async function childIDs(parentID : string) : Promise<string[]>
 
 function manager() : NodeManager
 {
-    return new NodeManager(handle, ra, noopOrphanedBlobs());
+    return new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 }
 
 async function caught(promise : Promise<unknown>) : Promise<unknown>

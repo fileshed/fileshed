@@ -100,17 +100,22 @@ const UBadgeStub = {
 
 // The tab feeds the field from store.entries, so a save's refreshed view re-renders the card; this host mirrors
 // that wiring.
-function mountField(entry : AdminSettingEntry, unit ?: 'bytes' | 'days') : VueWrapper
+function mountField(entry : AdminSettingEntry, unit ?: 'bytes' | 'days', zeroLabel ?: string) : VueWrapper
 {
     const store = useAdminSettingsStore();
     store.entries = [ entry ];
 
     return mount({
         components: { SettingField },
-        setup: () => ({ store, unit }),
+        setup: () => ({ store, unit, zeroLabel }),
         template: '<SettingField v-if="store.entries[0]" :entry="store.entries[0]" '
-            + 'label="Test setting" description="What it does." :unit="unit" />',
+            + 'label="Test setting" description="What it does." :unit="unit" :zero-label="zeroLabel" />',
     }, { global: { stubs: { UInput: UInputStub, UButton: UButtonStub, USwitch: USwitchStub, UBadge: UBadgeStub } } });
+}
+
+function inputValue(wrapper : VueWrapper) : string
+{
+    return (wrapper.find('.value-input').element as HTMLInputElement).value;
 }
 
 function saveButton(wrapper : VueWrapper) : HTMLButtonElement
@@ -171,7 +176,7 @@ describe('SettingField', () =>
         await flushPromises();
 
         expect(patchMock).toHaveBeenCalledWith({ UPLOAD_MAX_BYTES: 2000 });
-        expect((wrapper.find('.value-input').element as HTMLInputElement).value).toBe('3000');
+        expect(inputValue(wrapper)).toBe('3000');
     });
 
     it('takes a human size on a bytes field, echoing the parsed byte count, and saves the bytes', async () =>
@@ -197,6 +202,58 @@ describe('SettingField', () =>
         await wrapper.find('.value-input').setValue('20 gigawatts');
 
         expect(saveButton(wrapper).disabled).toBe(true);
+    });
+
+    it('prefills a bytes field with the stored size in human units', () =>
+    {
+        expect(inputValue(mountField(numberEntry({ value: 2_097_152 }), 'bytes'))).toBe('2.1 MB');
+    });
+
+    // The prefill is a rounded rendering, so reading it back as a size would store 2,100,000 for a field nobody
+    // edited. Untouched means unchanged, and the echo underneath still names the count exactly.
+    it('never drifts the stored count on a bytes field left untouched', async () =>
+    {
+        const wrapper = mountField(numberEntry({ value: 2_097_152 }), 'bytes');
+
+        expect(saveButton(wrapper).disabled).toBe(true);
+        expect(wrapper.text()).toContain(`= ${ (2_097_152).toLocaleString() } bytes (2.1 MB)`);
+
+        await wrapper.find('.btn-save').trigger('click');
+        await flushPromises();
+
+        expect(patchMock).not.toHaveBeenCalled();
+    });
+
+    it('saves an edited bytes draft as the size it parses to', async () =>
+    {
+        patchMock.mockResolvedValue(response([ numberEntry({ value: 3_000_000_000, source: 'override' }) ]));
+        const wrapper = mountField(numberEntry({ value: 2_097_152 }), 'bytes');
+
+        await wrapper.find('.value-input').setValue('3gb');
+        await wrapper.find('.btn-save').trigger('click');
+        await flushPromises();
+
+        expect(patchMock).toHaveBeenCalledWith({ UPLOAD_MAX_BYTES: 3_000_000_000 });
+        expect(inputValue(wrapper)).toBe('3 GB');
+    });
+
+    // Zero is a sentinel on the quota key, so echoing "0 bytes" would contradict what the setting means.
+    it('echoes a key\'s own word for zero, and the byte count for every other value', async () =>
+    {
+        const wrapper = mountField(numberEntry({ key: 'DEFAULT_QUOTA_BYTES', value: 0 }), 'bytes', 'Unlimited');
+
+        expect(wrapper.text()).toContain('Unlimited');
+        expect(wrapper.text()).not.toContain('0 bytes');
+
+        await wrapper.find('.value-input').setValue('20gb');
+
+        expect(wrapper.text()).toContain(`= ${ (20_000_000_000).toLocaleString() } bytes`);
+        expect(wrapper.text()).not.toContain('Unlimited');
+    });
+
+    it('echoes a plain zero as a count of nothing on a key that gave no word for it', () =>
+    {
+        expect(mountField(numberEntry({ value: 0 }), 'bytes').text()).toContain('= 0 bytes (0 B)');
     });
 
     it('offers Reset only while an override is in play, and resets with the null patch', async () =>
@@ -285,7 +342,69 @@ describe('SettingField', () =>
         await flushPromises();
 
         expect(patchMock).toHaveBeenCalledWith({ SMTP_PASSWORD: 'hunter2-smtp-secret' });
-        expect((wrapper.find('.value-input').element as HTMLInputElement).value).toBe('');
+        expect(inputValue(wrapper)).toBe('');
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Constraints — the key's own bounds, spent on a refusal here instead of a round trip. The server checks these
+    // regardless; an absent bound imposes nothing.
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('refuses a number under the key\'s minimum and names the bound', async () =>
+    {
+        const wrapper = mountField(numberEntry({ value: 1000, constraints: { min: 1 } }), 'bytes');
+
+        await wrapper.find('.value-input').setValue('0');
+
+        expect(saveButton(wrapper).disabled).toBe(true);
+        expect(wrapper.text()).toContain('Must be at least 1 B.');
+
+        await wrapper.find('.btn-save').trigger('click');
+        await flushPromises();
+
+        expect(patchMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a number over the key\'s maximum and names the bound', async () =>
+    {
+        const wrapper = mountField(numberEntry({
+            key: 'SMTP_PORT',
+            value: 587,
+            constraints: { min: 1, max: 65_535 },
+        }));
+
+        await wrapper.find('.value-input').setValue('70000');
+
+        expect(saveButton(wrapper).disabled).toBe(true);
+        expect(wrapper.text()).toContain('Must be at most 65535.');
+    });
+
+    it('refuses a string longer than the key\'s maximum length', async () =>
+    {
+        const wrapper = mountField(stringEntry({ key: 'INSTANCE_NAME', constraints: { maxLength: 5 } }));
+
+        await wrapper.find('.value-input').setValue('much too long');
+
+        expect(saveButton(wrapper).disabled).toBe(true);
+        expect(wrapper.text()).toContain('Must be 5 characters or fewer.');
+    });
+
+    it('accepts a value sitting exactly on a bound', async () =>
+    {
+        const wrapper = mountField(numberEntry({ value: 1000, constraints: { min: 1, max: 2000 } }));
+
+        await wrapper.find('.value-input').setValue('2000');
+
+        expect(saveButton(wrapper).disabled).toBe(false);
+    });
+
+    it('imposes nothing on a key that carries no bounds', async () =>
+    {
+        const wrapper = mountField(numberEntry({ value: 1000 }));
+
+        await wrapper.find('.value-input').setValue('0');
+
+        expect(saveButton(wrapper).disabled).toBe(false);
     });
 });
 

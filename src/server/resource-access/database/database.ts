@@ -70,9 +70,12 @@ export interface UserTable
     role : 'admin' | 'user';
     quota_limit : number | null;
 
-    // The admin plugin's ban flag, null on every account it has never banned, and better-auth's account-creation
-    // stamp -- emitted in camelCase like the rest of its base columns, so any hand-written SQL must quote it.
+    // The admin plugin's ban flag and expiry (both null on accounts it has never banned), and better-auth's
+    // account-creation stamp -- all emitted in camelCase like the rest of its base columns, so any hand-written SQL
+    // must quote them. A dated ban past its expiry still carries banned = true until the user's next sign-in
+    // attempt clears it; readers derive standing (see engines/ban.ts) instead of trusting the flag.
     banned : Bool | null;
+    banExpires : Timestamp | null;
     createdAt : Timestamp;
 
     // The per-user preferences blob: JSON text, null when the account has set none. Written only by the app's own

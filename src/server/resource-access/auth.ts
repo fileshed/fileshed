@@ -24,11 +24,14 @@ import { sql } from 'kysely';
 import {
     ACCESS_TOKEN_CONFIG_PAT,
     ACCESS_TOKEN_CONFIG_PLAYBACK,
+    ACCESS_TOKEN_MAX_EXPIRES_DAYS,
+    ACCESS_TOKEN_MIN_EXPIRES_DAYS,
     ACCESS_TOKEN_PREFIX,
     MS_PER_SECOND,
     PLAYBACK_TOKEN_PREFIX,
     PLAYBACK_TOKEN_TTL_MS,
     type ProviderSettingKey,
+    SESSION_COOKIE_CACHE_SECONDS,
     type SocialProviderID,
     providerCredentialKeys,
     providerRequiredKeys,
@@ -148,19 +151,23 @@ export function socialProvidersFromValues(values : ProviderBootValues) : BetterA
 //----------------------------------------------------------------------------------------------------------------------
 
 // The two api-key configurations behind FileShed's access tokens. `pat` is the durable, user-managed kind: named,
-// prefixed for glance-recognition, expiry user-chosen (the 1-365 day bounds live in the request codec and happen to
-// match the plugin's own clamp). `playback` is the media player's short-lived download-scoped kind: no name, no
-// stored starting characters (never listed anywhere), expiring on the config default alone. Rate limiting is off for
-// both -- FileShed is self-hosted, and the mint route also stamps rateLimitEnabled:false per key so no schema
-// default can resurrect it. Expiry values are SECONDS: the shipped plugin passes them through getDate(x, 'sec')
-// even though its reference docs say milliseconds -- the dist wins.
+// prefixed for glance-recognition, expiry user-chosen within the shared day bounds the request codec validates
+// against, so the plugin's clamp and the codec cannot drift. `playback` is the media player's short-lived
+// download-scoped kind: no name, no stored starting characters (never listed anywhere), expiring on the config
+// default alone. Rate limiting is off for both -- FileShed is self-hosted, and the mint route also stamps
+// rateLimitEnabled:false per key so no schema default can resurrect it. Expiry values are SECONDS: the shipped
+// plugin passes them through getDate(x, 'sec') even though its reference docs say milliseconds -- the dist wins.
 const apiKeyConfigurations = [
     {
         configId: ACCESS_TOKEN_CONFIG_PAT,
         defaultPrefix: ACCESS_TOKEN_PREFIX,
         requireName: true,
         rateLimit: { enabled: false },
-        keyExpiration: { defaultExpiresIn: null, minExpiresIn: 1, maxExpiresIn: 365 },
+        keyExpiration: {
+            defaultExpiresIn: null,
+            minExpiresIn: ACCESS_TOKEN_MIN_EXPIRES_DAYS,
+            maxExpiresIn: ACCESS_TOKEN_MAX_EXPIRES_DAYS,
+        },
         startingCharactersConfig: { shouldStore: true, charactersLength: 12 },
         deferUpdates: true,
     },
@@ -205,9 +212,9 @@ const authOptionsShape = {
     session: {
         // Serve the session from a short-lived signed cookie so getSession on hot paths skips a DB round-trip.
         // The cookie lives in the BROWSER, so revoking DB sessions (a ban does) cannot reach it before it expires
-        // -- 60 seconds caps that window at a cost of one session read per user per minute. Access tokens have no
-        // such lag: the ban hooks delete them outright.
-        cookieCache: { enabled: true, maxAge: 60 },
+        // -- SESSION_COOKIE_CACHE_SECONDS caps that window, at a cost of one session read per user per window.
+        // Access tokens have no such lag: the ban hooks delete them outright.
+        cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
     plugins: [ admin(), apiKey(apiKeyConfigurations) ],
     // Placeholder for the type only, like socialProviders: createAuth supplies the live hooks, which need the

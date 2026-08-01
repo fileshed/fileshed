@@ -33,7 +33,7 @@ import {
     seedBlob,
     seedUser,
 } from '../resource-access/nodes/support.ts';
-import { testActor } from '../nodes/support.ts';
+import { testActor, testNodePolicy } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -50,7 +50,7 @@ beforeEach(async () =>
     handle = await createTestDatabase();
     ra = new NodeRA(handle);
     offerRA = new DeletionOfferRA(handle);
-    nodes = new NodeManager(handle, ra, new BlobRA(handle), GRACE_MS);
+    nodes = new NodeManager(handle, ra, new BlobRA(handle), testNodePolicy({ offerGraceMs: async () => GRACE_MS }));
     offers = new DeletionOfferManager(handle, nodes);
 
     await seedUser(handle.db, 'alice');

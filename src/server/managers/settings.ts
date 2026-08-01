@@ -3,7 +3,7 @@
 //
 // The instance-settings brain: resolves each admin-tunable key as override-over-config (the loaded, substituted
 // yaml IS the default; a DB row beats it; deleting the row is "reset to default"), enforces the vocabulary's
-// per-key kind, seals secret values through the SecretBox before they touch a row, and masks them on the way
+// per-key kind and bounds, seals secret values through the SecretBox before they touch a row, and masks them on the way
 // out -- a stored secret never crosses the wire again. Admin-only at this boundary, the same single-condition RBAC
 // the admin manager uses. Consumers read through value() at use time, which is what makes a changed cap apply to
 // the very next request; only requiresRestart keys (frozen into the auth instance at boot) wait.
@@ -146,6 +146,33 @@ export class SettingsManager
         if(actor.role !== 'admin') { throw new ForbiddenError('Admin access required.'); }
     }
 
+    // The vocabulary's per-key bounds, enforced before a value can reach a row. A cap outside its bounds is not a
+    // value to store and work around later -- an UPLOAD_MAX_BYTES of 0 would refuse every upload, an SMTP_PORT of
+    // 70000 can never be dialed -- so it dies here, naming its key, rather than collapsing somewhere downstream.
+    #assertWithinConstraints(key : AdminSettingKey, value : SettingValue) : void
+    {
+        const constraints = settingDefinitions[key].constraints;
+        if(constraints === undefined) { return; }
+
+        if(typeof value === 'number')
+        {
+            if(constraints.min !== undefined && value < constraints.min)
+            {
+                throw new BadRequestError(`${ key } must be at least ${ constraints.min }.`);
+            }
+
+            if(constraints.max !== undefined && value > constraints.max)
+            {
+                throw new BadRequestError(`${ key } must be at most ${ constraints.max }.`);
+            }
+        }
+
+        if(typeof value === 'string' && constraints.maxLength !== undefined && value.length > constraints.maxLength)
+        {
+            throw new BadRequestError(`${ key } must be at most ${ constraints.maxLength } characters.`);
+        }
+    }
+
     async adminView(actor : SessionUser) : Promise<{ settings : AdminSettingEntry[]; restartRequired : boolean }>
     {
         this.#requireAdmin(actor);
@@ -167,6 +194,7 @@ export class SettingsManager
                 value: definition.secret && typeof value === 'string' ? maskSecret(value) : value,
                 source: override !== undefined ? 'override' : 'default',
                 hasDefault: this.#defaultFor(key) !== null,
+                constraints: definition.constraints,
             };
         });
 
@@ -207,6 +235,8 @@ export class SettingsManager
             }
             else
             {
+                this.#assertWithinConstraints(key, value);
+
                 const stored = definition.secret && typeof value === 'string' ? this.#box.seal(value) : value;
                 // eslint-disable-next-line no-await-in-loop -- a handful of keys, applied in order
                 await this.#ra.upsert(key, stored);

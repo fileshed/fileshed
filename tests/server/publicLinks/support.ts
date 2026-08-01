@@ -21,7 +21,7 @@ import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { createId } from '@paralleldrive/cuid2';
 
-import type { ClaimResponse, NodeResponse, ShareRole } from '@fileshed/core';
+import { type ClaimResponse, type NodeResponse, type ShareRole, UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
@@ -83,9 +83,14 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     const userRA = new UserRA(handle);
     const linkRA = new PublicLinkRA(handle);
 
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: async () => 5 * 1024 * 1024 * 1024 });
+    const blobs = new BlobManager({
+        handle,
+        blob,
+        uploadMaxBytes: async () => 5 * 1024 * 1024 * 1024,
+        defaultQuota: async () => UNLIMITED_QUOTA,
+    });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
-    const nodes = new NodeManager(handle, nodeRA, noopOrphanedBlobs);
+    const nodes = new NodeManager(handle, nodeRA, noopOrphanedBlobs, { defaultQuota: async () => UNLIMITED_QUOTA });
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
 
     // The REAL share-aware resolver, wired exactly as app.ts wires it -- so these specs exercise the authorization

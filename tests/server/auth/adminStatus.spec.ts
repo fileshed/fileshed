@@ -30,6 +30,7 @@ import { createAdminStatusRoutes } from '@server/routes/admin.ts';
 
 // Support
 import { type BootedBlobApp, ORIGIN, bootBlobApp, cookieFrom, signIn, signUp } from '../blobs/support.ts';
+import { testNodePolicy } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -95,9 +96,9 @@ async function makeAdminCookie(email : string) : Promise<string>
 async function recordSweeps() : Promise<void>
 {
     const nodeRA = new NodeRA(booted.handle);
-    const nodes = new NodeManager(booted.handle, nodeRA, booted.blob);
+    const nodes = new NodeManager(booted.handle, nodeRA, booted.blob, testNodePolicy());
 
-    tracker.recordGc(await runGcOnce({ handle: booted.handle, blob: booted.blob, graceMs: GRACE_MS }));
+    tracker.recordGc(await runGcOnce({ handle: booted.handle, blob: booted.blob, graceMs: async () => GRACE_MS }));
     tracker.recordTrashPurge(await runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: async () => GRACE_MS }));
 }
 

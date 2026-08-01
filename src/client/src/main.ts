@@ -14,7 +14,13 @@ import { useToast } from '@nuxt/ui/composables';
 import App from './app.vue';
 import { router } from './router/index.ts';
 
+// Resource Access
+import { applySafeThemeRescue } from './resource-access/safeThemeRescue.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
+
+// Ahead of the mount, so an instance whose custom CSS hides the UI never renders under it.
+applySafeThemeRescue(window.location.search, document);
 
 const app = createApp(App);
 

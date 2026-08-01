@@ -17,23 +17,27 @@ describe('formatBytes', () =>
         expect(formatBytes(999)).toBe('999 B');
     });
 
-    it('steps up through decimal units at each multiple of 1000', () =>
+    // The symbols are SI: the kilo prefix is lowercase because uppercase K is kelvin, and every byte suffix is an
+    // uppercase B because a lowercase b is bits.
+    it('steps up one decimal unit per multiple of 1000, in SI symbols', () =>
     {
-        expect(formatBytes(1000)).toBe('1 KB');
+        expect(formatBytes(1000)).toBe('1 kB');
         expect(formatBytes(1_000_000)).toBe('1 MB');
         expect(formatBytes(2_000_000_000)).toBe('2 GB');
+        expect(formatBytes(1_000_000_000_000)).toBe('1 TB');
+        expect(formatBytes(1_000_000_000_000_000)).toBe('1 PB');
     });
 
     it('keeps a single decimal place for fractional sizes', () =>
     {
-        expect(formatBytes(1536)).toBe('1.5 KB');
+        expect(formatBytes(1536)).toBe('1.5 kB');
         expect(formatBytes(1_500_000)).toBe('1.5 MB');
-        expect(formatBytes(2560)).toBe('2.6 KB');
+        expect(formatBytes(2560)).toBe('2.6 kB');
     });
 
     it('trims a trailing .0 so exact sizes read cleanly', () =>
     {
-        expect(formatBytes(2048)).toBe('2 KB');
+        expect(formatBytes(2048)).toBe('2 kB');
     });
 
     it('treats negative or non-finite input as zero', () =>

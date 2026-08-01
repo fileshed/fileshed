@@ -16,10 +16,12 @@ import { Hono } from 'hono';
 import { serveStatic } from '@hono/node-server/serve-static';
 
 import {
+    type InstanceLimits,
     MEDIA_TAG_SWEEP_BATCH,
     MS_PER_DAY,
     MS_PER_MINUTE,
     type SocialProviderID,
+    UNLIMITED_QUOTA,
     providerSettingKeys,
 } from '@fileshed/core';
 
@@ -155,6 +157,9 @@ export interface AppServices
     admins : AdminManager;
     mail : MailManager;
 
+    // The size caps /api/instance publishes, resolved per request so a raised cap needs no restart.
+    limits : () => Promise<InstanceLimits>;
+
     // The OAuth providers frozen into this process's auth instance at boot, for /api/instance.
     providers : SocialProviderID[];
 }
@@ -207,10 +212,15 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
 
         app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
         // Auth-only compositions (no services) still get the admin surface; with no node store to charge against,
-        // every account truthfully reports zero usage.
+        // every account truthfully reports zero usage, and with no settings store the instance default is the
+        // shipped one.
         app.route('/api', createAdminRoutes(
             sessions,
-            services?.admins ?? new AdminManager({ auth, usage: async () => new Map() })
+            services?.admins ?? new AdminManager({
+                auth,
+                usage: async () => new Map(),
+                defaultQuota: async () => UNLIMITED_QUOTA,
+            })
         ));
         app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
 
@@ -237,6 +247,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
                         logo,
                     };
                 },
+                limits: services.limits,
                 providers: services.providers,
             }));
             app.route('/api', createAdminSettingsRoutes(sessions, services.settings));
@@ -359,17 +370,25 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const userRA = new UserRA(handle);
     const tracker = new LastRunTracker();
 
-    // The caps are closures over the settings manager, resolved per use: an admin override applies to the very
-    // next request, and with no override each supplier answers the config value it names.
+    // The tunables are closures over the settings manager, resolved per use: an admin override applies to the very
+    // next request, and with no override each supplier answers the config value it names. DEFAULT_QUOTA_BYTES has no
+    // config twin -- its floor is the vocabulary's own fallback, unlimited.
     const uploadMaxBytes = () : Promise<number> => settings.numberValue('UPLOAD_MAX_BYTES', config.UPLOAD_MAX_BYTES);
     const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);
     const trashPurgeDays = () : Promise<number> => settings.numberValue('TRASH_PURGE_DAYS', config.TRASH_PURGE_DAYS);
+    const gcGraceDays = () : Promise<number> => settings.numberValue('GC_GRACE_DAYS', config.GC_GRACE_DAYS);
+    const gcGraceMs = async () : Promise<number> => await gcGraceDays() * MS_PER_DAY;
+    const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
 
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes });
+    const blobs = new BlobManager({ handle, blob, uploadMaxBytes, defaultQuota });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
-    const branding = new BrandingManager({ settings: settingsRA, config, handle, blob, maxBytes: avatarMaxBytes });
-    const nodes = new NodeManager(handle, nodeRA, blob, config.GC_GRACE_DAYS * MS_PER_DAY, trashPurgeDays);
+    const branding = new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes });
+    const nodes = new NodeManager(handle, nodeRA, blob, {
+        offerGraceMs: gcGraceMs,
+        trashRetentionDays: trashPurgeDays,
+        defaultQuota,
+    });
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
     const users = new UserManager(userRA);
     const deletionOffers = new DeletionOfferManager(handle, nodes);
@@ -387,7 +406,11 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         emailEnabled: () => mail.isConfigured(),
         signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),
     });
-    const admins = new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) });
+    const admins = new AdminManager({
+        auth,
+        usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
+        defaultQuota,
+    });
 
     const setup = new SetupManager({
         auth,
@@ -406,7 +429,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
 
     const sweepIntervalMs = config.GC_INTERVAL_MINUTES * MS_PER_MINUTE;
     const stopGc = startGcTimer(
-        { handle, blob, graceMs: config.GC_GRACE_DAYS * MS_PER_DAY },
+        { handle, blob, graceMs: gcGraceMs },
         sweepIntervalMs,
         (summary) => tracker.recordGc(summary)
     );
@@ -441,6 +464,12 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         branding,
         admins,
         mail,
+        limits: async () =>
+        {
+            const [ upload, avatar ] = await Promise.all([ uploadMaxBytes(), avatarMaxBytes() ]);
+
+            return { uploadMaxBytes: upload, avatarMaxBytes: avatar };
+        },
         providers,
     };
 

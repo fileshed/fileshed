@@ -97,6 +97,8 @@
     import { z } from 'zod';
     import type { FormSubmitEvent } from '@nuxt/ui';
 
+    import { PASSWORD_MIN_LENGTH } from '@fileshed/core';
+
     // Stores
     import { useAppStore } from '../stores/app.ts';
 
@@ -116,7 +118,7 @@
 
     const schema = z
         .object({
-            password: z.string().min(8, 'Use at least 8 characters.'),
+            password: z.string().min(PASSWORD_MIN_LENGTH, `Use at least ${ PASSWORD_MIN_LENGTH } characters.`),
             confirm: z.string(),
         })
         .refine((fields) => fields.password === fields.confirm, {

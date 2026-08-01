@@ -8,6 +8,8 @@
 
 import type { Hono } from 'hono';
 
+import { UNLIMITED_QUOTA } from '@fileshed/core';
+
 // Resource Access
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 import { type Auth, type AuthExtras, createAuth } from '@server/resource-access/auth.ts';
@@ -74,7 +76,6 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         SMTP_PASSWORD: undefined,
         SMTP_FROM: undefined,
         EMAIL_VERIFICATION_REQUIRED: false,
-        FILESHED_SAFE_THEME: false,
         ...overrides,
     };
 }
@@ -116,7 +117,6 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
     const settingsRA = new SettingsRA(handle);
 
     const startedAt = new Date();
-    const nodes = new NodeManager(handle, nodeRA, blob);
     const settings = new SettingsManager({
         settings: settingsRA,
         config,
@@ -125,11 +125,19 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
     });
     const mail = new MailManager({ settings, mail: new MailRA() });
 
+    // The same settings-backed suppliers bootApp wires, so a spec can patch a cap through the admin route and see
+    // the very next request obey it -- a harness reading config directly would freeze them at composition.
+    const uploadMaxBytes = () : Promise<number> => settings.numberValue('UPLOAD_MAX_BYTES', config.UPLOAD_MAX_BYTES);
+    const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);
+    const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
+
+    const nodes = new NodeManager(handle, nodeRA, blob, { defaultQuota });
+
     return createApp(auth, {
-        blobs: new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES }),
+        blobs: new BlobManager({ handle, blob, uploadMaxBytes, defaultQuota }),
         mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
         setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
-        avatars: new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES }),
+        avatars: new AvatarManager({ handle, blob, avatarMaxBytes }),
         nodes,
         shares: new ShareManager(handle, nodeRA, shareRA, userRA),
         publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
@@ -150,15 +158,15 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
         }),
         users: new UserManager(userRA),
         settings,
-        branding: new BrandingManager({
-            settings: settingsRA,
-            config,
-            handle,
-            blob,
-            maxBytes: async () => config.AVATAR_MAX_BYTES,
-        }),
-        admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs) }),
+        branding: new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes }),
+        admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs), defaultQuota }),
         mail,
+        limits: async () =>
+        {
+            const [ upload, avatar ] = await Promise.all([ uploadMaxBytes(), avatarMaxBytes() ]);
+
+            return { uploadMaxBytes: upload, avatarMaxBytes: avatar };
+        },
         providers: [],
     });
 }

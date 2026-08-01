@@ -17,6 +17,13 @@ export const ACCESS_TOKEN_CONFIG_PLAYBACK = 'playback';
 export const ACCESS_TOKEN_PREFIX = 'fspat_';
 export const PLAYBACK_TOKEN_PREFIX = 'fsplay_';
 
+export const ACCESS_TOKEN_NAME_MAX_LENGTH = 100;
+
+// A PAT's user-chosen expiry, in whole days. The request codec validates against these and the api-key plugin is
+// configured to clamp to the same pair, so the two cannot disagree.
+export const ACCESS_TOKEN_MIN_EXPIRES_DAYS = 1;
+export const ACCESS_TOKEN_MAX_EXPIRES_DAYS = 365;
+
 export const PLAYBACK_TOKEN_TTL_MS = 5 * MS_PER_HOUR;
 export const PLAYBACK_TOKEN_REFRESH_WINDOW_MS = 30 * MS_PER_MINUTE;
 

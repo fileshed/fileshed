@@ -8,7 +8,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { AdminSettingKey, SettingKind, SettingValue } from '../instanceSettings.ts';
+import type { AdminSettingKey, SettingConstraints, SettingKind, SettingValue } from '../instanceSettings.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -29,6 +29,10 @@ export interface AdminSettingEntry
     // only -- the default itself never crosses the wire, so a config-supplied secret stays unreadable. The UI
     // offers Reset to default only when this is true: with nothing underneath, there is no default to reset to.
     hasDefault : boolean;
+
+    // The key's bounds, so the field can hint them and refuse a doomed patch before spending a round trip. Absent
+    // where the key has none. The server re-checks regardless -- these are for the human, not the gate.
+    constraints ?: SettingConstraints;
 }
 
 export interface AdminSettingsResponse

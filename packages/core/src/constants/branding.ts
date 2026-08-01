@@ -19,6 +19,10 @@ export const STOCK_THEME = {
 // the settings table.
 export const CUSTOM_CSS_MAX_LENGTH = 65_536;
 
+// The instance name lands in page titles, the sidebar wordmark, and email From lines; past a hundred characters it
+// stops being a name and starts breaking layouts.
+export const INSTANCE_NAME_MAX_LENGTH = 100;
+
 // Wider than the avatar whitelist on purpose: SVG is the natural logo format and the favicon path wants ICO,
 // and unlike avatars (user-generated, served to everyone) the logo is uploaded by the admin -- who already
 // holds the custom-CSS pen, so SVG's script surface adds nothing new.

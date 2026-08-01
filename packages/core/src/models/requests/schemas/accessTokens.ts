@@ -4,6 +4,13 @@
 
 import { z } from 'zod';
 
+// Constants
+import {
+    ACCESS_TOKEN_MAX_EXPIRES_DAYS,
+    ACCESS_TOKEN_MIN_EXPIRES_DAYS,
+    ACCESS_TOKEN_NAME_MAX_LENGTH,
+} from '../../../constants/accessToken.ts';
+
 // Models
 import { type AccessToken, accessTokenScopes } from '../../accessToken.ts';
 
@@ -25,18 +32,19 @@ import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // A PAT needs a name and at least one scope; duplicate scopes are rejected rather than silently deduped so a
-// malformed caller hears about it. Expiry is whole days, bounded to a year, or null for a non-expiring key.
+// malformed caller hears about it. Expiry is whole days, bounded by the shared constants the api-key plugin's own
+// clamp is configured with, or null for a non-expiring key.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const createAccessTokenRequestCodec = z.strictObject({
     name: z.string().trim()
         .min(1)
-        .max(100),
+        .max(ACCESS_TOKEN_NAME_MAX_LENGTH),
     scopes: z.array(z.enum(accessTokenScopes)).min(1)
         .refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique.'),
     expiresInDays: z.number().int()
-        .min(1)
-        .max(365)
+        .min(ACCESS_TOKEN_MIN_EXPIRES_DAYS)
+        .max(ACCESS_TOKEN_MAX_EXPIRES_DAYS)
         .nullable()
         .default(null),
 });

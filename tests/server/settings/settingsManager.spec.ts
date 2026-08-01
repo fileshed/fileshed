@@ -9,7 +9,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { BadRequestError, ForbiddenError } from '@fileshed/core';
+import { BadRequestError, ForbiddenError, INSTANCE_NAME_MAX_LENGTH } from '@fileshed/core';
 
 // Resource Access
 import { SettingsRA } from '@server/resource-access/settings/index.ts';
@@ -150,6 +150,71 @@ describe('SettingsManager', () =>
 
         expect(await manager.value('TRASH_PURGE_DAYS')).toBe(booted.config.TRASH_PURGE_DAYS);
         expect(await manager.value('UPLOAD_MAX_BYTES')).toBe(booted.config.UPLOAD_MAX_BYTES);
+    });
+
+    // A cap of zero bytes would refuse every upload and every avatar, leaving the instance broken in a way only
+    // another admin visit undoes. The bound is the vocabulary's, so the error must name the key that violated it.
+    it('rejects a cap below its floor, naming the key, storing nothing', async () =>
+    {
+        await expect(manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: 0 } }))
+            .rejects.toThrow(/UPLOAD_MAX_BYTES/);
+        await expect(manager.patch(admin, { changes: { AVATAR_MAX_BYTES: 0 } }))
+            .rejects.toThrow(BadRequestError);
+
+        expect(await manager.value('UPLOAD_MAX_BYTES')).toBe(booted.config.UPLOAD_MAX_BYTES);
+        expect(await manager.value('AVATAR_MAX_BYTES')).toBe(booted.config.AVATAR_MAX_BYTES);
+    });
+
+    it('rejects an SMTP port outside the dialable range, at either end', async () =>
+    {
+        await expect(manager.patch(admin, { changes: { SMTP_PORT: 0 } })).rejects.toThrow(BadRequestError);
+        await expect(manager.patch(admin, { changes: { SMTP_PORT: 65_536 } })).rejects.toThrow(BadRequestError);
+
+        expect(await manager.value('SMTP_PORT')).toBe(booted.config.SMTP_PORT);
+    });
+
+    it('stores a value sitting exactly on its bound -- the bound is inclusive', async () =>
+    {
+        await manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: 1, SMTP_PORT: 65_535 } });
+
+        expect(await manager.value('UPLOAD_MAX_BYTES')).toBe(1);
+        expect(await manager.value('SMTP_PORT')).toBe(65_535);
+    });
+
+    it('rejects an instance name past its length cap, storing nothing', async () =>
+    {
+        await expect(manager.patch(admin, { changes: { INSTANCE_NAME: 'n'.repeat(INSTANCE_NAME_MAX_LENGTH + 1) } }))
+            .rejects.toThrow(BadRequestError);
+
+        expect(await manager.value('INSTANCE_NAME')).toBe('FileShed');
+
+        const atCap = 'n'.repeat(INSTANCE_NAME_MAX_LENGTH);
+        await manager.patch(admin, { changes: { INSTANCE_NAME: atCap } });
+        expect(await manager.value('INSTANCE_NAME')).toBe(atCap);
+    });
+
+    // Reset is the absence of a row, so it must not be dragged through the bounds check: a default that happens to
+    // sit outside them (or a key whose floor is above zero) would otherwise become impossible to reset.
+    it('still resets a bounded key to its default rather than judging the default against the bounds', async () =>
+    {
+        await manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: 4096 } });
+
+        const view = await manager.patch(admin, { changes: { UPLOAD_MAX_BYTES: null } });
+
+        expect(view.settings.find((row) => row.key === 'UPLOAD_MAX_BYTES')?.source).toBe('default');
+        expect(await manager.value('UPLOAD_MAX_BYTES')).toBe(booted.config.UPLOAD_MAX_BYTES);
+    });
+
+    // The admin UI hints and pre-validates from these, so they must ride out with each entry rather than being
+    // duplicated client-side, where they would drift from the server that actually enforces them.
+    it('publishes each key\'s bounds with its entry, and none where the key has none', async () =>
+    {
+        const byKey = new Map((await manager.adminView(admin)).settings.map((entry) => [ entry.key, entry ]));
+
+        expect(byKey.get('UPLOAD_MAX_BYTES')?.constraints).toEqual({ min: 1 });
+        expect(byKey.get('SMTP_PORT')?.constraints).toEqual({ min: 1, max: 65_535 });
+        expect(byKey.get('INSTANCE_NAME')?.constraints).toEqual({ maxLength: INSTANCE_NAME_MAX_LENGTH });
+        expect(byKey.get('SIGN_UP_ENABLED')?.constraints).toBeUndefined();
     });
 
     it('refuses the admin surface to a non-admin', async () =>

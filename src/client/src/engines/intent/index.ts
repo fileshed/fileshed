@@ -64,6 +64,6 @@ export {
 } from './selection.ts';
 
 export type { EditorMode, OpenAction } from './handlers.ts';
-export { EDITOR_MAX_BYTES, canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from './handlers.ts';
+export { canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from './handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------

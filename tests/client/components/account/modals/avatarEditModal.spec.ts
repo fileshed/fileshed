@@ -19,6 +19,7 @@ import { uploadAvatar } from '@client/resource-access/avatar.ts';
 import { fetchNodeBlob } from '@client/resource-access/content.ts';
 
 // Stores
+import { useAppStore } from '@client/stores/app.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 
 // Under test
@@ -47,7 +48,7 @@ function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
         email: 'member@example.com',
         name: 'Ada Lovelace',
         role: 'user',
-        quota: { used: 0, limit: null },
+        quota: { used: 0, effective: null, limit: null },
         limits: { trashRetentionDays: 30 },
         preferences: {},
         image: null,
@@ -93,9 +94,10 @@ const CropperStub = {
 
 const UModalStub = {
     name: 'UModal',
-    props: [ 'open', 'title', 'dismissible' ],
+    props: [ 'open', 'title', 'description', 'dismissible' ],
     emits: [ 'update:open' ],
-    template: '<div v-if="open" class="u-modal" :data-title="title"><slot name="body" /></div>',
+    template: '<div v-if="open" class="u-modal" :data-title="title" :data-description="description">'
+        + '<slot name="body" /></div>',
 };
 
 const UButtonStub = {
@@ -360,6 +362,36 @@ describe('AvatarEditModal', () =>
 
         expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ color: 'error' }));
         expect(wrapper.find('.u-modal').exists()).toBe(true);
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // The size cap named on the source step is the operator's, not the one this bundle was built against.
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('names the instance\'s configured avatar cap', async () =>
+    {
+        useSessionStore().me = meFixture();
+        useAppStore().limits = { uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 5_000_000 };
+
+        const wrapper = mountModal();
+        await openModal(wrapper);
+
+        expect(wrapper.find('.u-modal').attributes('data-description')).toContain('5 MB');
+    });
+
+    it('follows the cap when the instance raises it', async () =>
+    {
+        useSessionStore().me = meFixture();
+        const app = useAppStore();
+        app.limits = { uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 5_000_000 };
+
+        const wrapper = mountModal();
+        await openModal(wrapper);
+
+        app.limits = { uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 8_000_000 };
+        await flushPromises();
+
+        expect(wrapper.find('.u-modal').attributes('data-description')).toContain('8 MB');
     });
 });
 

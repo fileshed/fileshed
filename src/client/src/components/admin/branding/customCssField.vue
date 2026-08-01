@@ -16,9 +16,9 @@
 
         <p class="mt-1 text-sm text-muted">
             Appended after the theme, for the things no knob covers. Applies on Save, not live. If it ever breaks
-            the UI badly enough to lock you out, start the server with
-            <code class="rounded bg-elevated px-1 py-0.5 font-mono text-xs">FILESHED_SAFE_THEME=1</code>
-            and come back here.
+            the UI badly enough to lock you out, add
+            <code class="rounded bg-elevated px-1 py-0.5 font-mono text-xs">?safe-theme</code>
+            to the URL — the page loads with no branding at all, so you can come back here and fix it.
         </p>
 
         <CssEditor

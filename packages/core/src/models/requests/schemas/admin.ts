@@ -4,10 +4,13 @@
 
 import { z } from 'zod';
 
+// Constants
+import { BAN_MAX_EXPIRES_DAYS, BAN_REASON_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../../../constants/user.ts';
+
 // Models
 import { databaseKinds } from '../../database.ts';
 import { storageBackendKinds } from '../../storageBackend.ts';
-import { type UserProfile, userRoles } from '../../userProfile.ts';
+import { userRoles } from '../../userProfile.ts';
 
 // Schemas
 import { userProfileCodec } from '../../schemas/userProfile.ts';
@@ -16,6 +19,8 @@ import { userProfileCodec } from '../../schemas/userProfile.ts';
 import type {
     AdminOverview,
     AdminStatusResponse,
+    AdminUserEntry,
+    AdminUserPage,
     AdminUserPageResponse,
     AdminUserResponse,
     BanUserRequest,
@@ -33,8 +38,9 @@ import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// A quota is a non-negative whole byte count, or null for unlimited. A negative or fractional value is not an
-// under-specified request the manager can clamp -- it is a malformed one, rejected here so it never reaches a write.
+// A quota is a non-negative whole byte count -- 0 spelling unlimited -- or null to inherit the instance default. A
+// negative or fractional value is not an under-specified request the manager can clamp: it is a malformed one,
+// rejected here so it never reaches a write.
 export const setQuotaRequestCodec = z.strictObject({
     quotaLimit: z.number()
         .int()
@@ -46,18 +52,17 @@ typeAssert<Equals<z.output<typeof setQuotaRequestCodec>, SetQuotaRequest>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// A ban expiry is whole days, 1..365 -- longer bans are the no-expiry kind, lifted by hand. The reason is optional
-// and capped to keep it a note, not an essay.
+// A ban expiry is whole days -- longer bans are the no-expiry kind, lifted by hand. The reason is optional.
 export const banUserRequestCodec = z.strictObject({
     reason: z.string()
         .trim()
         .min(1)
-        .max(500)
+        .max(BAN_REASON_MAX_LENGTH)
         .optional(),
     expiresInDays: z.number()
         .int()
         .min(1)
-        .max(365)
+        .max(BAN_MAX_EXPIRES_DAYS)
         .optional(),
 });
 
@@ -69,9 +74,8 @@ export const setRoleRequestCodec = z.strictObject({
 
 typeAssert<Equals<z.output<typeof setRoleRequestCodec>, SetRoleRequest>>();
 
-// The password floor matches better-auth's own sign-up minimum.
 export const setPasswordRequestCodec = z.strictObject({
-    password: z.string().min(8),
+    password: z.string().min(PASSWORD_MIN_LENGTH),
 });
 
 typeAssert<Equals<z.output<typeof setPasswordRequestCodec>, SetPasswordRequest>>();
@@ -85,6 +89,11 @@ typeAssert<Equals<z.output<typeof testEmailResponseCodec>, TestEmailResponse>>()
 //----------------------------------------------------------------------------------------------------------------------
 
 export const adminUserResponseCodec = userProfileCodec.extend({
+    // Resolved, never raw: 0 is not an effective quota, it is the raw column's way of spelling the null below.
+    quotaEffective: z.number()
+        .int()
+        .positive()
+        .nullable(),
     banExpires: isoDateTimeCodec.nullable(),
     usedBytes: z.number()
         .int()
@@ -111,9 +120,9 @@ typeAssert<Equals<z.output<typeof adminUserPageResponseCodec>, AdminUserPageResp
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function toAdminUserResponse(entry : { profile : UserProfile; usedBytes : number }) : AdminUserResponse
+export function toAdminUserResponse(entry : AdminUserEntry) : AdminUserResponse
 {
-    const { profile, usedBytes } = entry;
+    const { profile, quotaEffective, usedBytes } = entry;
 
     return {
         id: profile.id,
@@ -121,6 +130,7 @@ export function toAdminUserResponse(entry : { profile : UserProfile; usedBytes :
         ...profile.name === undefined ? {} : { name: profile.name },
         role: profile.role,
         quotaLimit: profile.quotaLimit,
+        quotaEffective,
         banned: profile.banned,
         banReason: profile.banReason,
         banExpires: profile.banExpires === null ? null : profile.banExpires.toISOString(),
@@ -129,14 +139,7 @@ export function toAdminUserResponse(entry : { profile : UserProfile; usedBytes :
     };
 }
 
-export function toAdminUserPageResponse(
-    page : {
-        users : { profile : UserProfile; usedBytes : number }[];
-        total : number;
-        limit : number;
-        offset : number;
-    }
-) : AdminUserPageResponse
+export function toAdminUserPageResponse(page : AdminUserPage) : AdminUserPageResponse
 {
     return {
         users: page.users.map(toAdminUserResponse),

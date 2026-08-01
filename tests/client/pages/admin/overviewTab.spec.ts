@@ -141,9 +141,9 @@ describe('Admin OverviewTab', () =>
 
         expect(wrapper.text()).toContain('4 MB');
         expect(wrapper.text()).toContain('3 MB');
-        expect(wrapper.text()).toContain('250 KB');
+        expect(wrapper.text()).toContain('250 kB');
         expect(wrapper.text()).toContain('6 blobs awaiting collection');
-        expect(wrapper.text()).toContain('900 KB still charged');
+        expect(wrapper.text()).toContain('900 kB still charged');
     });
 
     it('measures the stored footprint against what users are charged', async () =>

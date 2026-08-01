@@ -44,7 +44,7 @@ function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
         email: 'member@example.com',
         name: 'Ada Lovelace',
         role: 'user',
-        quota: { used: 0, limit: null },
+        quota: { used: 0, effective: null, limit: null },
         limits: { trashRetentionDays: 30 },
         preferences: {},
         image: null,

@@ -20,7 +20,8 @@ export const instanceSpec = describeRoute({
     tags: [ SETUP_TAG ],
     summary: 'Instance facts for pre-auth pages',
     description: 'Anonymous by design: the sign-in and setup pages need these facts before any session exists. '
-        + 'Carries only what is safe in anyone\'s hands.',
+        + 'Carries only what is safe in anyone\'s hands. Branding and the size caps under limits are read live, so '
+        + 'an admin change applies on the next load.',
     responses: {
         200: jsonResponse('The instance\'s pre-auth facts.', instanceResponseCodec),
     },

@@ -50,6 +50,7 @@ import {
 
 // Engines
 import { applyPreferencesPatch } from '../engines/preferences.ts';
+import { effectiveQuota } from '../engines/quota.ts';
 import { type RegulationResult, regulation } from '../engines/regulation/index.ts';
 
 // Resource Access
@@ -91,6 +92,16 @@ export interface FileCopySnapshot
     blobID : string;
 }
 
+// The tunables the manager reads rather than remembers: each is a supplier called at use time, so an admin moving one
+// applies to the very next request instead of the next restart. An omitted supplier answers the shipped default --
+// except defaultQuota, which every composition must state, because guessing it wrong fails open on storage.
+export interface NodePolicy
+{
+    offerGraceMs ?: () => Promise<number>;
+    trashRetentionDays ?: () => Promise<number>;
+    defaultQuota : () => Promise<number>;
+}
+
 export class NodeManager
 {
     readonly #db : DatabaseHandle['db'];
@@ -100,16 +111,11 @@ export class NodeManager
     readonly #offers : DeletionOfferRA;
     readonly #users : UserRA;
     readonly #orphanedBlobs : OrphanedBlobs;
-    readonly #offerGraceMs : number;
+    readonly #offerGraceMs : () => Promise<number>;
     readonly #trashRetentionDays : () => Promise<number>;
+    readonly #defaultQuota : () => Promise<number>;
 
-    constructor(
-        handle : DatabaseHandle,
-        nodes : NodeRA,
-        orphanedBlobs : OrphanedBlobs,
-        offerGraceMs : number = DEFAULT_GC_GRACE_DAYS * MS_PER_DAY,
-        trashRetentionDays : () => Promise<number> = async () => DEFAULT_TRASH_PURGE_DAYS
-    )
+    constructor(handle : DatabaseHandle, nodes : NodeRA, orphanedBlobs : OrphanedBlobs, policy : NodePolicy)
     {
         this.#db = handle.db;
         this.#kind = handle.kind;
@@ -118,8 +124,9 @@ export class NodeManager
         this.#offers = new DeletionOfferRA(handle);
         this.#users = new UserRA(handle);
         this.#orphanedBlobs = orphanedBlobs;
-        this.#offerGraceMs = offerGraceMs;
-        this.#trashRetentionDays = trashRetentionDays;
+        this.#offerGraceMs = policy.offerGraceMs ?? (async () => DEFAULT_GC_GRACE_DAYS * MS_PER_DAY);
+        this.#trashRetentionDays = policy.trashRetentionDays ?? (async () => DEFAULT_TRASH_PURGE_DAYS);
+        this.#defaultQuota = policy.defaultQuota;
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -320,19 +327,22 @@ export class NodeManager
     {
         // Preferences and the avatar are read from the row, not the session snapshot: the cookie cache lags a just-
         // saved value, so a page reload right after a change would otherwise show the stale one.
-        const [ used, stored, avatarSha256, trashRetentionDays ] = await Promise.all([
+        const [ used, stored, avatarSha256, trashRetentionDays, defaultQuota ] = await Promise.all([
             this.#nodes.ownedBytes(actor.id),
             this.#users.preferencesOf(actor.id),
             this.#users.avatarSha256Of(actor.id),
             this.#trashRetentionDays(),
+            this.#defaultQuota(),
         ]);
+
+        const limit = actor.quotaLimit ?? null;
 
         return {
             id: actor.id,
             email: actor.email,
             name: actor.name,
             role: actor.role === 'admin' ? 'admin' : 'user',
-            quota: { used, limit: actor.quotaLimit ?? null },
+            quota: { used, effective: effectiveQuota(limit, defaultQuota), limit },
             limits: { trashRetentionDays },
             preferences: toUserPreferences(stored),
             image: avatarImage(avatarSha256),
@@ -574,7 +584,7 @@ export class NodeManager
         const granteeIDs = await this.#shares.granteeIDsFor(chain);
 
         const now = new Date();
-        const expiresAt = new Date(now.getTime() + this.#offerGraceMs);
+        const expiresAt = new Date(now.getTime() + await this.#offerGraceMs());
 
         return granteeIDs
             .filter((granteeID) => granteeID !== node.ownerID)
@@ -741,7 +751,8 @@ export class NodeManager
         prepare ?: (trx : DatabaseHandle['db']) => Promise<void>
     ) : Promise<NodeResponse>
     {
-        await this.#admitQuota(actor, snapshot.size);
+        const limitBytes = await this.#resolveLimit(actor);
+        this.#enforceQuota(actor, await this.#nodes.ownedBytes(actor.id), snapshot.size, limitBytes);
 
         const now = new Date();
         const node : FileNode = {
@@ -763,24 +774,27 @@ export class NodeManager
             if(prepare !== undefined) { await prepare(trx); }
 
             const nodes = new NodeRA({ db: trx, kind: this.#kind });
-            this.#enforceQuota(actor, await nodes.ownedBytes(actor.id), snapshot.size);
+            this.#enforceQuota(actor, await nodes.ownedBytes(actor.id), snapshot.size, limitBytes);
             await nodes.insert(node);
         });
 
         return toNodeResponse(node, 'owner');
     }
 
-    async #admitQuota(actor : SessionUser, incomingBytes : number) : Promise<void>
+    // Fold the instance default into the actor's raw quota_limit. Always called BEFORE a transaction opens: it reads
+    // the settings row, and SQLite serializes writes, so a read issued from inside an open write transaction on the
+    // same handle deadlocks the commit. The resolved limit is then carried into the transaction as a plain number.
+    async #resolveLimit(actor : SessionUser) : Promise<number | null>
     {
-        this.#enforceQuota(actor, await this.#nodes.ownedBytes(actor.id), incomingBytes);
+        return effectiveQuota(actor.quotaLimit ?? null, await this.#defaultQuota());
     }
 
-    #enforceQuota(actor : SessionUser, usedBytes : number, incomingBytes : number) : void
+    #enforceQuota(actor : SessionUser, usedBytes : number, incomingBytes : number, limitBytes : number | null) : void
     {
         const verdict = regulation.quota.admit({
             ownerID: actor.id,
             usedBytes,
-            limitBytes: actor.quotaLimit ?? null,
+            limitBytes,
             incomingBytes,
         });
 

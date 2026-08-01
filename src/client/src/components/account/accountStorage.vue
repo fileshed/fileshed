@@ -2,8 +2,9 @@
   -- Account Storage
   --
   -- The account-page storage summary, read from the same session quota the sidebar gauge uses so the two never drift.
-  -- Unlike the sidebar's compact label, this always shows the denominator -- "Unlimited" when no quota is set -- so
-  -- the possibility of a cap is visible even on uncapped accounts.
+  -- Unlike the sidebar's compact label, this always shows the denominator -- "Unlimited" when nothing caps the account
+  -- -- so the possibility of a cap is visible even on uncapped accounts. The denominator is the effective cap, with
+  -- the instance default already folded in, never the account's own raw setting.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -15,9 +16,9 @@
             </div>
 
             <UProgress
-                v-if="quota.limit !== null"
+                v-if="quota.effective !== null"
                 :model-value="quota.used"
-                :max="quota.limit"
+                :max="quota.effective"
                 :color="nearingCap ? 'error' : 'primary'"
                 size="sm"
             />
@@ -30,13 +31,11 @@
 <script setup lang="ts">
     import { computed } from 'vue';
 
-    import { QUOTA_WARNING_PERCENT } from '@fileshed/core';
-
     // Stores
     import { useSessionStore } from '../../stores/session.ts';
 
     // Utils
-    import { formatBytes, quotaPercent } from '../../utils/formatters/index.ts';
+    import { formatBytes, nearingQuotaCap, quotaHoverLabel } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -44,29 +43,15 @@
 
     const quota = computed(() => session.me?.quota ?? null);
 
-    const nearingCap = computed(() =>
-    {
-        const current = quota.value;
-        if(!current || current.limit === null) { return false; }
-
-        return quotaPercent(current.used, current.limit) >= QUOTA_WARNING_PERCENT;
-    });
-
-    // The hover detail: the share of quota consumed, only meaningful when a cap exists.
-    const hoverLabel = computed(() =>
-    {
-        const current = quota.value;
-        if(!current || current.limit === null) { return undefined; }
-
-        return `${ Math.round(quotaPercent(current.used, current.limit)) }% of your storage used`;
-    });
+    const nearingCap = computed(() => nearingQuotaCap(quota.value));
+    const hoverLabel = computed(() => quotaHoverLabel(quota.value));
 
     const usageLabel = computed(() =>
     {
         const current = quota.value;
         if(!current) { return ''; }
 
-        const limitLabel = current.limit === null ? 'Unlimited' : formatBytes(current.limit);
+        const limitLabel = current.effective === null ? 'Unlimited' : formatBytes(current.effective);
         return `${ formatBytes(current.used) } used / ${ limitLabel }`;
     });
 </script>

@@ -32,7 +32,7 @@ import {
     seedBlob,
     seedUser,
 } from '../resource-access/nodes/support.ts';
-import { noopOrphanedBlobs, testActor } from '../nodes/support.ts';
+import { noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -77,7 +77,7 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
 
 function manager(orphanedBlobs : OrphanedBlobs = noopOrphanedBlobs()) : NodeManager
 {
-    return new NodeManager(handle, ra, orphanedBlobs);
+    return new NodeManager(handle, ra, orphanedBlobs, testNodePolicy());
 }
 
 async function caught(promise : Promise<unknown>) : Promise<unknown>
@@ -180,6 +180,29 @@ describe('NodeManager.copy', () =>
         const copy = await manager().copy(testActor({ id: 'alice', quotaLimit: 2000 }), 'src', { parentID: null });
 
         expect(copy.type).toBe('file');
+        expect(await ra.ownedBytes('alice')).toBe(2000);
+    });
+
+    // The copy path charges the same quota the upload path does, so it must resolve the instance default the same
+    // way: an account with no limit of its own is bound by whatever the default currently says.
+    it('rejects a copy that would exceed the instance default for an account with no limit of its own', async () =>
+    {
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
+
+        const bound = new NodeManager(handle, ra, noopOrphanedBlobs(), { defaultQuota: async () => 1500 });
+        const error = await caught(bound.copy(testActor({ id: 'alice' }), 'src', { parentID: null }));
+
+        expect(error).toBeInstanceOf(ForbiddenError);
+        expect(await ra.ownedBytes('alice')).toBe(1000);
+    });
+
+    it('admits that same copy for an account explicitly pinned unlimited', async () =>
+    {
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
+
+        const bound = new NodeManager(handle, ra, noopOrphanedBlobs(), { defaultQuota: async () => 1500 });
+        await bound.copy(testActor({ id: 'alice', quotaLimit: 0 }), 'src', { parentID: null });
+
         expect(await ra.ownedBytes('alice')).toBe(2000);
     });
 

@@ -9,6 +9,13 @@
 // settings-only keys carry their default here.
 //----------------------------------------------------------------------------------------------------------------------
 
+// Constants
+import { INSTANCE_NAME_MAX_LENGTH } from '../constants/branding.ts';
+import { DEFAULT_SMTP_PORT } from '../constants/config.ts';
+import { UNLIMITED_QUOTA } from '../constants/quota.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+
 export const settingKinds = [ 'number', 'boolean', 'string' ] as const;
 export type SettingKind = typeof settingKinds[number];
 
@@ -138,7 +145,9 @@ const staticSettingKeys = [
     'INSTANCE_NAME',
     'UPLOAD_MAX_BYTES',
     'AVATAR_MAX_BYTES',
+    'DEFAULT_QUOTA_BYTES',
     'TRASH_PURGE_DAYS',
+    'GC_GRACE_DAYS',
     'SIGN_UP_ENABLED',
     'SMTP_HOST',
     'SMTP_PORT',
@@ -153,6 +162,16 @@ export type AdminSettingKey = typeof staticSettingKeys[number] | ProviderSetting
 
 export const adminSettingKeys : readonly AdminSettingKey[] = [ ...staticSettingKeys, ...providerSettingKeys ];
 
+// The per-key bounds a value must satisfy to be stored at all. min/max bound a number key, maxLength bounds a
+// string key's length; an absent bound imposes nothing. These ride out to the admin UI so a field can hint and
+// pre-validate, but the server enforces them independently -- a client hint is a courtesy, never the gate.
+export interface SettingConstraints
+{
+    min ?: number;
+    max ?: number;
+    maxLength ?: number;
+}
+
 export interface SettingDefinition
 {
     key : AdminSettingKey;
@@ -165,6 +184,9 @@ export interface SettingDefinition
 
     // The default for settings-only keys (no yaml/config twin); null means the config supplies the default.
     fallback : number | boolean | string | null;
+
+    // Absent where the generic floor (kind match, non-negative whole numbers) is the whole rule.
+    constraints ?: SettingConstraints;
 }
 
 // Every provider key shares one shape: a restart-tier string whose secrecy follows its name -- client secrets are
@@ -180,14 +202,64 @@ const providerDefinitions = Object.fromEntries(providerSettingKeys.map((key) => 
 export const settingDefinitions : Readonly<Record<AdminSettingKey, SettingDefinition>> = {
     // The instance's display name: page titles, the sidebar wordmark, outgoing email. Settings-only, no config
     // twin -- a deployment brands through the admin surface, not the environment.
-    INSTANCE_NAME:
-        { key: 'INSTANCE_NAME', kind: 'string', secret: false, requiresRestart: false, fallback: 'FileShed' },
-    UPLOAD_MAX_BYTES:
-        { key: 'UPLOAD_MAX_BYTES', kind: 'number', secret: false, requiresRestart: false, fallback: null },
-    AVATAR_MAX_BYTES:
-        { key: 'AVATAR_MAX_BYTES', kind: 'number', secret: false, requiresRestart: false, fallback: null },
-    TRASH_PURGE_DAYS:
-        { key: 'TRASH_PURGE_DAYS', kind: 'number', secret: false, requiresRestart: false, fallback: null },
+    INSTANCE_NAME: {
+        key: 'INSTANCE_NAME',
+        kind: 'string',
+        secret: false,
+        requiresRestart: false,
+        fallback: 'FileShed',
+        constraints: { maxLength: INSTANCE_NAME_MAX_LENGTH },
+    },
+
+    // A cap of zero bytes would refuse every upload outright; the floor keeps a mistyped cap from bricking the
+    // instance in a way only another admin visit can undo.
+    UPLOAD_MAX_BYTES: {
+        key: 'UPLOAD_MAX_BYTES',
+        kind: 'number',
+        secret: false,
+        requiresRestart: false,
+        fallback: null,
+        constraints: { min: 1 },
+    },
+    AVATAR_MAX_BYTES: {
+        key: 'AVATAR_MAX_BYTES',
+        kind: 'number',
+        secret: false,
+        requiresRestart: false,
+        fallback: null,
+        constraints: { min: 1 },
+    },
+
+    // The quota every account with no per-user limit of its own inherits. Zero is unlimited, which is what ships.
+    DEFAULT_QUOTA_BYTES: {
+        key: 'DEFAULT_QUOTA_BYTES',
+        kind: 'number',
+        secret: false,
+        requiresRestart: false,
+        fallback: UNLIMITED_QUOTA,
+        constraints: { min: 0 },
+    },
+
+    TRASH_PURGE_DAYS: {
+        key: 'TRASH_PURGE_DAYS',
+        kind: 'number',
+        secret: false,
+        requiresRestart: false,
+        fallback: null,
+        constraints: { min: 0 },
+    },
+
+    // The graveyard window before a dereferenced blob's bytes go, and the same window a deletion offer stays
+    // materializable for. The sweep and the offer minter both read it live.
+    GC_GRACE_DAYS: {
+        key: 'GC_GRACE_DAYS',
+        kind: 'number',
+        secret: false,
+        requiresRestart: false,
+        fallback: null,
+        constraints: { min: 0 },
+    },
+
     SIGN_UP_ENABLED:
         { key: 'SIGN_UP_ENABLED', kind: 'boolean', secret: false, requiresRestart: false, fallback: true },
 
@@ -195,8 +267,14 @@ export const settingDefinitions : Readonly<Record<AdminSettingKey, SettingDefini
     // knob applies to the next email without a restart. An unset SMTP_HOST or SMTP_FROM means mail is off.
     SMTP_HOST:
         { key: 'SMTP_HOST', kind: 'string', secret: false, requiresRestart: false, fallback: null },
-    SMTP_PORT:
-        { key: 'SMTP_PORT', kind: 'number', secret: false, requiresRestart: false, fallback: 587 },
+    SMTP_PORT: {
+        key: 'SMTP_PORT',
+        kind: 'number',
+        secret: false,
+        requiresRestart: false,
+        fallback: DEFAULT_SMTP_PORT,
+        constraints: { min: 1, max: 65_535 },
+    },
     SMTP_SECURE:
         { key: 'SMTP_SECURE', kind: 'boolean', secret: false, requiresRestart: false, fallback: false },
     SMTP_USER:

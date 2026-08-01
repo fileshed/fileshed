@@ -12,7 +12,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
-import { type NodeResponse, type UploadCommitMetadata, isRoleAtLeast } from '@fileshed/core';
+import { EDITOR_MAX_BYTES, type NodeResponse, type UploadCommitMetadata, isRoleAtLeast } from '@fileshed/core';
 
 // Resource Access
 import { ApiError } from '../resource-access/apiError.ts';
@@ -22,7 +22,7 @@ import { getNode, patchNode } from '../resource-access/nodes.ts';
 
 // Engines
 import { computeProofAnswer } from '../engines/claim.ts';
-import { EDITOR_MAX_BYTES, type EditorMode, intent } from '../engines/intent/index.ts';
+import { type EditorMode, intent } from '../engines/intent/index.ts';
 
 // Utils
 import { hashFile, readSampleWindows } from '../utils/hashFile.ts';

@@ -105,7 +105,7 @@ describe('useTrashStore.emptyAll', () =>
             id: 'u1',
             email: 'member@example.com',
             role: 'user',
-            quota: { used: 0, limit: 10_000 },
+            quota: { used: 0, effective: 10_000, limit: 10_000 },
             limits: { trashRetentionDays: 30 },
             preferences: {},
             createdAt: ISO,
@@ -119,7 +119,7 @@ describe('useTrashStore.emptyAll', () =>
         emptyTrashMock.mockResolvedValue({ purged: 1 });
         await store.emptyAll();
 
-        expect(useSessionStore().me?.quota).toEqual({ used: 0, limit: 10_000 });
+        expect(useSessionStore().me?.quota).toEqual({ used: 0, effective: 10_000, limit: 10_000 });
     });
 });
 

@@ -34,7 +34,9 @@ export interface GcDeps
 {
     handle : DatabaseHandle;
     blob : BlobRA;
-    graceMs : number;
+
+    // Read at the start of each sweep, so an admin changing the grace window needs no restart.
+    graceMs : () => Promise<number>;
 }
 
 export interface GcSummary
@@ -49,7 +51,7 @@ export interface GcSummary
 
 export async function runGcOnce(deps : GcDeps) : Promise<GcSummary>
 {
-    const cutoff = new Date(Date.now() - deps.graceMs);
+    const cutoff = new Date(Date.now() - await deps.graceMs());
     const candidates = await deps.blob.gcCandidates(cutoff);
 
     // Candidates are independent (distinct sha256), so they collect concurrently; within each, the row goes before its

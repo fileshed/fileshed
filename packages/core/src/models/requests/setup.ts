@@ -25,6 +25,14 @@ export interface InstanceBranding
     logo : string | null;
 }
 
+// The size caps a client must respect but cannot guess: an upload picker that hardcoded a ceiling would lie on
+// every deployment that moved one. Read live, so a raised cap applies to the next page load.
+export interface InstanceLimits
+{
+    uploadMaxBytes : number;
+    avatarMaxBytes : number;
+}
+
 export interface InstanceResponse
 {
     needsSetup : boolean;
@@ -38,8 +46,9 @@ export interface InstanceResponse
     // The OAuth providers the RUNNING instance registered at boot -- the sign-in page's provider buttons.
     providers : SocialProviderID[];
 
-    // Read live, unlike the boot-frozen facts above: name and mode changes apply on the next load, no restart.
+    // Read live, unlike the boot-frozen facts above: name, mode, and cap changes apply on the next load, no restart.
     branding : InstanceBranding;
+    limits : InstanceLimits;
 }
 
 export interface SetupRequest

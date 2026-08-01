@@ -129,6 +129,74 @@ describe('POST /api/admin/users/:id/ban', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+describe('lapsed bans', () =>
+{
+    // The row keeps banned = true after a dated ban expires (better-auth only clears it on the user's next sign-in
+    // attempt), so the admin surface must derive standing rather than echo the flag.
+    it('reads a dated ban past its expiry as a clean record in the admin list', async () =>
+    {
+        const { booted, adminCookie, memberID } = await bootWithMember();
+        await action(
+            booted.app, 
+            `/api/admin/users/${ memberID }/ban`, 
+            adminCookie,
+            { reason: 'Spamming', expiresInDays: 1 }
+        );
+
+        await booted.handle.db.updateTable('user')
+            .set({ banExpires: new Date(Date.now() - 60_000).toISOString() })
+            .where('id', '=', memberID)
+            .execute();
+
+        const res = await booted.app.request(`${ ORIGIN }/api/admin/users`, { headers: { cookie: adminCookie } });
+        const body = await res.json();
+        const member = body.users.find((user : { id : string }) => user.id === memberID);
+
+        expect(res.status).toBe(200);
+        expect(member.banned).toBe(false);
+        expect(member.banReason).toBeNull();
+        expect(member.banExpires).toBeNull();
+    });
+
+    // Deliberately pins better-auth's own sign-in gate, not our code. The ban engine exists because the library
+    // honors a lapsed expiry at sign-in while leaving the banned flag set on the row, so the admin surface has to
+    // derive standing itself. A library bump that changed either half would leave that surface silently wrong.
+    it('lets the user sign back in once the ban has expired', async () =>
+    {
+        const { booted, adminCookie, memberID } = await bootWithMember();
+        await action(booted.app, `/api/admin/users/${ memberID }/ban`, adminCookie, { expiresInDays: 1 });
+        expect((await signIn(booted.app, 'member@example.com', PASSWORD)).status).toBe(403);
+
+        await booted.handle.db.updateTable('user')
+            .set({ banExpires: new Date(Date.now() - 60_000).toISOString() })
+            .where('id', '=', memberID)
+            .execute();
+
+        expect((await signIn(booted.app, 'member@example.com', PASSWORD)).status).toBe(200);
+    });
+
+    it('keeps a ban with a future expiry fully in force on the admin list', async () =>
+    {
+        const { booted, adminCookie, memberID } = await bootWithMember();
+        await action(
+            booted.app, 
+            `/api/admin/users/${ memberID }/ban`, 
+            adminCookie,
+            { reason: 'Spamming', expiresInDays: 7 }
+        );
+
+        const res = await booted.app.request(`${ ORIGIN }/api/admin/users`, { headers: { cookie: adminCookie } });
+        const body = await res.json();
+        const member = body.users.find((user : { id : string }) => user.id === memberID);
+
+        expect(member.banned).toBe(true);
+        expect(member.banReason).toBe('Spamming');
+        expect(typeof member.banExpires).toBe('string');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('POST /api/admin/users/:id/unban', () =>
 {
     it('lifts the ban, clears the trio, and the user signs in again', async () =>

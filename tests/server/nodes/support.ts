@@ -12,12 +12,15 @@
 
 import { Hono } from 'hono';
 
+// Models
+import { UNLIMITED_QUOTA } from '@fileshed/core';
+
 // Resource Access
 import type { SessionUser } from '@server/resource-access/auth.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 
 // Managers
-import { NodeManager, type OrphanedBlobs } from '@server/managers/node.ts';
+import { NodeManager, type NodePolicy, type OrphanedBlobs } from '@server/managers/node.ts';
 import { SessionManager } from '@server/managers/session.ts';
 import { mapManagerError } from '@server/managers/errors.ts';
 
@@ -51,15 +54,30 @@ export function noopOrphanedBlobs() : OrphanedBlobs
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Policy
+//----------------------------------------------------------------------------------------------------------------------
+
+// NodeManager demands an instance default rather than assuming one, so the value a spec runs against is stated here
+// instead of inside the manager. Specs that care about quota inheritance override it.
+export function testNodePolicy(overrides : Partial<NodePolicy> = {}) : NodePolicy
+{
+    return { defaultQuota: async () => UNLIMITED_QUOTA, ...overrides };
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // App composition
 //----------------------------------------------------------------------------------------------------------------------
 
 // A single app carrying the auth mount (so signUp/signIn work) plus the node and me surfaces, wired exactly as app.ts
 // will wire them at integration -- managers over a real NodeRA, errors mapped through mapManagerError with a 500 floor.
-export function composeNodeApp(booted : BootedApp, orphanedBlobs : OrphanedBlobs = noopOrphanedBlobs()) : Hono
+export function composeNodeApp(
+    booted : BootedApp,
+    orphanedBlobs : OrphanedBlobs = noopOrphanedBlobs(),
+    policy : NodePolicy = testNodePolicy()
+) : Hono
 {
     const sessions = new SessionManager(booted.auth);
-    const nodes = new NodeManager(booted.handle, new NodeRA(booted.handle), orphanedBlobs);
+    const nodes = new NodeManager(booted.handle, new NodeRA(booted.handle), orphanedBlobs, policy);
 
     const app = new Hono();
 

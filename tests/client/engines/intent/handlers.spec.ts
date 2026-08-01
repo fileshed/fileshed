@@ -4,16 +4,16 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type LinkTarget, type NodeResponse, PDF_ANNOTATOR_MAX_BYTES, type Role, type SharedTarget }
-    from '@fileshed/core';
-
 import {
     EDITOR_MAX_BYTES,
-    canViewInline,
-    defaultEditorMode,
-    resolveOpen,
-    resolveSharedOpen,
-} from '@client/engines/intent/handlers.ts';
+    type LinkTarget,
+    type NodeResponse,
+    PDF_ANNOTATOR_MAX_BYTES,
+    type Role,
+    type SharedTarget,
+} from '@fileshed/core';
+
+import { canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from '@client/engines/intent/handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 

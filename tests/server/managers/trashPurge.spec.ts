@@ -28,6 +28,7 @@ import {
     seedBlob,
     seedUser,
 } from '../resource-access/nodes/support.ts';
+import { testNodePolicy } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -44,7 +45,7 @@ beforeEach(async () =>
 {
     handle = await createTestDatabase();
     ra = new NodeRA(handle);
-    nodes = new NodeManager(handle, ra, new BlobRA(handle));
+    nodes = new NodeManager(handle, ra, new BlobRA(handle), testNodePolicy());
 
     await seedUser(handle.db, 'alice');
     await seedUser(handle.db, 'bob');

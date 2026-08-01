@@ -4,6 +4,9 @@
   -- One account in the admin table: identity, role and ban badges, charged usage, quota, joined date, and the
   -- actions menu. The row decides nothing -- every action is emitted for the tab to run -- but it does gray out the
   -- self-directed footguns (self-ban, self-demotion) the server would refuse anyway.
+  --
+  -- The quota shown is what the server says is actually enforced: an account with no limit of its own is capped by
+  -- the instance default, and says so, rather than claiming to be unlimited.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -41,7 +44,8 @@
             </span>
         </td>
         <td class="px-4 py-3 text-muted">
-            {{ user.quotaLimit === null ? 'Unlimited' : formatBytes(user.quotaLimit) }}
+            {{ quotaLabel }}
+            <span v-if="user.quotaLimit === null" class="text-dimmed">(default)</span>
         </td>
         <td class="px-4 py-3 text-muted">
             {{ formatNodeDate(user.createdAt, session.timeFormat) }}
@@ -66,13 +70,13 @@
     import { computed } from 'vue';
     import type { DropdownMenuItem } from '@nuxt/ui';
 
-    import { type AdminUserResponse, QUOTA_WARNING_PERCENT } from '@fileshed/core';
+    import type { AdminUserResponse } from '@fileshed/core';
 
     // Stores
     import { useSessionStore } from '../../stores/session.ts';
 
     // Utils
-    import { formatBytes, formatNodeDate, quotaPercent } from '../../utils/formatters/index.ts';
+    import { formatBytes, formatNodeDate, nearingQuotaCap, quotaPercent } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -92,16 +96,26 @@
 
     const isSelf = computed(() => session.me?.id === props.user.id);
 
-    // The share of quota consumed, shown only for capped accounts and warning-colored from the same threshold the
-    // user's own gauge uses.
-    const usagePercent = computed(() =>
+    const quotaLabel = computed(() =>
     {
-        if(props.user.quotaLimit === null) { return null; }
+        const cap = props.user.quotaEffective;
 
-        return Math.round(quotaPercent(props.user.usedBytes, props.user.quotaLimit));
+        return cap === null ? 'Unlimited' : formatBytes(cap);
     });
 
-    const nearingCap = computed(() => usagePercent.value !== null && usagePercent.value >= QUOTA_WARNING_PERCENT);
+    // The rounded share of quota consumed, shown only for capped accounts. The warning color comes from the shared
+    // gauge rule on the unrounded value, so this row and the user's own meter agree at the boundary.
+    const usagePercent = computed(() =>
+    {
+        const cap = props.user.quotaEffective;
+        if(cap === null) { return null; }
+
+        return Math.round(quotaPercent(props.user.usedBytes, cap));
+    });
+
+    const nearingCap = computed(
+        () => nearingQuotaCap({ used: props.user.usedBytes, effective: props.user.quotaEffective })
+    );
 
     const banLabel = computed(() =>
     {

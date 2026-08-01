@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Me API DTO
 //
-// Response contract for GET /api/me: the caller's own profile plus quota usage and preferences. limit mirrors
-// UserProfile.quotaLimit (null = unlimited); used is the live charged-usage aggregate, computed fresh per request.
-// preferences is the caller's known-view preferences blob.
+// Response contract for GET /api/me: the caller's own profile plus quota usage and preferences. used is the live
+// charged-usage aggregate, computed fresh per request; preferences is the caller's known-view preferences blob.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -21,6 +20,13 @@ export interface MeResponse
     role : UserRole;
     quota : {
         used : number;
+
+        // What is actually enforced against this account, instance default already folded in; null is unlimited.
+        // Anything showing the caller their cap wants this one.
+        effective : number | null;
+
+        // The raw per-user setting behind it: a byte cap of their own, 0 for explicitly unlimited, or null to
+        // inherit whatever the instance default currently says.
         limit : number | null;
     };
 

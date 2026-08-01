@@ -18,6 +18,9 @@ import { Readable } from 'node:stream';
 
 import { Hono } from 'hono';
 
+// Models
+import { UNLIMITED_QUOTA } from '@fileshed/core';
+
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
@@ -88,7 +91,7 @@ export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAv
     const backendID = await seedDefaultBackend(handle, config);
     const blob = new BlobRA(handle);
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES });
-    const nodes = new NodeManager(handle, new NodeRA(handle), blob);
+    const nodes = new NodeManager(handle, new NodeRA(handle), blob, { defaultQuota: async () => UNLIMITED_QUOTA });
 
     return {
         app: composeApp(auth, avatars, nodes),

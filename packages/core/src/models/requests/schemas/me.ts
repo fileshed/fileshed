@@ -35,6 +35,10 @@ export const meResponseCodec = z.strictObject({
         used: z.number()
             .int()
             .nonnegative(),
+        effective: z.number()
+            .int()
+            .positive()
+            .nullable(),
         limit: z.number()
             .int()
             .nonnegative()

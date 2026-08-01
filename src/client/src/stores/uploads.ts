@@ -12,6 +12,9 @@
 // Folder uploads walk a dropped tree: each folder is created first (merging into an existing folder of the same
 // name, the way an OS copy merges directories) and its files enqueue into the created node; a folder that can't be
 // created surfaces as an error row wearing the folder's name rather than vanishing.
+//
+// A file over the instance's upload cap never enters the pipeline: the cap is knowable before any bytes move, so the
+// row is born failed rather than hashing itself only to be turned away at the claim.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -20,6 +23,7 @@ import { defineStore } from 'pinia';
 import type { NodeResponse, UploadCommitMetadata } from '@fileshed/core';
 
 // Stores
+import { useAppStore } from './app.ts';
 import { useDriveStore } from './drive.ts';
 import { useSessionStore } from './session.ts';
 
@@ -34,7 +38,7 @@ import { computeProofAnswer } from '../engines/claim.ts';
 import type { DroppedFolder, DroppedPayload } from '../engines/uploads/droppedTree.ts';
 
 // Utils
-import { nextCopyName } from '../utils/formatters/index.ts';
+import { formatBytes, nextCopyName } from '../utils/formatters/index.ts';
 import { hashFile, readSampleWindows } from '../utils/hashFile.ts';
 import { describeApiError } from '../utils/runWithToast.ts';
 
@@ -354,6 +358,17 @@ export const useUploadsStore = defineStore('uploads', () =>
         }
     }
 
+    // Why this file can't be uploaded at all, or null when it can. Read live, so an admin who raises the cap makes a
+    // rejected row retryable rather than permanently dead.
+    function overCapError(file : File) : string | null
+    {
+        const maxBytes = useAppStore().uploadMaxBytes;
+        if(file.size <= maxBytes) { return null; }
+
+        return `${ file.name } is ${ formatBytes(file.size) } — larger than the `
+            + `${ formatBytes(maxBytes) } upload limit.`;
+    }
+
     // The shared row-appender behind the public entry points; deliberately no fresh-batch reset, so the multiple
     // adds inside one payload (loose files, then each folder) never wipe rows the same payload just created.
     function addFiles(files : readonly File[], folderID : string | null) : void
@@ -361,15 +376,18 @@ export const useUploadsStore = defineStore('uploads', () =>
         for(const file of files)
         {
             counter += 1;
+
+            const error = overCapError(file);
+
             items.value.push({
                 id: `upload-${ counter }`,
                 file,
                 folderID,
                 name: file.name,
-                status: 'queued',
+                status: error === null ? 'queued' : 'error',
                 progress: { hashedBytes: 0, sentBytes: 0, totalBytes: file.size },
                 result: null,
-                error: null,
+                error,
             });
         }
 
@@ -491,9 +509,9 @@ export const useUploadsStore = defineStore('uploads', () =>
         if(item === undefined || item.status !== 'error') { return; }
 
         cleanup(itemID);
-        item.error = null;
+        item.error = overCapError(item.file);
         item.progress = { hashedBytes: 0, sentBytes: 0, totalBytes: item.file.size };
-        item.status = 'queued';
+        item.status = item.error === null ? 'queued' : 'error';
 
         pump();
     }

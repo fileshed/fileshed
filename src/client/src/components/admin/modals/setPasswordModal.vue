@@ -9,7 +9,7 @@
     <UModal v-model:open="open" :title="`Set password for ${ targetName }`" :dismissible="!pending">
         <template #body>
             <div class="flex flex-col gap-4">
-                <UFormField label="New password" help="At least 8 characters. Tell the user out of band.">
+                <UFormField label="New password" :help="passwordHelp">
                     <UInput
                         v-model="password"
                         type="text"
@@ -21,7 +21,12 @@
 
                 <div class="flex justify-end gap-2">
                     <UButton color="neutral" variant="ghost" label="Cancel" :disabled="pending" @click="open = false" />
-                    <UButton label="Set password" :loading="pending" :disabled="password.length < 8" @click="onSave" />
+                    <UButton
+                        label="Set password"
+                        :loading="pending"
+                        :disabled="password.length < PASSWORD_MIN_LENGTH"
+                        @click="onSave"
+                    />
                 </div>
             </div>
         </template>
@@ -33,7 +38,7 @@
 <script setup lang="ts">
     import { computed, ref } from 'vue';
 
-    import type { AdminUserResponse } from '@fileshed/core';
+    import { type AdminUserResponse, PASSWORD_MIN_LENGTH } from '@fileshed/core';
 
     // Resource Access
     import { setUserPassword } from '../../../resource-access/admin.ts';
@@ -52,6 +57,8 @@
 
     const targetName = computed(() => target.value?.name ?? target.value?.email ?? '');
 
+    const passwordHelp = `At least ${ PASSWORD_MIN_LENGTH } characters. Tell the user out of band.`;
+
     function openFor(user : AdminUserResponse) : void
     {
         target.value = user;
@@ -62,7 +69,7 @@
     function onSave() : void
     {
         const user = target.value;
-        if(!user || password.value.length < 8) { return; }
+        if(!user || password.value.length < PASSWORD_MIN_LENGTH) { return; }
 
         void runMutation(() => setUserPassword(user.id, password.value), pending, () =>
         {

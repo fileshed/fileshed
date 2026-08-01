@@ -20,6 +20,7 @@ import type { Database, DatabaseKind } from './database.ts';
 import * as initial001 from './migrations/001_initial.ts';
 import * as mediaTags002 from './migrations/002_media_tags.ts';
 import * as instanceSettings003 from './migrations/003_instance_settings.ts';
+import * as quotaZeroSemantics004 from './migrations/004_quota_zero_semantics.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -44,6 +45,9 @@ function migrationList(kind : DatabaseKind) : Record<string, Migration>
         '003_instance_settings': {
             up: (db) => instanceSettings003.up(db),
             down: (db) => instanceSettings003.down(db),
+        },
+        '004_quota_zero_semantics': {
+            up: (db) => quotaZeroSemantics004.up(db),
         },
     };
 }
@@ -97,8 +101,8 @@ export async function migrateToLatest(db : Kysely<Database>, kind : DatabaseKind
     reportFailures(results, error);
 }
 
-// Roll the schema all the way back to empty. Every migration's down() must fully reverse its up() so this leaves a
-// clean database (verified in the specs).
+// Roll the schema all the way back to empty. Every migration that creates schema must fully reverse it in down() so
+// this leaves a clean database (verified in the specs); a data-only migration has nothing to drop and omits down.
 export async function migrateDown(db : Kysely<Database>, kind : DatabaseKind) : Promise<void>
 {
     const { error, results } = await makeMigrator(db, kind).migrateTo(NO_MIGRATIONS);

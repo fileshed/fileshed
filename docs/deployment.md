@@ -58,7 +58,6 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `GC_GRACE_DAYS` | no | 7 | Days a dereferenced blob lingers before deletion. |
 | `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). |
 | `FILESHED_SETUP_TOKEN` | no | — | Operator-chosen first-run setup token (for automation); omit to use the boot-printed code. |
-| `FILESHED_SAFE_THEME` | no | `false` | Serve stock theming (empty branding stylesheet) — the rescue when custom CSS in the admin Branding tab breaks the UI. |
 | `SMTP_HOST` | no | — | Outgoing mail server; unset leaves email off. Also settable in the admin Email tab. |
 | `SMTP_PORT` | no | 587 | 587 (STARTTLS) or 465 (TLS). |
 | `SMTP_SECURE` | no | `false` | `true` for implicit TLS (port 465). |
@@ -78,6 +77,11 @@ tenant, GitLab's issuer, Apple's bundle identifier — as environment variables:
 `COGNITO_USER_POOL_ID`, `TIKTOK_CLIENT_KEY`, `MICROSOFT_TENANT_ID`, `GITLAB_ISSUER`,
 `APPLE_APP_BUNDLE_IDENTIFIER`). Provider changes always wait on a restart — better-auth registers its OAuth routes
 at boot.
+
+**If custom CSS breaks the UI:** add `?safe-theme` to the URL — say
+`https://files.example.com/admin/branding?safe-theme`. The client drops the branding stylesheet before it mounts, so
+the page renders stock and you can fix or clear the CSS from the Branding tab; saving applies instance-wide
+immediately. Reload without the parameter to get branding back. No shell, no restart.
 
 ## Put HTTPS in front
 

@@ -2,7 +2,7 @@
 // Byte Size Parsing
 //
 // Human-entered sizes for the byte-cap inputs: "20gb", "20 GB", "200kb", "1.5tb", or plain bytes ("2048"). Units
-// are decimal (1 KB = 1000 B), matching formatBytes and the storage figures cloud drives present. The result is
+// are decimal (1 kB = 1000 B), matching formatBytes and the storage figures cloud drives present. The result is
 // always a whole, safe byte count -- fractional magnitudes are fine with a unit ("1.5gb"), rejected when they
 // yield fractional bytes -- and anything unparseable is null, never a guess.
 //----------------------------------------------------------------------------------------------------------------------

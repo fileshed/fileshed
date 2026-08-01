@@ -3,8 +3,7 @@
 //
 // One JSON row, merged key-wise: a patch touches only the keys it names, an explicit null unsets, and keys this
 // version does not know SURVIVE a patch untouched -- the forward-compat property the whole storage design exists
-// for. Reads never throw. The admin gate guards both the view and the write, and FILESHED_SAFE_THEME
-// short-circuits the stylesheet to nothing.
+// for. Reads never throw, and the admin gate guards both the view and the write.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -48,7 +47,6 @@ beforeEach(async () =>
     ra = new SettingsRA(booted.handle);
     manager = new BrandingManager({
         settings: ra,
-        config: booted.config,
         handle: booted.handle,
         blob: new BlobRA(booted.handle),
         maxBytes: async () => booted.config.AVATAR_MAX_BYTES,
@@ -163,22 +161,14 @@ describe('BrandingManager', () =>
         await expect(manager.deleteLogo(civilian)).rejects.toThrow(ForbiddenError);
     });
 
-    it('serves the rendered stylesheet, and nothing at all under FILESHED_SAFE_THEME', async () =>
+    it('serves the stored theme and the custom CSS as one stylesheet', async () =>
     {
         await manager.update(admin, { primary: '#3b82f6', customCSS: '.x { color: red; }' });
 
         const css = await manager.css();
+
         expect(css).toContain('--ui-color-primary-500: #3b82f6;');
         expect(css).toContain('.x { color: red; }');
-
-        const safe = new BrandingManager({
-            settings: ra,
-            config: { ...booted.config, FILESHED_SAFE_THEME: true },
-            handle: booted.handle,
-            blob: new BlobRA(booted.handle),
-            maxBytes: async () => booted.config.AVATAR_MAX_BYTES,
-        });
-        expect(await safe.css()).toBe('');
     });
 });
 

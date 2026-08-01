@@ -11,6 +11,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 
+import { type AdminUserResponse, UNLIMITED_QUOTA } from '@fileshed/core';
+
 // Managers
 import { AdminManager } from '@server/managers/admin.ts';
 import { SessionManager } from '@server/managers/session.ts';
@@ -20,7 +22,7 @@ import { createAdminRoutes } from '@server/routes/admin.ts';
 
 // Support
 import { type BootedApp, ORIGIN, bootTestApp, cookieFrom, makeAdmin, signIn, signUp } from './support.ts';
-import { type BootedBlobApp, bootBlobApp, claim } from '../blobs/support.ts';
+import { type BootedBlobApp, bootBlobApp, claim, makeUser } from '../blobs/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -46,6 +48,18 @@ async function signUpUser(booted : BootedApp, email : string) : Promise<string>
         .executeTakeFirstOrThrow();
 
     return row.id;
+}
+
+// Sign up an admin on a blob-flow app, which has no admin bootstrap of its own: promote at the database, then sign in
+// for a session that reflects the role.
+async function adminOn(booted : BootedBlobApp) : Promise<string>
+{
+    await signUp(booted.app, 'root@example.com', PASSWORD);
+    await booted.handle.db.updateTable('user').set({ role: 'admin' })
+        .where('email', '=', 'root@example.com')
+        .execute();
+
+    return cookieFrom(await signIn(booted.app, 'root@example.com', PASSWORD));
 }
 
 async function quotaByEmail(booted : BootedApp, email : string) : Promise<number | null>
@@ -175,7 +189,11 @@ describe('admin-set quota enforced by the blob claim flow', () =>
         const sessions = new SessionManager(booted.auth);
         booted.app.route('/api', createAdminRoutes(
             sessions,
-            new AdminManager({ auth: booted.auth, usage: async () => new Map() })
+            new AdminManager({
+                auth: booted.auth,
+                usage: async () => new Map(),
+                defaultQuota: async () => UNLIMITED_QUOTA,
+            })
         ));
     });
 
@@ -186,11 +204,7 @@ describe('admin-set quota enforced by the blob claim flow', () =>
 
     it('refuses a capped user a claim that exceeds the admin-set limit', async () =>
     {
-        await signUp(booted.app, 'root@example.com', PASSWORD);
-        await booted.handle.db.updateTable('user').set({ role: 'admin' })
-            .where('email', '=', 'root@example.com')
-            .execute();
-        const adminCookie = cookieFrom(await signIn(booted.app, 'root@example.com', PASSWORD));
+        const adminCookie = await adminOn(booted);
 
         await signUp(booted.app, 'capped@example.com', PASSWORD);
         const targetRow = await booted.handle.db.selectFrom('user').select('id')
@@ -208,6 +222,108 @@ describe('admin-set quota enforced by the blob claim flow', () =>
 
         expect(res.status).toBe(403);
         expect(body.error.toLowerCase()).toContain('quota');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Every admin row states the cap the account is actually held to, with the instance default already folded in -- the
+// same resolution the upload path enforces, so the listing can never disagree with what a user's next upload meets.
+// The raw per-user column rides along beside it, because only the pair distinguishes "capped at 10 KB because someone
+// said so" from "capped at 10 KB because the instance says so".
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('effective quota on admin user rows', () =>
+{
+    let booted : BootedBlobApp;
+    let adminCookie : string;
+    let instanceDefault : number;
+
+    beforeEach(async () =>
+    {
+        instanceDefault = UNLIMITED_QUOTA;
+        booted = await bootBlobApp();
+        booted.app.route('/api', createAdminRoutes(
+            new SessionManager(booted.auth),
+            new AdminManager({
+                auth: booted.auth,
+                usage: async () => new Map(),
+                defaultQuota: async () => instanceDefault,
+            })
+        ));
+        adminCookie = await adminOn(booted);
+    });
+
+    afterEach(async () =>
+    {
+        await booted.cleanup();
+    });
+
+    async function rowFor(email : string) : Promise<AdminUserResponse>
+    {
+        const res = await booted.app.request(`${ ORIGIN }/api/admin/users`, { headers: { cookie: adminCookie } });
+        const body = await res.json() as { users : AdminUserResponse[] };
+        const row = body.users.find((user) => user.email === email);
+
+        if(row === undefined) { throw new Error(`No row for ${ email } in the admin listing.`); }
+
+        return row;
+    }
+
+    it('reports an inheriting account as capped by the instance default, raw column still null', async () =>
+    {
+        instanceDefault = 10_000;
+        await makeUser(booted, 'inherits@example.com');
+
+        const row = await rowFor('inherits@example.com');
+
+        expect(row.quotaLimit).toBe(null);
+        expect(row.quotaEffective).toBe(10_000);
+    });
+
+    it('reports an account pinned to an explicit unlimited as uncapped under a capped default', async () =>
+    {
+        instanceDefault = 10_000;
+        await makeUser(booted, 'pinned@example.com', UNLIMITED_QUOTA);
+
+        const row = await rowFor('pinned@example.com');
+
+        expect(row.quotaLimit).toBe(UNLIMITED_QUOTA);
+        expect(row.quotaEffective).toBe(null);
+    });
+
+    it('keeps an explicit cap whatever the instance default says', async () =>
+    {
+        instanceDefault = 10_000;
+        await makeUser(booted, 'capped@example.com', 4096);
+
+        const row = await rowFor('capped@example.com');
+
+        expect(row.quotaLimit).toBe(4096);
+        expect(row.quotaEffective).toBe(4096);
+    });
+
+    it('reports an inheriting account as unlimited when the instance default is itself unlimited', async () =>
+    {
+        instanceDefault = UNLIMITED_QUOTA;
+        await makeUser(booted, 'inherits@example.com');
+
+        const row = await rowFor('inherits@example.com');
+
+        expect(row.quotaLimit).toBe(null);
+        expect(row.quotaEffective).toBe(null);
+    });
+
+    it('resolves the row a quota change answers with, not just the listing', async () =>
+    {
+        instanceDefault = 10_000;
+        const target = await makeUser(booted, 'member@example.com', 4096);
+
+        const res = await setQuota(booted.app, target.id, adminCookie, { quotaLimit: null });
+        const body = await res.json() as AdminUserResponse;
+
+        expect(res.status).toBe(200);
+        expect(body.quotaLimit).toBe(null);
+        expect(body.quotaEffective).toBe(10_000);
     });
 });
 

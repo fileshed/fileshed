@@ -8,10 +8,16 @@
 // tab's retry state.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
-import type { AdminSettingEntry, AdminSettingKey, PatchSettingsRequest, SettingValue } from '@fileshed/core';
+import {
+    type AdminSettingEntry,
+    type AdminSettingKey,
+    type PatchSettingsRequest,
+    type SettingValue,
+    UNLIMITED_QUOTA,
+} from '@fileshed/core';
 
 // Stores
 import { useAppStore } from './app.ts';
@@ -21,12 +27,28 @@ import { fetchAdminSettings, patchAdminSettings } from '../resource-access/admin
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// The settings keys the anonymous handshake carries, and so the ones whose change has to reach surfaces outside this
+// tab: the instance name brands every wordmark and title, the size caps gate the pickers. Moving one should move the
+// admin's own session now, not on the next reload.
+const handshakeKeys : readonly AdminSettingKey[] = [ 'INSTANCE_NAME', 'UPLOAD_MAX_BYTES', 'AVATAR_MAX_BYTES' ];
+
+//----------------------------------------------------------------------------------------------------------------------
+
 export const useAdminSettingsStore = defineStore('adminSettings', () =>
 {
     const entries = ref<AdminSettingEntry[]>([]);
     const restartRequired = ref(false);
     const loading = ref(false);
     const error = ref<Error | null>(null);
+
+    // The quota an account with no limit of its own inherits, in the same 0-is-unlimited dialect the per-user
+    // column speaks. Unlimited until the entries load, which is also what ships.
+    const defaultQuota = computed(() =>
+    {
+        const value = entries.value.find((entry) => entry.key === 'DEFAULT_QUOTA_BYTES')?.value;
+
+        return typeof value === 'number' ? value : UNLIMITED_QUOTA;
+    });
 
     function adopt(view : { settings : AdminSettingEntry[]; restartRequired : boolean }) : void
     {
@@ -57,9 +79,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
     {
         adopt(await patchAdminSettings(changes));
 
-        // The one settings key with pre-auth surfaces: renaming the instance should rename the wordmark and
-        // title the admin is looking at, not wait for a reload.
-        if('INSTANCE_NAME' in changes) { void useAppStore().initialize(); }
+        if(handshakeKeys.some((key) => key in changes)) { void useAppStore().initialize(); }
     }
 
     async function save(key : AdminSettingKey, value : SettingValue) : Promise<void>
@@ -78,7 +98,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
         await apply(Object.fromEntries(keys.map((key) => [ key, null ])));
     }
 
-    return { entries, restartRequired, loading, error, load, save, reset, resetAll };
+    return { entries, restartRequired, loading, error, defaultQuota, load, save, reset, resetAll };
 });
 
 //----------------------------------------------------------------------------------------------------------------------

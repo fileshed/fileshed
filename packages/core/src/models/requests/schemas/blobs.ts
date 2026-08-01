@@ -4,6 +4,9 @@
 
 import { z } from 'zod';
 
+// Constants
+import { MAX_CHALLENGE_RANGES, MIN_CHALLENGE_RANGES } from '../../../constants/blob.ts';
+
 // Requests
 import type {
     ChallengeAnswerCreate,
@@ -43,8 +46,8 @@ const claimTicketResponseCodec = z.strictObject({
     ticket: z.string(),
 });
 
-// [offset, length]. Ranges are random per challenge and 2-4 of them -- fixed ranges would be harvest-and-replay-able,
-// which is exactly what the challenge exists to prevent.
+// [offset, length]. Ranges are random per challenge and several of them -- fixed ranges would be
+// harvest-and-replay-able, which is exactly what the challenge exists to prevent.
 const rangeOffsetCodec = z.number()
     .int()
     .nonnegative();
@@ -60,8 +63,8 @@ const claimChallengeResponseCodec = z.strictObject({
     challengeID: z.string(),
     nonce: z.string(),
     ranges: z.array(byteRangeCodec)
-        .min(2)
-        .max(4),
+        .min(MIN_CHALLENGE_RANGES)
+        .max(MAX_CHALLENGE_RANGES),
 });
 
 export const claimResponseCodec = z.discriminatedUnion(

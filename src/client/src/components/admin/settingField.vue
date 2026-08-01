@@ -5,7 +5,10 @@
   -- (saving on toggle), a number input with an explicit Save for numeric ones. The Overridden badge and the Reset
   -- control appear only when an override hides an actual default underneath -- a stored value with nothing
   -- beneath it is not overriding anything, and there is nothing to reset to. The card also flags the rare key
-  -- whose change waits on a restart.
+  -- whose change waits on a restart, and refuses to spend a round trip on a value its own bounds already reject.
+  --
+  -- A byte key reads and writes human sizes, and the echo underneath carries the exact count the pretty rendering
+  -- rounds away.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -65,30 +68,38 @@
                     class="w-full"
                     @keydown.enter="saveNumber"
                 />
-                <p v-if="unit === 'bytes' && draftNumber !== null" class="mt-1 text-xs text-muted">
-                    = {{ describeByteSize(draftNumber) }} ({{ formatBytes(draftNumber) }})
+                <p v-if="byteEcho !== null" class="mt-1 text-xs text-muted">
+                    {{ byteEcho }}
+                </p>
+                <p v-if="violation" class="mt-1 text-xs text-error">
+                    {{ violation }}
                 </p>
             </div>
             <UButton
                 label="Save"
                 :loading="pending"
-                :disabled="!dirty || draftNumber === null"
+                :disabled="!dirty || draftNumber === null || violation !== null"
                 @click="saveNumber"
             />
         </div>
 
         <div v-if="entry.kind === 'string'" class="mt-3 flex items-start gap-2">
-            <UInput
-                v-model="draft"
-                :placeholder="stringPlaceholder"
-                :autocomplete="entry.secret ? 'off' : undefined"
-                class="flex-1"
-                @keydown.enter="saveString"
-            />
+            <div class="flex-1">
+                <UInput
+                    v-model="draft"
+                    :placeholder="stringPlaceholder"
+                    :autocomplete="entry.secret ? 'off' : undefined"
+                    class="w-full"
+                    @keydown.enter="saveString"
+                />
+                <p v-if="violation" class="mt-1 text-xs text-error">
+                    {{ violation }}
+                </p>
+            </div>
             <UButton
                 label="Save"
                 :loading="pending"
-                :disabled="!stringDirty"
+                :disabled="!stringDirty || violation !== null"
                 @click="saveString"
             />
         </div>
@@ -119,6 +130,10 @@
         label : string;
         description : string;
         unit ?: 'bytes' | 'days';
+
+        // What zero means on a byte key that spends it as a sentinel ("Unlimited"), where echoing "0 bytes" would
+        // contradict the setting.
+        zeroLabel ?: string;
     }>();
 
     const settings = useAdminSettingsStore();
@@ -136,9 +151,9 @@
 
     function draftFor(value : typeof props.entry.value) : string
     {
-        if(secret.value) { return ''; }
+        if(secret.value || value === null) { return ''; }
 
-        return value === null ? '' : String(value);
+        return props.unit === 'bytes' && typeof value === 'number' ? formatBytes(value) : String(value);
     }
 
     // A text input on purpose even for numbers: UInput type=number emits numbers (its runtime coerces) while its
@@ -152,11 +167,22 @@
         if(props.entry.kind !== 'boolean') { draft.value = draftFor(value); }
     });
 
+    // A byte draft still reading exactly as the stored value's rendering means that stored value, not the rounded
+    // count the string parses back to: formatBytes throws precision away, and a field nobody touched must never
+    // save a number nobody typed.
+    function draftBytes() : number | null
+    {
+        const stored = props.entry.value;
+        if(typeof stored === 'number' && draft.value === formatBytes(stored)) { return stored; }
+
+        return parseByteSize(draft.value);
+    }
+
     // The draft as a storable number, or null while it isn't one. Byte fields take human sizes ("20gb", "500mb")
     // or raw bytes; everything else (day counts) is a plain non-negative whole number.
     const draftNumber = computed<number | null>(() =>
     {
-        if(props.unit === 'bytes') { return parseByteSize(draft.value); }
+        if(props.unit === 'bytes') { return draftBytes(); }
 
         if(draft.value.trim() === '') { return null; }
 
@@ -166,10 +192,56 @@
 
     const dirty = computed(() => draftNumber.value !== null && draftNumber.value !== props.entry.value);
 
+    const byteEcho = computed<string | null>(() =>
+    {
+        const value = draftNumber.value;
+        if(props.unit !== 'bytes' || value === null) { return null; }
+
+        if(value === 0 && props.zeroLabel !== undefined) { return props.zeroLabel; }
+
+        return `= ${ describeByteSize(value) } (${ formatBytes(value) })`;
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Constraints
+    //------------------------------------------------------------------------------------------------------------------
+
+    function boundLabel(value : number) : string
+    {
+        return props.unit === 'bytes' ? formatBytes(value) : String(value);
+    }
+
+    // The bound the current draft misses, or null while it is storable. The server checks these independently -- all
+    // this buys is a doomed round trip skipped and a message naming which bound was missed.
+    const violation = computed<string | null>(() =>
+    {
+        const bounds = props.entry.constraints;
+        if(bounds === undefined) { return null; }
+
+        if(props.entry.kind === 'string')
+        {
+            const length = draft.value.trim().length;
+
+            return bounds.maxLength !== undefined && length > bounds.maxLength
+                ? `Must be ${ bounds.maxLength } characters or fewer.`
+                : null;
+        }
+
+        const value = draftNumber.value;
+        if(value === null) { return null; }
+
+        if(bounds.min !== undefined && value < bounds.min) { return `Must be at least ${ boundLabel(bounds.min) }.`; }
+        if(bounds.max !== undefined && value > bounds.max) { return `Must be at most ${ boundLabel(bounds.max) }.`; }
+
+        return null;
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+
     function saveNumber() : void
     {
         const value = draftNumber.value;
-        if(value === null || !dirty.value) { return; }
+        if(value === null || !dirty.value || violation.value !== null) { return; }
 
         void runMutation(() => settings.save(props.entry.key, value), pending);
     }
@@ -197,7 +269,7 @@
 
     function saveString() : void
     {
-        if(!stringDirty.value) { return; }
+        if(!stringDirty.value || violation.value !== null) { return; }
 
         void runMutation(() => settings.save(props.entry.key, draft.value.trim()), pending);
     }

@@ -15,6 +15,8 @@
 import { isAPIError } from 'better-auth/api';
 
 import {
+    type AdminUserEntry,
+    type AdminUserPage,
     type AdminUserSearchField,
     type AdminUserSortKey,
     BadRequestError,
@@ -29,6 +31,10 @@ import {
     type UserRole,
     parseUserProfile,
 } from '@fileshed/core';
+
+// Engines
+import { effectiveBan } from '../engines/ban.ts';
+import { effectiveQuota } from '../engines/quota.ts';
 
 // Resource Access
 import type { Auth, SessionUser } from '../resource-access/auth.ts';
@@ -54,22 +60,6 @@ export interface ListUsersOptions
     sortDirection ?: 'asc' | 'desc';
 }
 
-// A listed or acted-on user: the profile plus the bytes their owned files charge. Every admin response row carries
-// both, so the client never composes them ad hoc.
-export interface AdminUserEntry
-{
-    profile : UserProfile;
-    usedBytes : number;
-}
-
-export interface AdminUserPage
-{
-    users : AdminUserEntry[];
-    total : number;
-    limit : number;
-    offset : number;
-}
-
 // The bytes charged to each of a set of owners; owners absent from the map charge nothing. bootApp backs this with
 // the node store's grouped aggregate; auth-only compositions (no node store) answer an empty map.
 export type UsageResolver = (ownerIDs : string[]) => Promise<Map<string, number>>;
@@ -78,6 +68,10 @@ export interface AdminManagerDeps
 {
     auth : Auth;
     usage : UsageResolver;
+
+    // The instance-wide cap an account with no limit of its own inherits, as a supplier so an admin moving the
+    // setting binds the very next listing.
+    defaultQuota : () => Promise<number>;
 }
 
 // listUsers types its rows as the admin plugin's UserWithRole, which does not statically carry app-level
@@ -86,19 +80,35 @@ type AdminUser = Awaited<ReturnType<Auth['api']['listUsers']>>['users'][number] 
 
 // better-auth's user carries plugin fields the codec narrows and validates; the ban trio is normalized here because
 // the plugin leaves them null/undefined on accounts never banned, and banExpires crosses some adapters as a string.
-function toUserProfile(user : AdminUser) : UserProfile
+// Standing then goes through the ban engine: the row keeps a stale banned flag after a dated ban lapses (better-auth
+// only clears it on the user's next sign-in), and a lapsed ban must read as a clean record. The clock is passed in,
+// never read here, so every row in one listing is judged against the same instant.
+function toUserProfile(user : AdminUser, now : Date) : UserProfile
 {
+    const ban = effectiveBan({
+        banned: user.banned === true,
+        banReason: user.banReason ?? null,
+        banExpires: user.banExpires ? new Date(user.banExpires) : null,
+    }, now);
+
     return parseUserProfile({
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
         quotaLimit: user.quotaLimit ?? null,
-        banned: user.banned === true,
-        banReason: user.banReason ?? null,
-        banExpires: user.banExpires ? new Date(user.banExpires) : null,
+        banned: ban.banned,
+        banReason: ban.banReason,
+        banExpires: ban.banExpires,
         createdAt: new Date(user.createdAt),
     });
+}
+
+function toEntry(user : AdminUser, usedBytes : number, defaultQuota : number, now : Date) : AdminUserEntry
+{
+    const profile = toUserProfile(user, now);
+
+    return { profile, quotaEffective: effectiveQuota(profile.quotaLimit, defaultQuota), usedBytes };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -107,11 +117,13 @@ export class AdminManager
 {
     readonly #auth : Auth;
     readonly #usage : UsageResolver;
+    readonly #defaultQuota : () => Promise<number>;
 
     constructor(deps : AdminManagerDeps)
     {
         this.#auth = deps.auth;
         this.#usage = deps.usage;
+        this.#defaultQuota = deps.defaultQuota;
     }
 
     #requireAdmin(actor : SessionUser) : void
@@ -133,11 +145,15 @@ export class AdminManager
         throw error;
     }
 
+    // One read of the default and one clock per call, never per row: the default is a settings lookup and ban standing
+    // is time-sensitive, so rows resolved against two different defaults -- or two different instants -- would be a
+    // listing that contradicts itself.
     async #entryFor(user : AdminUser) : Promise<AdminUserEntry>
     {
-        const usage = await this.#usage([ user.id ]);
+        const now = new Date();
+        const [ usage, defaultQuota ] = await Promise.all([ this.#usage([ user.id ]), this.#defaultQuota() ]);
 
-        return { profile: toUserProfile(user), usedBytes: usage.get(user.id) ?? 0 };
+        return toEntry(user, usage.get(user.id) ?? 0, defaultQuota, now);
     }
 
     async listUsers(actor : SessionUser, headers : Headers, options : ListUsersOptions = {}) : Promise<AdminUserPage>
@@ -164,11 +180,12 @@ export class AdminManager
             headers,
         });
 
-        const usage = await this.#usage(users.map((user) => user.id));
-        const entries = users.map((user) : AdminUserEntry => ({
-            profile: toUserProfile(user),
-            usedBytes: usage.get(user.id) ?? 0,
-        }));
+        const now = new Date();
+        const [ usage, defaultQuota ] = await Promise.all([
+            this.#usage(users.map((user) => user.id)),
+            this.#defaultQuota(),
+        ]);
+        const entries = users.map((user) => toEntry(user, usage.get(user.id) ?? 0, defaultQuota, now));
 
         return { users: entries, total, limit, offset };
     }

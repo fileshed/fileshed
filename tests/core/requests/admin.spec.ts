@@ -37,6 +37,7 @@ describe('toAdminUserResponse', () =>
         const banExpires = new Date('2026-08-01T00:00:00.000Z');
         const wire = toAdminUserResponse({
             profile: { ...profile, banned: true, banReason: 'Spamming', banExpires },
+            quotaEffective: null,
             usedBytes: 1500,
         });
 
@@ -49,10 +50,42 @@ describe('toAdminUserResponse', () =>
     // name is optional on the profile; an absent name must be absent on the wire, not serialized as undefined.
     it('omits the name key entirely for a nameless profile', () =>
     {
-        const wire = toAdminUserResponse({ profile: { ...profile, name: undefined }, usedBytes: 0 });
+        const wire = toAdminUserResponse({
+            profile: { ...profile, name: undefined },
+            quotaEffective: null,
+            usedBytes: 0,
+        });
 
         expect('name' in wire).toBe(false);
         expect(adminUserResponseCodec.safeParse(wire).success).toBe(true);
+    });
+
+    // The row carries the raw column and the resolved cap side by side: an inheriting account (null limit) under a
+    // capped instance still reports the cap it is held to, which is what lets the client mark it as the default
+    // without knowing the rule.
+    it('carries the resolved cap alongside the raw per-user limit', () =>
+    {
+        const wire = toAdminUserResponse({
+            profile: { ...profile, quotaLimit: null },
+            quotaEffective: 10_000,
+            usedBytes: 0,
+        });
+
+        expect(wire.quotaLimit).toBe(null);
+        expect(wire.quotaEffective).toBe(10_000);
+        expect(adminUserResponseCodec.safeParse(wire).success).toBe(true);
+    });
+});
+
+describe('adminUserResponseCodec', () =>
+{
+    // 0 is the raw column's spelling of "no cap"; the resolved field spells it null. A 0 on the wire would render as
+    // a zero-byte cap, so the contract refuses it outright rather than leaving the client to interpret.
+    it('refuses a zero effective quota, the resolved field\'s way of saying unlimited being null', () =>
+    {
+        const wire = toAdminUserResponse({ profile, quotaEffective: null, usedBytes: 0 });
+
+        expect(adminUserResponseCodec.safeParse({ ...wire, quotaEffective: 0 }).success).toBe(false);
     });
 });
 
@@ -61,7 +94,7 @@ describe('adminUserPageResponseCodec', () =>
     it('accepts a serialized page and rejects a Date-typed createdAt', () =>
     {
         const page = toAdminUserPageResponse({
-            users: [ { profile, usedBytes: 0 } ],
+            users: [ { profile, quotaEffective: null, usedBytes: 0 } ],
             total: 1,
             limit: 50,
             offset: 0,

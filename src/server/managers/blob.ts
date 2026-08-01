@@ -50,6 +50,7 @@ import {
 } from '@fileshed/core';
 
 // Engines
+import { effectiveQuota } from '../engines/quota.ts';
 import { regulation } from '../engines/regulation/index.ts';
 
 // Resource Access
@@ -267,6 +268,9 @@ export interface BlobManagerDeps
 
     // Read at use time, per request, so an admin raising or lowering the cap needs no restart.
     uploadMaxBytes : () => Promise<number>;
+
+    // The instance-wide quota every account with no limit of its own inherits, likewise read per use.
+    defaultQuota : () => Promise<number>;
 }
 
 // A committed file node with the caller's effective role on it, so the route stamps the real role rather than
@@ -285,6 +289,7 @@ export class BlobManager
     readonly #handle : DatabaseHandle;
     readonly #blob : BlobRA;
     readonly #uploadMaxBytes : () => Promise<number>;
+    readonly #defaultQuota : () => Promise<number>;
 
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
@@ -301,6 +306,7 @@ export class BlobManager
         this.#handle = deps.handle;
         this.#blob = deps.blob;
         this.#uploadMaxBytes = deps.uploadMaxBytes;
+        this.#defaultQuota = deps.defaultQuota;
 
         this.#nodes = new NodeRA(deps.handle);
         this.#shares = new ShareRA(deps.handle);
@@ -521,15 +527,26 @@ export class BlobManager
 
     async #admitQuota(caller : SessionUser, incomingBytes : number) : Promise<void>
     {
+        const limitBytes = await this.#resolveLimit(caller.quotaLimit ?? null);
         const usedBytes = await this.#nodes.ownedBytes(caller.id);
-        this.#enforceQuota(caller.id, usedBytes, incomingBytes, caller.quotaLimit ?? null);
+
+        this.#enforceQuota(caller.id, usedBytes, incomingBytes, limitBytes);
     }
 
-    // Judge one write against an owner's quota and throw the quota message on refusal. Keyed by ownerID and an explicit
-    // limit so it serves both the caller-charged create paths (caller is the owner) and the owner-charged replace path
-    // (an editor's write is charged to the file's owner, whose limit is read from their user row, not the actor's
-    // session). usedBytes is passed in so the caller controls whether it was read outside the commit (the early gate)
-    // or inside it (the authoritative re-check). incomingBytes is the DELTA for a replace, which may be negative.
+    // Fold the instance default into an owner's raw quota_limit. Always called BEFORE a transaction opens: it reads
+    // the settings row, and SQLite serializes writes, so a read issued from inside an open write transaction on the
+    // same handle deadlocks the commit. The resolved limit is then carried into the transaction as a plain number.
+    async #resolveLimit(userLimit : number | null) : Promise<number | null>
+    {
+        return effectiveQuota(userLimit, await this.#defaultQuota());
+    }
+
+    // Judge one write against an owner's quota and throw the quota message on refusal. Keyed by ownerID and an already-
+    // resolved limit so it serves both the caller-charged create paths (caller is the owner) and the owner-charged
+    // replace path (an editor's write is charged to the file's owner, whose limit is read from their user row, not the
+    // actor's session). usedBytes is passed in so the caller controls whether it was read outside the commit (the
+    // early gate) or inside it (the authoritative re-check). incomingBytes is the DELTA for a replace, which may be
+    // negative.
     #enforceQuota(ownerID : string, usedBytes : number, incomingBytes : number, limitBytes : number | null) : void
     {
         const verdict = regulation.quota.admit({ ownerID, usedBytes, limitBytes, incomingBytes });
@@ -619,6 +636,8 @@ export class BlobManager
             trashedAt: null,
         };
 
+        const limitBytes = await this.#resolveLimit(caller.quotaLimit ?? null);
+
         await this.#handle.db.transaction().execute(async (trx) =>
         {
             const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
@@ -629,7 +648,7 @@ export class BlobManager
             // isolation, so a batch of concurrent claims could jointly overshoot; this is the authoritative check. On
             // SQLite (serialized writes) it closes the window; on Postgres READ COMMITTED it narrows it to concurrent
             // uncommitted claims -- full serialization (row locks / SERIALIZABLE) is out of v1 scope.
-            this.#enforceQuota(caller.id, await nodes.ownedBytes(caller.id), size, caller.quotaLimit ?? null);
+            this.#enforceQuota(caller.id, await nodes.ownedBytes(caller.id), size, limitBytes);
 
             await persistBlob(blob);
             await nodes.insert(node);
@@ -705,7 +724,7 @@ export class BlobManager
         const oldBlobID = target.blobID;
         const delta = size - target.size;
         const resolvedMime = mimeType ?? target.mimeType;
-        const ownerLimit = await this.#users.quotaLimitOf(target.ownerID);
+        const ownerLimit = await this.#resolveLimit(await this.#users.quotaLimitOf(target.ownerID));
         const now = new Date();
 
         // Early gate against the owner's quota before a write is opened; the in-transaction re-judge below is

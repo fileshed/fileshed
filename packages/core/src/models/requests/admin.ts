@@ -1,14 +1,15 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin API DTOs
 //
-// The admin-only surface for managing other users. Setting a quota carries a single field: the byte cap, or null for
-// unlimited. The successful response is the updated user's UserProfile -- the same row shape the admin listing returns.
+// The admin-only surface for managing other users. Setting a quota carries a single field: a byte cap of this user's
+// own, 0 for explicitly unlimited, or null to inherit the instance default. The successful response is the updated
+// user's UserProfile -- the same row shape the admin listing returns.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
 import type { DatabaseKind } from '../database.ts';
 import type { StorageBackendKind } from '../storageBackend.ts';
-import type { UserRole } from '../userProfile.ts';
+import type { UserProfile, UserRole } from '../userProfile.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Set quota (PATCH /api/admin/users/:id)
@@ -67,6 +68,10 @@ export type AdminUserSearchField = typeof adminUserSearchFields[number];
 //
 // The wire form of a UserProfile plus the bytes the account's owned files charge: the same row shape everywhere, so
 // neither side of the wire composes it ad hoc. Dates are ISO strings.
+//
+// Both quota fields ride every row because they answer different questions. quotaEffective is what the account is
+// actually held to, instance default already folded in (null is unlimited); quotaLimit is the raw per-user column
+// behind it, and null there means the account inherits -- the pair is what lets a row say "10 GB (default)".
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface AdminUserResponse
@@ -76,6 +81,7 @@ export interface AdminUserResponse
     name ?: string;
     role : UserRole;
     quotaLimit : number | null;
+    quotaEffective : number | null;
     banned : boolean;
     banReason : string | null;
     banExpires : string | null;
@@ -86,6 +92,23 @@ export interface AdminUserResponse
 export interface AdminUserPageResponse
 {
     users : AdminUserResponse[];
+    total : number;
+    limit : number;
+    offset : number;
+}
+
+// The domain-side twins the serializers take. quotaEffective arrives already resolved: folding the instance default
+// into a raw limit is server logic, and the wire form above only carries the verdict.
+export interface AdminUserEntry
+{
+    profile : UserProfile;
+    quotaEffective : number | null;
+    usedBytes : number;
+}
+
+export interface AdminUserPage
+{
+    users : AdminUserEntry[];
     total : number;
     limit : number;
     offset : number;

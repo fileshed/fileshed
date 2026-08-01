@@ -30,7 +30,7 @@ import {
     seedBlob,
     seedUser,
 } from '../resource-access/nodes/support.ts';
-import { RecordingOrphanedBlobs, noopOrphanedBlobs, testActor } from '../nodes/support.ts';
+import { RecordingOrphanedBlobs, noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -70,28 +70,30 @@ describe('NodeManager.me', () =>
         await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'dir' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const me = await manager.me(testActor({ id: 'alice', email: 'alice@example.com', quotaLimit: 1_000_000 }));
 
         expect(me.quota.used).toBe(1500);
         expect(me.quota.limit).toBe(1_000_000);
     });
 
-    // a 0 limit is a real block-all quota, distinct from null (unlimited). The manager must report it verbatim rather
-    // than collapsing it to null.
-    it('reports a zero quota limit as a real limit, not unlimited', async () =>
+    // 0 is the account's own "no cap", which is what pins a user above a tightened instance default; null would
+    // inherit that default instead. The raw value travels verbatim so the client can tell the two states apart.
+    it('pins an explicitly-unlimited account above a tightened instance default', async () =>
     {
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const policy = testNodePolicy({ defaultQuota: async () => 4096 });
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), policy);
         const me = await manager.me(testActor({ id: 'alice', quotaLimit: 0 }));
 
-        expect(me.quota.limit).toBe(0);
+        expect(me.quota).toEqual({ used: 0, effective: null, limit: 0 });
     });
 
     // The client renders retention copy from this value, so it must be the deployment's configured number -- never a
     // shipped default a deployment has overridden.
     it('reports the configured trash retention, not the shipped default', async () =>
     {
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), undefined, async () => 2);
+        const policy = testNodePolicy({ trashRetentionDays: async () => 2 });
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), policy);
         const me = await manager.me(testActor({ id: 'alice' }));
 
         expect(me.limits).toEqual({ trashRetentionDays: 2 });
@@ -99,7 +101,7 @@ describe('NodeManager.me', () =>
 
     it('falls back to the default trash retention when none is configured', async () =>
     {
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const me = await manager.me(testActor({ id: 'alice' }));
 
         expect(me.limits).toEqual({ trashRetentionDays: 30 });
@@ -117,7 +119,7 @@ describe('NodeManager.hardDelete', () =>
         await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', blobID: 'sha-b', parentID: 'dir' }));
 
         const orphaned = new RecordingOrphanedBlobs();
-        const manager = new NodeManager(handle, ra, orphaned);
+        const manager = new NodeManager(handle, ra, orphaned, testNodePolicy());
 
         await manager.hardDelete(testActor({ id: 'alice' }), 'dir');
 
@@ -132,7 +134,7 @@ describe('NodeManager.hardDelete', () =>
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'target' }));
 
         const orphaned = new RecordingOrphanedBlobs();
-        const manager = new NodeManager(handle, ra, orphaned);
+        const manager = new NodeManager(handle, ra, orphaned, testNodePolicy());
 
         await manager.hardDelete(testActor({ id: 'alice' }), 'lnk');
 
@@ -146,7 +148,7 @@ describe('NodeManager.hardDelete', () =>
         await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', blobID: 'sha-a', parentID: 'dir' }));
 
-        const manager = new NodeManager(handle, ra, throwingOrphanedBlobs);
+        const manager = new NodeManager(handle, ra, throwingOrphanedBlobs, testNodePolicy());
 
         await expect(manager.hardDelete(testActor({ id: 'alice' }), 'dir')).rejects.toThrow();
 
@@ -181,7 +183,7 @@ describe('NodeManager trashed visibility', () =>
     it('reads a trashed shared folder as absent for the recipient, but not for its owner', async () =>
     {
         await seedTrashedSharedFolder();
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         await expect(manager.get(testActor({ id: 'bob' }), 'dir')).rejects.toThrow(NotFoundError);
 
@@ -192,7 +194,7 @@ describe('NodeManager trashed visibility', () =>
     it('lists a trashed folder\'s children only for its owner', async () =>
     {
         await seedTrashedSharedFolder();
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const query = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         await expect(manager.children(testActor({ id: 'bob' }), 'dir', query)).rejects.toThrow(NotFoundError);
@@ -213,7 +215,7 @@ describe('NodeManager.children owner facet', () =>
         await ra.insert(fileNode({ id: 'mine', ownerID: 'alice', blobID: 'sha-a', parentID: 'p' }));
         await ra.insert(fileNode({ id: 'theirs', ownerID: 'bob', blobID: 'sha-a', parentID: 'p' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         const unfiltered = await manager.children(testActor({ id: 'alice' }), 'p', base);
@@ -251,7 +253,7 @@ describe('NodeManager.children — link row owner attribution', () =>
             .execute();
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         const result = await manager.children(testActor({ id: 'alice' }), 'p', base);
@@ -271,7 +273,7 @@ describe('NodeManager.children — link row owner attribution', () =>
         await ra.insert(folderNode({ id: 'unreachable', ownerID: 'dave' }));
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', parentID: 'p2', targetNodeID: 'unreachable' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         const result = await manager.children(testActor({ id: 'alice' }), 'p2', base);
@@ -304,7 +306,7 @@ describe('NodeManager.children owner facet — link targets', () =>
             .execute();
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         const result = await manager.children(testActor({ id: 'alice' }), 'p', base);
@@ -321,7 +323,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         await ra.insert(folderNode({ id: 'unreachable', ownerID: 'dave' }));
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', parentID: 'p2', targetNodeID: 'unreachable' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         const result = await manager.children(testActor({ id: 'alice' }), 'p2', base);
@@ -348,7 +350,7 @@ describe('NodeManager.children owner facet — link targets', () =>
             .execute();
         await ra.insert(linkNode({ id: 'lnk2', ownerID: 'alice', parentID: 'p3', targetNodeID: 'bobTarget' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
         const result = await manager.children(testActor({ id: 'alice' }), 'p3', base);
@@ -394,7 +396,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('reports', 'alice', 'editor', 'bob');
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'docs' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         const throughLink = await manager.children(testActor({ id: 'alice' }), 'lnk', base);
         const direct = await manager.children(testActor({ id: 'alice' }), 'docs', base);
@@ -418,7 +420,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('empty', 'alice', 'viewer', 'bob');
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'empty' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         const result = await manager.children(testActor({ id: 'alice' }), 'lnk', base);
 
@@ -437,7 +439,7 @@ describe('NodeManager.children through a folder link', () =>
         await ra.insert(folderNode({ id: 'inside', ownerID: 'dave', parentID: 'far' }));
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', targetNodeID: 'far' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         await expect(manager.children(testActor({ id: 'alice' }), 'deadlnk', base)).rejects.toThrow(NotFoundError);
     });
@@ -452,7 +454,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('ct', 'alice', 'viewer', 'carol');
         await ra.insert(linkNode({ id: 'trlnk', ownerID: 'alice', targetNodeID: 'ct' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         await expect(manager.children(testActor({ id: 'alice' }), 'trlnk', base)).rejects.toThrow(NotFoundError);
     });
@@ -467,7 +469,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('docs', 'alice', 'viewer', 'bob');
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'docs', name: 'Case Test\'s Docs' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs());
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         const node = await manager.get(testActor({ id: 'alice' }), 'lnk');
 

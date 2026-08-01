@@ -8,7 +8,7 @@
 // test-send throws the real reason, transport errors included, because the admin is there to fix them.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { BadRequestError, ForbiddenError } from '@fileshed/core';
+import { BadRequestError, DEFAULT_SMTP_PORT, ForbiddenError } from '@fileshed/core';
 
 // Resource Access
 import type { SessionUser } from '../resource-access/auth.ts';
@@ -73,7 +73,7 @@ export class MailManager
     {
         const [ host, port, secure, user, password, from ] = await Promise.all([
             this.#settings.value('SMTP_HOST'),
-            this.#settings.numberValue('SMTP_PORT', 587),
+            this.#settings.numberValue('SMTP_PORT', DEFAULT_SMTP_PORT),
             this.#settings.booleanValue('SMTP_SECURE', false),
             this.#settings.value('SMTP_USER'),
             this.#settings.value('SMTP_PASSWORD'),

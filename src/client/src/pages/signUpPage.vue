@@ -81,6 +81,8 @@
     import { z } from 'zod';
     import type { FormSubmitEvent } from '@nuxt/ui';
 
+    import { PASSWORD_MIN_LENGTH } from '@fileshed/core';
+
     // Stores
     import { useAppStore } from '../stores/app.ts';
     import { useSessionStore } from '../stores/session.ts';
@@ -99,7 +101,7 @@
     const schema = z.object({
         name: z.string().min(1, 'Enter your name.'),
         email: z.email('Enter a valid email address.'),
-        password: z.string().min(8, 'Use at least 8 characters.'),
+        password: z.string().min(PASSWORD_MIN_LENGTH, `Use at least ${ PASSWORD_MIN_LENGTH } characters.`),
     });
 
     type SignUpFields = z.output<typeof schema>;

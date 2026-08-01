@@ -4,6 +4,9 @@
   -- The instance's accounts: searchable (email or name), sortable, with charged usage, quota, ban state, and the
   -- per-row management actions. Actions that answer the refreshed row merge it in place; refetches happen only when
   -- the listing itself changes shape (search, sort).
+  --
+  -- The instance settings ride along for the set-quota modal alone: its inherit option names the current default in
+  -- so many bytes. A row's own quota column needs nothing from them -- the listing already carries what is enforced.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -72,7 +75,7 @@
             {{ total }} {{ total === 1 ? 'account' : 'accounts' }}
         </p>
 
-        <SetQuotaModal ref="quotaModal" @saved="mergeRow" />
+        <SetQuotaModal ref="quotaModal" :default-quota="settings.defaultQuota" @saved="mergeRow" />
         <SetPasswordModal ref="passwordModal" />
         <BanUserModal ref="banModal" @saved="mergeRow" />
     </div>
@@ -85,6 +88,9 @@
     import { useToast } from '@nuxt/ui/composables';
 
     import type { AdminUserResponse, AdminUserSearchField, AdminUserSortKey } from '@fileshed/core';
+
+    // Stores
+    import { useAdminSettingsStore } from '../../stores/adminSettings.ts';
 
     // Resource Access
     import { listUsers, revokeUserSessions, setUserRole, unbanUser } from '../../resource-access/admin.ts';
@@ -105,6 +111,7 @@
 
     const { runMutation } = useRunWithToast();
     const toast = useToast();
+    const settings = useAdminSettingsStore();
 
     const users = ref<AdminUserResponse[]>([]);
     const total = ref(0);
@@ -140,7 +147,11 @@
         }
     }
 
-    onMounted(() => { void load(); });
+    onMounted(() =>
+    {
+        void load();
+        void settings.load();
+    });
 
     // Typing re-queries after a beat; switching the field or the sort re-queries at once.
     let debounce : ReturnType<typeof setTimeout> | undefined;

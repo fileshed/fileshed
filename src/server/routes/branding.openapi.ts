@@ -87,8 +87,8 @@ export const getLogoSpec = describeRoute({
 export const brandingCssSpec = describeRoute({
     tags: [ 'Instance' ],
     summary: 'The instance theme stylesheet',
-    description: 'Anonymous by design -- pre-auth pages brand through it. Empty when the theme is stock or '
-        + 'FILESHED_SAFE_THEME is set. Serves an ETag; clients revalidate rather than cache blindly.',
+    description: 'Anonymous by design -- pre-auth pages brand through it. Empty when the theme is stock. Serves '
+        + 'an ETag; clients revalidate rather than cache blindly.',
     security: [],
     responses: {
         200: { description: 'The stylesheet.', content: { 'text/css': { schema: { type: 'string' } } } },

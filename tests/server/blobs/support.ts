@@ -18,6 +18,9 @@ import type { Readable } from 'node:stream';
 
 import { Hono } from 'hono';
 
+// Models
+import { UNLIMITED_QUOTA } from '@fileshed/core';
+
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { type BlobLocation, BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
@@ -75,10 +78,19 @@ function composeApp(auth : Auth, blobs : BlobManager, mediaTags : MediaTagManage
     return app;
 }
 
-export async function bootBlobApp(uploadMaxBytes ?: number) : Promise<BootedBlobApp>
+export interface BlobAppOptions
+{
+    uploadMaxBytes ?: number;
+
+    // The instance-wide quota an account with no limit of its own inherits. A supplier, not a number, so a spec can
+    // move it between requests the way an admin patching the setting does.
+    defaultQuota ?: () => Promise<number>;
+}
+
+export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<BootedBlobApp>
 {
     const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-blob-flow-'));
-    const overrides = uploadMaxBytes === undefined ? {} : { UPLOAD_MAX_BYTES: uploadMaxBytes };
+    const overrides = options.uploadMaxBytes === undefined ? {} : { UPLOAD_MAX_BYTES: options.uploadMaxBytes };
     const config = testConfig({ STORAGE_ROOT: storageRoot, ...overrides });
 
     const handle = createDatabase(config);
@@ -87,7 +99,12 @@ export async function bootBlobApp(uploadMaxBytes ?: number) : Promise<BootedBlob
 
     const backendID = await seedDefaultBackend(handle, config);
     const blob = new BlobRA(handle);
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES });
+    const blobs = new BlobManager({
+        handle,
+        blob,
+        uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES,
+        defaultQuota: options.defaultQuota ?? (async () => UNLIMITED_QUOTA),
+    });
 
     return {
         app: composeApp(auth, blobs, new MediaTagManager({ blob, tags: new MediaTagsRA(handle) })),

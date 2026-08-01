@@ -18,33 +18,43 @@ describe('meResponseCodec', () =>
         createdAt: '2026-01-01T00:00:00.000Z',
     };
 
-    // quotaLimit is null for an unlimited account -- the wire shape must admit that, not force a numeric sentinel.
-    it('accepts a null quota limit for an unlimited account', () =>
+    // A limit of null is an account inheriting the instance default, so the wire shape must admit it rather than
+    // forcing a numeric sentinel -- and an effective of null is the resolved answer "no cap at all".
+    it('accepts a null quota limit for an account inheriting the instance default', () =>
     {
-        const result = meResponseCodec.safeParse({ ...base, quota: { used: 4096, limit: null } });
+        const result = meResponseCodec.safeParse({ ...base, quota: { used: 4096, effective: null, limit: null } });
 
         expect(result.success).toBe(true);
     });
 
-    // a 0 limit is a valid block-all quota (the regulation engine admits only zero-byte writes
-    // against it), distinct from null. The wire shape must accept it rather than rejecting it as non-positive.
-    it('accepts a zero quota limit as a real block-all limit', () =>
+    // 0 is the per-user way to say "unlimited, whatever the default becomes", so it must survive the wire as itself
+    // rather than being rejected as non-positive or flattened into null.
+    it('accepts a zero quota limit as an explicit per-user unlimited', () =>
     {
-        const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, limit: 0 } });
+        const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, effective: null, limit: 0 } });
 
         expect(result.success).toBe(true);
+    });
+
+    // Unlimited is spelled null on the effective side and nowhere else. A 0 there would be a resolution bug leaking
+    // the raw sentinel, and a client reading it as a cap would report an account that can store nothing.
+    it('rejects a zero effective quota, which would be the unlimited sentinel left unresolved', () =>
+    {
+        const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, effective: 0, limit: 0 } });
+
+        expect(result.success).toBe(false);
     });
 
     it('rejects a negative used value', () =>
     {
-        const result = meResponseCodec.safeParse({ ...base, quota: { used: -1, limit: null } });
+        const result = meResponseCodec.safeParse({ ...base, quota: { used: -1, effective: null, limit: null } });
 
         expect(result.success).toBe(false);
     });
 
     it('rejects a negative quota limit', () =>
     {
-        const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, limit: -1 } });
+        const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, effective: null, limit: -1 } });
 
         expect(result.success).toBe(false);
     });
@@ -53,7 +63,7 @@ describe('meResponseCodec', () =>
     // knows its configuration and must always send it.
     it('rejects a profile missing the limits object', () =>
     {
-        const { limits: _limits, ...withoutLimits } = { ...base, quota: { used: 0, limit: null } };
+        const { limits: _limits, ...withoutLimits } = { ...base, quota: { used: 0, effective: null, limit: null } };
         const result = meResponseCodec.safeParse(withoutLimits);
 
         expect(result.success).toBe(false);
@@ -63,7 +73,7 @@ describe('meResponseCodec', () =>
     // than failing, so an older server missing the field still reads.
     it('defaults preferences to an empty blob when the response omits it', () =>
     {
-        const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, limit: null } });
+        const result = meResponseCodec.safeParse({ ...base, quota: { used: 0, effective: null, limit: null } });
 
         expect(result.success).toBe(true);
         expect(result.success && result.data.preferences).toEqual({});
@@ -73,7 +83,7 @@ describe('meResponseCodec', () =>
     {
         const result = meResponseCodec.safeParse({
             ...base,
-            quota: { used: 0, limit: null },
+            quota: { used: 0, effective: null, limit: null },
             preferences: { rootLabel: 'Photos' },
         });
 

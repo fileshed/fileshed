@@ -83,9 +83,10 @@
     import { CircleStencil, Cropper } from 'vue-advanced-cropper';
     import 'vue-advanced-cropper/dist/style.css';
 
-    import { DEFAULT_AVATAR_MAX_BYTES, type NodeResponse, avatarMimeTypes } from '@fileshed/core';
+    import { type NodeResponse, avatarMimeTypes } from '@fileshed/core';
 
     // Stores
+    import { useAppStore } from '../../../stores/app.ts';
     import { useSessionStore } from '../../../stores/session.ts';
 
     // Components
@@ -102,6 +103,7 @@
 
     type Step = 'source' | 'browse' | 'crop';
 
+    const app = useAppStore();
     const session = useSessionStore();
     const toast = useToast();
     const { runMutation } = useRunWithToast();
@@ -116,7 +118,7 @@
     let sourceFile : File | null = null;
 
     const acceptTypes = avatarMimeTypes.join(',');
-    const maxSizeLabel = formatBytes(DEFAULT_AVATAR_MAX_BYTES);
+    const maxSizeLabel = computed(() => formatBytes(app.avatarMaxBytes));
     const hasAvatar = computed(() => Boolean(session.me?.image));
 
     const title = computed(() =>
@@ -130,7 +132,7 @@
     const description = computed(() =>
     {
         return step.value === 'source'
-            ? `Your photo is cropped to a circle. Max ${ maxSizeLabel }.`
+            ? `Your photo is cropped to a circle. Max ${ maxSizeLabel.value }.`
             : undefined;
     });
 

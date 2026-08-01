@@ -31,7 +31,7 @@ import {
     seedBlob,
     seedUser,
 } from '../resource-access/nodes/support.ts';
-import { noopOrphanedBlobs, testActor } from '../nodes/support.ts';
+import { noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -74,7 +74,7 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
 
 function manager() : NodeManager
 {
-    return new NodeManager(handle, ra, noopOrphanedBlobs());
+    return new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 }
 
 function search(actorID : string, term : string, limit = 50, offset = 0) : Promise<NodeListResponse>
