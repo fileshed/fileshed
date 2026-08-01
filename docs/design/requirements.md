@@ -1,6 +1,6 @@
 # FileShed — Requirements & Technical Design
 
-FileShed (`fileshed` internally — repo, package, binary) is self-hosted, multi-user file hosting with a Google Drive-class UX. This document is the source of truth for v1 scope and the technical decisions behind it.
+FileShed (`fileshed` internally — repo, package, binary) is self-hosted, multi-user file hosting whose UX holds the bar set by the mainstream cloud file managers. This document is the source of truth for v1 scope and the technical decisions behind it.
 
 ---
 
@@ -259,7 +259,7 @@ anonymous capability published only by an owner. Do not unify the two surfaces; 
 
 ## 8. Frontend
 
-Drive-class UX. Nuxt UI v4 provides the chrome (dialogs, menus, toasts, forms, tables); the core file-management surface is custom:
+The UX bar is the mainstream cloud file managers. Nuxt UI v4 provides the chrome (dialogs, menus, toasts, forms, tables); the core file-management surface is custom:
 
 - **Main view**: grid and list modes, sortable columns (name, size, modified, owner), breadcrumb path, folder tree sidebar.
 - **Selection**: click, ctrl/shift-click, marquee (drag-select). Keyboard: arrows, enter to open, del to trash, F2 rename.
