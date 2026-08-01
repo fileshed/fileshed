@@ -3,8 +3,7 @@
 **Version 1.0 — 2026-08-01**
 
 *Derived from the Apache Software Foundation's Individual Contributor License Agreement v2.0, restated in plain
-English, with the beneficiary named in section 1. The Apache ICLA has anchored contributor agreements across the
-industry for two decades; the closer this document stays to it, the less there is to evaluate from scratch.*
+English, with the beneficiary named in section 1.*
 
 Thank you for contributing to FileShed. This agreement sets out the terms under which contributions are accepted. It
 exists so the project holds clear, unambiguous rights to everything inside it — enough to keep releasing FileShed as
