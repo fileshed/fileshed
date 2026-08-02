@@ -1,13 +1,12 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # FileShed — single-image build: the Hono server serves both the API and the built client.
 #
-# The server runs TypeScript natively (Node 24), so no server compile happens here: the runtime image carries the
-# server and core SOURCES plus production node_modules; only the client gets built. better-sqlite3 usually installs
-# from a musl prebuild; the build tools are present so an unlucky platform compiles instead of failing.
+# The server runs TypeScript natively, so no server compile happens here: the runtime image carries the server and core
+# SOURCES plus production node_modules; only the client gets built. Nothing in the tree is a native addon -- SQLite is
+# node:sqlite, part of the runtime itself -- so no compiler toolchain is installed and no architecture needs a prebuild.
 # ---------------------------------------------------------------------------------------------------------------------
 
-FROM node:24-alpine AS build
-RUN apk add --no-cache python3 make g++
+FROM node:26-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -24,7 +23,7 @@ RUN npm run build -w @fileshed/client \
 
 # ---------------------------------------------------------------------------------------------------------------------
 
-FROM node:24-alpine
+FROM node:26-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production \

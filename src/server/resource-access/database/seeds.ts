@@ -23,7 +23,7 @@ import type { Config } from '../../utils/config.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// better-sqlite3 cannot bind a JS boolean, so is_default takes 1/0 on SQLite and true/false on Postgres (database.ts).
+// node:sqlite cannot bind a JS boolean, so is_default takes 1/0 on SQLite and true/false on Postgres (database.ts).
 function trueBind(handle : DatabaseHandle) : boolean | number
 {
     return handle.kind === 'postgres' ? true : 1;

@@ -30,11 +30,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { Kysely, SqliteDialect } from 'kysely';
-import BetterSqlite3 from 'better-sqlite3';
+import { Kysely } from 'kysely';
+import { NodeSqliteDialect } from '@fileshed/kysely-node-sqlite';
 
 // Constants
-import { SMALL_FILE_THRESHOLD_BYTES } from '@fileshed/core';
+import { SMALL_FILE_THRESHOLD_BYTES, SQLITE_BUSY_TIMEOUT_MS } from '@fileshed/core';
 
 // Database row schema (types only -- the inspector reads the same tables the server writes)
 import type { Database } from '@server/resource-access/database/database.ts';
@@ -445,10 +445,13 @@ export interface DbInspector
 
 export function openDb(databasePath : string) : DbInspector
 {
-    const sqlite = new BetterSqlite3(databasePath, { readonly: true });
-    sqlite.pragma('busy_timeout = 5000');
+    const dialect = new NodeSqliteDialect({
+        location: databasePath,
+        readOnly: true,
+        timeout: SQLITE_BUSY_TIMEOUT_MS,
+    });
 
-    const db = new Kysely<Database>({ dialect: new SqliteDialect({ database: sqlite }) });
+    const db = new Kysely<Database>({ dialect });
 
     return { db, close: () => db.destroy() };
 }

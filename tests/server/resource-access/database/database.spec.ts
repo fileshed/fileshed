@@ -4,8 +4,8 @@
 // Every pragma assertion reads back through a real file-backed handle: SQLite silently ignores a pragma it does not
 // recognise, so a misspelling leaves no error behind, and a :memory: database cannot be put into WAL at all.
 //
-// The busy-timeout and page-cache values are ones better-sqlite3 already opens with. Asserting them guards the
-// deployment's effective configuration against a driver that changes its mind, not the pragma lines themselves.
+// node:sqlite applies none of these on its own, so what the factory sets is the whole of the deployment's connection
+// configuration.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { existsSync } from 'node:fs';
@@ -16,18 +16,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { sql } from 'kysely';
-import BetterSqlite3 from 'better-sqlite3';
 
 // Models
-import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_CACHE_SIZE, SQLITE_STATEMENT_CACHE_SIZE } from '@fileshed/core';
+import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_CACHE_SIZE } from '@fileshed/core';
 
 // Resource Access
-import {
-    type DatabaseHandle,
-    type StatementCacheTarget,
-    createDatabase,
-    withStatementCache,
-} from '@server/resource-access/database/database.ts';
+import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 
 // Utils
 import type { Config } from '@server/utils/config.ts';
@@ -109,108 +103,6 @@ describe('createDatabase — SQLite connection', () =>
     {
         // PRAGMA synchronous reports the level as an ordinal; NORMAL is 1.
         expect(await pragma(handle, 'synchronous')).toBe(1);
-    });
-
-    it('sees a column added after the same statement was already compiled once', async () =>
-    {
-        await sql.raw('create table probe (original text)').execute(handle.db);
-        await sql.raw(`insert into probe (original) values ('kept')`).execute(handle.db);
-
-        // Identical SQL either side of the ALTER, so the second run is served from the cache.
-        const before = await sql.raw('select * from probe').execute(handle.db);
-        await sql.raw(`alter table probe add column added text default 'filled'`).execute(handle.db);
-        const after = await sql.raw('select * from probe').execute(handle.db);
-
-        expect(before.rows).toEqual([ { original: 'kept' } ]);
-        expect(after.rows).toEqual([ { original: 'kept', added: 'filled' } ]);
-    });
-});
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// A real driver handle that counts how many times it was asked to compile something. Counting through the seam keeps
-// the assertions off better-sqlite3's internals.
-function countingTarget() : StatementCacheTarget & { compiles : number; done() : void }
-{
-    const sqlite = new BetterSqlite3(':memory:');
-
-    return {
-        compiles: 0,
-        close: () => sqlite.close(),
-        done: () => sqlite.close(),
-        prepare(source : string)
-        {
-            this.compiles += 1;
-
-            return sqlite.prepare(source);
-        },
-    };
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-describe('withStatementCache', () =>
-{
-    it('compiles a repeated statement once and a new one again', () =>
-    {
-        const target = countingTarget();
-        const cached = withStatementCache(target);
-
-        cached.prepare('select 1');
-        cached.prepare('select 1');
-        cached.prepare('select 2');
-
-        expect(target.compiles).toBe(2);
-
-        target.done();
-    });
-
-    it('hands back the very same compiled statement on a hit', () =>
-    {
-        const target = countingTarget();
-        const cached = withStatementCache(target);
-
-        expect(cached.prepare('select 1')).toBe(cached.prepare('select 1'));
-
-        target.done();
-    });
-
-    it('stops growing at its cap, recompiling whatever fell out of it', () =>
-    {
-        const target = countingTarget();
-        const cached = withStatementCache(target);
-
-        // One more distinct statement than the cache holds, so the coldest -- the first -- is evicted.
-        for(let index = 0; index <= SQLITE_STATEMENT_CACHE_SIZE; index++)
-        {
-            cached.prepare(`select ${ index }`);
-        }
-
-        const compilesBeforeRevisit = target.compiles;
-        cached.prepare('select 0');
-
-        expect(compilesBeforeRevisit).toBe(SQLITE_STATEMENT_CACHE_SIZE + 1);
-        expect(target.compiles).toBe(SQLITE_STATEMENT_CACHE_SIZE + 2);
-
-        target.done();
-    });
-
-    it('compiles a fresh statement rather than handing out one that is mid-iteration', () =>
-    {
-        const target = countingTarget();
-        const cached = withStatementCache(target);
-
-        cached.prepare('create table t (a integer)').run();
-        cached.prepare('insert into t (a) values (1), (2)').run();
-
-        const reader = cached.prepare('select a from t');
-        const walk = reader.iterate();
-        walk.next();
-
-        expect(cached.prepare('select a from t')).not.toBe(reader);
-
-        walk.return?.(undefined);
-        target.done();
     });
 });
 

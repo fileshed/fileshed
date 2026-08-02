@@ -20,7 +20,7 @@ export function timestampType(kind : DatabaseKind) : ColumnDataType
     return kind === 'postgres' ? 'timestamptz' : 'text';
 }
 
-// Native boolean on Postgres; SQLite stores 0/1 in an integer column (better-sqlite3 will not bind a JS boolean).
+// Native boolean on Postgres; SQLite stores 0/1 in an integer column (node:sqlite will not bind a JS boolean).
 export function boolType(kind : DatabaseKind) : ColumnDataType
 {
     return kind === 'postgres' ? 'boolean' : 'integer';
