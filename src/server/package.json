@@ -1,6 +1,6 @@
 {
   "name": "@fileshed/server",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "license": "AGPL-3.0-only",
   "type": "module",
   "private": true,
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@better-auth/api-key": "^1.6.25",
-    "@fileshed/core": "^0.1.0",
+    "@fileshed/core": "^0.0.0",
     "@hono/node-server": "^2.0.10",
     "@hono/standard-validator": "^0.2.3",
     "@paralleldrive/cuid2": "^2.3.1",
