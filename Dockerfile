@@ -44,6 +44,8 @@ COPY --from=build /app/src/client/dist ./client-dist
 VOLUME /data
 EXPOSE 3000
 
-CMD ["node", "src/server/server.ts"]
+# node:sqlite prints an ExperimentalWarning on every boot; the API reached release-candidate status and the driver
+# is wrapped by our own dialect, so the packaged product silences the noise. Source runs still see the warning.
+CMD ["node", "--disable-warning=ExperimentalWarning", "src/server/server.ts"]
 
 # ---------------------------------------------------------------------------------------------------------------------
