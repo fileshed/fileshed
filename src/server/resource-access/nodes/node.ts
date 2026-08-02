@@ -626,8 +626,9 @@ export class NodeRA
     //------------------------------------------------------------------------------------------------------------------
 
     // The quota charge for a user: the total logical size of the file nodes they own, trashed included and folders and
-    // links (which have no size) excluded. Runs on every upload admission -- one aggregate over
-    // node_owner_id_idx. Postgres sum(bigint) comes back as a numeric string and SQLite as a number; Number spans both.
+    // links (which have no size) excluded. Runs on every upload admission -- one aggregate covered end to end by
+    // node_owner_size_idx. Postgres sum(bigint) comes back as a numeric string and SQLite as a number; Number spans
+    // both.
     async ownedBytes(ownerID : string) : Promise<number>
     {
         const row = await this.#db

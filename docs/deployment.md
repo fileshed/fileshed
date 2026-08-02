@@ -108,6 +108,20 @@ The database holds the tree, shares, and metadata; the blob store holds the byte
 backup of one without the other is half a backup: nodes pointing at missing content, or orphaned content no tree
 references. Snapshot them from the same moment where possible (stop the container, or use filesystem snapshots).
 
+SQLite runs in WAL mode, so a live instance keeps its most recent commits in a `fileshed.db-wal` sidecar next to the
+database file. Copying `fileshed.db` alone while the server is running silently drops them. Stopping the container is
+the simplest fix — a clean shutdown folds the WAL back into the database and leaves a single self-contained file. To
+back up without stopping, let SQLite take the copy from the host (the image does not carry the `sqlite3` CLI), which
+reads the WAL as part of the database:
+
+```bash
+sqlite3 /path/to/volume/fileshed.db ".backup '/backup/fileshed.db'"
+```
+
+WAL also means SQLite syncs to disk at checkpoints rather than on every commit. An unclean shutdown — a yanked power
+cord, not a normal `docker stop` — can cost the last few seconds of committed writes; it cannot corrupt the database.
+Postgres deployments are unaffected.
+
 ## Postgres
 
 Use the Postgres compose file, which runs the app alongside a Postgres 17 service with a health-checked startup

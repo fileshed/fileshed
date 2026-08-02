@@ -8,6 +8,7 @@ export * from './avatar.ts';
 export * from './blob.ts';
 export * from './branding.ts';
 export * from './config.ts';
+export * from './database.ts';
 export * from './handler.ts';
 export * from './media.ts';
 export * from './nodeType.ts';

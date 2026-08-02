@@ -21,12 +21,20 @@ import { mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { type ColumnType, Kysely, PostgresDialect, SqliteDialect } from 'kysely';
+import { type ColumnType, Kysely, PostgresDialect, type SqliteDatabase, SqliteDialect } from 'kysely';
 import { Pool, types as pgTypes } from 'pg';
 import BetterSqlite3 from 'better-sqlite3';
 
+// Models
+import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_CACHE_SIZE, SQLITE_STATEMENT_CACHE_SIZE } from '@fileshed/core';
+
 // Utils
 import type { Config } from '../../utils/config.ts';
+import { getLogger } from '../../utils/logger.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+
+const logger = getLogger('database');
 
 //----------------------------------------------------------------------------------------------------------------------
 // Column helpers
@@ -250,6 +258,70 @@ function postgresTypeParser(oid : number) : ReturnType<typeof pgTypes.getTypePar
 const postgresTypes = { getTypeParser: postgresTypeParser };
 
 //----------------------------------------------------------------------------------------------------------------------
+// SQLite connection
+//----------------------------------------------------------------------------------------------------------------------
+
+// A `journal_mode` pragma reports the mode actually in force, which is how a refused WAL switch surfaces.
+function isWalEnabled(result : unknown) : boolean
+{
+    if(!Array.isArray(result)) { return false; }
+
+    const mode = (result[0] as { journal_mode ?: unknown } | undefined)?.journal_mode;
+
+    return typeof mode === 'string' && mode.toLowerCase() === 'wal';
+}
+
+// Kysely's SqliteDialect compiles a fresh statement for every query it runs, which on small reads costs a real share
+// of the query itself. Holding them is safe: better-sqlite3 prepares through sqlite3_prepare_v2, which
+// silently recompiles a statement when the schema beneath it changes, so a cached one survives a migration. A busy
+// statement is mid-iteration and cannot be handed out a second time, so that case compiles fresh instead.
+//
+// The target is typed to better-sqlite3's own handle rather than Kysely's narrower SqliteDatabase because the cache
+// needs `busy`, which a SqliteStatement does not carry.
+export interface StatementCacheTarget
+{
+    close() : void;
+    prepare(source : string) : BetterSqlite3.Statement<unknown[]>;
+}
+
+export function withStatementCache(sqlite : StatementCacheTarget) : SqliteDatabase
+{
+    const cache = new Map<string, BetterSqlite3.Statement<unknown[]>>();
+
+    return {
+        close: () => sqlite.close(),
+        prepare: (source : string) =>
+        {
+            const cached = cache.get(source);
+
+            if(cached?.busy) { return sqlite.prepare(source); }
+
+            if(cached)
+            {
+                // A Map iterates in insertion order, so reinserting on a hit keeps the eviction end genuinely cold.
+                cache.delete(source);
+                cache.set(source, cached);
+
+                return cached;
+            }
+
+            const statement = sqlite.prepare(source);
+
+            if(cache.size >= SQLITE_STATEMENT_CACHE_SIZE)
+            {
+                const coldest = cache.keys().next();
+
+                if(!coldest.done) { cache.delete(coldest.value); }
+            }
+
+            cache.set(source, statement);
+
+            return statement;
+        },
+    };
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 
 export function createDatabase(config : Config) : DatabaseHandle
 {
@@ -288,7 +360,25 @@ export function createDatabase(config : Config) : DatabaseHandle
     // SQLite ignores foreign keys entirely unless this pragma is on for the connection.
     sqlite.pragma('foreign_keys = ON');
 
-    const dialect = new SqliteDialect({ database: sqlite });
+    // Both already match better-sqlite3's current defaults; they are pinned so a driver bump or a differently-compiled
+    // build cannot move them silently. The timeout is set before the WAL switch below, which itself takes a brief
+    // exclusive lock and can come back busy on a contended file.
+    sqlite.pragma(`busy_timeout = ${ SQLITE_BUSY_TIMEOUT_MS }`);
+    sqlite.pragma(`cache_size = ${ SQLITE_CACHE_SIZE }`);
+
+    // WAL keeps readers running through a write instead of blocking on it. The switch is a property of the file, not
+    // the connection, and it can genuinely fail -- network filesystems do not support the shared memory WAL needs, and
+    // SQLite reports that by returning the mode it kept rather than by throwing. A :memory: database never converts.
+    if(databasePath !== ':memory:' && !isWalEnabled(sqlite.pragma('journal_mode = WAL')))
+    {
+        logger.warn({ databasePath }, 'SQLite stayed on its rollback journal; WAL is unavailable on this filesystem');
+    }
+
+    // WAL's companion: fsync at checkpoints rather than on every commit. A crash can cost the last transactions but
+    // cannot corrupt the database. Reopening an existing WAL file lands here anyway; a freshly converted one does not.
+    sqlite.pragma('synchronous = NORMAL');
+
+    const dialect = new SqliteDialect({ database: withStatementCache(sqlite) });
 
     return { db: new Kysely<Database>({ dialect }), kind: 'sqlite' };
 }
