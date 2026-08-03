@@ -13,7 +13,7 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { ApiError } from '@client/resource-access/apiError.ts';
@@ -31,6 +31,9 @@ import { useAppStore } from '@client/stores/app.ts';
 import { useDriveStore } from '@client/stores/drive.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 import { useUploadsStore } from '@client/stores/uploads.ts';
+
+// Support
+import { meFixture } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -194,15 +197,7 @@ describe('useUploadsStore', () =>
     it('refreshes the session quota when an upload lands, so the gauge moves', async () =>
     {
         mockHappyPipeline();
-        const refreshedProfile : MeResponse = {
-            id: 'u1',
-            email: 'member@example.com',
-            role: 'user',
-            quota: { used: 4096, effective: 10_000, limit: 10_000 },
-            limits: { trashRetentionDays: 30 },
-            preferences: {},
-            createdAt: ISO,
-        };
+        const refreshedProfile = meFixture({ quota: { used: 4096, effective: 10_000, limit: 10_000 } });
         fetchMeMock.mockResolvedValue(refreshedProfile);
 
         const store = useUploadsStore();

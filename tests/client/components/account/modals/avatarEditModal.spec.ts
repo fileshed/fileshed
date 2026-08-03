@@ -12,7 +12,7 @@ import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vite
 import { type DOMWrapper, type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { MeResponse, NodeResponse } from '@fileshed/core';
+import type { NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { uploadAvatar } from '@client/resource-access/avatar.ts';
@@ -21,6 +21,9 @@ import { fetchNodeBlob } from '@client/resource-access/content.ts';
 // Stores
 import { useAppStore } from '@client/stores/app.ts';
 import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { meFixture } from '../../../support.ts';
 
 // Under test
 import AvatarEditModal from '@client/components/account/modals/avatarEditModal.vue';
@@ -40,22 +43,6 @@ const uploadAvatarMock = uploadAvatar as unknown as Mock;
 const fetchNodeBlobMock = fetchNodeBlob as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'user_1',
-        email: 'member@example.com',
-        name: 'Ada Lovelace',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        image: null,
-        createdAt: '2026-07-20T00:00:00.000Z',
-        ...overrides,
-    };
-}
 
 function fileNode(overrides : Partial<NodeResponse> = {}) : NodeResponse
 {

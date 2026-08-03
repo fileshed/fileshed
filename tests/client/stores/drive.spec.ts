@@ -7,7 +7,7 @@ import { createHmac } from 'node:crypto';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { MeResponse, NodeListResponse, NodeResponse, UserSummary } from '@fileshed/core';
+import type { NodeListResponse, NodeResponse, UserSummary } from '@fileshed/core';
 
 // Resource Access
 import { ApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
@@ -24,6 +24,9 @@ import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-acces
 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { ME_ID, meFixture } from '../support.ts';
 
 // Under test
 import { useDriveStore } from '@client/stores/drive.ts';
@@ -69,7 +72,7 @@ function folderNode(id : string, parentID : string | null = null, name : string 
     return {
         id,
         name,
-        ownerID: 'u1',
+        ownerID: ME_ID,
         parentID,
         createdAt: ISO,
         updatedAt: ISO,
@@ -84,7 +87,7 @@ function fileNode(id : string, name : string = id) : NodeResponse
     return {
         id,
         name,
-        ownerID: 'u1',
+        ownerID: ME_ID,
         parentID: null,
         createdAt: ISO,
         updatedAt: ISO,
@@ -102,7 +105,7 @@ function linkNode(id : string, parentID : string | null, name : string, targetNo
     return {
         id,
         name,
-        ownerID: 'u1',
+        ownerID: ME_ID,
         parentID,
         createdAt: ISO,
         updatedAt: ISO,
@@ -125,22 +128,6 @@ function page(
 function ownerSummary(id : string) : UserSummary
 {
     return { id, name: id, email: `${ id }@example.com`, image: null };
-}
-
-// The signed-in caller's profile, whose id anchors the breadcrumb -- folderNode's ownerID defaults to 'u1', matching
-// this fixture's default id, so an ordinary chain reads own-tree unless a test overrides a node's owner.
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'u1',
-        email: 'u1@example.com',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: ISO,
-        ...overrides,
-    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

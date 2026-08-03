@@ -11,14 +11,15 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { MeResponse } from '@fileshed/core';
-
 // Resource Access
 import { authClient } from '@client/resource-access/authClient.ts';
 import { fetchMe } from '@client/resource-access/me.ts';
 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { meFixture } from '../../support.ts';
 
 // Under test
 import ProfileTab from '@client/pages/account/profileTab.vue';
@@ -36,22 +37,6 @@ const updateUserMock = authClient.updateUser as unknown as Mock;
 const fetchMeMock = fetchMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'user_1',
-        email: 'member@example.com',
-        name: 'Ada Lovelace',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        image: null,
-        createdAt: '2026-07-20T00:00:00.000Z',
-        ...overrides,
-    };
-}
 
 const UAvatarStub = {
     name: 'UAvatar',

@@ -11,7 +11,6 @@ import {
     DEFAULT_ROOT_LABEL,
     DEFAULT_TIME_FORMAT,
     DEFAULT_VIEW_MODE,
-    type MeResponse,
 } from '@fileshed/core';
 
 // Resource Access
@@ -19,6 +18,9 @@ import { ApiError } from '@client/resource-access/apiError.ts';
 import { authClient } from '@client/resource-access/authClient.ts';
 import { fetchMe } from '@client/resource-access/me.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
+
+// Support
+import { meFixture } from '../support.ts';
 
 // Under test
 import { useSessionStore } from '@client/stores/session.ts';
@@ -43,22 +45,6 @@ const signUpEmail = authClient.signUp.email as unknown as Mock;
 const signOutMock = authClient.signOut as unknown as Mock;
 const fetchMeMock = fetchMe as unknown as Mock;
 const updatePreferencesMock = updatePreferences as unknown as Mock;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'user_1',
-        email: 'member@example.com',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: '2026-07-20T00:00:00.000Z',
-        ...overrides,
-    };
-}
 
 //----------------------------------------------------------------------------------------------------------------------
 

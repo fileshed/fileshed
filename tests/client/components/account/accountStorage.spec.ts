@@ -10,29 +10,16 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { MeResponse } from '@fileshed/core';
-
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { meFixture } from '../../support.ts';
 
 // Under test
 import AccountStorage from '@client/components/account/accountStorage.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'user_1',
-        email: 'member@example.com',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: '2026-07-20T00:00:00.000Z',
-        ...overrides,
-    };
-}
 
 const UProgressStub = {
     name: 'UProgress',

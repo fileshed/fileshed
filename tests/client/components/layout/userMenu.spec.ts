@@ -11,14 +11,15 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import type { DropdownMenuItem } from '@nuxt/ui';
 
-import type { MeResponse } from '@fileshed/core';
-
 // Resource Access
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 
 // Stores
 import { useAppStore } from '@client/stores/app.ts';
 import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { meFixture } from '../../support.ts';
 
 // Under test
 import UserMenu from '@client/components/layout/userMenu.vue';
@@ -33,20 +34,6 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 const updatePreferencesMock = updatePreferences as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'user_1',
-        email: 'member@example.com',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: '2026-07-20T00:00:00.000Z',
-        ...overrides,
-    };
-}
 
 const UDropdownMenuStub = {
     name: 'UDropdownMenu',

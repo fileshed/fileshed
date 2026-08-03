@@ -16,6 +16,9 @@ import type { MeResponse } from '@fileshed/core';
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
 
+// Support
+import { meFixture } from '../support.ts';
+
 // Under test
 import QuotaMeter from '@client/components/quotaMeter.vue';
 
@@ -24,19 +27,6 @@ import QuotaMeter from '@client/components/quotaMeter.vue';
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function meFixture(quota : MeResponse['quota']) : MeResponse
-{
-    return {
-        id: 'u1',
-        email: 'member@example.com',
-        role: 'user',
-        quota,
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: '2026-07-01T00:00:00.000Z',
-    };
-}
 
 const UProgressStub = {
     name: 'UProgress',
@@ -52,7 +42,7 @@ const UTooltipStub = {
 
 function mountMeter(quota : MeResponse['quota']) : VueWrapper
 {
-    useSessionStore().me = meFixture(quota);
+    useSessionStore().me = meFixture({ quota });
 
     return mount(QuotaMeter, { global: { stubs: { UProgress: UProgressStub, UTooltip: UTooltipStub } } });
 }

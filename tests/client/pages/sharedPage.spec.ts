@@ -22,6 +22,9 @@ import { copyNode } from '@client/resource-access/nodes.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 import { leaveShare, sharedWithMe } from '@client/resource-access/shares.ts';
 
+// Support
+import { ME_ID, meFixture } from '../support.ts';
+
 // Under test
 import SharedPage from '@client/pages/sharedPage.vue';
 
@@ -45,22 +48,6 @@ const addToFilesOpen = vi.fn();
 
 const OWNER : UserSummary = { id: 'owner1', name: 'Ada Lovelace', email: 'ada@example.com', image: null };
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'me',
-        email: 'me@example.com',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: ISO,
-        ...overrides,
-    };
-}
-
 function fileTarget(id : string, name : string, mimeType = 'text/plain', size = 20) : SharedTarget
 {
     return { id, type: 'file', name, ownerID: 'owner1', mimeType, size };
@@ -77,7 +64,7 @@ function entry(target : SharedTarget, role : ShareRole = 'viewer', placed = fals
         share: {
             id: shareID,
             nodeID: target.id,
-            granteeUserID: 'me',
+            granteeUserID: ME_ID,
             role,
             createdBy: 'owner1',
             createdAt: '2026-07-01T00:00:00.000Z',

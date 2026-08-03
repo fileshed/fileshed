@@ -11,7 +11,7 @@
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { emptyTrash, getTrash } from '@client/resource-access/nodes.ts';
@@ -20,6 +20,9 @@ import { fetchMe } from '@client/resource-access/me.ts';
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
 import { useTrashStore } from '@client/stores/trash.ts';
+
+// Support
+import { meFixture } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -101,15 +104,7 @@ describe('useTrashStore.emptyAll', () =>
     // Trashed bytes still charge the quota; the permanent delete is the moment the gauge moves.
     it('refreshes the session quota after emptying, so the gauge drops', async () =>
     {
-        const refreshedProfile : MeResponse = {
-            id: 'u1',
-            email: 'member@example.com',
-            role: 'user',
-            quota: { used: 0, effective: 10_000, limit: 10_000 },
-            limits: { trashRetentionDays: 30 },
-            preferences: {},
-            createdAt: ISO,
-        };
+        const refreshedProfile = meFixture({ quota: { used: 0, effective: 10_000, limit: 10_000 } });
         fetchMeMock.mockResolvedValue(refreshedProfile);
 
         const store = useTrashStore();

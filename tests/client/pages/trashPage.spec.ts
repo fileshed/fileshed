@@ -22,6 +22,9 @@ import { emptyTrash, getTrash, hardDeleteNode, restoreNode } from '@client/resou
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 import { listDeletionOffers } from '@client/resource-access/deletionOffers.ts';
 
+// Support
+import { ME_ID, meFixture } from '../support.ts';
+
 // Under test
 import TrashPage from '@client/pages/trashPage.vue';
 
@@ -51,7 +54,7 @@ const updatePreferencesMock = updatePreferences as unknown as Mock;
 //----------------------------------------------------------------------------------------------------------------------
 
 const ISO = '2026-07-01T00:00:00.000Z';
-const BASE = { ownerID: 'u1', parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
+const BASE = { ownerID: ME_ID, parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
 
 function fileNode(id : string) : NodeResponse
 {
@@ -66,20 +69,6 @@ function folderNode(id : string) : NodeResponse
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
     return { nodes, total: nodes.length, limit: 50, offset: 0, owners: [] };
-}
-
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'me',
-        email: 'me@example.com',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: ISO,
-        ...overrides,
-    };
 }
 
 function offer(id : string, name : string) : DeletionOfferResponse

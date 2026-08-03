@@ -24,6 +24,9 @@ import { takeLegacyViewMode } from '@client/resource-access/legacyViewMode.ts';
 import { copyNode, getChildren } from '@client/resource-access/nodes.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 
+// Support
+import { ME_ID, meFixture } from '../support.ts';
+
 // Under test
 import DrivePage from '@client/pages/drivePage.vue';
 
@@ -58,7 +61,7 @@ const shareOpen = vi.fn();
 
 const ISO = '2026-07-01T00:00:00.000Z';
 
-const BASE = { ownerID: 'u1', parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
+const BASE = { ownerID: ME_ID, parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
 
 type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role'>>;
 
@@ -94,22 +97,6 @@ function linkNode(
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
     return { nodes, total: nodes.length, limit: 50, offset: 0, owners: [] };
-}
-
-// 'u1' matches BASE.ownerID above -- the default signed-in caller is the owner of every fixture node, which is the
-// realistic case for My Files. Foreign-node tests override ownerID on the node fixture instead.
-function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
-{
-    return {
-        id: 'u1',
-        email: 'member@example.com',
-        role: 'user',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: ISO,
-        ...overrides,
-    };
 }
 
 const PLAIN_CLICK = { metaKey: false, ctrlKey: false, shiftKey: false };
@@ -160,8 +147,8 @@ const STUBS = {
     NodeGrid: { name: 'NodeGrid', props: [ 'buildMenu' ], template: '<div class="node-grid" />' },
 };
 
-// The default signed-in caller owns every fixture node (BASE.ownerID/meFixture both default to 'u1') -- the ordinary
-// My Files case. Foreign-node tests pass an ownerID override on the node fixture instead of changing `me`.
+// The default signed-in caller owns every fixture node (BASE.ownerID is ME_ID) -- the ordinary My Files case.
+// Foreign-node tests pass an ownerID override on the node fixture instead of changing `me`.
 async function mountDrive(
     nodes : NodeResponse[],
     me : MeResponse | null = meFixture(),

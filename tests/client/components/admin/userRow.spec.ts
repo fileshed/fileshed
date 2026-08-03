@@ -14,10 +14,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import { type AdminUserResponse, type MeResponse, UNLIMITED_QUOTA } from '@fileshed/core';
+import { type AdminUserResponse, UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { meFixture } from '../../support.ts';
 
 // Under test
 import UserRow from '@client/components/admin/userRow.vue';
@@ -43,19 +46,6 @@ function user(overrides : Partial<AdminUserResponse> = {}) : AdminUserResponse
         usedBytes: 0,
         createdAt: '2026-07-01T00:00:00.000Z',
         ...overrides,
-    };
-}
-
-function meFixture(id : string) : MeResponse
-{
-    return {
-        id,
-        email: 'admin@example.com',
-        role: 'admin',
-        quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
-        preferences: {},
-        createdAt: '2026-07-01T00:00:00.000Z',
     };
 }
 
@@ -95,7 +85,7 @@ describe('UserRow', () =>
     beforeEach(() =>
     {
         setActivePinia(createPinia());
-        useSessionStore().me = meFixture('admin1');
+        useSessionStore().me = meFixture({ id: 'admin1', role: 'admin' });
     });
 
     it('badges the ban with the until date and carries the reason as the tooltip', () =>
