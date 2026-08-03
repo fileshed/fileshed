@@ -249,6 +249,53 @@ describe('NodeRA.children', () =>
         expect(desc.map((node) => node.id)).toEqual([ 'cherry', 'banana', 'apple' ]);
     });
 
+    // Names order the way a reader reads them, with capitalization ignored: apple, Banana, cherry. Comparing raw text
+    // would answer Banana, apple, cherry wherever bytes decide the comparison, and a deployment's listing must not
+    // depend on which database is underneath it.
+    it('orders names case-insensitively, so capitalization never reshuffles the listing', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('f-banana', { parentID: 'p', name: 'Banana' }));
+        await ra.insert(file('f-cherry', { parentID: 'p', name: 'cherry' }));
+        await ra.insert(file('f-apple', { parentID: 'p', name: 'apple' }));
+
+        const asc = await ra.children({ parentID: 'p', ownerID: 'u1' }, byName);
+        const desc = await ra.children(
+            { parentID: 'p', ownerID: 'u1' },
+            { pagination: { limit: 100, offset: 0 }, sort: { key: 'name', direction: 'desc' } }
+        );
+
+        expect(asc.map((node) => node.name)).toEqual([ 'apple', 'Banana', 'cherry' ]);
+        expect(desc.map((node) => node.name)).toEqual([ 'cherry', 'Banana', 'apple' ]);
+    });
+
+    // Folding case decides the order WITHIN each partition; it never lets a file climb above a folder.
+    it('keeps folders pinned above the file partition while folding case within each', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(folderNode({ id: 'd-zebra', ownerID: 'u1', parentID: 'p', name: 'Zebra' }));
+        await ra.insert(folderNode({ id: 'd-apricot', ownerID: 'u1', parentID: 'p', name: 'apricot' }));
+        await ra.insert(file('f-quince', { parentID: 'p', name: 'Quince' }));
+        await ra.insert(file('f-almond', { parentID: 'p', name: 'almond' }));
+
+        const children = await ra.children({ parentID: 'p', ownerID: 'u1' }, byName);
+
+        expect(children.map((node) => node.name)).toEqual([ 'apricot', 'Zebra', 'almond', 'Quince' ]);
+    });
+
+    // Two names differing only in case fold to the same sort value, leaving the id tiebreak to decide -- the same
+    // tiebreak that keeps a paginated listing from repeating or dropping a row when the sort key ties.
+    it('breaks a case-only name tie by id, so a tie stays deterministic', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('id-b', { parentID: 'p', name: 'report.txt' }));
+        await ra.insert(file('id-a', { parentID: 'p', name: 'REPORT.txt' }));
+
+        const children = await ra.children({ parentID: 'p', ownerID: 'u1' }, byName);
+
+        expect(children.map((node) => node.id)).toEqual([ 'id-a', 'id-b' ]);
+    });
+
     it('sorts by size', async () =>
     {
         await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
@@ -535,6 +582,26 @@ describe('NodeRA.children filters', () =>
         const unfiltered = await ra.children(at, byName);
 
         expect(all.map((node) => node.id)).toEqual(unfiltered.map((node) => node.id));
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// searchByName
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeRA.searchByName', () =>
+{
+    // A result set orders by the same folded name a folder listing does, rather than gathering the capitalized hits
+    // into a run of their own ahead of everything else.
+    it('orders matches case-insensitively', async () =>
+    {
+        await ra.insert(file('f-banana', { name: 'Banana pie.txt' }));
+        await ra.insert(file('f-cherry', { name: 'cherry pie.txt' }));
+        await ra.insert(file('f-apple', { name: 'apple pie.txt' }));
+
+        const matches = await ra.searchByName('pie', 100);
+
+        expect(matches.map((node) => node.name)).toEqual([ 'apple pie.txt', 'Banana pie.txt', 'cherry pie.txt' ]);
     });
 });
 

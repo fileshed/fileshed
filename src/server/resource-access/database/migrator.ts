@@ -22,6 +22,7 @@ import * as mediaTags002 from './migrations/002_media_tags.ts';
 import * as instanceSettings003 from './migrations/003_instance_settings.ts';
 import * as quotaZeroSemantics004 from './migrations/004_quota_zero_semantics.ts';
 import * as quotaAggregateIndex005 from './migrations/005_quota_aggregate_index.ts';
+import * as nameOrderingIndex006 from './migrations/006_name_ordering_index.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -53,6 +54,10 @@ function migrationList(kind : DatabaseKind) : Record<string, Migration>
         '005_quota_aggregate_index': {
             up: (db) => quotaAggregateIndex005.up(db),
             down: (db) => quotaAggregateIndex005.down(db),
+        },
+        '006_name_ordering_index': {
+            up: (db) => nameOrderingIndex006.up(db),
+            down: (db) => nameOrderingIndex006.down(db),
         },
     };
 }

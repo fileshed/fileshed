@@ -136,6 +136,9 @@ docker compose -f compose.postgres.yaml up -d
 Running your own Postgres instead: set `DATABASE_KIND=postgres` and `DATABASE_URL`, drop `DATABASE_PATH`.
 Migrations run at boot against either dialect.
 
+Names sort case-insensitively on both dialects; accented characters then order by the collation of the database
+itself, so a Postgres instance places them wherever the locale it was created with says they belong.
+
 ## Updating
 
 Pull or rebuild the image and restart. Migrations are additive and run automatically; downgrade paths are not

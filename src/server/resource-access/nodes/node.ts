@@ -34,6 +34,7 @@ import { nodeFromRow, rowFromNode } from './transforms.ts';
 
 // Utils
 import { avatarImage } from '../../utils/avatarImage.ts';
+import { escapeLikePattern } from '../../utils/likePattern.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -105,11 +106,19 @@ const sortColumns : Record<NodeSortKey, readonly SortColumn[]> = {
     kind: [ 'type', 'mime_type', 'name' ],
 };
 
-// Escape the LIKE metacharacters in a user's search term so "50%" or "a_b" match literally rather than as wildcards.
-// Backslash is the escape character (declared with ESCAPE in the query), so escape it first to avoid double-escaping.
-function escapeLikePattern(term : string) : string
+// The folded form every name-ordered listing sorts by, so `apple` sits beside `Apple` instead of behind a run of
+// capitals. It also settles a dialect split: raw text orders by byte on SQLite and by locale on Postgres, and only one
+// of those puts `Zebra` after `apple`. An index over the same expression is what keeps the folded ordering cheap.
+function lowerName(column : 'name' | 'node.name') : Expression<string>
 {
-    return term.replace(/[\\%_]/g, (char) => `\\${ char }`);
+    return sql<string>`lower(${ sql.ref(column) })`;
+}
+
+// Name is the one sort column that orders on a derived value rather than what is stored; every other column sorts as
+// it sits.
+function sortTarget(column : SortColumn) : SortColumn | Expression<string>
+{
+    return column === 'name' ? lowerName('name') : column;
 }
 
 type NodeExpressionBuilder = ExpressionBuilder<Database, 'node'>;
@@ -281,7 +290,7 @@ export class NodeRA
 
         for(const column of sortColumns[sort.key])
         {
-            builder = builder.orderBy(column, (ob) =>
+            builder = builder.orderBy(sortTarget(column), (ob) =>
             {
                 return sort.direction === 'asc' ? ob.asc().nullsLast() : ob.desc().nullsFirst();
             });
@@ -508,7 +517,7 @@ export class NodeRA
                 matches('media_tags.artist'),
                 matches('media_tags.album'),
             ]))
-            .orderBy('node.name', 'asc')
+            .orderBy(lowerName('node.name'), 'asc')
             .orderBy('node.id', 'asc')
             .limit(limit)
             .execute();
@@ -560,7 +569,7 @@ export class NodeRA
 
         for(const column of sortColumns[sort.key])
         {
-            builder = builder.orderBy(column, (ob) =>
+            builder = builder.orderBy(sortTarget(column), (ob) =>
             {
                 return sort.direction === 'asc' ? ob.asc().nullsLast() : ob.desc().nullsFirst();
             });

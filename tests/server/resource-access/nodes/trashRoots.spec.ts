@@ -136,6 +136,21 @@ describe('NodeRA.trashedRoots', () =>
         expect(roots.map((node) => node.id)).toEqual([ 'zeta', 'apple', 'mango' ]);
     });
 
+    // The trash view folds case exactly as a folder listing does: apple, Banana, cherry, on either database.
+    it('orders names case-insensitively', async () =>
+    {
+        await ra.insert(file('t-banana', { name: 'Banana' }));
+        await ra.insert(file('t-cherry', { name: 'cherry' }));
+        await ra.insert(file('t-apple', { name: 'apple' }));
+        await ra.setTrashed('t-banana', trashedAt);
+        await ra.setTrashed('t-cherry', trashedAt);
+        await ra.setTrashed('t-apple', trashedAt);
+
+        const roots = await ra.trashedRoots('u1', byName);
+
+        expect(roots.map((node) => node.name)).toEqual([ 'apple', 'Banana', 'cherry' ]);
+    });
+
     it('pages the roots deterministically', async () =>
     {
         await ra.insert(file('a', { name: 'a' }));
