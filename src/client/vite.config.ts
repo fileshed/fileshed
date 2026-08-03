@@ -58,12 +58,23 @@ export default defineConfig(({ mode }) =>
                     // Stock neutral-ghost hovers with bg-elevated -- invisible on this app's chrome, which mostly
                     // sits ON elevated panels (dark mode's elevated and muted tokens collide). Hover one step up
                     // the ladder instead, matching what neutral soft/subtle already do.
+                    //
+                    // A disabled solid button keeps its fill in stock Nuxt UI (`disabled:bg-{color}` pins the
+                    // color past hover, and the base slot only fades it to 75%), so a Save with nothing to save
+                    // still reads as the page's call to action. Drop the fill to the grey ladder instead --
+                    // accented rather than elevated so the button stays visible on the elevated chrome the
+                    // editor bars sit on.
                     button: {
                         compoundVariants: [
                             {
                                 color: 'neutral',
                                 variant: 'ghost',
                                 class: 'hover:bg-accented/75 active:bg-accented/75',
+                            },
+                            {
+                                variant: 'solid',
+                                class: 'disabled:bg-accented disabled:text-muted aria-disabled:bg-accented '
+                                    + 'aria-disabled:text-muted',
                             },
                         ],
                     },
