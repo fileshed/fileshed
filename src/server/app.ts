@@ -56,7 +56,7 @@ import {
     createAuth,
     providerValuesFromConfig,
 } from './resource-access/auth.ts';
-import { createDatabase } from './resource-access/database/database.ts';
+import { type DatabaseHandle, createDatabase } from './resource-access/database/database.ts';
 import { initialize } from './resource-access/boot.ts';
 import { seedDefaultBackend } from './resource-access/database/seeds.ts';
 import { BlobRA } from './resource-access/blob/index.ts';
@@ -169,7 +169,23 @@ export interface AppOptions
     // The built client's directory (resolved from the working directory). Present only in production, where this
     // process serves the SPA alongside the API; development leaves the client to Vite.
     clientDist ?: string;
+
+    // The database an auth-only composition assembles its admin manager over -- the same handle the auth instance was
+    // built from. A full composition brings its own managers and never reaches for this.
+    handle ?: DatabaseHandle;
 }
+
+function requireHandle(handle ?: DatabaseHandle) : DatabaseHandle
+{
+    if(handle === undefined)
+    {
+        throw new Error('An auth instance without services still needs its database handle for the admin surface.');
+    }
+
+    return handle;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 
 export function createApp(auth ?: Auth, services ?: AppServices, options : AppOptions = {}) : Hono
 {
@@ -213,11 +229,13 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
         app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
         // Auth-only compositions (no services) still get the admin surface; with no node store to charge against,
         // every account truthfully reports zero usage, and with no settings store the instance default is the
-        // shipped one.
+        // shipped one. The user listing has no such honest fallback -- it reads the user table -- so a composition
+        // that mounts this surface without a database is a wiring bug rather than a degraded mode.
         app.route('/api', createAdminRoutes(
             sessions,
             services?.admins ?? new AdminManager({
                 auth,
+                users: new UserRA(requireHandle(options.handle)),
                 usage: async () => new Map(),
                 defaultQuota: async () => UNLIMITED_QUOTA,
             })
@@ -408,6 +426,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     });
     const admins = new AdminManager({
         auth,
+        users: userRA,
         usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
         defaultQuota,
     });

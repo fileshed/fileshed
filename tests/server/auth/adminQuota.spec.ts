@@ -17,6 +17,9 @@ import { type AdminUserResponse, UNLIMITED_QUOTA } from '@fileshed/core';
 import { AdminManager } from '@server/managers/admin.ts';
 import { SessionManager } from '@server/managers/session.ts';
 
+// Resource Access
+import { UserRA } from '@server/resource-access/users/index.ts';
+
 // Routes
 import { createAdminRoutes } from '@server/routes/admin.ts';
 
@@ -191,6 +194,7 @@ describe('admin-set quota enforced by the blob claim flow', () =>
             sessions,
             new AdminManager({
                 auth: booted.auth,
+                users: new UserRA(booted.handle),
                 usage: async () => new Map(),
                 defaultQuota: async () => UNLIMITED_QUOTA,
             })
@@ -246,6 +250,7 @@ describe('effective quota on admin user rows', () =>
             new SessionManager(booted.auth),
             new AdminManager({
                 auth: booted.auth,
+                users: new UserRA(booted.handle),
                 usage: async () => new Map(),
                 defaultQuota: async () => instanceDefault,
             })

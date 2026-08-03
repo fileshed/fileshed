@@ -7,20 +7,25 @@
 // them -- must judge quota against the OWNER's authoritative limit, which the caller's session snapshot cannot supply.
 // The preferences and avatar reads are fresh-from-row on purpose: the session cookie cache would lag a just-saved
 // value, so /api/me reads the row.
+//
+// The admin listing reads here rather than through the auth plugin's own list endpoint, which matches its search
+// case-sensitively on Postgres and offers no way to ask for anything else. Only the read moved: every account
+// mutation still goes through the plugin, which owns the session and token side effects that ride along with one.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- update sets name snake_case DB columns (house convention for Kysely) */
 
-import { type SqlBool, sql } from 'kysely';
+import { type Expression, type Selectable, type SqlBool, sql } from 'kysely';
 
 // Models
-import type { UserSummary } from '@fileshed/core';
+import type { AdminUserSearchField, AdminUserSortKey, UserRole, UserSummary } from '@fileshed/core';
 
 // Resource Access
-import type { DatabaseHandle } from '../database/database.ts';
+import type { DatabaseHandle, UserTable } from '../database/database.ts';
 
 // Utils
 import { avatarImage } from '../../utils/avatarImage.ts';
+import { escapeLikePattern } from '../../utils/likePattern.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -51,6 +56,80 @@ export interface UserCounts
     admins : number;
     banned : number;
     createdSince : number;
+}
+
+// One account as the admin listing reads it, with the dialect differences already settled: banned as a real boolean
+// (SQLite stores 0/1) and the stamps as Dates (SQLite stores ISO text). Ban standing is NOT judged here -- the flag
+// crosses as stored, and the ban engine decides what it means.
+export interface AdminUserRow
+{
+    id : string;
+    name : string;
+    email : string;
+    role : UserRole;
+    quotaLimit : number | null;
+    banned : boolean;
+    banReason : string | null;
+    banExpires : Date | null;
+    createdAt : Date;
+}
+
+export interface AdminUserListing
+{
+    users : AdminUserRow[];
+    total : number;
+}
+
+// A caller-supplied sort key never reaches orderBy as raw SQL: it names a column here or it does not sort at all, and
+// a new key has to state which column it means. createdAt is one of better-auth's camelCase columns -- Kysely quotes
+// it, which is what keeps Postgres from folding the identifier to lower case and losing it.
+const userSortColumns : Record<AdminUserSortKey, 'name' | 'email' | 'createdAt'> = {
+    name: 'name',
+    email: 'email',
+    createdAt: 'createdAt',
+};
+
+export interface AdminUserListOptions
+{
+    limit : number;
+    offset : number;
+    search ?: string;
+    searchField : AdminUserSearchField;
+    sortBy ?: AdminUserSortKey;
+    sortDirection : 'asc' | 'desc';
+}
+
+// A substring match with BOTH sides folded: the stored value through lower(), the term in JS. SQLite's LIKE already
+// ignores ASCII case where Postgres's does not, so an unfolded match answers the same search differently depending on
+// which database is underneath -- `Bob@` finding nothing on one deployment and `bob@example.com` on the other. The
+// term's own metacharacters are escaped, so a search for "50%" looks for that text rather than everything.
+function searchCondition(field : AdminUserSearchField, term : string) : Expression<SqlBool>
+{
+    const pattern = `%${ escapeLikePattern(term.trim().toLowerCase()) }%`;
+
+    return sql<SqlBool>`lower(${ sql.ref(field) }) like ${ pattern } escape '\\'`;
+}
+
+type AdminUserSelection = Pick<
+    Selectable<UserTable>,
+    'id' | 'name' | 'email' | 'role' | 'quota_limit' | 'banned' | 'banReason' | 'banExpires' | 'createdAt'
+>;
+
+// SQLite hands back 0/1 for a boolean column and ISO text for a timestamp; Postgres hands back the real types. Both
+// arrive here, and only the domain shape leaves.
+function adminUserRow(row : AdminUserSelection) : AdminUserRow
+{
+    return {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        role: row.role,
+        quotaLimit: row.quota_limit,
+        banned: row.banned === true || row.banned === 1,
+        banReason: row.banReason,
+        banExpires: row.banExpires === null ? null : new Date(row.banExpires),
+        createdAt: new Date(row.createdAt),
+    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -105,6 +184,48 @@ export class UserRA
             banned: Number(row.banned),
             createdSince: Number(row.created_since),
         };
+    }
+
+    // One page of the admin user listing, plus the grand total the page was drawn from. Both run the same search
+    // predicate, so the count and the page can never describe different sets. The requested sort key leads, then id
+    // breaks ties -- without it a page boundary landing inside a run of equal names could repeat or drop an account.
+    // With no key requested the listing falls back to account age, the order the accounts arrived in.
+    async listUsers(options : AdminUserListOptions) : Promise<AdminUserListing>
+    {
+        const filter = options.search === undefined
+            ? undefined
+            : searchCondition(options.searchField, options.search);
+
+        let page = this.#db
+            .selectFrom('user')
+            .select([ 'id', 'name', 'email', 'role', 'quota_limit', 'banned', 'banReason', 'banExpires', 'createdAt' ]);
+
+        let counted = this.#db
+            .selectFrom('user')
+            .select((eb) => eb.fn.count('id').as('count'));
+
+        if(filter !== undefined)
+        {
+            page = page.where(filter);
+            counted = counted.where(filter);
+        }
+
+        // A direction with no key to apply it to is dropped, exactly as an unsorted listing has no direction.
+        const sort = options.sortBy === undefined
+            ? { column: 'createdAt' as const, direction: 'asc' as const }
+            : { column: userSortColumns[options.sortBy], direction: options.sortDirection };
+
+        const [ rows, total ] = await Promise.all([
+            page
+                .orderBy(sort.column, sort.direction)
+                .orderBy('id', 'asc')
+                .limit(options.limit)
+                .offset(options.offset)
+                .execute(),
+            counted.executeTakeFirstOrThrow(),
+        ]);
+
+        return { users: rows.map(adminUserRow), total: Number(total.count) };
     }
 
     // The per-user byte cap (null = unlimited) straight from the user row. A missing user reads as null (unlimited),

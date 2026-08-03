@@ -100,7 +100,7 @@ export async function bootTestApp(overrides : Partial<Config> = {}, extras : Aut
 
     await initialize(handle, auth);
 
-    return { config, handle, auth, app: createApp(auth) };
+    return { config, handle, auth, app: createApp(auth, undefined, { handle }) };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -161,7 +161,12 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
         users: new UserManager(userRA),
         settings,
         branding: new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes }),
-        admins: new AdminManager({ auth, usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs), defaultQuota }),
+        admins: new AdminManager({
+            auth,
+            users: userRA,
+            usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
+            defaultQuota,
+        }),
         mail,
         limits: async () =>
         {

@@ -69,7 +69,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         const search = ctx.req.query('search');
-        const page = await admins.listUsers(actor, ctx.req.raw.headers, {
+        const page = await admins.listUsers(actor, {
             limit: paginationParam(ctx.req.query('limit')),
             offset: paginationParam(ctx.req.query('offset')),
             ...search === undefined || search === '' ? {} : { search },

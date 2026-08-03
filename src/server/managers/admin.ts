@@ -2,10 +2,12 @@
 // Admin Manager
 //
 // The business layer behind the gated admin surface. The admin() plugin's HTTP endpoints are blocked externally
-// (app.ts), so every admin capability reaches better-auth through this manager's in-process auth.api.* calls, behind
-// our own role check. The caller's headers ride along on every call: better-auth's own admin guard re-checks the
-// session, and the caller is the admin we just authorized -- the gated capability executing through the one
-// sanctioned surface.
+// (app.ts), so every account MUTATION reaches better-auth through this manager's in-process auth.api.* calls, behind
+// our own role check -- the plugin owns the session and token side effects a ban or a role change drags along. The
+// caller's headers ride along on those calls: better-auth's own admin guard re-checks the session, and the caller is
+// the admin we just authorized -- the gated capability executing through the one sanctioned surface.
+//
+// The user listing is the exception, reading the user table directly (see listUsers).
 //
 // Authorization lives here rather than in the regulation engine: "is this account an admin?" is plain RBAC on the
 // account role, not the cross-record data legality the regulation engine models -- adding a judge there would overload
@@ -38,6 +40,7 @@ import { effectiveQuota } from '../engines/quota.ts';
 
 // Resource Access
 import type { Auth, SessionUser } from '../resource-access/auth.ts';
+import type { UserRA } from '../resource-access/users/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -67,6 +70,11 @@ export type UsageResolver = (ownerIDs : string[]) => Promise<Map<string, number>
 export interface AdminManagerDeps
 {
     auth : Auth;
+
+    // The listing reads the user table directly. The admin plugin's own list endpoint matches its search
+    // case-sensitively on Postgres with no way to ask otherwise, so only the mutations still go through it.
+    users : UserRA;
+
     usage : UsageResolver;
 
     // The instance-wide cap an account with no limit of its own inherits, as a supplier so an admin moving the
@@ -74,16 +82,31 @@ export interface AdminManagerDeps
     defaultQuota : () => Promise<number>;
 }
 
-// listUsers types its rows as the admin plugin's UserWithRole, which does not statically carry app-level
+// The admin plugin types a mutation's result as UserWithRole, which does not statically carry app-level
 // additionalFields; quota_limit is present at runtime (it is a real column), so the type is widened to admit it.
-type AdminUser = Awaited<ReturnType<Auth['api']['listUsers']>>['users'][number] & { quotaLimit ?: number | null };
+type AdminUser = Awaited<ReturnType<Auth['api']['banUser']>>['user'] & { quotaLimit ?: number | null };
+
+// What a profile is built from, satisfied by both the plugin's user and the listing's own row -- the two paths a
+// user reaches this manager by.
+interface ProfileSource
+{
+    id : string;
+    email : string;
+    name : string;
+    role ?: string | null;
+    quotaLimit ?: number | null;
+    banned ?: boolean | null;
+    banReason ?: string | null;
+    banExpires ?: Date | string | null;
+    createdAt : Date | string;
+}
 
 // better-auth's user carries plugin fields the codec narrows and validates; the ban trio is normalized here because
 // the plugin leaves them null/undefined on accounts never banned, and banExpires crosses some adapters as a string.
 // Standing then goes through the ban engine: the row keeps a stale banned flag after a dated ban lapses (better-auth
 // only clears it on the user's next sign-in), and a lapsed ban must read as a clean record. The clock is passed in,
 // never read here, so every row in one listing is judged against the same instant.
-function toUserProfile(user : AdminUser, now : Date) : UserProfile
+function toUserProfile(user : ProfileSource, now : Date) : UserProfile
 {
     const ban = effectiveBan({
         banned: user.banned === true,
@@ -104,7 +127,7 @@ function toUserProfile(user : AdminUser, now : Date) : UserProfile
     });
 }
 
-function toEntry(user : AdminUser, usedBytes : number, defaultQuota : number, now : Date) : AdminUserEntry
+function toEntry(user : ProfileSource, usedBytes : number, defaultQuota : number, now : Date) : AdminUserEntry
 {
     const profile = toUserProfile(user, now);
 
@@ -116,12 +139,14 @@ function toEntry(user : AdminUser, usedBytes : number, defaultQuota : number, no
 export class AdminManager
 {
     readonly #auth : Auth;
+    readonly #users : UserRA;
     readonly #usage : UsageResolver;
     readonly #defaultQuota : () => Promise<number>;
 
     constructor(deps : AdminManagerDeps)
     {
         this.#auth = deps.auth;
+        this.#users = deps.users;
         this.#usage = deps.usage;
         this.#defaultQuota = deps.defaultQuota;
     }
@@ -156,28 +181,23 @@ export class AdminManager
         return toEntry(user, usage.get(user.id) ?? 0, defaultQuota, now);
     }
 
-    async listUsers(actor : SessionUser, headers : Headers, options : ListUsersOptions = {}) : Promise<AdminUserPage>
+    // The one admin capability that does NOT reach better-auth: the plugin's list endpoint matches its search
+    // case-sensitively on Postgres, so the rows are fetched here instead. Authorization is unchanged -- the role check
+    // above runs on the session the route already resolved -- and everything the page is assembled from is the same.
+    async listUsers(actor : SessionUser, options : ListUsersOptions = {}) : Promise<AdminUserPage>
     {
         this.#requireAdmin(actor);
 
         const limit = clamp(options.limit ?? DEFAULT_LIST_USERS_LIMIT, 1, MAX_LIST_USERS_LIMIT);
         const offset = Math.max(options.offset ?? 0, 0);
 
-        const { users, total } = await this.#auth.api.listUsers({
-            query: {
-                limit,
-                offset,
-                ...options.search === undefined ? {} : {
-                    searchValue: options.search,
-                    searchField: options.searchField ?? 'email',
-                    searchOperator: 'contains' as const,
-                },
-                ...options.sortBy === undefined ? {} : {
-                    sortBy: options.sortBy,
-                    sortDirection: options.sortDirection ?? 'asc',
-                },
-            },
-            headers,
+        const { users, total } = await this.#users.listUsers({
+            limit,
+            offset,
+            ...options.search === undefined ? {} : { search: options.search },
+            searchField: options.searchField ?? 'email',
+            ...options.sortBy === undefined ? {} : { sortBy: options.sortBy },
+            sortDirection: options.sortDirection ?? 'asc',
         });
 
         const now = new Date();

@@ -45,7 +45,7 @@ export const listUsersSpec = describeRoute({
             name: 'search',
             in: 'query',
             required: false,
-            description: 'Substring to match; absent means unfiltered.',
+            description: 'Substring to match, case-insensitively; absent means unfiltered.',
             schema: { type: 'string' },
         },
         {
@@ -59,7 +59,7 @@ export const listUsersSpec = describeRoute({
             name: 'sortBy',
             in: 'query',
             required: false,
-            description: 'Sort key; absent means storage order.',
+            description: 'Sort key; absent orders by account age.',
             schema: { type: 'string', enum: [ 'name', 'email', 'createdAt' ] },
         },
         {

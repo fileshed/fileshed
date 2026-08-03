@@ -364,6 +364,25 @@ describe('GET /api/admin/users — search and sort', () =>
         expect(namePage.users.map((user : { email : string }) => user.email)).toEqual([ 'alice@example.com' ]);
     });
 
+    // An admin who types the address the way a person writes it still finds the account. Matching on the stored text
+    // answers this differently per deployment: SQLite's LIKE ignores ASCII case, Postgres's does not.
+    it('finds an account however the search was capitalized', async () =>
+    {
+        const booted = await bootTestApp();
+        await signUp(booted.app, 'bob@example.com', PASSWORD, 'Bob');
+        await signUp(booted.app, 'carol@other.test', PASSWORD, 'Carol');
+        const adminCookie = await makeAdmin(booted, 'root@example.com', PASSWORD);
+
+        const res = await booted.app.request(
+            `${ ORIGIN }/api/admin/users?search=Bob@`,
+            { headers: { cookie: adminCookie } }
+        );
+        const page = await res.json();
+
+        expect(page.users.map((user : { email : string }) => user.email)).toEqual([ 'bob@example.com' ]);
+        expect(page.total).toBe(1);
+    });
+
     it('sorts by the requested key and direction', async () =>
     {
         const booted = await bootTestApp();
@@ -381,6 +400,8 @@ describe('GET /api/admin/users — search and sort', () =>
             .toEqual([ 'zzz@example.com', 'bbb@example.com', 'aaa@example.com' ]);
     });
 
+    // Dropping the unrecognized key has to leave the listing itself intact -- an empty page would also answer 200,
+    // and would be the wrong answer.
     it('ignores an unrecognized sort key or search field instead of failing the request', async () =>
     {
         const booted = await bootTestApp();
@@ -390,8 +411,11 @@ describe('GET /api/admin/users — search and sort', () =>
             `${ ORIGIN }/api/admin/users?sortBy=quotaLimit;drop&searchField=role`,
             { headers: { cookie: adminCookie } }
         );
+        const page = await res.json();
 
         expect(res.status).toBe(200);
+        expect(page.users.map((user : { email : string }) => user.email)).toEqual([ 'root@example.com' ]);
+        expect(page.total).toBe(1);
     });
 });
 

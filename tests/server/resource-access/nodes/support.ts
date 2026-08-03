@@ -59,6 +59,7 @@ async function createUserStub(db : Kysely<Database>, kind : DatabaseKind) : Prom
         .addColumn('image', 'text')
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
         .addColumn('banned', boolType(kind))
+        .addColumn('banReason', 'text')
         .addColumn('banExpires', timestampType(kind))
         .addColumn('createdAt', timestampType(kind), (col) => col.notNull())
         .addColumn('quota_limit', bigIntType(kind))
