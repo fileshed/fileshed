@@ -102,6 +102,28 @@ export default defineConfig(({ mode }) =>
                 interval: 300,
             },
         },
+        // Vite's optimizer discovers some @tiptap packages and inlines a private ProseMirror copy into each, while
+        // UEditor's remaining imports resolve from source -- two copies of any prosemirror package that keeps
+        // registry state kill the editor ("Adding different instances of a keyed plugin", "Duplicate use of
+        // selection JSON ID cell"). Pre-bundling the whole family through @nuxt/ui pins single instances. Nuxt
+        // UI's documented fix lists the first five; the rest are the remaining prosemirror deps of @tiptap/pm,
+        // included wholesale because any of them can be the next duplicate.
+        optimizeDeps: {
+            include: [
+                '@nuxt/ui > prosemirror-state',
+                '@nuxt/ui > prosemirror-transform',
+                '@nuxt/ui > prosemirror-model',
+                '@nuxt/ui > prosemirror-view',
+                '@nuxt/ui > prosemirror-gapcursor',
+                '@nuxt/ui > prosemirror-tables',
+                '@nuxt/ui > prosemirror-commands',
+                '@nuxt/ui > prosemirror-dropcursor',
+                '@nuxt/ui > prosemirror-history',
+                '@nuxt/ui > prosemirror-inputrules',
+                '@nuxt/ui > prosemirror-keymap',
+                '@nuxt/ui > prosemirror-schema-list',
+            ],
+        },
     };
 });
 
