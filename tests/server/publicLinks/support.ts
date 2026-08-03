@@ -27,7 +27,7 @@ import { type ClaimResponse, type NodeResponse, type ShareRole, UNLIMITED_QUOTA 
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
-import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
+import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
@@ -58,6 +58,7 @@ import { createUploadRoutes } from '@server/routes/uploads.ts';
 
 // Auth support (real sign-up/sign-in over the same app)
 import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
 
@@ -129,9 +130,8 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
 export async function bootServeApp() : Promise<BootedServeApp>
 {
     const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-serve-'));
-    const config = testConfig({ STORAGE_ROOT: storageRoot });
+    const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot }));
 
-    const handle = createDatabase(config);
     const auth = createAuth(handle, config);
     await initialize(handle, auth);
     await seedDefaultBackend(handle, config);
@@ -145,7 +145,7 @@ export async function bootServeApp() : Promise<BootedServeApp>
         blob,
         cleanup: async () =>
         {
-            await handle.db.destroy();
+            await dispose();
             await rm(storageRoot, { recursive: true, force: true });
         },
     };

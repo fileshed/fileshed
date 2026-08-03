@@ -58,6 +58,36 @@ jobs:
       - run: npm ci
       - run: npm run test
 
+  # Postgres is the primary target, and the unit lane above proves only SQLite. Every server spec runs again here
+  # against a real server: the harness creates a uniquely-named database per boot and drops it afterwards, so this
+  # needs nothing beyond a reachable admin connection.
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fileshed
+          POSTGRES_PASSWORD: fileshed
+          POSTGRES_DB: fileshed
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fileshed -d fileshed"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:server
+        env:
+          FILESHED_TEST_DATABASE_URL: postgres://fileshed:fileshed@localhost:5432/fileshed
+
   # No services or secrets on purpose: the harness spawns its own server children on OS-assigned ports over temp
   # SQLite and blob directories, and config/config.yaml carries a fallback for every key but AUTH_SECRET, which the
   # harness supplies itself.

@@ -14,11 +14,20 @@ import type { Kysely } from 'kysely';
 import type { FileNode, FolderNode, LinkNode } from '@fileshed/core';
 
 // Resource Access
-import { type Database, type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
+import type { Database, DatabaseHandle, DatabaseKind } from '@server/resource-access/database/database.ts';
 import { migrateToLatest } from '@server/resource-access/database/migrator.ts';
+import {
+    bigIntType,
+    boolDefault,
+    boolType,
+    timestampType,
+} from '@server/resource-access/database/migrations/columns.ts';
 
 // Utils
 import type { Config } from '@server/utils/config.ts';
+
+// Test support
+import { openTestDatabase, testDatabaseKind } from '../../support/database.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Database
@@ -40,7 +49,7 @@ const testConfig : Config = {
 
 // Stands in for BetterAuth's user table (which its migrator owns in production), carrying just the columns FileShed
 // reads, so the app-table FKs to user.id resolve. Mirrors the migration spec's stub.
-async function createUserStub(db : Kysely<Database>) : Promise<void>
+async function createUserStub(db : Kysely<Database>, kind : DatabaseKind) : Promise<void>
 {
     await db.schema
         .createTable('user')
@@ -49,20 +58,21 @@ async function createUserStub(db : Kysely<Database>) : Promise<void>
         .addColumn('email', 'text', (col) => col.notNull())
         .addColumn('image', 'text')
         .addColumn('role', 'text', (col) => col.notNull().defaultTo('user'))
-        .addColumn('banned', 'integer')
-        .addColumn('createdAt', 'text', (col) => col.notNull())
-        .addColumn('quota_limit', 'integer')
+        .addColumn('banned', boolType(kind))
+        .addColumn('banExpires', timestampType(kind))
+        .addColumn('createdAt', timestampType(kind), (col) => col.notNull())
+        .addColumn('quota_limit', bigIntType(kind))
         .addColumn('preferences', 'text')
         .addColumn('avatar_sha256', 'text')
         .addColumn('avatar_mime', 'text')
         .execute();
 }
 
-// A fresh, fully migrated in-memory database. The caller owns the handle and destroys it when the test ends.
+// A fresh, fully migrated database. The caller owns the handle and destroys it when the test ends.
 export async function createTestDatabase() : Promise<DatabaseHandle>
 {
-    const handle = createDatabase(testConfig);
-    await createUserStub(handle.db);
+    const { handle } = await openTestDatabase(testConfig);
+    await createUserStub(handle.db, handle.kind);
     await migrateToLatest(handle.db, handle.kind);
     return handle;
 }
@@ -96,7 +106,7 @@ export async function seedBackend(db : Kysely<Database>, id : string) : Promise<
 {
     await db
         .insertInto('storage_backend')
-        .values({ id, kind: 'fs', config: '{}', is_default: 1 })
+        .values({ id, kind: 'fs', config: '{}', is_default: boolDefault(testDatabaseKind(), true) })
         .execute();
 }
 

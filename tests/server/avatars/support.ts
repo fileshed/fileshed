@@ -26,7 +26,7 @@ import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
-import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
+import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 
 // Managers
@@ -41,6 +41,7 @@ import { createMeRoutes } from '@server/routes/me.ts';
 
 // Auth support (real sign-up/sign-in over the same app)
 import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
 
@@ -82,9 +83,8 @@ export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAv
 {
     const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-avatar-'));
     const overrides = avatarMaxBytes === undefined ? {} : { AVATAR_MAX_BYTES: avatarMaxBytes };
-    const config = testConfig({ STORAGE_ROOT: storageRoot, ...overrides });
+    const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot, ...overrides }));
 
-    const handle = createDatabase(config);
     const auth = createAuth(handle, config);
     await initialize(handle, auth);
 
@@ -103,7 +103,7 @@ export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAv
         storageRoot,
         cleanup: async () =>
         {
-            await handle.db.destroy();
+            await dispose();
             await rm(storageRoot, { recursive: true, force: true });
         },
     };

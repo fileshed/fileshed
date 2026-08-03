@@ -25,7 +25,7 @@ import { type Auth, createAuth } from '@server/resource-access/auth.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
-import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
+import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
@@ -51,6 +51,7 @@ import { createUploadRoutes } from '@server/routes/uploads.ts';
 
 // Auth support (real sign-up / sign-in over the same app)
 import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
 
@@ -110,9 +111,8 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
 export async function bootShareApp() : Promise<BootedShareApp>
 {
     const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-shares-'));
-    const config = testConfig({ STORAGE_ROOT: storageRoot });
+    const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot }));
 
-    const handle = createDatabase(config);
     const auth = createAuth(handle, config);
     await initialize(handle, auth);
 
@@ -128,7 +128,7 @@ export async function bootShareApp() : Promise<BootedShareApp>
         storageRoot,
         cleanup: async () =>
         {
-            await handle.db.destroy();
+            await dispose();
             await rm(storageRoot, { recursive: true, force: true });
         },
     };

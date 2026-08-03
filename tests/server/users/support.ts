@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
-import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
+import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 import { UserRA } from '@server/resource-access/users/index.ts';
 
@@ -25,6 +25,7 @@ import { createUserRoutes } from '@server/routes/users.ts';
 
 // Auth support (real sign-up / sign-in over the same app)
 import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
 
@@ -40,8 +41,7 @@ export interface BootedUserApp
 
 export async function bootUserApp() : Promise<BootedUserApp>
 {
-    const config = testConfig();
-    const handle = createDatabase(config);
+    const { config, handle, dispose } = await openTestDatabase(testConfig());
     const auth = createAuth(handle, config);
     await initialize(handle, auth);
 
@@ -64,7 +64,7 @@ export async function bootUserApp() : Promise<BootedUserApp>
         app,
         handle,
         auth,
-        cleanup: async () => { await handle.db.destroy(); },
+        cleanup: dispose,
     };
 }
 

@@ -360,7 +360,7 @@ describe('tokens die with their owner\'s standing', () =>
         // A raw delete bypasses better-auth's hooks entirely -- the orphaned key row is exactly the case the
         // seam's own user check exists for.
         await sql`delete from node where owner_id = ${ owner.id }`.execute(booted.handle.db);
-        await sql`delete from user where id = ${ owner.id }`.execute(booted.handle.db);
+        await sql`delete from "user" where id = ${ owner.id }`.execute(booted.handle.db);
 
         const rows = await sql<{ count : number }>`
             select count(*) as count from apikey where "referenceId" = ${ owner.id }

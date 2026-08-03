@@ -93,6 +93,10 @@ export interface NodeFilters
 // and then by format; every other key is a single column. Folders are pinned above this ordering separately.
 type SortColumn = 'name' | 'size' | 'created_at' | 'updated_at' | 'type' | 'mime_type';
 
+// Several of these are nullable -- size on links, mime_type on anything that is not a file -- and the two dialects
+// disagree about where an absent value belongs: Postgres sorts nulls high, SQLite sorts them low. Every listing that
+// orders by one of these states the placement explicitly, in Postgres's terms, so a page does not depend on which
+// database is underneath it.
 const sortColumns : Record<NodeSortKey, readonly SortColumn[]> = {
     name: [ 'name' ],
     size: [ 'size' ],
@@ -116,7 +120,7 @@ type NodeExpressionBuilder = ExpressionBuilder<Database, 'node'>;
 function playlistCondition(eb : NodeExpressionBuilder) : Expression<SqlBool>
 {
     return eb.or([
-        eb('mime_type', 'in', [ ...PLAYLIST_MIME_LIST ]),
+        eb(sql<string>`lower(mime_type)`, 'in', [ ...PLAYLIST_MIME_LIST ]),
         ...PLAYLIST_EXTENSIONS.map((extension) => sql<SqlBool>`lower(name) like ${ `%${ extension }` }`),
     ]);
 }
@@ -134,10 +138,14 @@ function familyCondition(eb : NodeExpressionBuilder, family : NodeTypeFamily) : 
     if(family === 'playlists') { return eb.and([ eb('type', '=', 'file'), playlistCondition(eb) ]); }
 
     const spec = MIME_FAMILY_SPECS[family];
-    const mimeTerms : Expression<SqlBool>[] = spec.prefixes.map(
-        (prefix) => eb('mime_type', 'like', `${ prefix }%`)
-    );
-    if(spec.exact.length > 0) { mimeTerms.push(eb('mime_type', 'in', [ ...spec.exact ])); }
+
+    // Lowercased because a media type is case-insensitive and nothing upstream normalizes one an API client supplied.
+    // It also settles a dialect split: Postgres LIKE is case-sensitive where SQLite's is not, so an uppercased mime
+    // would otherwise be filed under its family on one deployment and nowhere at all on the other.
+    const mime = sql<string>`lower(mime_type)`;
+
+    const mimeTerms : Expression<SqlBool>[] = spec.prefixes.map((prefix) => eb(mime, 'like', `${ prefix }%`));
+    if(spec.exact.length > 0) { mimeTerms.push(eb(mime, 'in', [ ...spec.exact ])); }
 
     const conditions = [ eb('type', '=', 'file'), eb.or(mimeTerms) ];
     if(family === 'audio') { conditions.push(eb.not(playlistCondition(eb))); }
@@ -273,7 +281,10 @@ export class NodeRA
 
         for(const column of sortColumns[sort.key])
         {
-            builder = builder.orderBy(column, sort.direction);
+            builder = builder.orderBy(column, (ob) =>
+            {
+                return sort.direction === 'asc' ? ob.asc().nullsLast() : ob.desc().nullsFirst();
+            });
         }
 
         const rows = await builder
@@ -549,7 +560,10 @@ export class NodeRA
 
         for(const column of sortColumns[sort.key])
         {
-            builder = builder.orderBy(column, sort.direction);
+            builder = builder.orderBy(column, (ob) =>
+            {
+                return sort.direction === 'asc' ? ob.asc().nullsLast() : ob.desc().nullsFirst();
+            });
         }
 
         const rows = await builder

@@ -11,7 +11,7 @@ import type { Hono } from 'hono';
 import { UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Resource Access
-import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
+import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { type Auth, type AuthExtras, createAuth } from '@server/resource-access/auth.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
@@ -47,6 +47,9 @@ import { createApp } from '@server/app.ts';
 import type { Config } from '@server/utils/config.ts';
 import { SecretBox } from '@server/utils/secretBox.ts';
 import { VERSION } from '@server/utils/version.ts';
+
+// Test support
+import { openTestDatabase } from '../support/database.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -92,8 +95,7 @@ export interface BootedApp
 
 export async function bootTestApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
 {
-    const config = testConfig(overrides);
-    const handle = createDatabase(config);
+    const { config, handle } = await openTestDatabase(testConfig(overrides));
     const auth = createAuth(handle, config, extras);
 
     await initialize(handle, auth);
@@ -174,8 +176,7 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
 // The fully-serviced counterpart to bootTestApp, for specs that drive real requests through the whole app.
 export async function bootFullApp(overrides : Partial<Config> = {}) : Promise<BootedApp>
 {
-    const config = testConfig(overrides);
-    const handle = createDatabase(config);
+    const { config, handle } = await openTestDatabase(testConfig(overrides));
     const auth = createAuth(handle, config);
 
     await initialize(handle, auth);

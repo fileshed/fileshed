@@ -264,6 +264,39 @@ describe('NodeRA.children', () =>
         expect(children.map((node) => node.id)).toEqual([ 'small', 'mid', 'big' ]);
     });
 
+    // A link carries no size at all, and the two dialects disagree about where an absent value belongs unless the
+    // listing says so: Postgres sorts nulls high, SQLite sorts them low. A deployment's sort order must not depend
+    // on which database it runs, so the sizeless rows sit at the end of an ascending page on both.
+    it('sorts sizeless nodes to the end of an ascending size page, whatever the dialect', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('big', { parentID: 'p', size: 30 }));
+        await ra.insert(file('small', { parentID: 'p', size: 10 }));
+        await ra.insert(linkNode({ id: 'sizeless', ownerID: 'u1', parentID: 'p', targetNodeID: 'big' }));
+
+        const children = await ra.children(
+            { parentID: 'p', ownerID: 'u1' },
+            { pagination: { limit: 100, offset: 0 }, sort: { key: 'size', direction: 'asc' } }
+        );
+
+        expect(children.map((node) => node.id)).toEqual([ 'small', 'big', 'sizeless' ]);
+    });
+
+    it('sorts sizeless nodes to the front of a descending size page, whatever the dialect', async () =>
+    {
+        await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
+        await ra.insert(file('big', { parentID: 'p', size: 30 }));
+        await ra.insert(file('small', { parentID: 'p', size: 10 }));
+        await ra.insert(linkNode({ id: 'sizeless', ownerID: 'u1', parentID: 'p', targetNodeID: 'big' }));
+
+        const children = await ra.children(
+            { parentID: 'p', ownerID: 'u1' },
+            { pagination: { limit: 100, offset: 0 }, sort: { key: 'size', direction: 'desc' } }
+        );
+
+        expect(children.map((node) => node.id)).toEqual([ 'sizeless', 'big', 'small' ]);
+    });
+
     it('sorts by updatedAt', async () =>
     {
         await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
@@ -341,6 +374,16 @@ describe('NodeRA.children filters', () =>
         expect(await filtered([ 'images' ])).toEqual([ 'img' ]);
         expect(await filtered([ 'video' ])).toEqual([ 'vid' ]);
         expect(await filtered([ 'audio' ])).toEqual([ 'aud' ]);
+    });
+
+    // Media types are case-insensitive by definition, and nothing normalizes what an API client sends -- a browser
+    // lowercases File.type for us, a curl caller does not. The family filter classifies on the type, not its casing.
+    it('classifies a file whose mime arrived uppercased', async () =>
+    {
+        await seedFamilies();
+        await ra.insert(file('shouty', { parentID: 'p', mimeType: 'IMAGE/PNG' }));
+
+        expect(await filtered([ 'images' ])).toEqual([ 'img', 'shouty' ]);
     });
 
     // The audio assertion above is itself the carve-out's proof: plmime carries an audio/-prefixed mime and would

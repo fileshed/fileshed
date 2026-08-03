@@ -19,6 +19,7 @@
     "lint:fix": "eslint . --max-warnings=0 --fix",
     "lint:types": "npm run lint:types --workspaces --if-present",
     "test": "vitest run",
+    "test:server": "vitest run --project server",
     "test:watch": "vitest",
     "test:coverage": "vitest --coverage",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",

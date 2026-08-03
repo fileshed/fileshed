@@ -11,6 +11,7 @@
 
 import type { Readable } from 'node:stream';
 
+import { sql } from 'kysely';
 import { parseStream } from 'music-metadata';
 
 // Resource Access
@@ -107,7 +108,7 @@ export class MediaTagsRA
             .select([ 'node.blob_id', 'node.mime_type' ])
             .distinct()
             .where('node.type', '=', 'file')
-            .where('node.mime_type', 'like', 'audio/%')
+            .where(sql<string>`lower(node.mime_type)`, 'like', 'audio/%')
             .where('blob.deleted_at', 'is', null)
             .where('media_tags.blob_id', 'is', null)
             .limit(limit)

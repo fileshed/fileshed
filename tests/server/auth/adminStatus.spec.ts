@@ -166,7 +166,7 @@ describe('GET /api/admin/status', () =>
         expect(res.status).toBe(200);
         expect(body.overview.users).toEqual({ total: 1, admins: 1, banned: 0, newThisWeek: 1 });
         expect(body.overview.instance.version).toBe(INJECTED_VERSION);
-        expect(body.overview.instance.databaseKind).toBe('sqlite');
+        expect(body.overview.instance.databaseKind).toBe(booted.handle.kind);
     });
 
     // The client parses this response with the same codec, and it is a strictObject: a field the server adds without

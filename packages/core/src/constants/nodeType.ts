@@ -67,11 +67,15 @@ export const MIME_FAMILY_SPECS : Readonly<Record<MimeFamily, MimeFamilySpec>> = 
 // mutually exclusive by mime, so the iteration order only decides ties that cannot currently arise.
 export function familyOfMimeType(mimeType : string) : NodeTypeFamily | null
 {
+    // A media type is case-insensitive, and the specs above are written lowercase. Nothing normalizes what an API
+    // client supplied, so the comparison does it -- the server's own family filter matches the same way.
+    const mime = mimeType.toLowerCase();
+
     for(const family of mimeFamilies)
     {
         const spec = MIME_FAMILY_SPECS[family];
-        if(spec.prefixes.some((prefix) => mimeType.startsWith(prefix))) { return family; }
-        if(spec.exact.includes(mimeType)) { return family; }
+        if(spec.prefixes.some((prefix) => mime.startsWith(prefix))) { return family; }
+        if(spec.exact.includes(mime)) { return family; }
     }
 
     return null;

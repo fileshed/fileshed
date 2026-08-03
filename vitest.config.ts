@@ -33,6 +33,7 @@ export default defineConfig({
                 test: {
                     name: 'server',
                     include: [ 'tests/server/**/*.spec.ts' ],
+                    setupFiles: [ './tests/server/support/setup.ts' ],
                 },
             },
             {

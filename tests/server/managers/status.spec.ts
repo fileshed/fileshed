@@ -306,7 +306,7 @@ describe('StatusManager.status', () =>
         const view = await overview();
 
         expect(view.instance.version).toBe('9.9.9');
-        expect(view.instance.databaseKind).toBe('sqlite');
+        expect(view.instance.databaseKind).toBe(booted.handle.kind);
         expect(view.instance.activeProviders).toBe(2);
         expect(view.instance.uptimeSeconds).toBeGreaterThanOrEqual(UPTIME_SECONDS);
     });

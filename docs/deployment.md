@@ -124,6 +124,8 @@ Postgres deployments are unaffected.
 
 ## Postgres
 
+FileShed supports Postgres 17 or newer, which is also the version every release is tested against.
+
 Use the Postgres compose file, which runs the app alongside a Postgres 17 service with a health-checked startup
 order:
 

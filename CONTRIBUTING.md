@@ -58,6 +58,21 @@ it is slower and spawns real processes, so run it yourself. It catches the thing
 If one fails for reasons that look unrelated to your change, say so in the pull request rather than working around
 it. Sometimes it really is unrelated, and that is worth knowing.
 
+## Running the server suite against Postgres
+
+`npm test` uses SQLite, which is all most changes need. Postgres is the primary deployment target though, and the two
+disagree on enough (timestamps, booleans, null ordering, whether `LIKE` cares about case) that anything touching a
+query or a migration is worth running against it. Point `FILESHED_TEST_DATABASE_URL` at any Postgres you can create
+databases on, and the server suite uses it instead — each boot gets a database of its own, dropped when it finishes:
+
+```bash
+docker run -d --name fileshed-pg -e POSTGRES_PASSWORD=fileshed -e POSTGRES_USER=fileshed -p 5432:5432 postgres:17-alpine
+FILESHED_TEST_DATABASE_URL=postgres://fileshed:fileshed@localhost:5432/postgres npm run test:server
+```
+
+Leave the variable unset and nothing changes. CI runs both, so a query that only works on one will be caught there
+if you skip it.
+
 ## Tests are spec-first
 
 Tests here are derived from the **contract**, meaning what the code is supposed to do, and never reverse-engineered

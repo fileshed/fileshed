@@ -8,8 +8,7 @@
 // into the flow that triggered them.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { beforeEach, describe, expect, it } from 'vitest';
-import { flushPromises } from '@vue/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BadRequestError, ForbiddenError } from '@fileshed/core';
 
@@ -40,8 +39,14 @@ class RecordingMailRA
     readonly deliveries : MailDelivery[] = [];
     refuse : string | null = null;
 
+    // Counts every send the manager reached the transport with, refused or not -- what lets a fire-and-forget send be
+    // waited on for its own completion rather than a guessed interval.
+    attempts = 0;
+
     async send(delivery : MailDelivery) : Promise<void>
     {
+        this.attempts += 1;
+
         if(this.refuse !== null) { throw new Error(this.refuse); }
 
         this.deliveries.push(delivery);
@@ -65,6 +70,13 @@ beforeEach(async () =>
     transport = new RecordingMailRA();
     mail = new MailManager({ settings, mail: transport as unknown as MailRA });
 });
+
+// The auth-flow senders are deliberately fire-and-forget, so a send reaches the transport however many real round
+// trips the settings read takes -- a microtask flush would only ever prove the SQLite timing.
+async function awaitSendAttempts(count : number) : Promise<void>
+{
+    await vi.waitFor(() => expect(transport.attempts).toBe(count), { timeout: 5000, interval: 10 });
+}
 
 async function configureSmtp() : Promise<void>
 {
@@ -167,19 +179,29 @@ describe('MailManager', () =>
         await configureSmtp();
 
         mail.sendPasswordReset('member@example.com', 'https://shed.example.com/reset?token=abc');
-        await flushPromises();
+        await awaitSendAttempts(1);
 
         expect(transport.deliveries[0]?.to).toBe('member@example.com');
         expect(transport.deliveries[0]?.text).toContain('https://shed.example.com/reset?token=abc');
     });
 
-    it('never throws a send failure into the auth flow that triggered it', async () =>
+    it('never throws unconfigured mail into the auth flow that triggered it', () =>
     {
+        expect(() => mail.sendPasswordReset('member@example.com', 'https://x/reset')).not.toThrow();
+        expect(() => mail.sendVerification('member@example.com', 'https://x/verify')).not.toThrow();
+
+        // Unconfigured mail never reaches the transport at all, so there is nothing a later moment could deliver.
+        expect(transport.deliveries).toHaveLength(0);
+    });
+
+    it('never throws a transport refusal into the auth flow that triggered it', async () =>
+    {
+        await configureSmtp();
         transport.refuse = 'connection refused';
 
         expect(() => mail.sendPasswordReset('member@example.com', 'https://x/reset')).not.toThrow();
         expect(() => mail.sendVerification('member@example.com', 'https://x/verify')).not.toThrow();
-        await flushPromises();
+        await awaitSendAttempts(2);
 
         expect(transport.deliveries).toHaveLength(0);
     });
