@@ -37,46 +37,71 @@
             </p>
 
             <div
-                class="grid grid-cols-[1fr_10rem_6rem_9rem_6rem] gap-4 border-b border-default px-3 pb-2 text-xs
-                    font-semibold text-muted"
+                class="grid grid-cols-[1fr_10rem_6rem_9rem_6rem_2.5rem] gap-4 border-b border-default px-3 pb-2
+                    text-xs font-semibold text-muted"
             >
                 <span>Name</span>
                 <span>Owner</span>
                 <span>Size</span>
                 <span>Modified</span>
                 <span>Type</span>
+                <span class="sr-only">Actions</span>
             </div>
 
             <div
-                v-for="node in store.nodes"
-                :key="node.id"
-                class="grid cursor-default grid-cols-[1fr_10rem_6rem_9rem_6rem] items-center gap-4 border-b
+                v-for="row in rows"
+                :key="row.node.id"
+                class="grid cursor-default grid-cols-[1fr_10rem_6rem_9rem_6rem_2.5rem] items-center gap-4 border-b
                     border-default px-3 py-2 text-sm transition-colors hover:bg-elevated/50"
                 role="button"
                 tabindex="0"
-                :aria-label="node.name"
-                @dblclick="emit('open', node)"
-                @keydown.enter="emit('open', node)"
+                :aria-label="row.node.name"
+                @dblclick="emit('open', row.node)"
+                @keydown.enter="emit('open', row.node)"
             >
                 <div class="flex min-w-0 items-center gap-2">
                     <UIcon
-                        :name="presentationOf(node).icon"
+                        :name="presentationOf(row.node).icon"
                         class="size-5 shrink-0"
-                        :class="[ presentationOf(node).color, { 'opacity-40': isDeadLink(node) } ]"
+                        :class="[ presentationOf(row.node).color, { 'opacity-40': isDeadLink(row.node) } ]"
                     />
-                    <span class="truncate font-medium" :class="{ 'text-dimmed': isDeadLink(node) }" :title="node.name">
-                        {{ node.name }}
-                    </span>
+                    <div class="flex min-w-0 flex-col">
+                        <span
+                            class="truncate font-medium"
+                            :class="{ 'text-dimmed': isDeadLink(row.node) }"
+                            :title="row.node.name"
+                        >
+                            {{ row.node.name }}
+                        </span>
+                        <LocationLine
+                            v-if="row.location"
+                            :location="row.location"
+                            :root-label="session.rootLabel"
+                        />
+                    </div>
                 </div>
 
                 <div class="flex min-w-0 items-center gap-2">
-                    <UAvatar :src="ownerImage(node) ?? undefined" :alt="ownerLabel(node)" size="2xs" />
-                    <span class="truncate text-muted">{{ ownerLabel(node) }}</span>
+                    <UAvatar :src="ownerImage(row.node) ?? undefined" :alt="ownerLabel(row.node)" size="2xs" />
+                    <span class="truncate text-muted">{{ ownerLabel(row.node) }}</span>
                 </div>
 
-                <span class="truncate text-muted">{{ node.type === 'file' ? formatBytes(node.size) : '—' }}</span>
-                <span class="truncate text-muted">{{ formatNodeDate(node.updatedAt, session.timeFormat) }}</span>
-                <span class="truncate text-muted">{{ nodeKindLabel(node) }}</span>
+                <span class="truncate text-muted">
+                    {{ row.node.type === 'file' ? formatBytes(row.node.size) : '—' }}
+                </span>
+                <span class="truncate text-muted">{{ formatNodeDate(row.node.updatedAt, session.timeFormat) }}</span>
+                <span class="truncate text-muted">{{ nodeKindLabel(row.node) }}</span>
+
+                <UButton
+                    v-if="row.folderRoute"
+                    :to="row.folderRoute"
+                    icon="i-lucide-folder-open"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :aria-label="`Open the folder containing ${ row.node.name }`"
+                    :title="`Open the folder containing ${ row.node.name }`"
+                />
             </div>
 
             <div v-if="store.hasMore" class="mt-4 flex justify-center">
@@ -95,11 +120,19 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import type { NodeResponse } from '@fileshed/core';
+    import { computed } from 'vue';
+
+    import type { NodeLocation, NodeResponse } from '@fileshed/core';
 
     // Stores
     import { useSearchStore } from '../../stores/search.ts';
     import { useSessionStore } from '../../stores/session.ts';
+
+    // Components
+    import LocationLine from './locationLine.vue';
+
+    // Engines
+    import { containingFolderRoute } from '../../engines/location.ts';
 
     // Utils
     import {
@@ -120,6 +153,27 @@
 
     const store = useSearchStore();
     const session = useSessionStore();
+
+    interface ResultRow
+    {
+        node : NodeResponse;
+        location : NodeLocation | null;
+
+        // Where the go-to-folder button lands, or null when the containing folder is out of the caller's reach and
+        // there is nowhere to send them.
+        folderRoute : string | null;
+    }
+
+    const rows = computed<ResultRow[]>(() => store.nodes.map((node) =>
+    {
+        const location = store.locations[node.id] ?? null;
+
+        return {
+            node,
+            location,
+            folderRoute: location === null ? null : containingFolderRoute(location, node.parentID, node.id),
+        };
+    }));
 
     function presentationOf(node : NodeResponse) : NodeTypePresentation
     {

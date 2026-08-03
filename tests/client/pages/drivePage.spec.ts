@@ -5,7 +5,7 @@
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { createMemoryHistory, createRouter } from 'vue-router';
+import { type Router, createMemoryHistory, createRouter } from 'vue-router';
 
 import type { ContextMenuItem } from '@nuxt/ui';
 
@@ -162,7 +162,11 @@ const STUBS = {
 
 // The default signed-in caller owns every fixture node (BASE.ownerID/meFixture both default to 'u1') -- the ordinary
 // My Files case. Foreign-node tests pass an ownerID override on the node fixture instead of changing `me`.
-async function mountDrive(nodes : NodeResponse[], me : MeResponse | null = meFixture()) : Promise<VueWrapper>
+async function mountDrive(
+    nodes : NodeResponse[],
+    me : MeResponse | null = meFixture(),
+    at = '/'
+) : Promise<VueWrapper>
 {
     getChildrenMock.mockResolvedValue(page(nodes));
 
@@ -177,13 +181,19 @@ async function mountDrive(nodes : NodeResponse[], me : MeResponse | null = meFix
             { path: '/folder/:id', name: 'folder', component: { template: '<div />' } },
         ],
     });
-    router.push('/');
+    router.push(at);
     await router.isReady();
 
     const wrapper = mount(DrivePage, { global: { plugins: [ pinia, router ], stubs: STUBS } });
     await flushPromises();
 
     return wrapper;
+}
+
+// The router the page is actually driving, for specs that assert on navigation the page performs itself.
+function routerOf(wrapper : VueWrapper) : Router
+{
+    return wrapper.vm.$router;
 }
 
 function select(wrapper : VueWrapper, node : NodeResponse, modifiers = PLAIN_CLICK) : Promise<void>
@@ -716,6 +726,50 @@ describe('DrivePage — breadcrumb root anchor', () =>
         const crumbs = wrapper.findComponent(DriveHeader).props('crumbs') as DriveCrumb[];
 
         expect(crumbs.map((crumb) => crumb.label)).toEqual([ 'Shared with me', 'shared-root', 'deeper' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+//----------------------------------------------------------------------------------------------------------------------
+// Arrival selection — landing in a folder already pointed at a node
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — arrival selection', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    // What finishes a search result's go-to-folder: the caller lands in the folder with the file they went looking for
+    // already picked out, instead of scanning a full listing for it again.
+    it('selects the node named by the select query param once the listing arrives', async () =>
+    {
+        const wrapper = await mountDrive([ fileNode('f1'), fileNode('f2') ], meFixture(), '/?select=f2');
+
+        expect(wrapper.text()).toContain('1 selected');
+    });
+
+    // The param is a one-shot instruction, not standing state: leaving it in the URL would re-select the node on every
+    // later refresh and load-more, fighting whatever the caller has clicked since.
+    it('strips the select param from the URL once it has been honoured', async () =>
+    {
+        const wrapper = await mountDrive([ fileNode('f1') ], meFixture(), '/?select=f1');
+        await flushPromises();
+
+        expect(routerOf(wrapper).currentRoute.value.query.select).toBeUndefined();
+    });
+
+    it('selects nothing when the named node is not in the listing', async () =>
+    {
+        const wrapper = await mountDrive([ fileNode('f1') ], meFixture(), '/?select=missing');
+
+        expect(wrapper.text()).not.toContain('selected');
+    });
+
+    it('leaves the selection empty when no select param rides the route', async () =>
+    {
+        const wrapper = await mountDrive([ fileNode('f1') ]);
+
+        expect(wrapper.text()).not.toContain('selected');
     });
 });
 

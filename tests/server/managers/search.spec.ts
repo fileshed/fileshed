@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
-import type { NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { NodeResponse, SearchResponse } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -77,9 +77,14 @@ function manager() : NodeManager
     return new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 }
 
-function search(actorID : string, term : string, limit = 50, offset = 0) : Promise<NodeListResponse>
+function search(actorID : string, term : string, limit = 50, offset = 0) : Promise<SearchResponse>
 {
     return manager().search(testActor({ id: actorID }), { q: term, limit, offset });
+}
+
+function crumbNamesOf(result : SearchResponse, nodeID : string) : string[]
+{
+    return (result.locations[nodeID]?.crumbs ?? []).map((crumb) => crumb.name);
 }
 
 function idsOf(nodes : NodeResponse[]) : string[]
@@ -270,6 +275,110 @@ describe('NodeManager.search owner facet', () =>
 
         expect(idsOf(result.nodes)).toEqual([ 'lnk' ]);
         expect(result.owners.map((owner) => owner.id).sort()).toEqual([ 'alice', 'bob' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Locations -- where each hit lives, cut to the ancestry the caller may see
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeManager.search locations', () =>
+{
+    // Alice's tree: Personal / Finance / Team Docs / budget-report.pdf, with only Team Docs shared to bob.
+    async function seedSharedTree() : Promise<void>
+    {
+        await ra.insert(folderNode({ id: 'personal', ownerID: 'alice', name: 'Personal' }));
+        await ra.insert(folderNode({ id: 'finance', ownerID: 'alice', parentID: 'personal', name: 'Finance' }));
+        await ra.insert(folderNode({ id: 'team', ownerID: 'alice', parentID: 'finance', name: 'Team Docs' }));
+        await ra.insert(fileNode({
+            id: 'budget', ownerID: 'alice', parentID: 'team', blobID: 'sha-a', name: 'budget-report.pdf',
+        }));
+
+        await seedShare('team', 'bob', 'viewer');
+    }
+
+    // The case the whole feature turns on: a grantee reaching a file deep inside someone else's tree learns where it
+    // sits RELATIVE TO THE SHARE, and learns nothing about the folders the owner kept to themselves.
+    it('stops a grantee\'s location at the share root, never naming the owner\'s folders above it', async () =>
+    {
+        await seedSharedTree();
+
+        const result = await search('bob', 'budget-report');
+
+        expect(idsOf(result.nodes)).toEqual([ 'budget' ]);
+        expect(crumbNamesOf(result, 'budget')).toEqual([ 'Team Docs' ]);
+        expect(result.locations['budget']?.foreign).toBe(true);
+    });
+
+    // The same file, searched by its owner, is the control: nothing is cut, so the full path renders root-first and
+    // roots in their own tree.
+    it('gives the owner of that same file its whole chain, rooted in their own tree', async () =>
+    {
+        await seedSharedTree();
+
+        const result = await search('alice', 'budget-report');
+
+        expect(crumbNamesOf(result, 'budget')).toEqual([ 'Personal', 'Finance', 'Team Docs' ]);
+        expect(result.locations['budget']?.foreign).toBe(false);
+    });
+
+    // A share on the file itself reaches the file and nothing else, so there is no containing folder to name -- but the
+    // location must still say the file lives outside the caller's own tree.
+    it('reports an empty foreign location when only the file itself is shared', async () =>
+    {
+        await ra.insert(folderNode({ id: 'vault', ownerID: 'alice', name: 'Vault' }));
+        await ra.insert(fileNode({
+            id: 'lone', ownerID: 'alice', parentID: 'vault', blobID: 'sha-a', name: 'lone-report',
+        }));
+        await seedShare('lone', 'bob', 'viewer');
+
+        const result = await search('bob', 'lone-report');
+
+        expect(crumbNamesOf(result, 'lone')).toEqual([]);
+        expect(result.locations['lone']?.foreign).toBe(true);
+    });
+
+    // A node at the caller's own root has nothing above it, which is their files root rather than an unknown place.
+    it('reports an empty own-tree location for a node at the caller\'s root', async () =>
+    {
+        await ra.insert(fileNode({ id: 'top', ownerID: 'alice', blobID: 'sha-a', name: 'top-report' }));
+
+        const result = await search('alice', 'top-report');
+
+        expect(crumbNamesOf(result, 'top')).toEqual([]);
+        expect(result.locations['top']?.foreign).toBe(false);
+    });
+
+    // Every row the page returns is renderable: a hit without a location would leave the results surface with nothing
+    // to draw under the name.
+    it('carries a location for every node on the page and none for nodes off it', async () =>
+    {
+        await ra.insert(folderNode({ id: 'box', ownerID: 'alice', name: 'Box' }));
+        await ra.insert(fileNode({ id: 'm1', ownerID: 'alice', parentID: 'box', blobID: 'sha-a', name: 'many-1' }));
+        await ra.insert(fileNode({ id: 'm2', ownerID: 'alice', parentID: 'box', blobID: 'sha-a', name: 'many-2' }));
+        await ra.insert(fileNode({ id: 'm3', ownerID: 'alice', parentID: 'box', blobID: 'sha-a', name: 'many-3' }));
+
+        const firstPage = await search('alice', 'many-', 2, 0);
+
+        expect(firstPage.nodes.map((node) => node.id)).toEqual([ 'm1', 'm2' ]);
+        expect(Object.keys(firstPage.locations).sort()).toEqual([ 'm1', 'm2' ]);
+        expect(crumbNamesOf(firstPage, 'm1')).toEqual([ 'Box' ]);
+    });
+
+    // A location names folders, and folders are reached by parent edges alone. A link pointing into a shared folder is
+    // not a way to inherit that folder's ancestry, so a matched link reports its OWN placement.
+    it('locates a matched link by its own placement rather than its target\'s', async () =>
+    {
+        await ra.insert(folderNode({ id: 'shelf', ownerID: 'alice', name: 'Shelf' }));
+        await ra.insert(folderNode({ id: 'far', ownerID: 'alice', name: 'Far Away' }));
+        await ra.insert(fileNode({ id: 'tgt', ownerID: 'alice', parentID: 'far', blobID: 'sha-a', name: 'target' }));
+        await ra.insert(linkNode({
+            id: 'shortcut', ownerID: 'alice', parentID: 'shelf', targetNodeID: 'tgt', name: 'linked-report',
+        }));
+
+        const result = await search('alice', 'linked-report');
+
+        expect(crumbNamesOf(result, 'shortcut')).toEqual([ 'Shelf' ]);
     });
 });
 

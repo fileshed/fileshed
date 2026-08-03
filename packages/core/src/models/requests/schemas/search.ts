@@ -8,7 +8,10 @@ import { z } from 'zod';
 import { DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT } from '../../../constants/index.ts';
 
 // Requests
-import type { SearchQuery } from '../search.ts';
+import type { LocationCrumb, NodeLocation, SearchQuery, SearchResponse } from '../search.ts';
+
+// Request Schemas
+import { nodeListResponseCodec } from './nodes.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
@@ -34,5 +37,30 @@ export const searchQueryCodec = z.strictObject({
 });
 
 typeAssert<Equals<z.output<typeof searchQueryCodec>, SearchQuery>>();
+
+//----------------------------------------------------------------------------------------------------------------------
+
+export const locationCrumbCodec = z.strictObject({
+    id: z.string(),
+    name: z.string(),
+});
+
+typeAssert<Equals<z.output<typeof locationCrumbCodec>, LocationCrumb>>();
+
+export const nodeLocationCodec = z.strictObject({
+    crumbs: z.array(locationCrumbCodec),
+    foreign: z.boolean(),
+});
+
+typeAssert<Equals<z.output<typeof nodeLocationCodec>, NodeLocation>>();
+
+// The search envelope is the ordinary node listing plus the locations sidecar, composed off the listing codec's shape
+// so the two can never drift apart.
+export const searchResponseCodec = z.strictObject({
+    ...nodeListResponseCodec.shape,
+    locations: z.record(z.string(), nodeLocationCodec),
+});
+
+typeAssert<Equals<z.output<typeof searchResponseCodec>, SearchResponse>>();
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -32,6 +32,10 @@ interface JsonRequestOptions<T>
     query ?: QueryParams;
     body ?: unknown;
     codec : ZodType<T>;
+
+    // Aborting rejects the returned promise with the signal's own DOMException rather than an ApiError -- a caller
+    // that cancels its own request is expected to recognise and swallow it.
+    signal ?: AbortSignal;
 }
 
 interface VoidRequestOptions
@@ -110,7 +114,8 @@ async function issue(
     path : string,
     method : HttpMethod,
     query : QueryParams | undefined,
-    body : unknown
+    body : unknown,
+    signal ?: AbortSignal
 ) : Promise<Response>
 {
     const headers : Record<string, string> = { accept: 'application/json' };
@@ -122,6 +127,8 @@ async function issue(
         init.body = JSON.stringify(body);
     }
 
+    if(signal !== undefined) { init.signal = signal; }
+
     return apiFetch(buildUrl(path, query), init);
 }
 
@@ -129,7 +136,7 @@ async function issue(
 
 export async function requestJson<T>(path : string, options : JsonRequestOptions<T>) : Promise<T>
 {
-    const response = await issue(path, options.method ?? 'GET', options.query, options.body);
+    const response = await issue(path, options.method ?? 'GET', options.query, options.body, options.signal);
 
     return parseJson(response, options.codec);
 }

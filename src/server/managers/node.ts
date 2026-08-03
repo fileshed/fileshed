@@ -32,6 +32,7 @@ import {
     type MeResponse,
     type Node,
     type NodeListResponse,
+    type NodeLocation,
     type NodeResponse,
     NotFoundError,
     type PatchNodeRequest,
@@ -40,6 +41,7 @@ import {
     type Role,
     SEARCH_CANDIDATE_LIMIT,
     type SearchQuery,
+    type SearchResponse,
     type UpdatePreferencesRequest,
     type UserSummary,
     isDirectOwner,
@@ -51,6 +53,7 @@ import {
 // Engines
 import { applyPreferencesPatch } from '../engines/preferences.ts';
 import { effectiveQuota } from '../engines/quota.ts';
+import { resolveLocation } from '../engines/location.ts';
 import { type RegulationResult, regulation } from '../engines/regulation/index.ts';
 
 // Resource Access
@@ -59,8 +62,8 @@ import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { DeletionOfferRA } from '../resource-access/deletionOffers/index.ts';
 import {
     type ChildrenOptions,
+    type ChildrenQuery as ListingRoot,
     type NodeFilters,
-    type ChildrenQuery as NodeLocation,
     NodeRA,
 } from '../resource-access/nodes/node.ts';
 import { ShareRA } from '../resource-access/shares/index.ts';
@@ -204,7 +207,7 @@ export class NodeManager
 
         // ownerID scopes the ROOT listing only -- that is where per-user trees begin. A folder's listing is scoped by
         // the folder alone (NodeRA.children), which is what lets contributions by other owners appear.
-        const location : NodeLocation = { parentID: listedParentID, ownerID: actor.id };
+        const listing : ListingRoot = { parentID: listedParentID, ownerID: actor.id };
         const options : ChildrenOptions = {
             pagination: { limit: query.limit, offset: query.offset },
             sort: { key: query.sortKey, direction: query.sortDirection },
@@ -220,9 +223,9 @@ export class NodeManager
         // The page and its total carry the filters; the owner facet does NOT -- it faces the whole folder so the filter
         // menu can always switch owners.
         const [ page, total, folderOwners ] = await Promise.all([
-            this.#nodes.children(location, options, filters),
-            this.#nodes.countChildren(location, filters),
-            this.#nodes.ownersOf(location),
+            this.#nodes.children(listing, options, filters),
+            this.#nodes.countChildren(listing, filters),
+            this.#nodes.ownersOf(listing),
         ]);
 
         const [ grants, targets ] = await Promise.all([
@@ -259,8 +262,9 @@ export class NodeManager
     // insensitive on both dialects, trashed excluded, capped); every candidate's effective role resolves in ONE batch,
     // the ones that resolve to null (a stranger's files) drop out, and the survivors carry the role the caller earned.
     // Pagination runs over those survivors -- accessibility can't be pushed into the SQL pagination, so `total` is the
-    // count the caller may actually reach, and a page never leaks a node they cannot resolve.
-    async search(actor : SessionUser, query : SearchQuery) : Promise<NodeListResponse>
+    // count the caller may actually reach, and a page never leaks a node they cannot resolve. Each hit also carries
+    // where it lives, trimmed to the part of its ancestry the caller may see.
+    async search(actor : SessionUser, query : SearchQuery) : Promise<SearchResponse>
     {
         const candidates = await this.#nodes.searchByName(query.q, SEARCH_CANDIDATE_LIMIT);
 
@@ -270,6 +274,7 @@ export class NodeManager
         const page = accessible.slice(query.offset, query.offset + query.limit);
         const targets = await this.#resolveTargets(actor, page);
         const owners = await this.#ownersOfPage(page, targets);
+        const locations = await this.#locationsOf(actor, page);
 
         const nodes = page.map((node) =>
         {
@@ -285,7 +290,42 @@ export class NodeManager
 
         // A search envelope spans many owners rather than one folder's worth, but the caller can already see every
         // node it returns, so the page's distinct owners disclose nothing a folder listing wouldn't.
-        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset, owners };
+        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset, owners, locations };
+    }
+
+    // Where each hit on a page lives, keyed by node id. Two queries for the whole page however long it is: one
+    // recursive walk gathering every hit's ancestor chain, then one batch role resolution over the distinct ancestors
+    // those chains name. An ancestor the caller resolves to no role is absent from `visibleIDs`, which is what cuts a
+    // chain at the share root -- the same resolver the read gate itself runs, so a location can only ever name folders
+    // the caller could have opened directly.
+    async #locationsOf(actor : SessionUser, page : readonly Node[]) : Promise<Record<string, NodeLocation>>
+    {
+        if(page.length === 0) { return {}; }
+
+        const chains = await this.#nodes.ancestorChains(page.map((node) => node.id));
+
+        const ancestorIDs = new Set<string>();
+        for(const chain of chains.values())
+        {
+            for(const ancestor of chain) { ancestorIDs.add(ancestor.id); }
+        }
+
+        const roles = await this.#shares.effectiveRoles(actor.id, [ ...ancestorIDs ]);
+        const visibleIDs = new Set([ ...ancestorIDs ].filter((id) => (roles.get(id) ?? null) !== null));
+
+        const locations : Record<string, NodeLocation> = {};
+        for(const node of page)
+        {
+            locations[node.id] = resolveLocation({
+                ownerID: node.ownerID,
+                parentID: node.parentID,
+                ancestors: chains.get(node.id) ?? [],
+                visibleIDs,
+                actorID: actor.id,
+            });
+        }
+
+        return locations;
     }
 
     // The caller's Trash view: the roots of their own trashed subtrees, paged and sorted like a folder listing. Every

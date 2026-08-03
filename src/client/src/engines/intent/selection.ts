@@ -38,7 +38,9 @@ export function emptySelection() : SelectionState
     return { selected: new Set(), anchor: null };
 }
 
-function selectSingle(id : string) : SelectionState
+// The whole selection reduced to one node, which is also the new anchor. A plain click lands here, and so does
+// arriving in a folder pointed straight at a node -- a search result's go-to-folder.
+export function selectOnly(id : string) : SelectionState
 {
     return { selected: new Set([ id ]), anchor: id };
 }
@@ -56,11 +58,11 @@ function toggle(state : SelectionState, id : string) : SelectionState
 // anchor (nothing selected yet) or an anchor no longer in view, a shift-click degrades to a single select.
 function selectRange(state : SelectionState, orderedIDs : readonly string[], id : string) : SelectionState
 {
-    if(state.anchor === null) { return selectSingle(id); }
+    if(state.anchor === null) { return selectOnly(id); }
 
     const anchorIndex = orderedIDs.indexOf(state.anchor);
     const targetIndex = orderedIDs.indexOf(id);
-    if(anchorIndex === -1 || targetIndex === -1) { return selectSingle(id); }
+    if(anchorIndex === -1 || targetIndex === -1) { return selectOnly(id); }
 
     const [ from, to ] = anchorIndex <= targetIndex ? [ anchorIndex, targetIndex ] : [ targetIndex, anchorIndex ];
     const selected = new Set(orderedIDs.slice(from, to + 1));
@@ -80,7 +82,7 @@ export function applyClick(
     if(modifiers.range) { return selectRange(state, orderedIDs, id); }
     if(modifiers.toggle) { return toggle(state, id); }
 
-    return selectSingle(id);
+    return selectOnly(id);
 }
 
 // A click on empty space, or an Escape, drops the whole selection.

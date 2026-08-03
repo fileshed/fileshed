@@ -19,6 +19,7 @@ import {
     ownsSelection,
     planTrash,
     reconcile,
+    selectOnly,
 } from './selection.ts';
 import { canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from './handlers.ts';
 
@@ -30,6 +31,7 @@ export const intent = {
         applyClick,
         clearSelection,
         reconcile,
+        selectOnly,
         canCopyNode,
         canCopySelection,
         planTrash,
@@ -55,6 +57,7 @@ export {
     applyClick,
     clearSelection,
     reconcile,
+    selectOnly,
     canCopyNode,
     canCopySelection,
     planTrash,

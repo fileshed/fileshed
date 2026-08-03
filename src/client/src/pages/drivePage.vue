@@ -72,7 +72,6 @@
     import { useUploadsStore } from '../stores/uploads.ts';
 
     // Resource Access
-    import { downloadUrl } from '../resource-access/downloads.ts';
     import { takeLegacyViewMode } from '../resource-access/legacyViewMode.ts';
 
     // Components
@@ -96,6 +95,7 @@
     // Utils
     import { isDeadLink } from '../utils/formatters/index.ts';
     import { ownerIDFor, resolveOwner } from '../utils/resolveOwner.ts';
+    import { useOpenNode } from '../utils/openNode.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -109,6 +109,7 @@
     const router = useRouter();
     const toast = useToast();
     const { runMutation } = useRunWithToast();
+    const { perform } = useOpenNode();
 
     const selection = ref<SelectionState>(intent.selection.emptySelection());
     const renameModal = ref<InstanceType<typeof RenameNode> | null>(null);
@@ -131,10 +132,25 @@
         void store.load(routeFolderID());
     });
 
+    // A `select` query param names the node to arrive on -- how a search result's go-to-folder lands the caller
+    // already pointing at the file they searched for. It is consumed once and stripped from the URL, so a later
+    // refresh or load-more doesn't keep re-selecting a node the caller has since clicked away from.
+    function arrivalSelectID() : string | null
+    {
+        const { select } = route.query;
+        return typeof select === 'string' && select.length > 0 ? select : null;
+    }
+
     // Trim selection to what's actually present after any listing change (navigation, refresh, load-more).
     watch(() => store.children, () =>
     {
         selection.value = intent.selection.reconcile(selection.value, store.children.map((node) => node.id));
+
+        const arriving = arrivalSelectID();
+        if(arriving === null || !store.children.some((node) => node.id === arriving)) { return; }
+
+        selection.value = intent.selection.selectOnly(arriving);
+        void router.replace({ path: route.path });
     });
 
     function onKeydown(event : KeyboardEvent) : void
@@ -283,18 +299,7 @@
 
     function onOpen(node : NodeResponse) : void
     {
-        const action = intent.handlers.resolveOpen(node);
-        switch (action.kind)
-        {
-            case 'navigate': void router.push(`/folder/${ action.folderID }`); break;
-            case 'edit': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'annotate': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'play': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'play-playlist': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
-            case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
-            case 'none': break;
-        }
+        perform(intent.handlers.resolveOpen(node));
     }
 
     function openIcon(node : NodeResponse) : string

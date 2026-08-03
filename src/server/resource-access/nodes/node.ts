@@ -2,13 +2,14 @@
 // Node Resource Access
 //
 // The query surface over the `node` table that the node/share managers build on: reads (get, getMany, children), the
-// structural walks (ancestorIDs, the subtree trash update), plain writes (insert, rename, move, hardDelete), and the
-// derived aggregate quotas lean on (ownedBytes). Rows cross the row<->domain boundary in transforms.ts; nothing here
-// models a node itself.
+// structural walks (ancestorIDs, ancestorChains, the subtree trash update), plain writes (insert, rename, move,
+// hardDelete), and the derived aggregate quotas lean on (ownedBytes). Rows cross the row<->domain boundary in
+// transforms.ts; nothing here models a node itself.
 //
-// Two recursive CTEs carry the tree logic, written once in Kysely so both dialects get the same walk:
-// ancestorIDs climbs parent edges to the root, and setTrashed descends the subtree. Both follow
-// parent_id only -- never target_node_id -- so links, which are inert pointers, never steer a traversal.
+// Three recursive CTEs carry the tree logic, written once in Kysely so both dialects get the same walk: ancestorIDs
+// climbs parent edges to the root, ancestorChains climbs them for many nodes at once, and setTrashed descends the
+// subtree. All follow parent_id only -- never target_node_id -- so links, which are inert pointers, never steer a
+// traversal.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- update sets and CTE column lists name snake_case DB columns (house convention) */
@@ -62,6 +63,16 @@ export interface ChildrenOptions
 {
     pagination : Pagination;
     sort : NodeSort;
+}
+
+// One rung of an ancestor walk: enough to name the folder and to judge where the chain roots, without dragging a whole
+// node across for a breadcrumb that only ever renders a label.
+export interface Ancestor
+{
+    id : string;
+    name : string;
+    ownerID : string;
+    parentID : string | null;
 }
 
 // The listing filters, AND-combined. An empty `types` is unfiltered; a single-select owner, an exact-name match, and
@@ -352,6 +363,62 @@ export class NodeRA
             .execute();
 
         return rows.map((row) => row.id);
+    }
+
+    // The ancestor chains of many nodes at once, each keyed by the node it belongs to and ordered nearest parent
+    // first, excluding the node itself. Every requested id seeds its own chain in ONE recursive CTE -- a search page
+    // resolves its whole set of locations without fanning out a query per hit. A requested id that names no row simply
+    // maps to nothing; the caller reads an absent chain as empty.
+    async ancestorChains(ids : readonly string[]) : Promise<Map<string, Ancestor[]>>
+    {
+        const chains = new Map<string, Ancestor[]>();
+        if(ids.length === 0) { return chains; }
+
+        const rows = await this.#db
+            .withRecursive('chains(root, id, name, owner_id, parent_id, depth)', (qc) => qc
+                .selectFrom('node')
+                .select([
+                    sql<string>`id`.as('root'),
+                    'id',
+                    'name',
+                    'owner_id',
+                    'parent_id',
+                    sql<number>`0`.as('depth'),
+                ])
+                .where('id', 'in', ids)
+                .unionAll(qc
+                    .selectFrom('node as ancestor')
+                    .innerJoin('chains', 'chains.parent_id', 'ancestor.id')
+                    .where('chains.depth', '<', MAX_TREE_DEPTH)
+                    .select([
+                        'chains.root',
+                        'ancestor.id',
+                        'ancestor.name',
+                        'ancestor.owner_id',
+                        'ancestor.parent_id',
+                        sql<number>`chains.depth + 1`.as('depth'),
+                    ])))
+            .selectFrom('chains')
+            .select([
+                sql<string>`root`.as('root'),
+                sql<string>`id`.as('id'),
+                sql<string>`name`.as('name'),
+                sql<string>`owner_id`.as('owner_id'),
+                sql<string | null>`parent_id`.as('parent_id'),
+                sql<number>`depth`.as('depth'),
+            ])
+            .where('depth', '>', 0)
+            .orderBy('depth', 'asc')
+            .execute();
+
+        for(const row of rows)
+        {
+            const chain = chains.get(row.root) ?? [];
+            chain.push({ id: row.id, name: row.name, ownerID: row.owner_id, parentID: row.parent_id });
+            chains.set(row.root, chain);
+        }
+
+        return chains;
     }
 
     // The distinct blob shas of every file node in the subtree rooted at `id` (including `id` itself), gathered by

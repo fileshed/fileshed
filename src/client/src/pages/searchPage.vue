@@ -34,15 +34,12 @@
 
 <script setup lang="ts">
     import { computed, watch } from 'vue';
-    import { useRoute, useRouter } from 'vue-router';
+    import { useRoute } from 'vue-router';
 
     import type { NodeResponse } from '@fileshed/core';
 
     // Stores
     import { useSearchStore } from '../stores/search.ts';
-
-    // Resource Access
-    import { downloadUrl } from '../resource-access/downloads.ts';
 
     // Components
     import SearchSurface from '../components/search/searchSurface.vue';
@@ -50,11 +47,14 @@
     // Engines
     import { intent } from '../engines/intent/index.ts';
 
+    // Utils
+    import { useOpenNode } from '../utils/openNode.ts';
+
     //------------------------------------------------------------------------------------------------------------------
 
     const store = useSearchStore();
     const route = useRoute();
-    const router = useRouter();
+    const { perform } = useOpenNode();
 
     const term = computed(() =>
     {
@@ -69,24 +69,12 @@
     }, { immediate: true });
 
     //------------------------------------------------------------------------------------------------------------------
-    // Open -- the same handler seam the drive and Shared with me use. A folder navigates in place; every file surface
-    // opens in a fresh tab -- the in-app editor, the annotator, the players, and browser-renderable or downloadable
-    // files off the download endpoint.
+    // Open -- the same handler seam the drive and Shared with me use.
     //------------------------------------------------------------------------------------------------------------------
 
     function onOpen(node : NodeResponse) : void
     {
-        const action = intent.handlers.resolveOpen(node);
-        switch (action.kind)
-        {
-            case 'navigate': void router.push(`/folder/${ action.folderID }`); break;
-            case 'edit': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'annotate': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'play': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
-            case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
-            case 'none': break;
-        }
+        perform(intent.handlers.resolveOpen(node));
     }
 </script>
 

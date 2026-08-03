@@ -45,7 +45,6 @@
 
 <script setup lang="ts">
     import { computed, onMounted, ref } from 'vue';
-    import { useRouter } from 'vue-router';
     import { useToast } from '@nuxt/ui/composables';
     import type { DropdownMenuItem } from '@nuxt/ui';
 
@@ -54,9 +53,6 @@
     // Stores
     import { useSessionStore } from '../stores/session.ts';
     import { useSharedStore } from '../stores/shared.ts';
-
-    // Resource Access
-    import { downloadUrl } from '../resource-access/downloads.ts';
 
     // Components
     import ViewToggle from '../components/viewToggle.vue';
@@ -69,15 +65,16 @@
 
     // Utils
     import type { ModifiedFilter } from '../utils/filterPresets.ts';
+    import { useOpenNode } from '../utils/openNode.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
     const store = useSharedStore();
     const session = useSessionStore();
-    const router = useRouter();
     const toast = useToast();
     const { runMutation } = useRunWithToast();
+    const { perform } = useOpenNode();
 
     const addToFilesModal = ref<InstanceType<typeof AddToFilesModal> | null>(null);
 
@@ -121,18 +118,7 @@
 
     function onOpen(entry : SharedWithMeEntry) : void
     {
-        const action = intent.handlers.resolveSharedOpen(entry.target);
-        switch (action.kind)
-        {
-            case 'navigate': void router.push(`/folder/${ action.folderID }`); break;
-            case 'edit': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'annotate': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'play': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'play-playlist': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
-            case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
-            case 'none': break;
-        }
+        perform(intent.handlers.resolveSharedOpen(entry.target));
     }
 
     function openIcon(entry : SharedWithMeEntry) : string

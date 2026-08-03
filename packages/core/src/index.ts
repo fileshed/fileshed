@@ -119,7 +119,12 @@ export {
     type PurgeBrokenLinksResponse,
     type EmptyTrashResponse,
 } from './models/requests/nodes.ts';
-export { type SearchQuery } from './models/requests/search.ts';
+export {
+    type LocationCrumb,
+    type NodeLocation,
+    type SearchQuery,
+    type SearchResponse,
+} from './models/requests/search.ts';
 export {
     type ClaimRequest,
     type ClaimResponse,
@@ -227,7 +232,12 @@ export {
     userSummaryCodec,
     toNodeResponse,
 } from './models/requests/schemas/nodes.ts';
-export { searchQueryCodec } from './models/requests/schemas/search.ts';
+export {
+    locationCrumbCodec,
+    nodeLocationCodec,
+    searchQueryCodec,
+    searchResponseCodec,
+} from './models/requests/schemas/search.ts';
 export {
     claimRequestCodec,
     claimResponseCodec,

@@ -577,6 +577,83 @@ describe('NodeRA.ancestorIDs', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+// ancestorChains
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeRA.ancestorChains', () =>
+{
+    // Two branches off a shared spine: r -> a -> b -> leafB, and r -> a -> x -> leafX.
+    async function buildForest() : Promise<void>
+    {
+        await ra.insert(folderNode({ id: 'r', ownerID: 'u1', parentID: null, name: 'Root' }));
+        await ra.insert(folderNode({ id: 'a', ownerID: 'u1', parentID: 'r', name: 'A' }));
+        await ra.insert(folderNode({ id: 'b', ownerID: 'u1', parentID: 'a', name: 'B' }));
+        await ra.insert(folderNode({ id: 'x', ownerID: 'u2', parentID: 'a', name: 'X' }));
+        await ra.insert(file('leafB', { parentID: 'b' }));
+        await ra.insert(file('leafX', { parentID: 'x' }));
+    }
+
+    function idsOf(chains : Map<string, { id : string }[]>, root : string) : string[]
+    {
+        return (chains.get(root) ?? []).map((ancestor) => ancestor.id);
+    }
+
+    // The whole point of the batch: many nodes, one walk, and each node's chain comes back attached to that node
+    // rather than pooled -- otherwise a page of results could not tell whose ancestors are whose.
+    it('keys each requested node\'s own chain separately, nearest parent first', async () =>
+    {
+        await buildForest();
+
+        const chains = await ra.ancestorChains([ 'leafB', 'leafX' ]);
+
+        expect(idsOf(chains, 'leafB')).toEqual([ 'b', 'a', 'r' ]);
+        expect(idsOf(chains, 'leafX')).toEqual([ 'x', 'a', 'r' ]);
+    });
+
+    // A crumb has to render a label and be judged for where it roots, so each rung carries its name, its owner, and
+    // its own parent edge.
+    it('carries each ancestor\'s name, owner, and parent edge', async () =>
+    {
+        await buildForest();
+
+        const chains = await ra.ancestorChains([ 'leafX' ]);
+
+        expect(chains.get('leafX')).toEqual([
+            { id: 'x', name: 'X', ownerID: 'u2', parentID: 'a' },
+            { id: 'a', name: 'A', ownerID: 'u1', parentID: 'r' },
+            { id: 'r', name: 'Root', ownerID: 'u1', parentID: null },
+        ]);
+    });
+
+    it('omits a root node entirely, since it has no ancestors', async () =>
+    {
+        await buildForest();
+
+        const chains = await ra.ancestorChains([ 'r', 'leafB' ]);
+
+        expect(chains.has('r')).toBe(false);
+        expect(idsOf(chains, 'leafB')).toEqual([ 'b', 'a', 'r' ]);
+    });
+
+    it('answers an empty request without touching the database', async () =>
+    {
+        await buildForest();
+
+        expect(await ra.ancestorChains([])).toEqual(new Map());
+    });
+
+    it('walks parent edges only, so a link climbs its own placement rather than its target\'s', async () =>
+    {
+        await buildForest();
+        await ra.insert(linkNode({ id: 'lk', ownerID: 'u1', parentID: 'b', targetNodeID: 'leafX' }));
+
+        const chains = await ra.ancestorChains([ 'lk' ]);
+
+        expect(idsOf(chains, 'lk')).toEqual([ 'b', 'a', 'r' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
 // trash / restore / hardDelete
 //----------------------------------------------------------------------------------------------------------------------
 
