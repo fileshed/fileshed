@@ -217,6 +217,17 @@ export function cookieFrom(res : Response) : string
     return res.headers.get('set-cookie')?.split(';')[0] ?? '';
 }
 
+// Every cookie the response sets, joined as a browser would send them back -- including better-auth's session_data
+// cache, which carries a signed SNAPSHOT of the user row for its Max-Age. cookieFrom keeps only the session token, so
+// a request built from it makes the server read the session fresh. A spec whose subject is a user row changing after
+// sign-in must send the whole jar, or the staleness it means to exercise never happens.
+export function cookieJarFrom(res : Response) : string
+{
+    return res.headers.getSetCookie()
+        .map((cookie) => cookie.split(';')[0])
+        .join('; ');
+}
+
 // Sign up, then flip the account to admin at the database. A fresh sign-in afterwards mints a session that reflects the
 // promoted role (the sign-up cookie predates it).
 export async function makeAdmin(booted : BootedApp, email : string, password : string) : Promise<string>

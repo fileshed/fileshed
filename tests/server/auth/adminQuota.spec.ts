@@ -25,7 +25,7 @@ import { createAdminRoutes } from '@server/routes/admin.ts';
 
 // Support
 import { type BootedApp, ORIGIN, bootTestApp, cookieFrom, makeAdmin, signIn, signUp } from './support.ts';
-import { type BootedBlobApp, bootBlobApp, claim, makeUser } from '../blobs/support.ts';
+import { type BootedBlobApp, bootBlobApp, claim, fileNodesForBlob, makeUser, putUpload } from '../blobs/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -182,7 +182,7 @@ function sha256Of(data : Buffer) : string
         .digest('hex');
 }
 
-describe('admin-set quota enforced by the blob claim flow', () =>
+describe('admin-set quota enforced by the blob upload flow', () =>
 {
     let booted : BootedBlobApp;
 
@@ -226,6 +226,63 @@ describe('admin-set quota enforced by the blob claim flow', () =>
 
         expect(res.status).toBe(403);
         expect(body.error.toLowerCase()).toContain('quota');
+    });
+
+    // The cases that separate a live read from a cached one, and the reason they send `jar` rather than `cookie`: the
+    // user signs in FIRST, so the session_data cookie they carry holds a snapshot of the row taken under the OLD cap,
+    // and nothing between the admin's change and the user's next request refreshes it. Judging against that snapshot
+    // is the bug; the cap the admin has already set is the answer. Both directions, because a live read that only
+    // ever refuses is just a broken quota.
+    it('refuses the next claim under a cap the admin lowered after the user signed in', async () =>
+    {
+        const adminCookie = await adminOn(booted);
+        const capped = await makeUser(booted, 'capped@example.com', 1_000_000);
+
+        expect((await setQuota(booted.app, capped.id, adminCookie, { quotaLimit: 4096 })).status).toBe(200);
+
+        const res = await claim(booted.app, capped.jar, sha256Of(randomBytes(32)), 4097);
+        const body = await res.json() as { error : string };
+
+        expect(res.status).toBe(403);
+        expect(body.error.toLowerCase()).toContain('quota');
+    });
+
+    it('admits the next claim under a cap the admin raised after the user signed in', async () =>
+    {
+        const adminCookie = await adminOn(booted);
+        const capped = await makeUser(booted, 'capped@example.com', 4096);
+
+        expect((await setQuota(booted.app, capped.id, adminCookie, { quotaLimit: 1_000_000 })).status).toBe(200);
+
+        const res = await claim(booted.app, capped.jar, sha256Of(randomBytes(32)), 8192);
+        const body = await res.json() as { upload : boolean; ticket : string };
+
+        expect(res.status).toBe(200);
+        expect(body.upload).toBe(true);
+        expect(body.ticket).toBeTypeOf('string');
+    });
+
+    // The commit re-judges quota inside its transaction, and it must re-judge against the cap as it stands at commit
+    // time: a cap lowered while the bytes were in flight refuses the write rather than letting an already-issued
+    // ticket spend a limit that no longer exists.
+    it('refuses a commit whose ticket was issued before the admin lowered the cap', async () =>
+    {
+        const adminCookie = await adminOn(booted);
+        const capped = await makeUser(booted, 'capped@example.com', 1_000_000);
+        const data = randomBytes(2048);
+
+        const claimRes = await claim(booted.app, capped.jar, sha256Of(data), data.length);
+        const { ticket } = await claimRes.json() as { ticket : string };
+
+        expect((await setQuota(booted.app, capped.id, adminCookie, { quotaLimit: 1024 })).status).toBe(200);
+
+        const res = await putUpload(booted.app, capped.jar, ticket, data);
+        const body = await res.json() as { error : string };
+
+        expect(res.status).toBe(403);
+        expect(body.error.toLowerCase()).toContain('quota');
+        // Nothing durable landed: the refusal rolled the whole commit back.
+        expect(await fileNodesForBlob(booted.handle, sha256Of(data))).toHaveLength(0);
     });
 });
 

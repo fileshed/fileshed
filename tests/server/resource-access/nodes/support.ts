@@ -87,7 +87,7 @@ const isoNow = () : string => new Date().toISOString();
 export async function seedUser(
     db : Kysely<Database>,
     id : string,
-    extra : { name ?: string; avatarSha256 ?: string | null } = {}
+    extra : { name ?: string; avatarSha256 ?: string | null; quotaLimit ?: number | null } = {}
 ) : Promise<void>
 {
     await db
@@ -97,9 +97,26 @@ export async function seedUser(
             name: extra.name ?? id,
             email: `${ id }@t.test`,
             avatar_sha256: extra.avatarSha256 ?? null,
+            quota_limit: extra.quotaLimit ?? null,
             role: 'user',
             createdAt: isoNow(),
         })
+        .execute();
+}
+
+// Move an existing user's cap, the way an admin patching their quota does. The user row is the only place a quota
+// lives, so this is how a spec states one -- and the only way to change one mid-test, which is what a spec about a
+// quota change taking effect needs.
+export async function setUserQuota(
+    db : Kysely<Database>,
+    userID : string,
+    quotaLimit : number | null
+) : Promise<void>
+{
+    await db
+        .updateTable('user')
+        .set({ quota_limit: quotaLimit })
+        .where('id', '=', userID)
         .execute();
 }
 

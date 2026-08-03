@@ -365,17 +365,17 @@ export class NodeManager
 
     async me(actor : SessionUser) : Promise<MeResponse>
     {
-        // Preferences and the avatar are read from the row, not the session snapshot: the cookie cache lags a just-
-        // saved value, so a page reload right after a change would otherwise show the stale one.
-        const [ used, stored, avatarSha256, trashRetentionDays, defaultQuota ] = await Promise.all([
+        // The quota, preferences, and avatar all come from the row, not the session snapshot: the cookie cache lags a
+        // just-saved value, so a page reload right after a change would otherwise show the stale one. For quota that
+        // is not merely cosmetic -- the number shown here is the one the next upload is judged against.
+        const [ used, limit, stored, avatarSha256, trashRetentionDays, defaultQuota ] = await Promise.all([
             this.#nodes.ownedBytes(actor.id),
+            this.#users.quotaLimitOf(actor.id),
             this.#users.preferencesOf(actor.id),
             this.#users.avatarSha256Of(actor.id),
             this.#trashRetentionDays(),
             this.#defaultQuota(),
         ]);
-
-        const limit = actor.quotaLimit ?? null;
 
         return {
             id: actor.id,
@@ -791,8 +791,8 @@ export class NodeManager
         prepare ?: (trx : DatabaseHandle['db']) => Promise<void>
     ) : Promise<NodeResponse>
     {
-        const limitBytes = await this.#resolveLimit(actor);
-        this.#enforceQuota(actor, await this.#nodes.ownedBytes(actor.id), snapshot.size, limitBytes);
+        const limitBytes = await this.#resolveLimit(actor.id);
+        this.#enforceQuota(actor.id, await this.#nodes.ownedBytes(actor.id), snapshot.size, limitBytes);
 
         const now = new Date();
         const node : FileNode = {
@@ -814,25 +814,35 @@ export class NodeManager
             if(prepare !== undefined) { await prepare(trx); }
 
             const nodes = new NodeRA({ db: trx, kind: this.#kind });
-            this.#enforceQuota(actor, await nodes.ownedBytes(actor.id), snapshot.size, limitBytes);
+            this.#enforceQuota(actor.id, await nodes.ownedBytes(actor.id), snapshot.size, limitBytes);
             await nodes.insert(node);
         });
 
         return toNodeResponse(node, 'owner');
     }
 
-    // Fold the instance default into the actor's raw quota_limit. Always called BEFORE a transaction opens: it reads
-    // the settings row, and SQLite serializes writes, so a read issued from inside an open write transaction on the
-    // same handle deadlocks the commit. The resolved limit is then carried into the transaction as a plain number.
-    async #resolveLimit(actor : SessionUser) : Promise<number | null>
+    // The cap an owner is held to right now: their quota_limit read from their user row, with the instance default
+    // folded in. Both halves are read live, never taken from the actor's session -- the session cookie cache carries
+    // a snapshot of the user row for its whole window, so enforcing against it would judge a write by a limit an
+    // admin has already replaced.
+    //
+    // Always called BEFORE a transaction opens: it reads the user row and the settings row, and SQLite serializes
+    // writes, so a read issued from inside an open write transaction on the same handle deadlocks the commit. The
+    // resolved limit is then carried into the transaction as a plain number.
+    async #resolveLimit(ownerID : string) : Promise<number | null>
     {
-        return effectiveQuota(actor.quotaLimit ?? null, await this.#defaultQuota());
+        const [ userLimit, instanceDefault ] = await Promise.all([
+            this.#users.quotaLimitOf(ownerID),
+            this.#defaultQuota(),
+        ]);
+
+        return effectiveQuota(userLimit, instanceDefault);
     }
 
-    #enforceQuota(actor : SessionUser, usedBytes : number, incomingBytes : number, limitBytes : number | null) : void
+    #enforceQuota(ownerID : string, usedBytes : number, incomingBytes : number, limitBytes : number | null) : void
     {
         const verdict = regulation.quota.admit({
-            ownerID: actor.id,
+            ownerID,
             usedBytes,
             limitBytes,
             incomingBytes,

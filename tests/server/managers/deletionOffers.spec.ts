@@ -32,6 +32,7 @@ import {
     seedBackend,
     seedBlob,
     seedUser,
+    setUserQuota,
 } from '../resource-access/nodes/support.ts';
 import { testActor, testNodePolicy } from '../nodes/support.ts';
 
@@ -280,7 +281,9 @@ describe('DeletionOfferManager', () =>
             .where('offeree_id', '=', 'bob')
             .executeTakeFirstOrThrow()).id;
 
-        const error = await caught(offers.accept(testActor({ id: 'bob', quotaLimit: 5 }), offerID, { parentID: null }));
+        await setUserQuota(handle.db, 'bob', 5);
+
+        const error = await caught(offers.accept(testActor({ id: 'bob' }), offerID, { parentID: null }));
 
         // The rejection rolls the whole transaction back: the offer survives for a retry after the offeree frees
         // space, and the blob stays graveyarded -- nothing durable happened.

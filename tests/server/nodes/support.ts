@@ -170,13 +170,16 @@ interface ActorInit
     email ?: string;
     name ?: string;
     role ?: 'admin' | 'user';
-    quotaLimit ?: number | null;
     createdAt ?: Date;
 }
 
 // A minimal signed-in principal for manager-level specs that drive the manager directly rather than over HTTP. The
-// manager reads only id (every method) plus email/name/role/quotaLimit/createdAt (me); the rest of better-auth's
-// inferred SessionUser is irrelevant here, so a partial is cast to the boundary type.
+// manager reads only id (every method) plus email/name/role/createdAt (me); the rest of better-auth's inferred
+// SessionUser is irrelevant here, so a partial is cast to the boundary type.
+//
+// Deliberately carries no quota: a session cannot state one. Quota is read from the user row at every enforcement
+// point, so a spec that needs a capped actor seeds the cap on the row (seedUser/setUserQuota) -- an actor-shaped
+// knob here would let a spec "set" a quota that nothing enforces.
 export function testActor(init : ActorInit) : SessionUser
 {
     const createdAt = init.createdAt ?? new Date('2026-01-01T00:00:00.000Z');
@@ -186,7 +189,6 @@ export function testActor(init : ActorInit) : SessionUser
         email: init.email ?? `${ init.id }@t.test`,
         name: init.name ?? init.id,
         role: init.role ?? 'user',
-        quotaLimit: init.quotaLimit ?? null,
         emailVerified: true,
         createdAt,
         updatedAt: createdAt,

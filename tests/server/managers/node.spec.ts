@@ -29,6 +29,7 @@ import {
     seedBackend,
     seedBlob,
     seedUser,
+    setUserQuota,
 } from '../resource-access/nodes/support.ts';
 import { RecordingOrphanedBlobs, noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
 
@@ -70,20 +71,37 @@ describe('NodeManager.me', () =>
         await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'dir' }));
 
+        await setUserQuota(handle.db, 'alice', 1_000_000);
+
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const me = await manager.me(testActor({ id: 'alice', email: 'alice@example.com', quotaLimit: 1_000_000 }));
+        const me = await manager.me(testActor({ id: 'alice', email: 'alice@example.com' }));
 
         expect(me.quota.used).toBe(1500);
         expect(me.quota.limit).toBe(1_000_000);
+    });
+
+    // The profile is what the client renders the quota meter from, so it must agree with what the next upload will
+    // actually be judged against -- a cap read from a session snapshot would keep showing the old number after an
+    // admin moved it.
+    it('reports a cap changed since sign-in, not the one the session was issued with', async () =>
+    {
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const actor = testActor({ id: 'alice' });
+
+        await setUserQuota(handle.db, 'alice', 4096);
+
+        expect((await manager.me(actor)).quota).toEqual({ used: 0, effective: 4096, limit: 4096 });
     });
 
     // 0 is the account's own "no cap", which is what pins a user above a tightened instance default; null would
     // inherit that default instead. The raw value travels verbatim so the client can tell the two states apart.
     it('pins an explicitly-unlimited account above a tightened instance default', async () =>
     {
+        await setUserQuota(handle.db, 'alice', 0);
+
         const policy = testNodePolicy({ defaultQuota: async () => 4096 });
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), policy);
-        const me = await manager.me(testActor({ id: 'alice', quotaLimit: 0 }));
+        const me = await manager.me(testActor({ id: 'alice' }));
 
         expect(me.quota).toEqual({ used: 0, effective: null, limit: 0 });
     });

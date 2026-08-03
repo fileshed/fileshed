@@ -31,6 +31,7 @@ import {
     seedBackend,
     seedBlob,
     seedUser,
+    setUserQuota,
 } from '../resource-access/nodes/support.ts';
 import { noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
 
@@ -163,10 +164,9 @@ describe('NodeManager.copy', () =>
     it('rejects a copy that would exceed the caller\'s quota, writing no node', async () =>
     {
         await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
+        await setUserQuota(handle.db, 'alice', 1500);
 
-        const error = await caught(
-            manager().copy(testActor({ id: 'alice', quotaLimit: 1500 }), 'src', { parentID: null })
-        );
+        const error = await caught(manager().copy(testActor({ id: 'alice' }), 'src', { parentID: null }));
 
         expect(error).toBeInstanceOf(ForbiddenError);
         // The source is the only node Alice owns; the rejected copy added nothing.
@@ -176,10 +176,40 @@ describe('NodeManager.copy', () =>
     it('admits a copy that lands the caller exactly at their quota limit', async () =>
     {
         await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
+        await setUserQuota(handle.db, 'alice', 2000);
 
-        const copy = await manager().copy(testActor({ id: 'alice', quotaLimit: 2000 }), 'src', { parentID: null });
+        const copy = await manager().copy(testActor({ id: 'alice' }), 'src', { parentID: null });
 
         expect(copy.type).toBe('file');
+        expect(await ra.ownedBytes('alice')).toBe(2000);
+    });
+
+    // A copy is judged against the cap as it stands when the copy runs, not the one the caller signed in under: an
+    // admin who tightens a quota has tightened it for the very next copy.
+    it('judges a copy against a cap lowered since the caller signed in', async () =>
+    {
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
+        await setUserQuota(handle.db, 'alice', 10_000);
+
+        const actor = testActor({ id: 'alice' });
+        await setUserQuota(handle.db, 'alice', 1500);
+
+        expect(await caught(manager().copy(actor, 'src', { parentID: null }))).toBeInstanceOf(ForbiddenError);
+        expect(await ra.ownedBytes('alice')).toBe(1000);
+    });
+
+    // The reverse direction, so the live read is not mistaken for "always refuse": a raised cap admits the very next
+    // copy, with no session turnover in between.
+    it('admits a copy under a cap raised since the caller signed in', async () =>
+    {
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
+        await setUserQuota(handle.db, 'alice', 1500);
+
+        const actor = testActor({ id: 'alice' });
+        await setUserQuota(handle.db, 'alice', 2000);
+
+        await manager().copy(actor, 'src', { parentID: null });
+
         expect(await ra.ownedBytes('alice')).toBe(2000);
     });
 
@@ -200,8 +230,10 @@ describe('NodeManager.copy', () =>
     {
         await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
 
+        await setUserQuota(handle.db, 'alice', 0);
+
         const bound = new NodeManager(handle, ra, noopOrphanedBlobs(), { defaultQuota: async () => 1500 });
-        await bound.copy(testActor({ id: 'alice', quotaLimit: 0 }), 'src', { parentID: null });
+        await bound.copy(testActor({ id: 'alice' }), 'src', { parentID: null });
 
         expect(await ra.ownedBytes('alice')).toBe(2000);
     });

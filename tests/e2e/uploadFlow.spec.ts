@@ -246,9 +246,10 @@ describe('proof-of-possession dedup by a second owner', () =>
 //----------------------------------------------------------------------------------------------------------------------
 // Quota enforcement at claim time
 //
-// A dedicated server: the quota is set by the bootstrap admin, and sessions snapshot the quota at sign-in, so the user
-// signs in AFTER the set to carry the new limit. A claim that would push usage over the limit is refused at claim time
-// -- no ticket, no blob, no node -- while a claim that lands exactly at the limit is admitted and commits.
+// A dedicated server whose quota is set by the bootstrap admin. A claim that would push usage over the limit is
+// refused at claim time -- no ticket, no blob, no node -- while a claim that lands exactly at the limit is admitted
+// and commits. The last case moves the quota out from under an already-signed-in user, which is where a cap read from
+// the session rather than the database would keep enforcing a number the admin has already replaced.
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('quota enforcement over the wire', () =>
@@ -262,6 +263,8 @@ describe('quota enforcement over the wire', () =>
 
     let quotaServer : ServerHandle;
     let user : ApiClient;
+    let quotaAdmin : ApiClient;
+    let quotaUserID : string;
 
     beforeAll(async () =>
     {
@@ -277,14 +280,13 @@ describe('quota enforcement over the wire', () =>
 
         const registrant = new ApiClient(quotaServer.baseURL);
         await registrant.signUp('quota-user@example.com', PASSWORD);
-        const userID = (await (await registrant.get('/api/me')).json() as MeResponse).id;
+        quotaUserID = (await (await registrant.get('/api/me')).json() as MeResponse).id;
 
-        const admin = new ApiClient(quotaServer.baseURL);
-        await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
-        const setQuota = await admin.patch(`/api/admin/users/${ userID }`, { quotaLimit: LIMIT });
+        quotaAdmin = new ApiClient(quotaServer.baseURL);
+        await quotaAdmin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+        const setQuota = await quotaAdmin.patch(`/api/admin/users/${ quotaUserID }`, { quotaLimit: LIMIT });
         if(setQuota.status !== 200) { throw new Error('setup: expected the admin to set the quota'); }
 
-        // Sign in AFTER the set so the session carries the new limit.
         user = new ApiClient(quotaServer.baseURL);
         await user.signIn('quota-user@example.com', PASSWORD);
     });
@@ -333,6 +335,30 @@ describe('quota enforcement over the wire', () =>
         const me = await (await user.get('/api/me')).json() as MeResponse;
         expect(me.quota.used).toBe(LIMIT);
         expect(me.quota.limit).toBe(LIMIT);
+    });
+
+    // The user is full and stays signed in throughout: their session (cookie cache included) still carries the old
+    // limit, and nothing signs them out or refreshes it. A quota the admin has already raised must free their very
+    // next upload, and the profile must report the new number rather than the one the session was issued with.
+    it('lets an admin-raised quota through on the very next upload, with no re-authentication', async () =>
+    {
+        const raised = await quotaAdmin.patch(`/api/admin/users/${ quotaUserID }`, { quotaLimit: LIMIT * 4 });
+        expect(raised.status).toBe(200);
+
+        const extra = smallFixture('quota-after-raise');
+        const extraSha = sha256Of(extra);
+
+        const claim = await (await user.post('/api/blobs/claim', { sha256: extraSha, size: extra.length }))
+            .json() as ClaimResponse;
+        expect(claim.upload).toBe(true);
+        if(claim.upload !== true) { throw new Error('expected a ticket once the admin raised the quota'); }
+
+        const params = new URLSearchParams({ name: 'after-raise.bin', mimeType: 'application/octet-stream' });
+        expect((await user.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, extra)).status).toBe(200);
+
+        const me = await (await user.get('/api/me')).json() as MeResponse;
+        expect(me.quota.used).toBe(LIMIT + extra.length);
+        expect(me.quota.limit).toBe(LIMIT * 4);
     });
 });
 

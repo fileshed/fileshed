@@ -40,10 +40,10 @@ import { createBlobRoutes } from '@server/routes/blobs.ts';
 import { createUploadRoutes } from '@server/routes/uploads.ts';
 
 // Auth support (real sign-up/sign-in over the same app)
-import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { ORIGIN, cookieFrom, cookieJarFrom, signIn, signUp, testConfig } from '../auth/support.ts';
 import { openTestDatabase } from '../support/database.ts';
 
-export { ORIGIN, cookieFrom, signIn, signUp } from '../auth/support.ts';
+export { ORIGIN, cookieFrom, cookieJarFrom, signIn, signUp } from '../auth/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -130,11 +130,15 @@ export interface TestUser
 {
     id : string;
     cookie : string;
+
+    // The session token PLUS better-auth's session_data cache, the way a browser carries them. The cache holds a
+    // signed snapshot of the user row, so a spec exercising a row that changes after sign-in must send this rather
+    // than `cookie` -- with the token alone the server reads the session fresh and no snapshot is ever consulted.
+    jar : string;
     email : string;
 }
 
-// Sign up, optionally set a quota_limit before signing in (a cached session snapshots quota at sign-in, so it must be
-// set first -- mirrors makeAdmin's role flip), then sign in for a session that reflects it.
+// Sign up with an optional starting quota_limit on the row, then sign in for a session cookie.
 export async function makeUser(
     booted : BootedBlobApp,
     email : string,
@@ -151,13 +155,13 @@ export async function makeUser(
             .execute();
     }
 
-    const cookie = cookieFrom(await signIn(booted.app, email, password));
+    const signInRes = await signIn(booted.app, email, password);
 
     const row = await booted.handle.db.selectFrom('user').select('id')
         .where('email', '=', email)
         .executeTakeFirstOrThrow();
 
-    return { id: row.id, cookie, email };
+    return { id: row.id, cookie: cookieFrom(signInRes), jar: cookieJarFrom(signInRes), email };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

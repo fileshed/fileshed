@@ -527,26 +527,35 @@ export class BlobManager
 
     async #admitQuota(caller : SessionUser, incomingBytes : number) : Promise<void>
     {
-        const limitBytes = await this.#resolveLimit(caller.quotaLimit ?? null);
+        const limitBytes = await this.#resolveLimit(caller.id);
         const usedBytes = await this.#nodes.ownedBytes(caller.id);
 
         this.#enforceQuota(caller.id, usedBytes, incomingBytes, limitBytes);
     }
 
-    // Fold the instance default into an owner's raw quota_limit. Always called BEFORE a transaction opens: it reads
-    // the settings row, and SQLite serializes writes, so a read issued from inside an open write transaction on the
-    // same handle deadlocks the commit. The resolved limit is then carried into the transaction as a plain number.
-    async #resolveLimit(userLimit : number | null) : Promise<number | null>
+    // The cap an owner is held to right now: their quota_limit read from their user row, with the instance default
+    // folded in. Both halves are read live, never taken from the caller's session -- the session cookie cache carries
+    // a snapshot of the user row for its whole window, so enforcing against it would judge a write by a limit an
+    // admin has already replaced.
+    //
+    // Always called BEFORE a transaction opens: it reads the user row and the settings row, and SQLite serializes
+    // writes, so a read issued from inside an open write transaction on the same handle deadlocks the commit. The
+    // resolved limit is then carried into the transaction as a plain number.
+    async #resolveLimit(ownerID : string) : Promise<number | null>
     {
-        return effectiveQuota(userLimit, await this.#defaultQuota());
+        const [ userLimit, instanceDefault ] = await Promise.all([
+            this.#users.quotaLimitOf(ownerID),
+            this.#defaultQuota(),
+        ]);
+
+        return effectiveQuota(userLimit, instanceDefault);
     }
 
     // Judge one write against an owner's quota and throw the quota message on refusal. Keyed by ownerID and an already-
     // resolved limit so it serves both the caller-charged create paths (caller is the owner) and the owner-charged
-    // replace path (an editor's write is charged to the file's owner, whose limit is read from their user row, not the
-    // actor's session). usedBytes is passed in so the caller controls whether it was read outside the commit (the
-    // early gate) or inside it (the authoritative re-check). incomingBytes is the DELTA for a replace, which may be
-    // negative.
+    // replace path (an editor's write is charged to the file's owner). usedBytes is passed in so the caller controls
+    // whether it was read outside the commit (the early gate) or inside it (the authoritative re-check). incomingBytes
+    // is the DELTA for a replace, which may be negative.
     #enforceQuota(ownerID : string, usedBytes : number, incomingBytes : number, limitBytes : number | null) : void
     {
         const verdict = regulation.quota.admit({ ownerID, usedBytes, limitBytes, incomingBytes });
@@ -636,7 +645,7 @@ export class BlobManager
             trashedAt: null,
         };
 
-        const limitBytes = await this.#resolveLimit(caller.quotaLimit ?? null);
+        const limitBytes = await this.#resolveLimit(caller.id);
 
         await this.#handle.db.transaction().execute(async (trx) =>
         {
@@ -724,7 +733,7 @@ export class BlobManager
         const oldBlobID = target.blobID;
         const delta = size - target.size;
         const resolvedMime = mimeType ?? target.mimeType;
-        const ownerLimit = await this.#resolveLimit(await this.#users.quotaLimitOf(target.ownerID));
+        const ownerLimit = await this.#resolveLimit(target.ownerID);
         const now = new Date();
 
         // Early gate against the owner's quota before a write is opened; the in-transaction re-judge below is
