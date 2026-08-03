@@ -55,7 +55,14 @@ export class SettingsRA
 
     async upsert(key : string, value : unknown) : Promise<void>
     {
+        // JSON.stringify answers the *value* undefined -- not a string -- for undefined, functions and symbols.
         const encoded = JSON.stringify(value);
+
+        if(typeof encoded !== 'string')
+        {
+            throw new Error(`setting ${ key }: a value of type ${ typeof value } has no JSON representation`);
+        }
+
         const stamp = new Date().toISOString();
 
         await this.#db
