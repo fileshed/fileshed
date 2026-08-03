@@ -75,6 +75,15 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
         }
     }
 
+    // A non-empty entries array is a server view already in hand: the vocabulary is a fixed list, so a load that
+    // landed left every key in it. For a surface that only reads a value back off the entries, that view is enough.
+    async function ensureLoaded() : Promise<void>
+    {
+        if(entries.value.length > 0) { return; }
+
+        await load();
+    }
+
     async function apply(changes : PatchSettingsRequest['changes']) : Promise<void>
     {
         adopt(await patchAdminSettings(changes));
@@ -98,7 +107,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
         await apply(Object.fromEntries(keys.map((key) => [ key, null ])));
     }
 
-    return { entries, restartRequired, loading, error, defaultQuota, load, save, reset, resetAll };
+    return { entries, restartRequired, loading, error, defaultQuota, load, ensureLoaded, save, reset, resetAll };
 });
 
 //----------------------------------------------------------------------------------------------------------------------

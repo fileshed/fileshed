@@ -150,7 +150,7 @@
     onMounted(() =>
     {
         void load();
-        void settings.load();
+        void settings.ensureLoaded();
     });
 
     // Typing re-queries after a beat; switching the field or the sort re-queries at once.

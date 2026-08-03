@@ -4,6 +4,8 @@
 // The store's one job: whatever the server answers -- on load, save, or reset -- IS the state. Sources, masked
 // values, and the restart flag are never computed client-side, so a save adopts the refreshed view wholesale, and
 // a reset is just the null patch. A failed load lands in `error` for the tab's retry state instead of throwing.
+// Readers that only want a value back off the view ask through ensureLoaded, which spends a round trip only when
+// the store has nothing to read.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +44,11 @@ function entry(overrides : Partial<AdminSettingEntry> = {}) : AdminSettingEntry
     };
 }
 
+function quotaEntry(bytes : number) : AdminSettingEntry
+{
+    return entry({ key: 'DEFAULT_QUOTA_BYTES', kind: 'number', value: bytes });
+}
+
 function view(entries : AdminSettingEntry[], restartRequired = false) : AdminSettingsResponse
 {
     return { settings: entries, restartRequired };
@@ -78,6 +85,43 @@ describe('useAdminSettingsStore', () =>
 
         expect(store.error?.message).toBe('offline');
         expect(store.entries).toHaveLength(0);
+    });
+
+    it('ensureLoaded fetches the view when the store has none', async () =>
+    {
+        fetchMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
+        const store = useAdminSettingsStore();
+
+        await store.ensureLoaded();
+
+        expect(store.defaultQuota).toBe(20_000);
+    });
+
+    it('ensureLoaded answers from the view already in hand instead of asking again', async () =>
+    {
+        fetchMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
+        const store = useAdminSettingsStore();
+        await store.load();
+        fetchMock.mockClear();
+
+        await store.ensureLoaded();
+
+        expect(store.defaultQuota).toBe(20_000);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    // A blip that leaves the store empty must not blank the values every later reader depends on.
+    it('ensureLoaded asks again after a load that failed', async () =>
+    {
+        fetchMock.mockRejectedValueOnce(new Error('offline'));
+        const store = useAdminSettingsStore();
+        await store.load();
+
+        fetchMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
+        await store.ensureLoaded();
+
+        expect(store.defaultQuota).toBe(20_000);
+        expect(store.error).toBeNull();
     });
 
     it('save patches the one key and adopts the refreshed view', async () =>
