@@ -23,7 +23,8 @@
             @keydown.enter="emit('open', node)"
         >
             <div
-                class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100
+                    focus-within:opacity-100 pointer-coarse:opacity-100"
                 @click.stop
                 @dblclick.stop
             >

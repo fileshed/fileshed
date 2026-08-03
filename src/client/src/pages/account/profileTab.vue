@@ -9,7 +9,7 @@
 
 <template>
     <div class="flex flex-col gap-8">
-        <section class="flex items-start gap-6">
+        <section class="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-6">
             <div class="flex shrink-0 flex-col items-center gap-3">
                 <button
                     type="button"
@@ -34,8 +34,8 @@
                 />
             </div>
 
-            <div class="flex min-w-0 flex-col gap-1 pt-4">
-                <div class="flex items-center gap-2">
+            <div class="flex w-full min-w-0 flex-col items-center gap-1 sm:w-auto sm:items-start sm:pt-4">
+                <div class="flex max-w-full items-center gap-2">
                     <h2 class="truncate text-lg font-semibold text-highlighted">
                         {{ displayName }}
                     </h2>

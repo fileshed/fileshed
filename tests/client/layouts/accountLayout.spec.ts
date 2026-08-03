@@ -11,6 +11,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { createMemoryHistory, createRouter } from 'vue-router';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -48,16 +49,31 @@ const UNavigationMenuStub = {
 const RouterViewStub = { name: 'RouterView', template: '<div class="router-view" />' };
 const TopBarStub = { name: 'TopBar', template: '<div class="top-bar" />' };
 
+// The shell's narrow-viewport drawer holds a second copy of this same sidebar; closed, it holds nothing, which is
+// the state these assertions count links in.
+const USlideoverStub = {
+    name: 'USlideover',
+    props: [ 'open' ],
+    template: '<div v-if="open"><slot name="content" /></div>',
+};
+
 function mountLayout() : VueWrapper
 {
+    const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [ { path: '/:pathMatch(.*)*', component: { template: '<div />' } } ],
+    });
+
     return mount(AccountLayout, {
         global: {
+            plugins: [ router ],
             stubs: {
                 RouterLink: RouterLinkStub,
                 UButton: UButtonStub,
                 UNavigationMenu: UNavigationMenuStub,
                 RouterView: RouterViewStub,
                 TopBar: TopBarStub,
+                USlideover: USlideoverStub,
             },
         },
     });

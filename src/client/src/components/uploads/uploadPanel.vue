@@ -10,7 +10,8 @@
 <template>
     <div
         v-if="uploads.hasItems"
-        class="fixed bottom-4 right-4 z-40 w-80 overflow-hidden rounded-lg border border-default bg-default shadow-lg"
+        class="fixed inset-x-4 bottom-4 z-40 overflow-hidden rounded-lg border border-default bg-default shadow-lg
+            sm:left-auto sm:right-4 sm:w-80"
     >
         <div class="flex items-center justify-between gap-2 border-b border-default px-3 py-2">
             <span class="truncate text-sm font-medium">{{ summary }}</span>

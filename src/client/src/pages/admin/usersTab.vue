@@ -11,14 +11,14 @@
 
 <template>
     <div class="flex flex-col gap-4">
-        <div class="flex gap-2">
+        <div class="flex flex-col gap-2 sm:flex-row">
             <UInput
                 v-model="search"
                 icon="i-lucide-search"
                 placeholder="Search accounts…"
-                class="max-w-xs flex-1"
+                class="sm:max-w-xs sm:flex-1"
             />
-            <USelect v-model="searchField" :items="searchFieldItems" class="w-32" />
+            <USelect v-model="searchField" :items="searchFieldItems" class="sm:w-32" />
         </div>
 
         <UAlert
@@ -30,25 +30,25 @@
         />
 
         <div v-else class="overflow-x-auto rounded-lg border border-default">
-            <table class="w-full text-sm">
+            <table class="w-full table-fixed text-sm">
                 <thead>
                     <tr class="border-b border-default text-left text-muted">
                         <th class="px-4 py-3">
                             <SortHeader label="Account" sort-key="email" :state="sort" @toggle="toggleSort" />
                         </th>
-                        <th class="px-4 py-3 font-medium">
+                        <th class="w-28 px-4 py-3 font-medium">
                             Role
                         </th>
-                        <th class="px-4 py-3 font-medium">
+                        <th class="hidden w-32 px-4 py-3 font-medium lg:table-cell">
                             Usage
                         </th>
-                        <th class="px-4 py-3 font-medium">
+                        <th class="hidden w-44 px-4 py-3 font-medium lg:table-cell">
                             Quota
                         </th>
-                        <th class="px-4 py-3">
+                        <th class="hidden w-32 px-4 py-3 xl:table-cell">
                             <SortHeader label="Joined" sort-key="createdAt" :state="sort" @toggle="toggleSort" />
                         </th>
-                        <th class="px-2 py-3" />
+                        <th class="w-12 px-2 py-3" />
                     </tr>
                 </thead>
                 <tbody>

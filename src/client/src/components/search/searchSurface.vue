@@ -3,9 +3,10 @@
   --
   -- The body of the Search view: the loading spinner, the load error with its retry, "No files match" when the query
   -- resolved to nothing, and otherwise the result count line plus a dense row per hit -- name, owner, size, modified,
-  -- type, the same facts the drive's list view shows. Opening relays up so the page runs the shared open intent; there
-  -- is no selection and no per-row menu here, since search is a finder, not a manager. Reads the search store for its
-  -- listing state directly.
+  -- type, the same facts the drive's list view shows. The name outranks the metadata columns, which leave as the
+  -- surface narrows until only the name and the go-to-folder jump remain. Opening relays up so the page runs the
+  -- shared open intent; there is no selection and no per-row menu here, since search is a finder, not a manager. Reads
+  -- the search store for its listing state directly.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -37,22 +38,27 @@
             </p>
 
             <div
-                class="grid grid-cols-[1fr_10rem_6rem_9rem_6rem_2.5rem] gap-4 border-b border-default px-3 pb-2
-                    text-xs font-semibold text-muted"
+                class="grid grid-cols-[minmax(0,1fr)_2.5rem] sm:grid-cols-[minmax(0,1fr)_9rem_2.5rem]
+                    lg:grid-cols-[minmax(0,1fr)_7rem_9rem_2.5rem]
+                    xl:grid-cols-[minmax(0,1fr)_10rem_6rem_9rem_6rem_2.5rem] gap-2 border-b border-default px-3 pb-2
+                    text-xs font-semibold text-muted sm:gap-4"
             >
                 <span>Name</span>
-                <span>Owner</span>
-                <span>Size</span>
-                <span>Modified</span>
-                <span>Type</span>
+                <span class="hidden lg:block">Owner</span>
+                <span class="hidden xl:block">Size</span>
+                <span class="hidden sm:block">Modified</span>
+                <span class="hidden xl:block">Type</span>
                 <span class="sr-only">Actions</span>
             </div>
 
             <div
                 v-for="row in rows"
                 :key="row.node.id"
-                class="grid cursor-default grid-cols-[1fr_10rem_6rem_9rem_6rem_2.5rem] items-center gap-4 border-b
-                    border-default px-3 py-2 text-sm transition-colors hover:bg-elevated/50"
+                class="grid cursor-default grid-cols-[minmax(0,1fr)_2.5rem]
+                    sm:grid-cols-[minmax(0,1fr)_9rem_2.5rem]
+                    lg:grid-cols-[minmax(0,1fr)_7rem_9rem_2.5rem]
+                    xl:grid-cols-[minmax(0,1fr)_10rem_6rem_9rem_6rem_2.5rem] items-center gap-2 border-b
+                    border-default px-3 py-2 text-sm transition-colors hover:bg-elevated/50 sm:gap-4"
                 role="button"
                 tabindex="0"
                 :aria-label="row.node.name"
@@ -81,16 +87,18 @@
                     </div>
                 </div>
 
-                <div class="flex min-w-0 items-center gap-2">
+                <div class="hidden min-w-0 items-center gap-2 lg:flex">
                     <UAvatar :src="ownerImage(row.node) ?? undefined" :alt="ownerLabel(row.node)" size="2xs" />
                     <span class="truncate text-muted">{{ ownerLabel(row.node) }}</span>
                 </div>
 
-                <span class="truncate text-muted">
+                <span class="hidden truncate text-muted xl:block">
                     {{ row.node.type === 'file' ? formatBytes(row.node.size) : '—' }}
                 </span>
-                <span class="truncate text-muted">{{ formatNodeDate(row.node.updatedAt, session.timeFormat) }}</span>
-                <span class="truncate text-muted">{{ nodeKindLabel(row.node) }}</span>
+                <span class="hidden truncate text-muted sm:block">
+                    {{ formatNodeDate(row.node.updatedAt, session.timeFormat) }}
+                </span>
+                <span class="hidden truncate text-muted xl:block">{{ nodeKindLabel(row.node) }}</span>
 
                 <UButton
                     v-if="row.folderRoute"

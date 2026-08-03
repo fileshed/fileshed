@@ -7,7 +7,7 @@
 
 <template>
     <div class="rounded-lg border border-default p-4">
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
             <h3 class="font-medium">
                 {{ title }}
             </h3>

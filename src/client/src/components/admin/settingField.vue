@@ -13,7 +13,7 @@
 
 <template>
     <div class="rounded-lg border border-default p-4" :data-setting="entry.key">
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                     <h3 class="font-medium text-default">
@@ -39,7 +39,7 @@
                 </p>
             </div>
 
-            <div class="flex shrink-0 items-center gap-2">
+            <div class="flex items-center gap-2 sm:shrink-0">
                 <UButton
                     v-if="entry.source === 'override' && entry.hasDefault"
                     label="Reset to default"

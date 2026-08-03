@@ -25,7 +25,7 @@
                 variant="subtle"
                 size="sm"
             />
-            <span class="ml-auto truncate font-mono text-xs text-muted">{{ backend.id }}</span>
+            <span class="ml-auto min-w-0 truncate font-mono text-xs text-muted">{{ backend.id }}</span>
         </div>
     </section>
 </template>

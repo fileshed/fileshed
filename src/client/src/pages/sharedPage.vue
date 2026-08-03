@@ -12,7 +12,7 @@
 
 <template>
     <section class="flex h-full flex-col gap-4">
-        <header class="flex shrink-0 items-start justify-between gap-4">
+        <header class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div class="min-w-0">
                 <h1 class="text-2xl font-bold">
                     Shared with me
@@ -22,7 +22,7 @@
                     stop seeing it here.
                 </p>
             </div>
-            <ViewToggle :view-mode="viewMode" @set-view="setView" />
+            <ViewToggle class="shrink-0 self-end sm:self-auto" :view-mode="viewMode" @set-view="setView" />
         </header>
 
         <FilterRow

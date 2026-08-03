@@ -40,7 +40,10 @@
                 <h2 class="text-lg font-semibold text-highlighted">
                     Test
                 </h2>
-                <div class="flex items-center justify-between gap-4 rounded-lg border border-default p-4">
+                <div
+                    class="flex flex-col items-start gap-3 rounded-lg border border-default p-4 sm:flex-row
+                        sm:items-center sm:justify-between sm:gap-4"
+                >
                     <div>
                         <h3 class="font-medium text-default">
                             Send a test email

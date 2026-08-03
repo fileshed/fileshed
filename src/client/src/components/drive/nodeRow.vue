@@ -2,8 +2,8 @@
   -- Node Row
   --
   -- One dense row in the list: name with its type icon, owner, size, modified time, kind, and an end-of-row kebab.
-  -- The name outranks the metadata columns: at narrow widths Type leaves first, then Size, so the name always keeps
-  -- readable room.
+  -- The name outranks the metadata columns: as the surface narrows Type leaves first, then Size, then Modified, and
+  -- at the narrowest tier size and modified return as one meta line under the name. Name, owner, and the kebab stay.
   -- Same interaction contract as the grid tile -- click emits selection intent with modifiers, double-click emits
   -- open, the menu items (right-click, or the kebab) are a prop. A dead link dims and reads "Broken link" in the kind
   -- column. The owner avatar resolves against the listing's owners facet -- a link attributes to its resolved
@@ -14,10 +14,11 @@
 <template>
     <UContextMenu :items="menuItems">
         <div
-            class="group grid cursor-default grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
-                md:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
-                lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] items-center gap-4
-                border-b border-default px-3 py-2 text-sm transition-colors"
+            class="group grid cursor-default grid-cols-[minmax(0,1fr)_2.5rem_2.5rem]
+                sm:grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
+                lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
+                xl:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] items-center gap-2
+                border-b border-default px-3 py-2 text-sm transition-colors sm:gap-4"
             :class="selected ? 'bg-primary/10' : 'hover:bg-elevated/50'"
             role="button"
             tabindex="0"
@@ -35,9 +36,12 @@
                         class="absolute -bottom-1 -right-1 size-3 rounded-full bg-default text-muted"
                     />
                 </div>
-                <span class="truncate font-medium" :class="{ 'text-dimmed': dead }" :title="node.name">
-                    {{ node.name }}
-                </span>
+                <div class="flex min-w-0 flex-col">
+                    <span class="truncate font-medium" :class="{ 'text-dimmed': dead }" :title="node.name">
+                        {{ node.name }}
+                    </span>
+                    <span class="truncate text-xs text-muted sm:hidden">{{ metaLine }}</span>
+                </div>
             </div>
 
             <div class="flex justify-center" @click.stop @dblclick.stop>
@@ -47,14 +51,17 @@
                 <UAvatar v-else :alt="ownerID" size="xs" />
             </div>
 
-            <span class="hidden truncate text-muted md:block">
+            <span class="hidden truncate text-muted lg:block">
                 {{ node.type === 'file' ? formatBytes(node.size) : '—' }}
             </span>
-            <span class="truncate text-muted">{{ formatNodeDate(node.updatedAt, session.timeFormat) }}</span>
-            <span class="hidden truncate text-muted lg:block">{{ kindLabel }}</span>
+            <span class="hidden truncate text-muted sm:block">
+                {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
+            </span>
+            <span class="hidden truncate text-muted xl:block">{{ kindLabel }}</span>
 
             <div
-                class="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                class="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100
+                    pointer-coarse:opacity-100"
                 @click.stop
                 @dblclick.stop
             >
@@ -119,6 +126,15 @@
     const kindLabel = computed(() => nodeKindLabel(props.node));
     const ownerID = computed(() => ownerIDFor(props.node));
     const owner = computed(() => resolveOwner(ownerID.value, props.owners));
+
+    // What the metadata columns say, folded into one line for the narrow tier that has no room for them.
+    const metaLine = computed(() =>
+    {
+        const modified = formatNodeDate(props.node.updatedAt, session.timeFormat);
+        if(dead.value) { return `Broken link · ${ modified }`; }
+
+        return props.node.type === 'file' ? `${ formatBytes(props.node.size) } · ${ modified }` : modified;
+    });
 
     function onClick(event : MouseEvent) : void
     {

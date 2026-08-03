@@ -13,7 +13,11 @@
         </div>
 
         <ul v-else class="divide-y divide-default">
-            <li v-for="token in tokens" :key="token.id" class="flex items-center gap-3 p-4">
+            <li
+                v-for="token in tokens"
+                :key="token.id"
+                class="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center"
+            >
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="font-medium text-default">{{ token.name }}</span>

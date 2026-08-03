@@ -9,10 +9,11 @@
 <template>
     <div>
         <div
-            class="grid grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
-                md:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
-                lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] gap-4 border-b border-default px-3 pb-2
-                text-xs font-semibold text-muted"
+            class="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem]
+                sm:grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
+                lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
+                xl:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] gap-2 border-b border-default px-3 pb-2
+                text-xs font-semibold text-muted sm:gap-4"
         >
             <button type="button" class="flex items-center gap-1 text-left hover:text-default" @click="emit('sort', 'name')">
                 Name
@@ -21,7 +22,7 @@
             <span class="text-center">Owner</span>
             <button
                 type="button"
-                class="hidden items-center gap-1 text-left hover:text-default md:flex"
+                class="hidden items-center gap-1 text-left hover:text-default lg:flex"
                 @click="emit('sort', 'size')"
             >
                 Size
@@ -29,7 +30,7 @@
             </button>
             <button
                 type="button"
-                class="flex items-center gap-1 text-left hover:text-default"
+                class="hidden items-center gap-1 text-left hover:text-default sm:flex"
                 @click="emit('sort', 'updatedAt')"
             >
                 Modified
@@ -37,7 +38,7 @@
             </button>
             <button
                 type="button"
-                class="hidden items-center gap-1 text-left hover:text-default lg:flex"
+                class="hidden items-center gap-1 text-left hover:text-default xl:flex"
                 @click="emit('sort', 'kind')"
             >
                 Type

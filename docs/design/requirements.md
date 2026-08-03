@@ -272,6 +272,7 @@ The UX bar is the mainstream cloud file managers. Nuxt UI v4 provides the chrome
 - **Sharing requests**: owners get a "Sharing requests" view (grant/decline); requesters see request status on the stub. "Save a copy to my drive" appears on any file shared to you; pending deletion offers surface alongside Shared with me.
 - **Shared with me view**: virtual listing of active shares with placement status and "Add to my drive".
 - **Trash view**, **quota meter** in sidebar, name search in header.
+- **Narrow viewports**: supported down to 360px wide, with the sidebar moving into a drawer opened from the header below the `md` breakpoint.
 - Image/video/audio/PDF preview via browser-native rendering against the download endpoint (Range support makes video scrubbing work). No bespoke viewers in v1.
 
 ---

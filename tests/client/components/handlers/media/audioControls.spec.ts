@@ -3,8 +3,9 @@
 //
 // Purely props-in, emits-out: no media element involved. What this guards: the play/pause and volume icons track the
 // props they're derived from, the buffered and played fills widen with their percentages, the time readout formats
-// through the shared engine, and every control emits the action the player is expected to carry out. No fullscreen
-// control exists here -- there is no visual surface to fill.
+// through the shared engine, and every control emits the action the player is expected to carry out -- from its button
+// and, for the ones a narrow row drops, from the overflow menu as well. No fullscreen control exists here -- there is
+// no visual surface to fill.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -23,12 +24,20 @@ const UButtonStub = {
         + '@click="$emit(\'click\')">{{ label }}</button>',
 };
 
+// Renders every menu item as a button, submenu children included, so a test can click what a real menu would show.
 const UDropdownMenuStub = {
     name: 'UDropdownMenu',
     props: [ 'items' ],
-    template: '<div class="rate-menu"><slot />'
-        + '<button v-for="item in items.flat()" :key="item.label" :data-rate-item="item.label" '
-        + '@click="item.onSelect()">{{ item.label }}</button></div>',
+    computed: {
+        entries()
+        {
+            return (this.items as { label : string; children ?: unknown[] }[][]).flat()
+                .flatMap((item) => (item.children ?? [ item ]));
+        },
+    },
+    template: '<div><slot />'
+        + '<button v-for="item in entries" :key="item.label" :data-menuitem="item.label" '
+        + '@click="item.onSelect && item.onSelect()">{{ item.label }}</button></div>',
 };
 
 const stubs = { UButton: UButtonStub, UDropdownMenu: UDropdownMenuStub, UIcon: true };
@@ -66,6 +75,23 @@ function seekFills(wrapper : VueWrapper) : { buffered : HTMLElement; played : HT
     const divs = row.querySelectorAll(':scope > div');
 
     return { buffered: divs[1] as HTMLElement, played: divs[2] as HTMLElement };
+}
+
+// The row carries two menus; each is found by the button that opens it.
+function menuFor(wrapper : VueWrapper, triggerLabel : string) : VueWrapper
+{
+    const menu = wrapper.findAllComponents({ name: 'UDropdownMenu' })
+        .find((candidate) => candidate.find(`[aria-label="${ triggerLabel }"]`).exists());
+
+    if(menu === undefined) { throw new Error(`No menu opened by "${ triggerLabel }"`); }
+
+    return menu as VueWrapper;
+}
+
+function menuLabels(wrapper : VueWrapper, triggerLabel : string) : string[]
+{
+    return menuFor(wrapper, triggerLabel).findAll('[data-menuitem]')
+        .map((item) => item.attributes('data-menuitem') ?? '');
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -134,7 +160,8 @@ describe('AudioControls', () =>
     {
         const wrapper = mountControls();
 
-        await wrapper.get('[data-rate-item="1.5x"]').trigger('click');
+        await menuFor(wrapper, 'Playback speed').get('[data-menuitem="1.5x"]')
+            .trigger('click');
 
         expect(wrapper.emitted('set-rate')).toEqual([ [ 1.5 ] ]);
     });
@@ -177,6 +204,62 @@ describe('AudioControls', () =>
         const wrapper = mountControls({ duration: 0 });
 
         expect(wrapper.get('input[aria-label="Seek"]').attributes('disabled')).toBeDefined();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// The card is narrower than the video bar at every width, so the same secondary controls move into a menu. Which ones
+// are visible is styling and untestable here; what matters is that the menu reaches the same actions, and that play,
+// the queue steps, and mute stay on the row.
+describe('AudioControls overflow menu', () =>
+{
+    it('runs shuffle, repeat, and the rate ladder from the menu', async () =>
+    {
+        const wrapper = mountControls();
+        const menu = menuFor(wrapper, 'More controls');
+
+        await menu.get('[data-menuitem="Shuffle"]').trigger('click');
+        await menu.get('[data-menuitem="Repeat: off"]').trigger('click');
+        await menu.get('[data-menuitem="2x"]').trigger('click');
+
+        expect(wrapper.emitted('toggle-shuffle')).toHaveLength(1);
+        expect(wrapper.emitted('cycle-repeat')).toHaveLength(1);
+        expect(wrapper.emitted('set-rate')).toEqual([ [ 2 ] ]);
+    });
+
+    it('names the repeat mode it will cycle from', () =>
+    {
+        expect(menuLabels(mountControls({ repeat: 'all' }), 'More controls')).toContain('Repeat: all');
+    });
+
+    it('checks the shuffle entry while shuffle is on', () =>
+    {
+        const items = menuFor(mountControls({ shuffle: true }), 'More controls').props('items') as
+            { label : string; checked ?: boolean }[][];
+
+        expect(items.flat().find((item) => item.label === 'Shuffle')?.checked).toBe(true);
+    });
+
+    it('offers Cast only where remote playback is available', async () =>
+    {
+        expect(menuLabels(mountControls(), 'More controls')).not.toContain('Cast');
+
+        const wrapper = mountControls({ castAvailable: true });
+        await menuFor(wrapper, 'More controls').get('[data-menuitem="Cast"]')
+            .trigger('click');
+
+        expect(wrapper.emitted('cast')).toHaveLength(1);
+    });
+
+    it('leaves play, the queue steps, and mute on the row', () =>
+    {
+        const labels = menuLabels(mountControls({ castAvailable: true, hasNext: true }), 'More controls');
+
+        expect(labels).not.toContain('Play');
+        expect(labels).not.toContain('Previous track');
+        expect(labels).not.toContain('Next track');
+        expect(labels).not.toContain('Mute');
     });
 });
 

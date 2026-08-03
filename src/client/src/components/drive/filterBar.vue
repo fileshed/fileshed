@@ -24,7 +24,7 @@
             />
 
             <template #content="{ close }">
-                <div class="flex w-64 flex-col p-1">
+                <div class="flex w-64 max-w-[calc(100vw-2rem)] flex-col p-1">
                     <button
                         type="button"
                         class="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-elevated"
@@ -66,11 +66,20 @@
             variant="ghost"
             icon="i-lucide-x"
             label="Clear all"
+            aria-label="Clear all"
+            :ui="{ label: 'hidden sm:inline' }"
             @click="store.clearFilters()"
         />
 
-        <UDropdownMenu v-if="viewMode === 'grid'" :items="sortItems" class="ml-auto">
-            <UButton icon="i-lucide-arrow-up-down" color="neutral" variant="ghost" :label="sortLabel" />
+        <UDropdownMenu v-if="viewMode === 'grid'" :items="sortItems" class="ml-auto shrink-0">
+            <UButton
+                icon="i-lucide-arrow-up-down"
+                color="neutral"
+                variant="ghost"
+                :label="sortLabel"
+                :aria-label="`Sort by ${ sortLabel }`"
+                :ui="{ label: 'hidden sm:inline' }"
+            />
         </UDropdownMenu>
     </div>
 </template>

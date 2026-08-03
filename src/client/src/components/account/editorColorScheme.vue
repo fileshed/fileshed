@@ -23,7 +23,7 @@
             :search-input="false"
             icon="i-lucide-palette"
             :disabled="pending"
-            class="mt-3 w-64"
+            class="mt-3 w-64 max-w-full"
             @update:model-value="choose"
         />
     </div>

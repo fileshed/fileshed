@@ -9,7 +9,7 @@
 
 <template>
     <section class="flex h-full flex-col gap-4">
-        <header class="flex shrink-0 items-start justify-between gap-4">
+        <header class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div class="min-w-0">
                 <h1 class="text-2xl font-bold">
                     Trash
@@ -18,16 +18,18 @@
                     Restore items to your files, or delete them forever.
                 </p>
             </div>
-            <ViewToggle :view-mode="viewMode" @set-view="setView" />
+            <ViewToggle class="shrink-0 self-end sm:self-auto" :view-mode="viewMode" @set-view="setView" />
         </header>
 
         <div
-            class="flex shrink-0 items-center justify-between gap-4 rounded-lg border border-default px-4 py-3"
+            class="flex shrink-0 flex-col items-start gap-3 rounded-lg border border-default px-4 py-3
+                sm:flex-row sm:items-center sm:justify-between sm:gap-4"
         >
             <p class="text-sm text-muted">
                 Items in the trash are permanently deleted after {{ retentionLabel }}.
             </p>
             <UButton
+                class="shrink-0"
                 color="error"
                 variant="soft"
                 label="Empty trash"

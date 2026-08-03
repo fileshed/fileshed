@@ -13,7 +13,7 @@
             </template>
         </UBreadcrumb>
 
-        <ViewToggle :view-mode="viewMode" @set-view="(mode) => emit('set-view', mode)" />
+        <ViewToggle class="shrink-0" :view-mode="viewMode" @set-view="(mode) => emit('set-view', mode)" />
     </div>
 </template>
 

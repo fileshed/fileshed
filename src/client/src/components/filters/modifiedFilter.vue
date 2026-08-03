@@ -18,7 +18,7 @@
         />
 
         <template #content="{ close }">
-            <div class="flex w-72 flex-col p-1">
+            <div class="flex w-72 max-w-[calc(100vw-2rem)] flex-col p-1">
                 <button
                     type="button"
                     class="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-elevated"

@@ -3,8 +3,10 @@
   --
   -- The transport bar overlaid on the video: a full-width scrub bar showing both playback progress and how far the
   -- browser has buffered ahead, then shuffle, previous/next over the playlist, play/pause, repeat, elapsed/total
-  -- time, volume, a playback-rate menu, and fullscreen. Presentational only -- it holds no media state of its own,
-  -- reading everything from props and asking the player to act via emits. Painted fixed-dark-on-black regardless of
+  -- time, volume, a playback-rate menu, and fullscreen. Narrow viewports keep the transport, mute, the playlist
+  -- toggle, and fullscreen on the bar and fold the rest into an overflow menu that carries the same emits its
+  -- buttons do. Presentational only -- it holds no media state of its own, reading everything from props and
+  -- asking the player to act via emits. Painted fixed-dark-on-black regardless of
   -- the app's own light/dark mode, since it sits on the video image itself rather than the app chrome (the same
   -- reasoning the text editor's gutter uses to opt out of the chosen colorscheme).
   --------------------------------------------------------------------------------------------------------------------->
@@ -43,7 +45,7 @@
                 :color="shuffle ? 'primary' : 'neutral'"
                 variant="ghost"
                 size="sm"
-                class="focus-visible:outline-white"
+                class="hidden focus-visible:outline-white sm:inline-flex"
                 :aria-label="shuffle ? 'Shuffle on' : 'Shuffle off'"
                 @click="emit('toggle-shuffle')"
             />
@@ -81,7 +83,7 @@
                 :color="repeat === 'off' ? 'neutral' : 'primary'"
                 variant="ghost"
                 size="sm"
-                class="focus-visible:outline-white"
+                class="hidden focus-visible:outline-white sm:inline-flex"
                 :aria-label="`Repeat ${ repeat }`"
                 @click="emit('cycle-repeat')"
             />
@@ -97,7 +99,7 @@
                     :color="casting ? 'primary' : 'neutral'"
                     variant="ghost"
                     size="sm"
-                    class="focus-visible:outline-white"
+                    class="hidden focus-visible:outline-white sm:inline-flex"
                     :aria-label="casting ? 'Casting' : 'Cast'"
                     @click="emit('cast')"
                 />
@@ -112,8 +114,8 @@
                 />
 
                 <div
-                    class="relative flex h-4 w-16 items-center rounded-full has-[:focus-visible]:outline-2
-                        has-[:focus-visible]:outline-white has-[:focus-visible]:outline-offset-2"
+                    class="relative hidden h-4 w-16 items-center rounded-full has-[:focus-visible]:outline-2
+                        has-[:focus-visible]:outline-white has-[:focus-visible]:outline-offset-2 sm:flex"
                 >
                     <div
                         class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full
@@ -141,8 +143,19 @@
                         color="neutral"
                         variant="ghost"
                         size="sm"
-                        class="focus-visible:outline-white"
+                        class="hidden focus-visible:outline-white sm:inline-flex"
                         aria-label="Playback speed"
+                    />
+                </UDropdownMenu>
+
+                <UDropdownMenu :items="overflowItems">
+                    <UButton
+                        icon="i-lucide-ellipsis-vertical"
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="focus-visible:outline-white sm:hidden"
+                        aria-label="More controls"
                     />
                 </UDropdownMenu>
 
@@ -237,6 +250,40 @@
             onSelect: () => { emit('set-rate', rate); },
         })),
     ]);
+
+    // The narrow-viewport home for the controls the bar drops. Repeat cycles from here exactly as its button does --
+    // the player only knows how to advance the mode, not to set one.
+    const overflowItems = computed<DropdownMenuItem[][]>(() =>
+    {
+        const groups : DropdownMenuItem[][] = [
+            [
+                {
+                    label: 'Shuffle',
+                    icon: 'i-lucide-shuffle',
+                    type: 'checkbox' as const,
+                    checked: props.shuffle,
+                    onSelect: () => { emit('toggle-shuffle'); },
+                },
+                {
+                    label: `Repeat: ${ props.repeat }`,
+                    icon: props.repeat === 'one' ? 'i-lucide-repeat-1' : 'i-lucide-repeat',
+                    onSelect: () => { emit('cycle-repeat'); },
+                },
+            ],
+            [ { label: 'Speed', icon: 'i-lucide-gauge', children: rateItems.value[0] } ],
+        ];
+
+        if(props.castAvailable)
+        {
+            groups.push([ {
+                label: props.casting ? 'Casting' : 'Cast',
+                icon: 'i-lucide-cast',
+                onSelect: () => { emit('cast'); },
+            } ]);
+        }
+
+        return groups;
+    });
 
     function onSeekInput(event : Event) : void
     {

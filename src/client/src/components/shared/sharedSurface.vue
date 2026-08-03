@@ -77,12 +77,12 @@
                     </p>
                 </div>
 
-                <UBadge color="neutral" variant="subtle" size="sm" class="shrink-0 capitalize">
+                <UBadge color="neutral" variant="subtle" size="sm" class="hidden shrink-0 capitalize lg:inline-flex">
                     {{ entry.share.role }}
                 </UBadge>
-                <span v-if="entry.placed" class="shrink-0 text-xs text-muted">In your files</span>
+                <span v-if="entry.placed" class="hidden shrink-0 text-xs text-muted lg:inline">In your files</span>
 
-                <span class="w-24 shrink-0 truncate text-right text-muted">{{ sizeOf(entry) }}</span>
+                <span class="hidden w-24 shrink-0 truncate text-right text-muted sm:block">{{ sizeOf(entry) }}</span>
 
                 <UDropdownMenu :items="buildMenu(entry)">
                     <UButton

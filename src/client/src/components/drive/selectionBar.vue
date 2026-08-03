@@ -8,6 +8,10 @@
   -- Share are ownership-gated too, but only ever apply to a single selected node. Presentational -- each button emits
   -- its intent and the route component owns the targets and the mutations. The destructive button's label is passed
   -- in (Trash for files and folders, Remove for a links-only set).
+  --
+  -- Below lg the labels drop to their tooltips and Copy and Rename move into an overflow menu. The threshold is lg,
+  -- not md, because the sidebar returns at md and leaves the content pane narrower there than one breakpoint down.
+  -- Both renderings answer to the same caps, so the narrow bar never offers an action the wide one withholds.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -23,9 +27,9 @@
             aria-label="Clear selection"
             @click="emit('clear')"
         />
-        <span class="px-1 text-sm font-medium">{{ count }} selected</span>
+        <span class="shrink-0 whitespace-nowrap px-1 text-sm font-medium">{{ count }} selected</span>
 
-        <div class="ml-2 flex items-center gap-1 whitespace-nowrap">
+        <div class="ml-2 flex shrink-0 items-center gap-1 whitespace-nowrap">
             <UTooltip v-if="canShare" text="Share">
                 <UButton
                     icon="i-lucide-user-plus"
@@ -33,6 +37,7 @@
                     variant="subtle"
                     label="Share"
                     aria-label="Share"
+                    :ui="{ label: 'hidden lg:inline' }"
                     @click="emit('share')"
                 />
             </UTooltip>
@@ -44,12 +49,13 @@
                     variant="subtle"
                     label="Move"
                     aria-label="Move"
+                    :ui="{ label: 'hidden lg:inline' }"
                     @click="emit('move')"
                 />
             </UTooltip>
 
             <UTooltip :text="copyTooltip">
-                <span class="inline-flex">
+                <span class="hidden lg:inline-flex">
                     <UButton
                         icon="i-lucide-copy"
                         color="neutral"
@@ -69,6 +75,7 @@
                     color="neutral"
                     variant="subtle"
                     label="Rename"
+                    class="hidden lg:inline-flex"
                     aria-label="Rename"
                     @click="emit('rename')"
                 />
@@ -81,9 +88,19 @@
                     variant="subtle"
                     :label="trashLabel"
                     :aria-label="trashLabel"
+                    :ui="{ label: 'hidden lg:inline' }"
                     @click="emit('trash')"
                 />
             </UTooltip>
+
+            <UDropdownMenu :items="overflowItems" :ui="{ content: 'w-48' }" class="lg:hidden">
+                <UButton
+                    icon="i-lucide-ellipsis-vertical"
+                    color="neutral"
+                    variant="subtle"
+                    aria-label="More selection actions"
+                />
+            </UDropdownMenu>
         </div>
     </div>
 </template>
@@ -91,7 +108,12 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    defineProps<{
+    import { computed } from 'vue';
+    import type { DropdownMenuItem } from '@nuxt/ui';
+
+    //------------------------------------------------------------------------------------------------------------------
+
+    const props = defineProps<{
         count : number;
         canCopy : boolean;
         copyTooltip : string;
@@ -110,6 +132,24 @@
         share : [];
         trash : [];
     }>();
+
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Copy rides as a disabled item rather than disappearing: the wide bar's tooltip explains why a folder can't be
+    // copied, and an action that simply vanishes leaves that unsaid.
+    const overflowItems = computed<DropdownMenuItem[][]>(() =>
+    {
+        const items : DropdownMenuItem[] = [
+            { label: 'Copy', icon: 'i-lucide-copy', disabled: !props.canCopy, onSelect: () => emit('copy') },
+        ];
+
+        if(props.canRename)
+        {
+            items.push({ label: 'Rename', icon: 'i-lucide-pencil', onSelect: () => emit('rename') });
+        }
+
+        return [ items ];
+    });
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

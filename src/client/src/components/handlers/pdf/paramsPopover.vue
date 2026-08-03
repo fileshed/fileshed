@@ -8,7 +8,7 @@
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div class="flex w-64 flex-col gap-4 p-3">
+    <div class="flex w-64 max-w-[calc(100vw-2rem)] flex-col gap-4 p-3">
         <template v-if="mode === 'highlight'">
             <section class="flex flex-col gap-2">
                 <p class="text-xs font-medium text-muted">

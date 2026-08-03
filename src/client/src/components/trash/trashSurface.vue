@@ -3,8 +3,9 @@
   --
   -- The body of the Trash view: the loading spinner, the load error with its retry, the "Trash is empty" state, the
   -- filtered-to-nothing state, and otherwise the caller's trashed roots as a grid of cards or a dense row list, per the
-  -- view toggle. Each item carries Restore and Delete forever; the actions relay up so the page owns restore (a direct
-  -- mutation) and Delete forever (a confirm modal). Reads the trash store for its listing state directly.
+  -- view toggle. Each item carries Restore and Delete forever behind a kebab; the actions relay up so the page owns
+  -- restore (a direct mutation) and Delete forever (a confirm modal). Reads the trash store for its listing state
+  -- directly.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -48,8 +49,7 @@
                     v-for="node in store.items"
                     :key="node.id"
                     :node="node"
-                    @restore="(n) => emit('restore', n)"
-                    @delete="(n) => emit('delete', n)"
+                    :menu-items="menuFor(node)"
                 />
             </div>
 
@@ -62,28 +62,17 @@
                 >
                     <UIcon :name="presentationOf(node).icon" class="size-5 shrink-0" :class="presentationOf(node).color" />
                     <span class="min-w-0 flex-1 truncate font-medium" :title="node.name">{{ node.name }}</span>
-                    <span class="w-24 shrink-0 truncate text-right text-muted">{{ sizeOf(node) }}</span>
+                    <span class="hidden w-24 shrink-0 truncate text-right text-muted sm:block">{{ sizeOf(node) }}</span>
 
-                    <div class="flex shrink-0 items-center gap-1">
+                    <UDropdownMenu :items="menuFor(node)" :ui="{ content: 'w-48' }">
                         <UButton
-                            icon="i-lucide-rotate-ccw"
+                            icon="i-lucide-ellipsis-vertical"
                             color="neutral"
                             variant="ghost"
                             size="sm"
-                            label="Restore"
-                            aria-label="Restore"
-                            @click="emit('restore', node)"
+                            aria-label="More actions"
                         />
-                        <UButton
-                            icon="i-lucide-trash-2"
-                            color="error"
-                            variant="ghost"
-                            size="sm"
-                            label="Delete forever"
-                            aria-label="Delete forever"
-                            @click="emit('delete', node)"
-                        />
-                    </div>
+                    </UDropdownMenu>
                 </li>
             </ul>
 
@@ -103,6 +92,8 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
+    import type { DropdownMenuItem } from '@nuxt/ui';
+
     import type { NodeResponse, ViewMode } from '@fileshed/core';
 
     // Stores
@@ -135,6 +126,21 @@
     function sizeOf(node : NodeResponse) : string
     {
         return node.type === 'file' ? formatBytes(node.size) : '—';
+    }
+
+    // One menu for both renderings -- the tile's corner kebab and the row's end kebab offer the same two actions, and
+    // both relay up so the page keeps ownership of restore and the delete confirm.
+    function menuFor(node : NodeResponse) : DropdownMenuItem[][]
+    {
+        return [
+            [ { label: 'Restore', icon: 'i-lucide-rotate-ccw', onSelect: () => emit('restore', node) } ],
+            [ {
+                label: 'Delete forever',
+                icon: 'i-lucide-trash-2',
+                color: 'error',
+                onSelect: () => emit('delete', node),
+            } ],
+        ];
     }
 </script>
 

@@ -17,7 +17,8 @@
             type="text"
             placeholder="Find in document"
             aria-label="Find in document"
-            class="w-40 bg-transparent px-1 text-sm outline-none placeholder:text-dimmed"
+            class="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-dimmed sm:w-40
+                sm:flex-none"
             @input="onInput"
             @keydown.enter.prevent="onEnter"
             @keydown.esc.prevent="store.closeFind()"

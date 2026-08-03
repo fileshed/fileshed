@@ -45,6 +45,7 @@ way you expect. The web UI does not feel like a compromise for having been self-
 - **Search.** Name matching across everything you can see, with filters for type, owner, and modified date.
 - **An admin area.** Users and quotas, outgoing mail, OAuth sign-in providers, branding and theming, and instance
   settings, most of which apply live without a restart.
+- **Narrow screens.** The interface works down to 360px wide.
 
 ## Quickstart
 

@@ -1,16 +1,13 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Main Layout
   --
-  -- The primary authenticated chrome: sidebar navigation, header with the user menu, and the routed content. Auth
-  -- pages render outside this layout (sibling routes), so it can assume a signed-in user. It is a fixed-viewport app
-  -- shell: the outer frame is pinned to the viewport (h-screen) and only <main> scrolls, so the sidebar and header stay
-  -- put on every page and a route that fills the height (the file editor) gets a real height to bound its own scroller
-  -- against instead of growing the page.
+  -- The primary authenticated chrome: the drive sidebar over the shared app shell. Auth pages render outside this
+  -- layout (sibling routes), so it can assume a signed-in user.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div class="flex h-screen overflow-hidden bg-default text-default">
-        <aside class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-default p-4">
+    <AppShell>
+        <template #sidebar>
             <RouterLink to="/" class="mb-6 flex items-center gap-2 px-2 text-xl font-bold">
                 <img :src="app.logoUrl" alt="" class="size-8">
                 {{ app.name }}
@@ -27,22 +24,18 @@
             />
 
             <QuotaMeter class="mt-4" />
-        </aside>
+        </template>
 
-        <div class="flex min-w-0 flex-1 flex-col">
-            <TopBar />
+        <RouterView />
 
-            <main class="min-h-0 min-w-0 flex-1 overflow-auto p-6">
-                <RouterView />
-            </main>
-        </div>
+        <template #overlays>
+            <input ref="fileInput" type="file" multiple class="hidden" @change="onFilesPicked">
+            <input ref="folderInput" type="file" webkitdirectory class="hidden" @change="onFolderPicked">
 
-        <input ref="fileInput" type="file" multiple class="hidden" @change="onFilesPicked">
-        <input ref="folderInput" type="file" webkitdirectory class="hidden" @change="onFolderPicked">
-
-        <UploadPanel />
-        <UploadCollision />
-    </div>
+            <UploadPanel />
+            <UploadCollision />
+        </template>
+    </AppShell>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
@@ -63,7 +56,7 @@
     import { useUploadsStore } from '../stores/uploads.ts';
 
     // Components
-    import TopBar from '../components/layout/topBar.vue';
+    import AppShell from '../components/layout/appShell.vue';
     import QuotaMeter from '../components/quotaMeter.vue';
     import UploadPanel from '../components/uploads/uploadPanel.vue';
     import UploadCollision from '../components/uploads/modals/uploadCollision.vue';

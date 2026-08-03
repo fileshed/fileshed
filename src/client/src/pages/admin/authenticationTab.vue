@@ -22,7 +22,7 @@
         />
 
         <template v-else>
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <p class="text-sm text-muted">
                     Sign-in providers take effect after a restart. FileShed offers every provider better-auth
                     supports.
@@ -33,7 +33,7 @@
                     value-key="value"
                     placeholder="Add provider…"
                     icon="i-lucide-plus"
-                    class="w-56"
+                    class="sm:w-56 sm:shrink-0"
                 />
             </div>
 
@@ -67,7 +67,7 @@
                     </p>
                     <p class="flex flex-wrap items-center gap-1.5 text-sm text-muted">
                         Callback URL for the OAuth app:
-                        <code class="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs">{{
+                        <code class="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs break-all">{{
                             callbackURL(provider) }}</code>
                         <UButton
                             icon="i-lucide-copy"

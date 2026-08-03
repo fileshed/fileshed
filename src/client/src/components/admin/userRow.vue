@@ -12,10 +12,10 @@
 <template>
     <tr class="border-b border-default last:border-b-0">
         <td class="px-4 py-3">
-            <div class="font-medium">
+            <div class="truncate font-medium">
                 {{ user.name ?? '—' }}
             </div>
-            <div class="text-muted">
+            <div class="truncate text-muted">
                 {{ user.email }}
             </div>
         </td>
@@ -37,17 +37,17 @@
                 />
             </div>
         </td>
-        <td class="px-4 py-3 text-muted">
+        <td class="hidden px-4 py-3 text-muted lg:table-cell">
             {{ formatBytes(user.usedBytes) }}
             <span v-if="usagePercent !== null" :class="nearingCap ? 'font-medium text-error' : ''">
                 ({{ usagePercent }}%)
             </span>
         </td>
-        <td class="px-4 py-3 text-muted">
+        <td class="hidden px-4 py-3 text-muted lg:table-cell">
             {{ quotaLabel }}
             <span v-if="user.quotaLimit === null" class="text-dimmed">(default)</span>
         </td>
-        <td class="px-4 py-3 text-muted">
+        <td class="hidden px-4 py-3 text-muted xl:table-cell">
             {{ formatNodeDate(user.createdAt, session.timeFormat) }}
         </td>
         <td class="px-2 py-3 text-right">

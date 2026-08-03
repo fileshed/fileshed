@@ -11,97 +11,95 @@
 
 <template>
     <div class="flex flex-wrap items-center gap-3 border-b border-default px-4 py-2">
-        <div class="flex flex-wrap items-center gap-3">
-            <PdfFindBar v-if="store.findOpen" />
+        <PdfFindBar v-if="store.findOpen" class="w-full sm:w-auto" />
+        <UButton
+            v-else
+            icon="i-lucide-search"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            aria-label="Find in document"
+            @click="store.openFind()"
+        />
+
+        <UFieldGroup v-if="!store.readOnly">
             <UButton
-                v-else
-                icon="i-lucide-search"
+                v-for="tool in tools"
+                :key="tool.mode"
+                :icon="tool.icon"
+                :aria-label="tool.label"
+                :variant="store.mode === tool.mode ? 'solid' : 'outline'"
+                color="neutral"
+                size="sm"
+                @click="store.setMode(tool.mode)"
+            />
+            <UPopover>
+                <UButton
+                    icon="i-lucide-chevron-down"
+                    :disabled="store.mode === 'none'"
+                    variant="outline"
+                    color="neutral"
+                    size="sm"
+                    aria-label="Tool options"
+                />
+                <template #content>
+                    <PdfParamsPopover :mode="store.mode" />
+                </template>
+            </UPopover>
+        </UFieldGroup>
+
+        <div v-if="store.pageCount > 0" class="flex items-center gap-1 text-sm text-dimmed tabular-nums">
+            <UInput
+                :model-value="pageDraft"
+                aria-label="Page number"
+                size="sm"
+                :ui="{ base: 'w-12 text-center' }"
+                @update:model-value="pageDraft = String($event)"
+                @keydown.enter="commitPage"
+                @blur="commitPage"
+            />
+            <span>/ {{ store.pageCount }}</span>
+        </div>
+
+        <UFieldGroup>
+            <UButton
+                icon="i-lucide-zoom-out"
+                color="neutral"
+                variant="subtle"
+                size="sm"
+                aria-label="Zoom out"
+                @click="store.zoomOut()"
+            />
+            <USelectMenu
+                :model-value="store.zoom"
+                value-key="value"
+                :items="zoomPresets"
+                :search-input="false"
+                size="sm"
+                color="neutral"
+                variant="subtle"
+                :ui="{ content: 'w-40' }"
+                @update:model-value="store.setZoom"
+            />
+            <UButton
+                icon="i-lucide-zoom-in"
+                color="neutral"
+                variant="subtle"
+                size="sm"
+                aria-label="Zoom in"
+                @click="store.zoomIn()"
+            />
+        </UFieldGroup>
+
+        <UDropdownMenu :items="overflowItems">
+            <UButton
+                icon="i-lucide-ellipsis-vertical"
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                aria-label="Find in document"
-                @click="store.openFind()"
+                aria-label="More actions"
             />
-
-            <UFieldGroup v-if="!store.readOnly">
-                <UButton
-                    v-for="tool in tools"
-                    :key="tool.mode"
-                    :icon="tool.icon"
-                    :aria-label="tool.label"
-                    :variant="store.mode === tool.mode ? 'solid' : 'outline'"
-                    color="neutral"
-                    size="sm"
-                    @click="store.setMode(tool.mode)"
-                />
-                <UPopover>
-                    <UButton
-                        icon="i-lucide-chevron-down"
-                        :disabled="store.mode === 'none'"
-                        variant="outline"
-                        color="neutral"
-                        size="sm"
-                        aria-label="Tool options"
-                    />
-                    <template #content>
-                        <PdfParamsPopover :mode="store.mode" />
-                    </template>
-                </UPopover>
-            </UFieldGroup>
-
-            <div v-if="store.pageCount > 0" class="flex items-center gap-1 text-sm text-dimmed tabular-nums">
-                <UInput
-                    :model-value="pageDraft"
-                    aria-label="Page number"
-                    size="sm"
-                    :ui="{ base: 'w-12 text-center' }"
-                    @update:model-value="pageDraft = String($event)"
-                    @keydown.enter="commitPage"
-                    @blur="commitPage"
-                />
-                <span>/ {{ store.pageCount }}</span>
-            </div>
-
-            <UFieldGroup>
-                <UButton
-                    icon="i-lucide-zoom-out"
-                    color="neutral"
-                    variant="subtle"
-                    size="sm"
-                    aria-label="Zoom out"
-                    @click="store.zoomOut()"
-                />
-                <USelectMenu
-                    :model-value="store.zoom"
-                    value-key="value"
-                    :items="zoomPresets"
-                    :search-input="false"
-                    size="sm"
-                    color="neutral"
-                    variant="subtle"
-                    :ui="{ content: 'w-40' }"
-                    @update:model-value="store.setZoom"
-                />
-                <UButton
-                    icon="i-lucide-zoom-in"
-                    color="neutral"
-                    variant="subtle"
-                    size="sm"
-                    aria-label="Zoom in"
-                    @click="store.zoomIn()"
-                />
-            </UFieldGroup>
-
-            <UDropdownMenu :items="overflowItems">
-                <UButton
-                    icon="i-lucide-ellipsis-vertical"
-                    color="neutral"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="More actions"
-                />
-            </UDropdownMenu>
-        </div>
+        </UDropdownMenu>
     </div>
 </template>
 
