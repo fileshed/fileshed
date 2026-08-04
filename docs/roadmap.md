@@ -17,6 +17,7 @@ considered rather than commitments.
 - [x] PDF viewing and annotation
 - [x] Text and Markdown editors with autosave
 - [x] Name search with type, owner, and modified-date filters
+- [x] Search results that show where a file lives
 - [x] Admin: user management, quota overrides, and bans
 - [x] Admin: outgoing mail configuration
 - [x] Admin: OAuth sign-in provider configuration
@@ -25,13 +26,12 @@ considered rather than commitments.
 - [x] Admin: status dashboard
 - [x] User avatars
 - [x] Personal access tokens and media playback tokens
-- [x] Docker image and compose file
+- [x] Responsive layout, down to 360px wide
+- [x] Docker image and compose file, published multi-arch to the GitHub Container Registry
 - [x] CI
 
 ## Before 1.0
 
-- [ ] Responsive layout for small screens
-- [ ] Search results that show where a file lives
 - [ ] General hardening
 
 ## Under consideration after 1.0
