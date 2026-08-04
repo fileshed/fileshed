@@ -64,9 +64,28 @@ to its log, and the account you create there becomes the instance admin.
 
 ### Deploying
 
-There is a Dockerfile and a `compose.yaml`; one image, one volume. See
-**[docs/deployment.md](docs/deployment.md)** for the environment reference, HTTPS guidance, Postgres, and what to back
-up.
+Images are published to the GitHub Container Registry for `linux/amd64` and `linux/arm64`:
+
+```bash
+docker run -d --name fileshed \
+  -p 3000:3000 \
+  -e AUTH_SECRET="$(openssl rand -base64 32)" \
+  -e BASE_URL=http://localhost:3000 \
+  -v fileshed-data:/data \
+  ghcr.io/fileshed/fileshed:latest
+```
+
+One volume holds everything that persists: the SQLite database at `/data/fileshed.db` and the blob store under
+`/data/blobs`. `docker logs fileshed` prints the one-time setup code for the first admin account.
+
+Three moving tags are published alongside the exact version of every release:
+
+- `latest` — the newest stable release.
+- `beta` — the newest prerelease.
+- `dev` — the newest commit on `main` that passed the full test suite.
+
+See **[docs/deployment.md](docs/deployment.md)** for compose files, the environment reference, HTTPS guidance,
+Postgres, and what to back up.
 
 ## Stack
 

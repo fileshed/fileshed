@@ -105,3 +105,89 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:e2e
+
+  # amd64 only and no push: this lane proves the image builds and boots. The layer cache it fills is what the
+  # publish job below reuses, so the multi-arch build only pays for the arm64 runtime stage.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: fileshed:ci
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot the image
+        run: |
+          docker run -d --name fileshed-smoke -p 3000:3000 \
+            -e AUTH_SECRET="$(openssl rand -base64 32)" \
+            -e BASE_URL=http://localhost:3000 \
+            fileshed:ci
+
+          for _ in $(seq 60); do
+            if curl -fsS http://localhost:3000/api/health | grep -q '"status":"ok"'; then
+              echo "Server answered /api/health."
+              curl -fsS -o /dev/null http://localhost:3000/
+              echo "Client served from /."
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{ .State.Running }}' fileshed-smoke)" != "true" ]; then
+              echo "Container exited before it became reachable."
+              docker logs fileshed-smoke
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "Timed out waiting for /api/health."
+          docker logs fileshed-smoke
+          exit 1
+
+      - name: Remove the container
+        if: always()
+        run: docker rm -f fileshed-smoke
+
+  # `dev` means "the newest main commit that passed everything", so this waits on every check above.
+  docker-dev:
+    needs: [ lint, types, unit, postgres, e2e, docker ]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/fileshed/fileshed
+          tags: type=raw,value=dev
+          labels: |
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

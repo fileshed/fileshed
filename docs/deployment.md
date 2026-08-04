@@ -6,24 +6,44 @@ zero-dependency default; Postgres is the primary target for larger deployments.
 ## Quickstart (Docker)
 
 ```bash
-docker build -t fileshed .
 docker run -d --name fileshed \
   -p 3000:3000 \
   -e AUTH_SECRET="$(openssl rand -base64 32)" \
   -e BASE_URL=http://localhost:3000 \
   -v fileshed-data:/data \
-  fileshed
+  ghcr.io/fileshed/fileshed:latest
 ```
 
-Or with compose. The compose files deliberately contain **no** secret — compose refuses to start until you provide
-one, so a deployment can never run on a published placeholder:
+The `/data` volume holds both the SQLite database (`/data/fileshed.db`) and the blob store (`/data/blobs`).
+
+Or with compose — save this as `compose.yaml`, with a `.env` beside it:
+
+```yaml
+services:
+  fileshed:
+    image: ghcr.io/fileshed/fileshed:latest
+    ports:
+      - "3000:3000"
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:?generate one with `openssl rand -base64 32`}
+      BASE_URL: http://localhost:3000
+    volumes:
+      - fileshed-data:/data
+    restart: unless-stopped
+
+volumes:
+  fileshed-data:
+```
 
 ```bash
 echo "AUTH_SECRET=$(openssl rand -base64 32)" > .env
 docker compose up -d
 ```
 
-(The `.env` file sits next to the compose file, is read by compose natively, and must never be committed.)
+The compose files in the repository (`compose.yaml`, `compose.postgres.yaml`) build the image from source instead;
+point them at `ghcr.io/fileshed/fileshed:latest` to run the published one. Neither contains a secret — compose
+refuses to start until you provide one, so a deployment can never run on a published placeholder. (The `.env` file
+sits next to the compose file, is read by compose natively, and must never be committed.)
 
 First run creates the database (migrations run at every boot and are idempotent), then prints a **one-time setup
 code** to the container log:
@@ -36,6 +56,20 @@ Open `/setup` in the browser, enter the code, and create your admin account — 
 lives in an environment or a log. The code regenerates on every boot until setup completes, and the setup page
 disappears permanently the moment the first account exists. For non-interactive provisioning, set
 `FILESHED_SETUP_TOKEN` and `POST /api/setup` with `{ token, name, email, password }` instead.
+
+### Image tags
+
+Images are published for `linux/amd64` and `linux/arm64`.
+
+| Tag | Points at |
+|---|---|
+| `latest` | The newest stable release. |
+| `beta` | The newest prerelease. |
+| `dev` | The newest commit on `main` that passed the full test suite. |
+| `0.1.0` | That exact release, permanently. |
+
+Pin the exact version for anything you care about; `latest` and `beta` move under you on every release, and `dev` is
+unreleased code.
 
 ## Environment
 

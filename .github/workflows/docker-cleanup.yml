@@ -1,0 +1,31 @@
+name: Docker Cleanup
+
+# Every push to main vacates the previous `dev` digest, so untagged manifests accumulate forever without this.
+#
+# keep-n-untagged is a count, not an age: the live `dev` image plus the last four it replaced stay pullable no matter
+# how long ago they were built. Tagged versions are never candidates, since no delete-tags or keep-n-tagged rule is
+# set. This action resolves manifests instead of counting raw package versions -- the per-architecture children of a
+# multi-arch image are untagged versions too, and deleting those out from under an index that is being kept breaks
+# `docker pull`.
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1.2.2
+        with:
+          owner: fileshed
+          package: fileshed
+          keep-n-untagged: 4
+          validate: true
