@@ -131,15 +131,24 @@ function mockHappyPipeline() : void
     uploadMock.mockResolvedValue(fileNode('n1'));
 }
 
+// Polling is bounded by a wall clock, not a turn count: the proof-of-possession answer goes through real WebCrypto,
+// whose completion lands whenever the platform's threadpool gets to it, while a spin of empty event-loop turns burns
+// hundreds of turns in a millisecond. The deadline stays under Vitest's own timeout, so a pipeline that really is
+// stuck still fails naming what it waited for.
+const SETTLE_TIMEOUT_MS = 2000;
+
 async function waitFor(predicate : () => boolean, label = 'condition') : Promise<void>
 {
-    for(let attempt = 0; attempt < 50; attempt += 1)
+    const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+
+    do
     {
         if(predicate()) { return; }
 
-        // eslint-disable-next-line no-await-in-loop -- polling the async pipeline forward one microtask flush at a time
+        // eslint-disable-next-line no-await-in-loop -- polling the async pipeline forward one event-loop turn at a time
         await flushPromises();
     }
+    while(Date.now() < deadline);
 
     throw new Error(`timed out waiting for ${ label }`);
 }
