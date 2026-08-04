@@ -37,6 +37,8 @@ considered rather than commitments.
 ## Under consideration after 1.0
 
 - [ ] Additional storage backends: S3-compatible, Azure, database blob
-- [ ] WebDAV and SFTP access
+- [ ] Read-only mounts of existing folders, browsed in place rather than imported
+- [ ] WebDAV, SFTP, and FTP access
 - [ ] Expiring links and shares
+- [ ] Client-side encrypted files, where the server never holds the contents
 - [ ] Richer search
