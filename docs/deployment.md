@@ -8,15 +8,17 @@ zero-dependency default; Postgres is the primary target for larger deployments.
 ```bash
 docker run -d --name fileshed \
   -p 3000:3000 \
-  -e AUTH_SECRET="$(openssl rand -base64 32)" \
   -e BASE_URL=http://localhost:3000 \
   -v fileshed-data:/data \
   ghcr.io/fileshed/fileshed:latest
 ```
 
-The `/data` volume holds both the SQLite database (`/data/fileshed.db`) and the blob store (`/data/blobs`).
+The `/data` volume holds the SQLite database (`/data/fileshed.db`), the blob store (`/data/blobs`), and the key that
+signs sessions (`/data/auth-secret`), which FileShed generates on the first run. A container started with no
+configuration comes up on its own and keeps its sessions across restarts. To supply or rotate the key yourself, see
+**[secrets.md](secrets.md)**.
 
-Or with compose — save this as `compose.yaml`, with a `.env` beside it:
+Or with compose — save this as `compose.yaml`:
 
 ```yaml
 services:
@@ -25,7 +27,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      AUTH_SECRET: ${AUTH_SECRET:?generate one with `openssl rand -base64 32`}
       BASE_URL: http://localhost:3000
     volumes:
       - fileshed-data:/data
@@ -36,14 +37,13 @@ volumes:
 ```
 
 ```bash
-echo "AUTH_SECRET=$(openssl rand -base64 32)" > .env
 docker compose up -d
 ```
 
 The compose files in the repository (`compose.yaml`, `compose.postgres.yaml`) build the image from source instead;
-point them at `ghcr.io/fileshed/fileshed:latest` to run the published one. Neither contains a secret — compose
-refuses to start until you provide one, so a deployment can never run on a published placeholder. (The `.env` file
-sits next to the compose file, is read by compose natively, and must never be committed.)
+point them at `ghcr.io/fileshed/fileshed:latest` to run the published one. Both pass `AUTH_SECRET` through from a
+`.env` file sitting next to them if you choose to set one — compose reads that file natively, and it must never be
+committed.
 
 First run creates the database (migrations run at every boot and are idempotent), then prints a **one-time setup
 code** to the container log:
@@ -79,7 +79,10 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `AUTH_SECRET` | **yes** | — | ≥ 32 chars. Signs sessions. **Rotating it signs every user out.** |
+| `AUTH_SECRET` | no | generated on first run | ≥ 32 chars. Signs sessions and encrypts stored instance secrets. Unset, FileShed generates and keeps one at `/data/auth-secret`. **Rotating it signs every user out** — see [secrets.md](secrets.md). |
+| `AUTH_SECRET_FILE` | no | `/data/auth-secret` (image) | A file holding that key. Generated when missing at that default path; at any other path it is read-only and a missing one fails the boot. |
+| `AUTH_SECRET_PREVIOUS` | no | — | The key being replaced, for the one boot that migrates stored secrets to the new one. |
+| `FILESHED_DISCARD_SEALED_SECRETS` | no | `false` | `1` clears stored secrets no available key can open — the only circumstance in which FileShed deletes one. Without it, such a boot refuses. |
 | `BASE_URL` | yes | `http://localhost:5173` | The externally reachable URL — behind a proxy, the public one. |
 | `HOST` / `PORT` | no | `0.0.0.0` / `3000` (image) | Bind address and port. |
 | `DATABASE_KIND` | no | `sqlite` | `sqlite` or `postgres`. |
@@ -137,6 +140,10 @@ Back up **both, together**:
 
 1. The database — `/data/fileshed.db` (SQLite) or your Postgres database.
 2. The blob store — `/data/blobs`.
+
+A `/data` volume backup also carries `/data/auth-secret`, the key that opens the instance secrets stored in the
+database. Postgres deployments need it separately: `pg_dump` does not include it. See
+**[secrets.md](secrets.md)**.
 
 The database holds the tree, shares, and metadata; the blob store holds the bytes, addressed by content hash. A
 backup of one without the other is half a backup: nodes pointing at missing content, or orphaned content no tree

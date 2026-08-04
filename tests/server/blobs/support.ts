@@ -40,7 +40,7 @@ import { createBlobRoutes } from '@server/routes/blobs.ts';
 import { createUploadRoutes } from '@server/routes/uploads.ts';
 
 // Auth support (real sign-up/sign-in over the same app)
-import { ORIGIN, cookieFrom, cookieJarFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, cookieJarFrom, signIn, signUp, testConfig } from '../auth/support.ts';
 import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN, cookieFrom, cookieJarFrom, signIn, signUp } from '../auth/support.ts';
@@ -94,7 +94,7 @@ export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<Boote
     const overrides = options.uploadMaxBytes === undefined ? {} : { UPLOAD_MAX_BYTES: options.uploadMaxBytes };
     const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot, ...overrides }));
 
-    const auth = createAuth(handle, config);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
     await initialize(handle, auth);
 
     const backendID = await seedDefaultBackend(handle, config);

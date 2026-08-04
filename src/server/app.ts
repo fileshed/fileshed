@@ -71,6 +71,7 @@ import { UserRA } from './resource-access/users/index.ts';
 // Managers
 import { AccessTokenManager } from './managers/accessToken.ts';
 import { AdminManager } from './managers/admin.ts';
+import { managedAuthSecretFile, resolveAuthSecret } from './managers/authSecret.ts';
 import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
 import { DeletionOfferManager } from './managers/deletionOffer.ts';
@@ -351,12 +352,24 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
 {
     const config = loadConfig();
     const handle = createDatabase(config);
-    const startedAt = new Date();
     const settingsRA = new SettingsRA(handle);
+
+    // Before the auth instance, and so before every migration: better-auth's own migrator runs off the instance
+    // this secret constructs, and the SecretBox that seals stored settings derives its key from the same value.
+    const authSecret = await resolveAuthSecret({
+        managedFile: managedAuthSecretFile(config),
+        configuredFile: config.AUTH_SECRET_FILE ?? null,
+        environment: config.AUTH_SECRET ?? null,
+        previous: config.AUTH_SECRET_PREVIOUS ?? null,
+        discardSealedSecrets: config.FILESHED_DISCARD_SEALED_SECRETS,
+        settings: settingsRA,
+    });
+
+    const startedAt = new Date();
     const settings = new SettingsManager({
         settings: settingsRA,
         config,
-        box: new SecretBox(config.AUTH_SECRET),
+        box: new SecretBox(authSecret),
         startedAt,
     });
     const mail = new MailManager({ settings, mail: new MailRA() });
@@ -370,7 +383,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         providerSettingKeys.map(async (key) =>
             [ key, await settings.stringValueAtBoot(key, configProviderValues[key] ?? null) ] as const)
     ));
-    const auth = createAuth(handle, config, {
+    const auth = createAuth(handle, config, authSecret, {
         mail,
         requireEmailVerification: await settings.booleanValueAtBoot(
             'EMAIL_VERIFICATION_REQUIRED',

@@ -21,7 +21,7 @@ import { SettingsManager } from '@server/managers/settings.ts';
 import { SecretBox } from '@server/utils/secretBox.ts';
 
 // Support
-import { type BootedApp, bootTestApp } from '../auth/support.ts';
+import { type BootedApp, TEST_AUTH_SECRET, bootTestApp } from '../auth/support.ts';
 import { testActor } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ beforeEach(async () =>
     manager = new SettingsManager({
         settings: new SettingsRA(booted.handle),
         config: booted.config,
-        box: new SecretBox(booted.config.AUTH_SECRET),
+        box: new SecretBox(TEST_AUTH_SECRET),
         startedAt: new Date(),
     });
 });
@@ -95,7 +95,7 @@ describe('SettingsManager', () =>
         const configured = new SettingsManager({
             settings: new SettingsRA(booted.handle),
             config: { ...booted.config, GITHUB_CLIENT_ID: 'gh-from-env' },
-            box: new SecretBox(booted.config.AUTH_SECRET),
+            box: new SecretBox(TEST_AUTH_SECRET),
             startedAt: new Date(),
         });
 
@@ -242,7 +242,7 @@ describe('SettingsManager', () =>
             return new SettingsManager({
                 settings: new SettingsRA(booted.handle),
                 config: booted.config,
-                box: new SecretBox(booted.config.AUTH_SECRET),
+                box: new SecretBox(TEST_AUTH_SECRET),
                 startedAt,
             });
         }
@@ -276,7 +276,7 @@ describe('SettingsManager', () =>
         const unmigrated = new SettingsManager({
             settings: new SettingsRA(bare),
             config: booted.config,
-            box: new SecretBox(booted.config.AUTH_SECRET),
+            box: new SecretBox(TEST_AUTH_SECRET),
             startedAt: new Date(),
         });
 

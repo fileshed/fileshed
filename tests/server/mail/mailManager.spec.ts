@@ -24,7 +24,7 @@ import { SettingsManager } from '@server/managers/settings.ts';
 import { SecretBox } from '@server/utils/secretBox.ts';
 
 // Support
-import { type BootedApp, bootTestApp } from '../auth/support.ts';
+import { type BootedApp, TEST_AUTH_SECRET, bootTestApp } from '../auth/support.ts';
 import { testActor } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -64,7 +64,7 @@ beforeEach(async () =>
     settings = new SettingsManager({
         settings: new SettingsRA(booted.handle),
         config: booted.config,
-        box: new SecretBox(booted.config.AUTH_SECRET),
+        box: new SecretBox(TEST_AUTH_SECRET),
         startedAt: new Date(),
     });
     transport = new RecordingMailRA();

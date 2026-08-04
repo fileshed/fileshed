@@ -24,7 +24,7 @@ import { mapManagerError } from '@server/managers/errors.ts';
 import { createUserRoutes } from '@server/routes/users.ts';
 
 // Auth support (real sign-up / sign-in over the same app)
-import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
 import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
@@ -42,7 +42,7 @@ export interface BootedUserApp
 export async function bootUserApp() : Promise<BootedUserApp>
 {
     const { config, handle, dispose } = await openTestDatabase(testConfig());
-    const auth = createAuth(handle, config);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
     await initialize(handle, auth);
 
     const sessions = new SessionManager(auth);

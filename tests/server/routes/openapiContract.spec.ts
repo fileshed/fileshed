@@ -18,13 +18,13 @@ import { createAuth } from '@server/resource-access/auth.ts';
 import { createDatabase } from '@server/resource-access/database/database.ts';
 
 // Support
-import { composeFullApp, testConfig } from '../auth/support.ts';
+import { TEST_AUTH_SECRET, composeFullApp, testConfig } from '../auth/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const config = testConfig();
 const handle = createDatabase(config);
-const auth = createAuth(handle, config);
+const auth = createAuth(handle, config, TEST_AUTH_SECRET);
 
 const app = composeFullApp(auth, handle, config);
 

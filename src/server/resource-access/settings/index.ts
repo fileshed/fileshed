@@ -28,6 +28,16 @@ export class SettingsRA
         this.#db = handle.db;
     }
 
+    // Whether the table exists yet. The auth secret resolves BEFORE the migrations that create it -- better-auth's
+    // migrator runs off the instance that secret constructs -- so on a first boot "no table" is the honest answer
+    // to "is anything sealed in here", not a failure. Introspection answers it the same way on both dialects.
+    async tableExists() : Promise<boolean>
+    {
+        const tables = await this.#db.introspection.getTables();
+
+        return tables.some((table) => table.name === 'instance_setting');
+    }
+
     async all() : Promise<SettingRow[]>
     {
         const rows = await this.#db

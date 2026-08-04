@@ -64,14 +64,30 @@ const configSchema = z.object({
     DATABASE_PATH: z.string().default(DEFAULT_DATABASE_PATH),
     DATABASE_URL: z.string().optional(),
 
-    // Length alone cannot catch a copied sample file, and the sample placeholder is deliberately long enough to
-    // pass it -- a deployment signing sessions with a string published in this repo is forgeable by anyone, so the
-    // known placeholder fails boot outright.
+    // Optional: an unset AUTH_SECRET is read from the secret file, which FileShed generates on a first run
+    // (managers/authSecret.ts). Set, it beats that file and must still clear both bars -- length alone cannot
+    // catch a copied sample file, and the sample placeholder is deliberately long enough to pass it, so a
+    // deployment signing sessions with a string published in this repo fails boot outright.
     AUTH_SECRET: z.string().min(32, 'AUTH_SECRET must be at least 32 characters')
         .refine(
             (secret) => secret !== 'CHANGE_ME_this_is_a_placeholder_not_a_real_secret',
             'AUTH_SECRET is still the sample placeholder — generate a real one: openssl rand -base64 32'
-        ),
+        )
+        .optional(),
+
+    // Where that secret file lives. Unset, FileShed manages one next to the database and generates it when it is
+    // missing; pointed anywhere else, the file belongs to the operator -- read, never written, and a missing one
+    // fails the boot rather than being guessed at.
+    AUTH_SECRET_FILE: z.string().min(1)
+        .optional(),
+
+    // The key an earlier AUTH_SECRET used, carried for one boot so settings sealed under it are re-sealed under
+    // the new one. Deliberately unvalidated: it only ever opens stored values, and never signs a session.
+    AUTH_SECRET_PREVIOUS: z.string().min(1)
+        .optional(),
+
+    // The one-shot answer to the refusal to boot with settings no available key can open: clear them instead.
+    FILESHED_DISCARD_SEALED_SECRETS: booleanish.default(false),
 
     BASE_URL: z.url().default(DEFAULT_BASE_URL),
 

@@ -19,9 +19,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { mkdirSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath } from 'node:url';
 
 import { type ColumnType, Kysely, PostgresDialect } from 'kysely';
 import { Pool, types as pgTypes } from 'pg';
@@ -33,6 +32,7 @@ import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_CACHE_SIZE } from '@fileshed/core';
 // Utils
 import type { Config } from '../../utils/config.ts';
 import { getLogger } from '../../utils/logger.ts';
+import { resolveDataPath } from '../../utils/paths.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -292,15 +292,12 @@ export function createDatabase(config : Config) : DatabaseHandle
         return { db: new Kysely<Database>({ dialect }), kind: 'postgres' };
     }
 
-    // SQLite. `:memory:` is the in-memory sentinel (used by the specs) and has no parent directory to
-    // create; any other path gets its directory ensured so a first run against ./data just works. Relative paths
-    // resolve against the REPO ROOT, not process.cwd() -- the Vite dev server runs with src/client as its cwd while
-    // the standalone entry runs at the root, and cwd-relative resolution silently split them across two database
-    // files. This file sits four directories below the root.
-    const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
-    const databasePath = config.DATABASE_PATH === ':memory:' || isAbsolute(config.DATABASE_PATH)
+    // SQLite. `:memory:` is the in-memory sentinel (used by the specs) and has no parent directory to create; any
+    // other path gets its directory ensured so a first run against ./data just works, and a relative one resolves
+    // the way every data path does (utils/paths.ts).
+    const databasePath = config.DATABASE_PATH === ':memory:'
         ? config.DATABASE_PATH
-        : resolve(repoRoot, config.DATABASE_PATH);
+        : resolveDataPath(config.DATABASE_PATH);
 
     if(databasePath !== ':memory:')
     {

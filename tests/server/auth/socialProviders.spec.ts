@@ -25,7 +25,7 @@ import {
 } from '@server/resource-access/auth.ts';
 
 // Support
-import { testConfig } from './support.ts';
+import { TEST_AUTH_SECRET, testConfig } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -167,7 +167,7 @@ describe('createAuth social providers', () =>
         const config = testConfig({ GITHUB_CLIENT_ID: 'env-id', GITHUB_CLIENT_SECRET: 'env-secret' });
         handle = createDatabase(config);
 
-        const auth = createAuth(handle, config, {
+        const auth = createAuth(handle, config, TEST_AUTH_SECRET, {
             providerValues: { GITHUB_CLIENT_ID: 'settings-id', GITHUB_CLIENT_SECRET: 'settings-secret' },
         });
 
@@ -179,7 +179,7 @@ describe('createAuth social providers', () =>
         const config = testConfig({ GITHUB_CLIENT_ID: 'gh-id', GITHUB_CLIENT_SECRET: 'gh-secret' });
         handle = createDatabase(config);
 
-        const auth = createAuth(handle, config);
+        const auth = createAuth(handle, config, TEST_AUTH_SECRET);
 
         expect(auth.options.socialProviders?.github?.clientId).toBe('gh-id');
     });
@@ -189,7 +189,7 @@ describe('createAuth social providers', () =>
         const config = testConfig();
         handle = createDatabase(config);
 
-        const auth = createAuth(handle, config);
+        const auth = createAuth(handle, config, TEST_AUTH_SECRET);
 
         expect(auth.options.socialProviders).toBeUndefined();
     });

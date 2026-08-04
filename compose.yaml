@@ -9,9 +9,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # REQUIRED — no default on purpose: compose refuses to start until you provide one. Put it in a .env file
-      # next to this compose file (AUTH_SECRET=...) or export it in your shell. Rotating it signs everyone out.
-      AUTH_SECRET: ${AUTH_SECRET:?generate one with `openssl rand -base64 32` and put it in .env next to this file}
+      # Optional: left empty, the server generates a session key at /data/auth-secret on first run. To hold it
+      # yourself, put it in a .env file next to this compose file (AUTH_SECRET=...) or export it in your shell —
+      # `openssl rand -base64 32` mints one. Changing it signs everyone out. See docs/secrets.md.
+      AUTH_SECRET: ${AUTH_SECRET:-}
       # The externally reachable URL (scheme + host + port). Behind a reverse proxy, this is the public URL.
       BASE_URL: http://localhost:3000
       # First run: the console log prints a one-time setup code — finish setup in the browser at /setup.

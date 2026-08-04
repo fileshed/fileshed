@@ -50,7 +50,7 @@ import { createShareRoutes } from '@server/routes/shares.ts';
 import { createUploadRoutes } from '@server/routes/uploads.ts';
 
 // Auth support (real sign-up / sign-in over the same app)
-import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
 import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
@@ -113,7 +113,7 @@ export async function bootShareApp() : Promise<BootedShareApp>
     const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-shares-'));
     const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot }));
 
-    const auth = createAuth(handle, config);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
     await initialize(handle, auth);
 
     const backendID = await seedDefaultBackend(handle, config);

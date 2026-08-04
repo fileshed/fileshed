@@ -40,7 +40,7 @@ import { createAvatarRoutes } from '@server/routes/avatars.ts';
 import { createMeRoutes } from '@server/routes/me.ts';
 
 // Auth support (real sign-up/sign-in over the same app)
-import { ORIGIN, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
 import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
@@ -85,7 +85,7 @@ export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAv
     const overrides = avatarMaxBytes === undefined ? {} : { AVATAR_MAX_BYTES: avatarMaxBytes };
     const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot, ...overrides }));
 
-    const auth = createAuth(handle, config);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
     await initialize(handle, auth);
 
     const backendID = await seedDefaultBackend(handle, config);

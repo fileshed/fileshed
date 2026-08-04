@@ -17,8 +17,23 @@ DATABASE_KIND: ${DATABASE_KIND:-sqlite}
 DATABASE_PATH: ${DATABASE_PATH:-./data/fileshed.db}
 DATABASE_URL: ${DATABASE_URL:-}
 
-# REQUIRED, no fallback on purpose: sessions are signed with this. Generate one: openssl rand -base64 32
+# Session signing, in precedence order (docs/secrets.md has the whole story):
+#   AUTH_SECRET_FILE -- a file you point at, anywhere but the managed path below. Read, never written; a missing
+#                       one fails the boot.
+#   AUTH_SECRET      -- the value itself.
+#   the managed file -- beside the database, whether AUTH_SECRET_FILE names it or nothing does. Generated on first
+#                       run. This is what the container image uses.
+# Setting one of the first two migrates the settings sealed under the managed file and then removes it.
 AUTH_SECRET: ${AUTH_SECRET:-}
+AUTH_SECRET_FILE: ${AUTH_SECRET_FILE:-}
+
+# The key an earlier AUTH_SECRET used. Set it for the one boot after a rotation and stored secrets move to the new
+# key; remove it afterwards.
+AUTH_SECRET_PREVIOUS: ${AUTH_SECRET_PREVIOUS:-}
+
+# Clear stored secrets no available key can open, instead of refusing to boot. The only thing that makes FileShed
+# delete one; set it for a single boot and remove it again.
+FILESHED_DISCARD_SEALED_SECRETS: ${FILESHED_DISCARD_SEALED_SECRETS:-false}
 
 # The externally reachable URL (behind a reverse proxy, the public one).
 BASE_URL: ${BASE_URL:-http://localhost:5173}

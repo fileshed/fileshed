@@ -54,6 +54,7 @@ ENV NODE_ENV=production \
     CLIENT_DIST=./client-dist \
     DATABASE_KIND=sqlite \
     DATABASE_PATH=/data/fileshed.db \
+    AUTH_SECRET_FILE=/data/auth-secret \
     STORAGE_ROOT=/data/blobs
 
 COPY --from=deps /app/node_modules ./node_modules

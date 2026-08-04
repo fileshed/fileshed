@@ -89,8 +89,7 @@ jobs:
           FILESHED_TEST_DATABASE_URL: postgres://fileshed:fileshed@localhost:5432/fileshed
 
   # No services or secrets on purpose: the harness spawns its own server children on OS-assigned ports over temp
-  # SQLite and blob directories, and config/config.yaml carries a fallback for every key but AUTH_SECRET, which the
-  # harness supplies itself.
+  # SQLite and blob directories, and config/config.yaml carries a fallback for every key it needs.
   e2e:
     runs-on: ubuntu-latest
     strategy:
@@ -124,10 +123,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # No AUTH_SECRET on purpose: an appliance install hands the image nothing, so the smoke run boots the way one
+      # does -- the server generates its own key at /data/auth-secret, or this job fails.
       - name: Boot the image
         run: |
           docker run -d --name fileshed-smoke -p 3000:3000 \
-            -e AUTH_SECRET="$(openssl rand -base64 32)" \
             -e BASE_URL=http://localhost:3000 \
             fileshed:ci
 
@@ -136,6 +136,13 @@ jobs:
               echo "Server answered /api/health."
               curl -fsS -o /dev/null http://localhost:3000/
               echo "Client served from /."
+
+              mode=$(docker exec fileshed-smoke stat -c '%a' /data/auth-secret)
+              if [ "$mode" != "600" ]; then
+                echo "Session secret file has mode $mode, expected 600."
+                exit 1
+              fi
+              echo "Session secret generated at /data/auth-secret (mode $mode)."
               exit 0
             fi
             if [ "$(docker inspect -f '{{ .State.Running }}' fileshed-smoke)" != "true" ]; then

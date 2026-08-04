@@ -69,14 +69,17 @@ Images are published to the GitHub Container Registry for `linux/amd64` and `lin
 ```bash
 docker run -d --name fileshed \
   -p 3000:3000 \
-  -e AUTH_SECRET="$(openssl rand -base64 32)" \
   -e BASE_URL=http://localhost:3000 \
   -v fileshed-data:/data \
   ghcr.io/fileshed/fileshed:latest
 ```
 
-One volume holds everything that persists: the SQLite database at `/data/fileshed.db` and the blob store under
-`/data/blobs`. `docker logs fileshed` prints the one-time setup code for the first admin account.
+One volume holds everything that persists: the SQLite database at `/data/fileshed.db`, the blob store under
+`/data/blobs`, and the session-signing key at `/data/auth-secret`, generated on the first run.
+`docker logs fileshed` prints the one-time setup code for the first admin account.
+
+To supply that key yourself, rotate it, or keep it in a Docker secret, see
+**[docs/secrets.md](docs/secrets.md)** — it also covers what a backup has to include.
 
 Three moving tags are published alongside the exact version of every release:
 
@@ -85,7 +88,7 @@ Three moving tags are published alongside the exact version of every release:
 - `dev` — the newest commit on `main` that passed the full test suite.
 
 See **[docs/deployment.md](docs/deployment.md)** for compose files, the environment reference, HTTPS guidance,
-Postgres, and what to back up.
+Postgres, and what to back up, and **[docs/secrets.md](docs/secrets.md)** for the session secret.
 
 ## Stack
 

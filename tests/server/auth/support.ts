@@ -55,6 +55,10 @@ import { openTestDatabase } from '../support/database.ts';
 
 export const ORIGIN = 'http://localhost:3000';
 
+// The explicit secret every in-process spec boots with, standing in for a deployment that sets AUTH_SECRET. Specs
+// about resolving an UNSET one drive the resolver directly.
+export const TEST_AUTH_SECRET = 'test-auth-secret-test-auth-secret-test';
+
 export function testConfig(overrides : Partial<Config> = {}) : Config
 {
     return {
@@ -63,7 +67,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         DATABASE_KIND: 'sqlite',
         DATABASE_PATH: ':memory:',
         DATABASE_URL: undefined,
-        AUTH_SECRET: 'test-auth-secret-test-auth-secret-test',
+        AUTH_SECRET: TEST_AUTH_SECRET,
         BASE_URL: ORIGIN,
         FILESHED_SETUP_TOKEN: undefined,
         STORAGE_ROOT: './data/blobs',
@@ -96,7 +100,7 @@ export interface BootedApp
 export async function bootTestApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
 {
     const { config, handle } = await openTestDatabase(testConfig(overrides));
-    const auth = createAuth(handle, config, extras);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
 
     await initialize(handle, auth);
 
@@ -122,7 +126,7 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
     const settings = new SettingsManager({
         settings: settingsRA,
         config,
-        box: new SecretBox(config.AUTH_SECRET),
+        box: new SecretBox(TEST_AUTH_SECRET),
         startedAt,
     });
     const mail = new MailManager({ settings, mail: new MailRA() });
@@ -182,7 +186,7 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
 export async function bootFullApp(overrides : Partial<Config> = {}) : Promise<BootedApp>
 {
     const { config, handle } = await openTestDatabase(testConfig(overrides));
-    const auth = createAuth(handle, config);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
 
     await initialize(handle, auth);
 

@@ -349,12 +349,14 @@ function emailVerificationOptions(mail : AuthMailHooks | undefined) : typeof aut
     };
 }
 
-export function createAuth(handle : DatabaseHandle, config : Config, extras : AuthExtras = {}) : Auth
+// The secret is a parameter rather than a config read: config.AUTH_SECRET is optional, and the value that actually
+// signs sessions is resolved at boot (environment over stored over generated, see managers/authSecret.ts).
+export function createAuth(handle : DatabaseHandle, config : Config, secret : string, extras : AuthExtras = {}) : Auth
 {
     return betterAuth({
         ...authOptionsShape,
         database: { db: handle.db, type: handle.kind },
-        secret: config.AUTH_SECRET,
+        secret,
         baseURL: config.BASE_URL,
         trustedOrigins: resolveTrustedOrigins(config),
         socialProviders: socialProvidersFromValues(extras.providerValues ?? providerValuesFromConfig(config)),

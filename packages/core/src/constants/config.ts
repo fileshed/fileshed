@@ -17,4 +17,14 @@ export const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 export const DEFAULT_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_SMTP_PORT = 587;
 
+// Byte count of a generated AUTH_SECRET, written base64. Matches what `openssl rand -base64 32` produces, which is
+// what the docs tell an operator minting one by hand.
+export const GENERATED_AUTH_SECRET_BYTES = 32;
+
+// Name of the secret file FileShed manages for itself, alongside the database in the data directory.
+export const AUTH_SECRET_FILE_NAME = 'auth-secret';
+
+// Owner read/write only. The file is the whole key to every sealed setting, so group and world get nothing.
+export const AUTH_SECRET_FILE_MODE = 0o600;
+
 //----------------------------------------------------------------------------------------------------------------------

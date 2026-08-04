@@ -28,9 +28,9 @@ const MANAGED_KEYS = [
 
 const saved : Record<string, string | undefined> = {};
 
-// Start each case from a clean, minimally valid environment: the required AUTH_SECRET present, every provider key
-// absent, and BASE_URL cleared so its default applies (the Vitest/Vite process leaks BASE_URL='/', which the URL
-// schema would reject). A case sets only the provider halves it is exercising.
+// Start each case from a clean, minimally valid environment: an AUTH_SECRET that passes validation, every provider
+// key absent, and BASE_URL cleared so its default applies (the Vitest/Vite process leaks BASE_URL='/', which the
+// URL schema would reject). A case sets only the provider halves it is exercising.
 beforeEach(() =>
 {
     for(const key of MANAGED_KEYS)
@@ -73,6 +73,15 @@ describe('substituteEnv', () =>
 
 describe('loadConfig AUTH_SECRET validation', () =>
 {
+    // An instance with no AUTH_SECRET in its environment resolves one from its database at boot, so the loader has
+    // nothing to complain about -- the key is simply unset here.
+    it('loads with no AUTH_SECRET in the environment', () =>
+    {
+        Reflect.deleteProperty(process.env, 'AUTH_SECRET');
+
+        expect(loadConfig().AUTH_SECRET).toBeUndefined();
+    });
+
     // The sample placeholder is long enough to pass the length floor on purpose (so length is tested separately),
     // which is exactly why it must be rejected by name: a secret published in the repo signs forgeable sessions.
     it('rejects the sample placeholder even though it satisfies the length requirement', () =>
