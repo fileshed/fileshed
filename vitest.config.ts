@@ -34,6 +34,7 @@ export default defineConfig({
                     name: 'server',
                     include: [ 'tests/server/**/*.spec.ts' ],
                     setupFiles: [ './tests/server/support/setup.ts' ],
+                    globalSetup: [ './tests/server/support/globalSetup.ts' ],
                 },
             },
             {

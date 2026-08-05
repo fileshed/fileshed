@@ -46,7 +46,7 @@ export interface TestDatabase
 
 //----------------------------------------------------------------------------------------------------------------------
 
-async function onAdmin(run : (client : Client) => Promise<void>) : Promise<void>
+export async function onAdmin(run : (client : Client) => Promise<void>) : Promise<void>
 {
     const client = new Client({ connectionString: ADMIN_URL });
 
@@ -69,27 +69,83 @@ function urlFor(database : string) : string
 
 const provisioned = new Map<string, DatabaseHandle>();
 
-const DESTROY_TIMEOUT_MS = 5000;
+// How long a pool gets to shut down, and how long the server then gets to report the last of its backends gone.
+// Both are escape hatches from a spec that wedged a connection; healthy reclamation costs a single round-trip.
+const CLOSE_TIMEOUT_MS = 5000;
+const DRAIN_TIMEOUT_MS = 5000;
+const DRAIN_POLL_MS = 20;
 
-// Closing the pool comes first, so that by the time the drop runs there is nothing left attached to object to it:
-// terminating a live connection makes pg raise on the client, which surfaces as an unhandled error rather than
-// anything a spec can catch. A spec that already closed its own pool is the normal case, not an error.
-//
-// The timeout is the escape hatch. pool.end() waits on whatever query is still outstanding, and a spec that failed
-// mid-flight can leave one that never settles -- so reclamation stops waiting and lets FORCE sever it instead.
-async function release(database : string, handle : DatabaseHandle) : Promise<void>
+// The net's own budget, since it can spend both of the above in a row and a spec's hook cannot be given a budget
+// from here. Disposing a database is deliberately the cheaper half -- closing the pool, nothing more -- so a spec's
+// own cleanup stays inside the allowance vitest gives it.
+export const RECLAIM_TIMEOUT_MS = 30_000;
+
+//----------------------------------------------------------------------------------------------------------------------
+
+async function withDeadline(work : Promise<unknown>, ms : number) : Promise<void>
 {
-    provisioned.delete(database);
+    let timer : ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); });
 
-    const closed = handle.db.destroy().then(() => true, () => true);
-    const timedOut = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), DESTROY_TIMEOUT_MS));
+    try { await Promise.race([ work, deadline ]); }
+    finally { clearTimeout(timer); }
+}
 
-    await Promise.race([ closed, timedOut ]);
+function sleep(ms : number) : Promise<void>
+{
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-    await onAdmin(async (client) =>
+// Kysely's destroy() resolves when pg-pool has unlinked its clients, which is at least a tick before their sockets
+// are actually closed -- pg-pool drops each client from its bookkeeping array and only then calls client.end().
+// So a resolved destroy() means "no new queries", never "the server has let go".
+async function closePool(handle : DatabaseHandle) : Promise<void>
+{
+    await withDeadline(handle.db.destroy().catch(() => undefined), CLOSE_TIMEOUT_MS);
+}
+
+async function backendsOn(client : Client, database : string) : Promise<number>
+{
+    const result = await client.query<{ backends : number }>(
+        'select count(*)::int as backends from pg_stat_activity where datname = $1',
+        [ database ]
+    );
+
+    return result.rows[0]?.backends ?? 0;
+}
+
+// The only place a test database is ever dropped, and it asks Postgres first -- the one witness that can actually
+// answer whether this process has let go, since a resolved destroy() cannot. FORCE would sever whatever connection
+// was still open, and pg answers a severed connection with a FATAL 57P01 on a client nobody is listening to: an
+// unhandled error that fails a run whose every test passed.
+export async function reclaimIfUnused(client : Client, database : string) : Promise<boolean>
+{
+    if(await backendsOn(client, database) > 0) { return false; }
+
+    await client.query(`drop database if exists "${ database }"`);
+
+    return true;
+}
+
+// Nothing re-opens a reclaimed database, so retrying only ever gets closer to succeeding.
+async function reclaimUntilUnused(client : Client, database : string, deadline : number) : Promise<boolean>
+{
+    if(await reclaimIfUnused(client, database)) { return true; }
+    if(Date.now() >= deadline) { return false; }
+
+    await sleep(DRAIN_POLL_MS);
+
+    return reclaimUntilUnused(client, database, deadline);
+}
+
+// Refusing to force means a wedged connection leaves its database behind instead of crashing the run. It is an
+// orphan then, and the next run's sweep reclaims it.
+async function dropWhenUnused(client : Client, database : string) : Promise<void>
+{
+    if(!await reclaimUntilUnused(client, database, Date.now() + DRAIN_TIMEOUT_MS))
     {
-        await client.query(`drop database if exists "${ database }" with (force)`);
-    });
+        process.stderr.write(`test database ${ database } still has connections; left for the next run's sweep\n`);
+    }
 }
 
 // The afterEach net. Reclaims every database provisioned since the last sweep, whatever the specs did or failed to do.
@@ -98,7 +154,32 @@ export async function dropProvisionedDatabases() : Promise<void>
     const entries = [ ...provisioned.entries() ];
     provisioned.clear();
 
-    await Promise.all(entries.map(([ database, handle ]) => release(database, handle)));
+    if(entries.length === 0) { return; }
+
+    await Promise.all(entries.map(([ , handle ]) => closePool(handle)));
+
+    await onAdmin(async (client) =>
+    {
+        await Promise.all(entries.map(([ database ]) => dropWhenUnused(client, database)));
+    });
+}
+
+// Reclaims what runs that died mid-flight left behind. It runs before any worker has provisioned a database, so
+// every name it finds belongs to some earlier run -- and a dead run holds no connections, which is exactly the
+// condition the drop below requires. A second suite running against the same server is safe for the same reason:
+// Postgres refuses to drop a database anyone is attached to, so the worst this can do to it is nothing.
+export async function dropOrphanedDatabases() : Promise<void>
+{
+    if(!ADMIN_URL) { return; }
+
+    await onAdmin(async (client) =>
+    {
+        const orphans = await client.query<{ datname : string }>(
+            "select datname from pg_database where datname like 'fileshed\\_test\\_%'"
+        );
+
+        await Promise.all(orphans.rows.map(({ datname }) => reclaimIfUnused(client, datname)));
+    });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -124,7 +205,9 @@ export async function openTestDatabase(config : Config) : Promise<TestDatabase>
 
     provisioned.set(database, handle);
 
-    return { config: postgresConfig, handle, dispose: () => release(database, handle) };
+    // Giving a database back means letting go of its connections; the net does the dropping, moments later and on
+    // its own budget. Splitting it that way keeps a spec's own cleanup hook off the wire.
+    return { config: postgresConfig, handle, dispose: () => closePool(handle) };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

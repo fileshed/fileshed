@@ -1,16 +1,18 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Server Suite Setup
+// Server Suite Global Setup
 //
-// Registered at file level, so this afterEach runs last -- a spec's own cleanup is an inner hook and goes first.
+// Runs once in vitest's own process, before the first worker starts -- the only moment at which every test database
+// on the server is provably somebody else's leftover.
 //----------------------------------------------------------------------------------------------------------------------
-
-import { afterEach } from 'vitest';
 
 // Test support
-import { RECLAIM_TIMEOUT_MS, dropProvisionedDatabases } from './database.ts';
+import { dropOrphanedDatabases } from './database.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-afterEach(dropProvisionedDatabases, RECLAIM_TIMEOUT_MS);
+export async function setup() : Promise<void>
+{
+    await dropOrphanedDatabases();
+}
 
 //----------------------------------------------------------------------------------------------------------------------
