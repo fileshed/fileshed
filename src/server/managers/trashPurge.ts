@@ -72,7 +72,8 @@ export async function runTrashPurgeOnce(deps : TrashPurgeDeps) : Promise<TrashPu
     const purged = outcomes.filter((outcome) => outcome === 'purged').length;
     const failed = outcomes.filter((outcome) => outcome === 'failed').length;
 
-    logger.info({ candidates: roots.length, purged, failed }, 'trash purge sweep complete');
+    const level = failed > 0 ? 'warn' : (roots.length > 0 ? 'info' : 'debug');
+    logger[level]({ candidates: roots.length, purged, failed }, 'trash purge sweep complete');
 
     return { candidates: roots.length, purged, failed };
 }

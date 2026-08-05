@@ -78,7 +78,8 @@ export async function runGcOnce(deps : GcDeps) : Promise<GcSummary>
     const kept = removals.filter((removal) => removal === 'kept').length;
     const bytesFailed = removals.filter((removal) => removal === 'bytesFailed').length;
 
-    logger.info({ candidates: candidates.length, deleted, kept, bytesFailed }, 'GC sweep complete');
+    const level = bytesFailed > 0 ? 'warn' : (candidates.length > 0 ? 'info' : 'debug');
+    logger[level]({ candidates: candidates.length, deleted, kept, bytesFailed }, 'GC sweep complete');
 
     return { candidates: candidates.length, deleted, kept, bytesFailed };
 }
