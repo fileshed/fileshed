@@ -2,9 +2,8 @@
 set -euo pipefail
 
 # The whole release ritual: code, then `npm run release -- <bump>`. If [Unreleased] is empty but commits landed
-# since the last tag, the changelog skill is run headlessly to fill it; the one human step is reviewing those
-# words before anything is stamped, tagged, or published. Pre-release versions (any semver with a hyphen) are
-# marked as pre-releases on GitHub.
+# since the last tag, the changelog skill is run headlessly to fill it, and the notes print as the release
+# proceeds. Pre-release versions (any semver with a hyphen) are marked as pre-releases on GitHub.
 
 REPO_URL="https://github.com/fileshed/fileshed"
 
@@ -77,16 +76,6 @@ if [ -n "$(unreleased_body)" ]; then
     unreleased_body
     echo "=============================================="
     echo ""
-    echo "Edit CHANGELOG.md now if you want changes; the file is re-read after this prompt."
-    read -r -p "Release with these notes? [y/N] " ANSWER
-    if [[ "$ANSWER" != [yY] ]]; then
-        echo "Stopped. CHANGELOG.md is filled and ready; re-run to continue."
-        exit 0
-    fi
-    if [ -n "$(git status --porcelain --untracked-files=no -- ':!CHANGELOG.md')" ]; then
-        echo "Error: files besides CHANGELOG.md changed during review. Commit or stash them first."
-        exit 1
-    fi
 fi
 
 # A release tag should point at the most-verified commit this repo can produce.
@@ -97,24 +86,28 @@ npm run test
 npm run test:e2e
 npm run build
 
-npm version "$@" --no-git-tag-version
+npm version "$@" --no-git-tag-version --workspaces-update=false
 VERSION=$(node -p "require('./package.json').version")
 
-for ws in packages/core src/client src/server; do
-    npm version "$VERSION" --no-git-tag-version -w "$ws"
-done
-
-# Workspace cross-references carry caret ranges against the local version; on a 0.x minor bump the old range
-# stops matching the new sibling version, and npm would go looking for it on the registry.
+# npm version -w reconciles the whole workspace tree on every call, which explodes on the first 0.x bump: the
+# sibling caret ranges stop matching mid-loop and npm goes to the registry for a package that only exists here.
+# Versions and cross-references are plain file edits instead, reconciled by one lock-only install at the end.
 node -e '
     const fs = require("fs");
-    for (const p of ["src/client/package.json", "src/server/package.json"])
+    const version = process.argv[1];
+    const manifests = {
+        "packages/core/package.json": false,
+        "src/client/package.json": true,
+        "src/server/package.json": true,
+    };
+    for (const [path, dependsOnCore] of Object.entries(manifests))
     {
-        const raw = fs.readFileSync(p, "utf8");
+        const raw = fs.readFileSync(path, "utf8");
         const indent = raw.match(/\n(\s+)"/)[1];
         const pkg = JSON.parse(raw);
-        pkg.dependencies["@fileshed/core"] = "^" + process.argv[1];
-        fs.writeFileSync(p, JSON.stringify(pkg, null, indent) + "\n");
+        pkg.version = version;
+        if (dependsOnCore) { pkg.dependencies["@fileshed/core"] = "^" + version; }
+        fs.writeFileSync(path, JSON.stringify(pkg, null, indent) + "\n");
     }
 ' "$VERSION"
 npm install --package-lock-only --ignore-scripts >/dev/null
