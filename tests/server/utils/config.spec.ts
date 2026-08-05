@@ -19,6 +19,7 @@ import { loadConfig, substituteEnv } from '@server/utils/config.ts';
 const MANAGED_KEYS = [
     'AUTH_SECRET',
     'BASE_URL',
+    'TRUSTED_ORIGINS',
     'GITHUB_CLIENT_ID',
     'GITHUB_CLIENT_SECRET',
     'GITLAB_CLIENT_ID',
@@ -96,6 +97,95 @@ describe('loadConfig AUTH_SECRET validation', () =>
         process.env['AUTH_SECRET'] = 'too-short';
 
         expect(() => loadConfig()).toThrow(/32 characters/);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('loadConfig BASE_URL', () =>
+{
+    // The instance's own scheme and host: better-auth builds every URL it hands out from them, so anything that is
+    // not an http(s) URL fails the boot instead of producing nonsense links.
+    it('refuses a BASE_URL that is not an http(s) URL', () =>
+    {
+        process.env['BASE_URL'] = 'ftp://files.example.com';
+
+        expect(() => loadConfig()).toThrow(/BASE_URL must be an http\(s\) URL/);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('loadConfig TRUSTED_ORIGINS', () =>
+{
+    // An https canonical URL, so the entries under test can be written the way a real deployment writes them.
+    beforeEach(() => { process.env['BASE_URL'] = 'https://files.example.com'; });
+
+    // Nothing set means nothing added: BASE_URL stays the entire trust list, which is the behavior every existing
+    // deployment already has.
+    it('is an empty list when the variable is unset', () =>
+    {
+        expect(loadConfig().TRUSTED_ORIGINS).toEqual([]);
+    });
+
+    it('reads a comma-separated list in order, ignoring the spacing around entries', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = ' https://alt.example.com ,https://files.internal:3950 ';
+
+        expect(loadConfig().TRUSTED_ORIGINS).toEqual([ 'https://alt.example.com', 'https://files.internal:3950' ]);
+    });
+
+    // An Origin header is scheme, host and port and nothing else, so an entry written as a full URL has to come
+    // down to the same thing. A default port is part of that: a browser on https://files.example.com:443 sends
+    // https://files.example.com.
+    it('reduces each entry to its origin, dropping paths, trailing slashes and default ports', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = 'https://files.example.com/,https://alt.example.com/app?x=1,'
+            + 'https://port.example.com:443';
+
+        expect(loadConfig().TRUSTED_ORIGINS)
+            .toEqual([ 'https://files.example.com', 'https://alt.example.com', 'https://port.example.com' ]);
+    });
+
+    it('ignores empty entries left by a trailing or doubled comma', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = 'https://files.example.com,,';
+
+        expect(loadConfig().TRUSTED_ORIGINS).toEqual([ 'https://files.example.com' ]);
+    });
+
+    // A hostname with no scheme is the likely typo, and it has no origin to match against. Refusing at boot beats
+    // loading it into a list where it silently matches nothing.
+    it('refuses an entry that is not a URL, naming the entry', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = 'https://files.example.com,files.internal';
+
+        expect(() => loadConfig()).toThrow(/files\.internal/);
+    });
+
+    it('refuses a scheme that has no origin', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = 'fileshed://open';
+
+        expect(() => loadConfig()).toThrow(/fileshed:\/\/open/);
+    });
+
+    // One protocol covers every alternate, taken from BASE_URL, and it is what decides Secure cookies too. An entry
+    // on the other scheme would be built and cookied wrong, so it is refused by name instead.
+    it('refuses an entry whose scheme differs from BASE_URL, naming it', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = 'https://alt.example.com,http://files.internal:3950';
+
+        expect(() => loadConfig()).toThrow(/http:\/\/files\.internal:3950/);
+    });
+
+    // The rule is "same as BASE_URL", not "https": a plain-http instance on a LAN takes plain-http alternates.
+    it('takes an all-http list under an http BASE_URL', () =>
+    {
+        process.env['BASE_URL'] = 'http://files.internal:3950';
+        process.env['TRUSTED_ORIGINS'] = 'http://192.168.1.20:3950';
+
+        expect(loadConfig().TRUSTED_ORIGINS).toEqual([ 'http://192.168.1.20:3950' ]);
     });
 });
 

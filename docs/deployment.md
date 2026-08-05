@@ -84,6 +84,7 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `AUTH_SECRET_PREVIOUS` | no | — | The key being replaced, for the one boot that migrates stored secrets to the new one. |
 | `FILESHED_DISCARD_SEALED_SECRETS` | no | `false` | `1` clears stored secrets no available key can open — the only circumstance in which FileShed deletes one. Without it, such a boot refuses. |
 | `BASE_URL` | yes | `http://localhost:5173` | The externally reachable URL — behind a proxy, the public one. |
+| `TRUSTED_ORIGINS` | no | — | Further origins the instance answers on, comma-separated. See below. |
 | `HOST` / `PORT` | no | `0.0.0.0` / `3000` (image) | Bind address and port. |
 | `DATABASE_KIND` | no | `sqlite` | `sqlite` or `postgres`. |
 | `DATABASE_PATH` | sqlite | `/data/fileshed.db` (image) | SQLite file location. |
@@ -103,6 +104,25 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `EMAIL_VERIFICATION_REQUIRED` | no | `false` | New accounts must verify their address before signing in. Applied at boot. |
 | `<PROVIDER>_CLIENT_ID` / `<PROVIDER>_CLIENT_SECRET` | no | — | OAuth credentials for any social provider better-auth supports, e.g. `GITHUB_*`, `GOOGLE_*`, `DISCORD_*`. Applied at boot; a provider activates once every field it requires is set. |
 | `LOG_LEVEL` | no | `info` | pino levels: trace … silent. |
+
+`TRUSTED_ORIGINS` is for an instance reachable at more than one URL — an internal hostname beside the public one,
+split-horizon DNS. List the extra origins comma-separated
+(`https://files.example.com,https://files.internal:3950`); each is read down to scheme, host and port, and an entry
+that is not an http(s) URL fails the boot with that entry in the message.
+
+A request arriving on a listed origin is answered as that origin: sign-in works there, provider sign-in returns
+there, and the links in verification and password-reset email point back at it. A host that is not listed — a stale
+DNS name, a forged `Host` header — is answered as `BASE_URL`, which stays the canonical URL and never needs an entry
+of its own.
+
+Two things to know:
+
+- Every entry uses the same scheme as `BASE_URL`, and a list mixing them fails the boot. One protocol covers all the
+  hosts, and it is also what marks session cookies `Secure`.
+- Each origin used for provider sign-in needs its own callback URL registered with that provider —
+  `https://files.internal:3950/api/auth/callback/github` alongside the canonical one. How many a provider accepts
+  differs: Google, Microsoft and Discord take a list per client, while a GitHub OAuth App takes exactly one, so
+  several origins there need a GitHub App or one OAuth app per origin.
 
 Everything email can also be configured at runtime from the admin **Email** tab — values set there override these,
 the password is stored encrypted, and changes apply to the next email without a restart (except

@@ -50,6 +50,26 @@ const booleanish = z.preprocess((value) =>
     return Boolean(value);
 }, z.boolean());
 
+// One TRUSTED_ORIGINS entry reduced to what a browser's Origin header carries, or null when the entry cannot be
+// one. The host half becomes better-auth's allowedHosts and the whole origin its trust list (see
+// resource-access/auth.ts), both matched by exact string -- an entry keeping a path or a trailing slash would match
+// nothing at all. Only http and https carry an origin a browser sends: a bare hostname does not parse as a URL, and
+// a scheme like mailto: has no origin, so both come back null.
+function normalizeOrigin(entry : string) : string | null
+{
+    try
+    {
+        const url = new URL(entry);
+        if(url.protocol !== 'http:' && url.protocol !== 'https:') { return null; }
+
+        return url.origin;
+    }
+    catch
+    {
+        return null;
+    }
+}
+
 // LOG_LEVEL and NODE_ENV are deliberately absent: the logger initializes at import time, before loadConfig() can
 // run, so it owns those two directly (see utils/logger.ts).
 const configSchema = z.object({
@@ -89,7 +109,44 @@ const configSchema = z.object({
     // The one-shot answer to the refusal to boot with settings no available key can open: clear them instead.
     FILESHED_DISCARD_SEALED_SECRETS: booleanish.default(false),
 
-    BASE_URL: z.url().default(DEFAULT_BASE_URL),
+    // The canonical URL. http(s) only: it is the instance's own scheme and host, and everything from the setup
+    // announcement to better-auth's URL construction is built from those two.
+    BASE_URL: z.url({
+        protocol: /^https?$/,
+        error: 'BASE_URL must be an http(s) URL, e.g. https://files.example.com',
+    }).default(DEFAULT_BASE_URL),
+
+    // Further origins the instance answers on, comma-separated, for a deployment reachable at more than one URL.
+    // Each entry is normalized to its origin; one that has none fails the boot and is named in the message, rather
+    // than loading into a list where it can never match. Empty leaves BASE_URL the only URL answered on.
+    TRUSTED_ORIGINS: z.string()
+        .transform((value, ctx) =>
+        {
+            const entries = value.split(',')
+                .map((entry) => entry.trim())
+                .filter((entry) => entry !== '');
+
+            const origins : string[] = [];
+            for(const entry of entries)
+            {
+                const origin = normalizeOrigin(entry);
+                if(origin === null)
+                {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: `TRUSTED_ORIGINS entry '${ entry }' is not an http(s) URL. Write each origin in `
+                            + 'full, like https://files.example.com',
+                    });
+                }
+                else
+                {
+                    origins.push(origin);
+                }
+            }
+
+            return origins;
+        })
+        .default([]),
 
     // Blob storage + GC. STORAGE_ROOT is both the fs backend's root and the config the default storage_backend row is
     // seeded with. GC_GRACE_DAYS is the graveyard window before a dereferenced blob is hard-deleted; 0 collects
@@ -157,6 +214,21 @@ const configSchema = z.object({
             code: 'custom',
             path: [ 'DATABASE_URL' ],
             message: 'DATABASE_URL is required when DATABASE_KIND=postgres',
+        });
+    }
+
+    // better-auth builds every alternate's URLs under a single protocol, taken from BASE_URL (see
+    // resource-access/auth.ts), and that same value decides whether session cookies are Secure. A list mixing
+    // schemes therefore cannot be served: half of it would be built, and cookied, wrong.
+    const scheme = new URL(config.BASE_URL).protocol;
+    const mismatched = config.TRUSTED_ORIGINS.filter((origin) => new URL(origin).protocol !== scheme);
+
+    if(mismatched.length > 0)
+    {
+        ctx.addIssue({
+            code: 'custom',
+            path: [ 'TRUSTED_ORIGINS' ],
+            message: `TRUSTED_ORIGINS must use BASE_URL's scheme (${ scheme }//): ${ mismatched.join(', ') }`,
         });
     }
 });

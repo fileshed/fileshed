@@ -69,6 +69,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         DATABASE_URL: undefined,
         AUTH_SECRET: TEST_AUTH_SECRET,
         BASE_URL: ORIGIN,
+        TRUSTED_ORIGINS: [],
         FILESHED_SETUP_TOKEN: undefined,
         STORAGE_ROOT: './data/blobs',
         GC_GRACE_DAYS: 7,

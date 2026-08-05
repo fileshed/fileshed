@@ -47,16 +47,41 @@ import type { Config } from '../utils/config.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// Origins allowed to hit the auth endpoints. Same-origin requests (client served by the server) never need this; it
-// exists for the cross-origin flows. Production trusts only the configured BASE_URL. Development turns origin
-// matching off entirely (better-auth's bare `*` pattern matches any host) -- a dev box gets reached however is
-// handy: localhost, the machine's LAN IP for cast/phone testing, a .local hostname. The rest of the CSRF machinery
-// stays on; only the origin allowlist opens up, and only outside production.
-function resolveTrustedOrigins(config : Config) : string[]
-{
-    if(process.env['NODE_ENV'] !== 'production') { return [ config.BASE_URL, '*' ]; }
+// better-auth's multi-host form of baseURL, as opposed to the plain canonical string.
+type DynamicBaseURL = Exclude<NonNullable<BetterAuthOptions['baseURL']>, string>;
 
-    return [ config.BASE_URL ];
+// The hosts this instance answers on, and how better-auth builds URLs for them. A request whose host is on the list
+// has its base URL built from that host, and everything derived from it follows: the OAuth redirect_uri, the
+// verification and reset links. Sign-in started at an alternate origin therefore comes back to that origin instead
+// of teleporting to the canonical one. A host that is not on the list resolves to the fallback, which is what makes
+// a forged Host (or X-Forwarded-Host) header inert -- it cannot mint a URL, it only ever gets the canonical one.
+//
+// Development adds the bare `*` pattern so a dev box still answers wherever it is reached: localhost, the machine's
+// LAN IP for cast/phone testing, a .local hostname.
+//
+// One protocol covers every host, which is why the config refuses a TRUSTED_ORIGINS list that mixes schemes. It is
+// also what sets the session cookie's Secure flag -- https here means Secure cookies, exactly as a plain BASE_URL
+// string used to decide it.
+export function resolveBaseURL(config : Config) : DynamicBaseURL
+{
+    const canonical = new URL(config.BASE_URL);
+    const hosts = new Set([ canonical.host, ...config.TRUSTED_ORIGINS.map((origin) => new URL(origin).host) ]);
+
+    return {
+        allowedHosts: process.env['NODE_ENV'] === 'production' ? [ ...hosts ] : [ ...hosts, '*' ],
+        protocol: canonical.protocol === 'https:' ? 'https' : 'http',
+        fallback: config.BASE_URL,
+    };
+}
+
+// Origins allowed to hit the auth endpoints. Same-origin requests (client served by the server) never need this; it
+// exists for the cross-origin flows. Production adds nothing: better-auth joins every allowedHosts entry and the
+// fallback's origin into the trust list itself, under the same protocol, so listing them again would only duplicate
+// it. Development keeps the bare `*` pattern, which matches any host. The rest of the CSRF machinery stays on;
+// only the origin allowlist opens up, and only outside production.
+export function resolveTrustedOrigins() : string[]
+{
+    return process.env['NODE_ENV'] === 'production' ? [] : [ '*' ];
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -191,7 +216,7 @@ const apiKeyConfigurations = [
 const authOptionsShape = {
     database: {} as { db : DatabaseHandle['db']; type : DatabaseHandle['kind'] },
     secret: '',
-    baseURL: '',
+    baseURL: { allowedHosts: [], protocol: 'https', fallback: '' } as DynamicBaseURL,
     trustedOrigins: [] as string[],
     // Placeholders past `enabled`, for the type only: createAuth supplies the live mail callbacks and the boot-read
     // verification flag.
@@ -357,8 +382,8 @@ export function createAuth(handle : DatabaseHandle, config : Config, secret : st
         ...authOptionsShape,
         database: { db: handle.db, type: handle.kind },
         secret,
-        baseURL: config.BASE_URL,
-        trustedOrigins: resolveTrustedOrigins(config),
+        baseURL: resolveBaseURL(config),
+        trustedOrigins: resolveTrustedOrigins(),
         socialProviders: socialProvidersFromValues(extras.providerValues ?? providerValuesFromConfig(config)),
         emailAndPassword: emailAndPasswordOptions(extras.mail, extras.requireEmailVerification ?? false),
         emailVerification: emailVerificationOptions(extras.mail),

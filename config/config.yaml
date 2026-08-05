@@ -38,6 +38,11 @@ FILESHED_DISCARD_SEALED_SECRETS: ${FILESHED_DISCARD_SEALED_SECRETS:-false}
 # The externally reachable URL (behind a reverse proxy, the public one).
 BASE_URL: ${BASE_URL:-http://localhost:5173}
 
+# Further origins the instance answers on, comma-separated, for one reachable at more than one URL. BASE_URL is
+# answered on with or without this; entries are read down to scheme + host + port, and each must use BASE_URL's
+# scheme. docs/deployment.md covers the provider callbacks each origin needs.
+TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+
 # Blob storage and maintenance.
 STORAGE_ROOT: ${STORAGE_ROOT:-./data/blobs}
 GC_GRACE_DAYS: ${GC_GRACE_DAYS:-7}
