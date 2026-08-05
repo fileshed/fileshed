@@ -16,7 +16,15 @@ import { getLogger } from './utils/logger.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const { app, config } = await bootApp();
+// The Vite dev server re-executes this module in the same process when server files change. Each boot starts the
+// sweep timers, so the previous boot's must be stopped first -- otherwise every reload leaks a ticking set and the
+// sweeps fire at fractions of their interval.
+type BootGlobal = typeof globalThis & { __fileshedShutdown ?: () => void };
+const bootGlobal = globalThis as BootGlobal;
+
+bootGlobal.__fileshedShutdown?.();
+const { app, config, shutdown } = await bootApp();
+bootGlobal.__fileshedShutdown = shutdown;
 
 if(import.meta.main)
 {
