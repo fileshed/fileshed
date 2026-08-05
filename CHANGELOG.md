@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-04
+
 ### Added
 
 - Multi-user file drive: folders, drag-and-drop uploads, grid and list views, selection with bulk actions,
@@ -24,11 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   viewer with annotations, and an audio/video player with playlists.
 - Accounts: email/password sign-in, OAuth providers by configuration, avatars, per-user preferences, and a
   self-service account area.
+- Access tokens for scripts and other API clients, minted from the account area with per-capability scopes over
+  files, shares, and account reads, an optional expiry, and a single reveal at mint; revocable at any time.
 - The session-signing key is generated on first run and kept in a file beside the database (`/data/auth-secret` in
   the container image); it also encrypts the instance secrets an admin enters, which reach the database only as
   ciphertext. `AUTH_SECRET` or `AUTH_SECRET_FILE` supplies your own key instead, `AUTH_SECRET_PREVIOUS` rotates it
   without losing sealed settings, and a sealed setting that no available key opens stops the boot rather than
   being discarded.
+- First-run setup: a fresh instance prints a one-time code at boot and the setup page walks the first admin through
+  creating their account. The page is gone for good once an account exists.
 - Admin area: an overview dashboard, user management (roles, quotas, bans, password resets, session
   revocation), live-applied instance settings, email delivery, authentication providers, and branding.
 - Two database dialects behind one query layer: PostgreSQL, and SQLite through the runtime's own driver — no
@@ -36,4 +42,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker images for amd64 and arm64 at `ghcr.io/fileshed/fileshed`, with `dev`, `beta`, and `latest` tags.
 - A responsive interface, usable down to 360px-wide screens.
 
-[Unreleased]: https://github.com/fileshed/fileshed/commits/main
+[Unreleased]: https://github.com/fileshed/fileshed/compare/v0.1.0...main
+[0.1.0]: https://github.com/fileshed/fileshed/releases/tag/v0.1.0

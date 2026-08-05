@@ -1,6 +1,6 @@
 {
   "name": "@fileshed/client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "AGPL-3.0-only",
   "type": "module",
   "private": true,
@@ -15,7 +15,7 @@
     "@codemirror/lang-markdown": "^6.5.1",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.6",
-    "@fileshed/core": "^0.0.0",
+    "@fileshed/core": "^0.1.0",
     "@floating-ui/dom": "^1.8.0",
     "@fsegurai/codemirror-theme-bundle": "^6.4.2",
     "@nuxt/ui": "^4.10.0",
