@@ -23,8 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File viewers and editors: plain text and Markdown editors with autosave and conflict detection, a PDF
   viewer with annotations, and an audio/video player with playlists.
 - Accounts: email/password sign-in, OAuth providers by configuration, avatars, per-user preferences, and a
-  self-service account area. The session-signing secret is generated and stored on first run; setting
-  `AUTH_SECRET` overrides it.
+  self-service account area.
+- The session-signing key is generated on first run and kept in a file beside the database (`/data/auth-secret` in
+  the container image); it also encrypts the instance secrets an admin enters, which reach the database only as
+  ciphertext. `AUTH_SECRET` or `AUTH_SECRET_FILE` supplies your own key instead, `AUTH_SECRET_PREVIOUS` rotates it
+  without losing sealed settings, and a sealed setting that no available key opens stops the boot rather than
+  being discarded.
 - Admin area: an overview dashboard, user management (roles, quotas, bans, password resets, session
   revocation), live-applied instance settings, email delivery, authentication providers, and branding.
 - Two database dialects behind one query layer: PostgreSQL, and SQLite through the runtime's own driver — no
