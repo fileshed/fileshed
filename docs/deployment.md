@@ -92,6 +92,7 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `STORAGE_ROOT` | no | `/data/blobs` (image) | Filesystem blob store root. |
 | `CLIENT_DIST` | no | `./client-dist` (image) | Built client directory; unset = API-only (development). |
 | `UPLOAD_MAX_BYTES` | no | 5 GiB | Single-upload cap. |
+| `UPLOAD_CHUNK_BYTES` | no | 8 MiB | Bytes per upload request. Minimum 1 MiB. See below. |
 | `AVATAR_MAX_BYTES` | no | 2 MiB | Avatar image cap. |
 | `GC_GRACE_DAYS` | no | 7 | Days a dereferenced blob lingers before deletion. |
 | `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). |
@@ -123,6 +124,13 @@ Two things to know:
   `https://files.internal:3950/api/auth/callback/github` alongside the canonical one. How many a provider accepts
   differs: Google, Microsoft and Discord take a list per client, while a GitHub OAuth App takes exactly one, so
   several origins there need a GitHub App or one OAuth app per origin.
+
+A file is uploaded as a sequence of requests rather than one, so the size a reverse proxy has to accept is
+`UPLOAD_CHUNK_BYTES`, not the file. The 8 MiB default clears the caps most stacks ship with — nginx starts
+`client_max_body_size` at 1 MiB, and Cloudflare's free and pro plans stop at 100 MB. Raise it on a proxy that takes
+larger bodies to spend fewer round trips per file. The minimum is 1 MiB, and a smaller value fails the boot naming
+the value it read; there is no maximum. A changed value is logged at boot and reaches clients on their next upload —
+the server tells each one what to cut its file into.
 
 Everything email can also be configured at runtime from the admin **Email** tab — values set there override these,
 the password is stored encrypted, and changes apply to the next email without a restart (except

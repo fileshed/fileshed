@@ -132,6 +132,22 @@ describe('UPLOAD_MAX_BYTES over the wire', () =>
         expect((await claimFixture()).status).toBe(200);
     });
 
+    // The refusal has to say what it measured against, and the number is the admin's standing setting rather than
+    // anything the process started with -- so a client can tell the user the limit, and one speaking the resumable
+    // uploads draft reads the same figure out of Upload-Limit.
+    it('carries the standing cap in the refusal, in the body and in the Upload-Limit header', async () =>
+    {
+        expect((await patchSettings({ UPLOAD_MAX_BYTES: 2048 })).status).toBe(200);
+
+        const refused = await claimFixture();
+
+        expect(refused.status).toBe(413);
+        expect(await refused.json() as { maxBytes : number }).toMatchObject({ maxBytes: 2048 });
+        expect(refused.headers.get('upload-limit')).toBe('max-size=2048');
+
+        expect((await patchSettings({ UPLOAD_MAX_BYTES: null })).status).toBe(200);
+    });
+
     // The bound is the server's, so a client that ignores the published constraints still cannot store a cap that
     // would refuse every upload on the instance.
     it('refuses a cap of zero with a 400 naming the key, leaving the standing cap untouched', async () =>

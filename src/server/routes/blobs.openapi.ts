@@ -21,14 +21,20 @@ export const claimSpec = describeRoute({
     summary: 'Claim a blob',
     description: 'Admits a content-addressed write against the caller\'s quota, then routes it: an unknown blob gets a '
         + 'single-use upload ticket; a known blob large enough to be worth it gets a proof-of-possession challenge '
-        + 'instead of re-uploading the bytes. A claimed size that disagrees with a known blob is rejected.',
+        + 'instead of re-uploading the bytes. A claimed size that disagrees with a known blob is rejected.\n\n'
+        + 'A ticket carries the chunk size this instance wants the file cut into (`chunkBytes`), which a deployment '
+        + 'can raise or lower — plan the upload against that number rather than any compiled-in default.',
     requestBody: jsonBody(claimRequestCodec),
     responses: {
-        200: jsonResponse('An upload ticket or a proof-of-possession challenge.', claimResponseCodec),
+        200: jsonResponse(
+            'An upload ticket (with the instance\'s chunk size) or a proof-of-possession challenge.',
+            claimResponseCodec
+        ),
         400: errorResponse('The claim is malformed, or its size disagrees with the known blob.'),
         401: errorResponse('No session.'),
         403: errorResponse('The write would exceed the caller\'s quota.'),
-        413: errorResponse('The file exceeds the maximum upload size.'),
+        413: errorResponse('The file exceeds the maximum upload size. The limit is in the body\'s `maxBytes` and in '
+            + 'the `Upload-Limit: max-size=<bytes>` response header.'),
     },
 });
 

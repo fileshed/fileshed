@@ -53,6 +53,10 @@ TRASH_PURGE_DAYS: ${TRASH_PURGE_DAYS:-30}
 UPLOAD_MAX_BYTES: ${UPLOAD_MAX_BYTES:-5368709120}
 AVATAR_MAX_BYTES: ${AVATAR_MAX_BYTES:-2097152}
 
+# Bytes per upload chunk: what a fronting proxy's request-body cap actually has to accept, since no single request
+# carries the whole file. Minimum 1 MiB.
+UPLOAD_CHUNK_BYTES: ${UPLOAD_CHUNK_BYTES:-8388608}
+
 # Production client serving: the built client's directory; empty leaves the server API-only (development).
 CLIENT_DIST: ${CLIENT_DIST:-}
 

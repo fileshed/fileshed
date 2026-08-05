@@ -53,13 +53,18 @@ export class NotFoundError extends Error
     }
 }
 
-// The upload exceeds the configured byte ceiling.
+// The upload exceeds the configured byte ceiling. The ceiling travels with the refusal: it is a live setting, so the
+// only number that describes why this upload was refused is the one the check just read, and a caller told "too large"
+// without it has nothing to show the person who picked the file.
 export class PayloadTooLargeError extends Error
 {
-    constructor(message : string)
+    readonly maxBytes : number;
+
+    constructor(message : string, maxBytes : number)
     {
         super(message);
         this.name = 'PayloadTooLargeError';
+        this.maxBytes = maxBytes;
     }
 }
 

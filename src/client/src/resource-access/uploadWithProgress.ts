@@ -4,12 +4,20 @@
 // The one byte-moving request fetch can't make: a PUT that reports upload progress. fetch exposes no upload-progress
 // event, so the upload manager's progress bar rides an XMLHttpRequest instead. Everything else mirrors the fetch
 // wrappers -- credentialed, the commit target on the query string (a fresh node's name/parent/mime, or a replaced
-// node's id alone), a codec-validated NodeResponse on success, and the same typed ApiError (regulation errors upgraded
+// node's id alone), a codec-validated body on success, and the same typed ApiError (regulation errors upgraded
 // included) on any non-2xx, built from the shared body mapping rather than a second copy of it. An AbortSignal cancels
 // a transfer in flight.
+//
+// The body is one chunk of a file, or all of it. A chunk that leaves the file incomplete comes back 202 with the
+// upload's position; the chunk that completes it comes back with the committed node.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type NodeResponse, type UploadCommitMetadata, nodeResponseCodec } from '@fileshed/core';
+import {
+    type NodeResponse,
+    type UploadCommitMetadata,
+    nodeResponseCodec,
+    uploadChunkAcceptedCodec,
+} from '@fileshed/core';
 
 // Resource Access
 import { ApiError, apiErrorFromBody } from './apiError.ts';
@@ -29,9 +37,18 @@ export interface UploadWithProgressOptions
     ticket : string;
     body : Blob;
     commit : UploadCommitMetadata;
+
+    // Where this body's bytes belong in the file. Omitted for a whole-file upload.
+    offset ?: number;
+
     onProgress ?: (progress : UploadProgress) => void;
     signal ?: AbortSignal;
 }
+
+// What the server did with the bytes: committed the file node, or took them and is waiting for the rest.
+export type UploadOutcome
+    = | { committed : true; node : NodeResponse }
+    | { committed : false; receivedBytes : number; totalBytes : number };
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -47,16 +64,16 @@ function parseBody(text : string) : unknown
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function uploadWithProgress(options : UploadWithProgressOptions) : Promise<NodeResponse>
+export function uploadWithProgress(options : UploadWithProgressOptions) : Promise<UploadOutcome>
 {
-    const { ticket, body, commit, onProgress, signal } = options;
+    const { ticket, body, commit, offset, onProgress, signal } = options;
 
-    return new Promise<NodeResponse>((resolve, reject) =>
+    return new Promise<UploadOutcome>((resolve, reject) =>
     {
         if(signal?.aborted) { reject(new DOMException('Upload cancelled', 'AbortError')); return; }
 
         const xhr = new XMLHttpRequest();
-        xhr.open('PUT', buildUrl(`/api/uploads/${ ticket }`, commitQuery(commit)));
+        xhr.open('PUT', buildUrl(`/api/uploads/${ ticket }`, { ...commitQuery(commit), offset }));
         xhr.withCredentials = true;
         xhr.responseType = 'text';
         xhr.setRequestHeader('accept', 'application/json');
@@ -71,9 +88,17 @@ export function uploadWithProgress(options : UploadWithProgressOptions) : Promis
         {
             const parsed = parseBody(xhr.responseText);
 
+            if(xhr.status === 202)
+            {
+                try { resolve({ committed: false, ...uploadChunkAcceptedCodec.parse(parsed) }); }
+                catch(error) { reject(error); }
+
+                return;
+            }
+
             if(xhr.status >= 200 && xhr.status < 300)
             {
-                try { resolve(nodeResponseCodec.parse(parsed)); }
+                try { resolve({ committed: true, node: nodeResponseCodec.parse(parsed) }); }
                 catch(error) { reject(error); }
 
                 return;

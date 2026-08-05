@@ -3,11 +3,12 @@
 //
 // The upload queue and the pipeline behind it. Each dropped or picked file becomes an item that walks a fixed path:
 // hash the bytes, check the target folder for a name collision, pause for the user's choice if one is found, claim the
-// blob, then either PUT the bytes against the ticket or answer a proof-of-possession challenge -- both of which commit
-// the file node. At most three items run at once; the rest wait their turn. A collision pauses just its own item and
-// raises one prompt at a time, so the queue never asks two questions at once. An item landing in the folder the drive
-// view currently shows refreshes that listing. Cancellation aborts an in-flight transfer, settles a waiting prompt, or
-// drops a still-queued item; every failure leaves a readable message on the item's own row.
+// blob, then either send the bytes against the ticket in sequential chunks or answer a proof-of-possession
+// challenge -- both of which commit the file node. At most three items run at once; the rest wait their turn. A
+// collision pauses just its own item and raises one prompt at a time, so the queue never asks two questions at once.
+// An item landing in the folder the drive view currently shows refreshes that listing. Cancellation aborts an
+// in-flight transfer, settles a waiting prompt, or drops a still-queued item; every failure leaves a readable message
+// on the item's own row.
 //
 // Folder uploads walk a dropped tree: each folder is created first (merging into an existing folder of the same
 // name, the way an OS copy merges directories) and its files enqueue into the created node; a folder that can't be
@@ -29,9 +30,9 @@ import { useSessionStore } from './session.ts';
 
 // Resource Access
 import { answerChallenge, claimBlob } from '../resource-access/blobs.ts';
+import { uploadChunked } from '../resource-access/chunkedUpload.ts';
 import { readDroppedPayload } from '../resource-access/droppedEntries.ts';
 import { createNode, getChildren } from '../resource-access/nodes.ts';
-import { uploadWithProgress } from '../resource-access/uploadWithProgress.ts';
 
 // Engines
 import { computeProofAnswer } from '../engines/claim.ts';
@@ -271,10 +272,11 @@ export const useUploadsStore = defineStore('uploads', () =>
         {
             item.status = 'uploading';
 
-            return uploadWithProgress({
+            return uploadChunked({
                 ticket: claim.ticket,
-                body: item.file,
+                file: item.file,
                 commit,
+                chunkBytes: claim.chunkBytes,
                 onProgress: (progress) =>
                 {
                     item.progress.sentBytes = progress.sentBytes;

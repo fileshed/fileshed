@@ -19,9 +19,27 @@ describe('claimResponseCodec', () =>
     // The two shapes must be distinguishable by the `upload` literal alone.
     it('parses the upload-ticket variant', () =>
     {
-        const result = claimResponseCodec.safeParse({ upload: true, ticket: 'ticket_1' });
+        const result = claimResponseCodec.safeParse({ upload: true, ticket: 'ticket_1', chunkBytes: 8_388_608 });
 
         expect(result.success).toBe(true);
+    });
+
+    // The chunk size is how the client cuts the file it is about to send, and the deployment decides it. A ticket
+    // without one leaves the client guessing at a number it was supposed to be told, so the ticket is not a ticket.
+    it('rejects an upload ticket that omits the chunk size', () =>
+    {
+        const result = claimResponseCodec.safeParse({ upload: true, ticket: 'ticket_1' });
+
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects a chunk size of zero or fewer bytes, which could never finish a file', () =>
+    {
+        const zero = claimResponseCodec.safeParse({ upload: true, ticket: 'ticket_1', chunkBytes: 0 });
+        const negative = claimResponseCodec.safeParse({ upload: true, ticket: 'ticket_1', chunkBytes: -1 });
+
+        expect(zero.success).toBe(false);
+        expect(negative.success).toBe(false);
     });
 
     it('parses the challenge variant', () =>
@@ -49,7 +67,12 @@ describe('claimResponseCodec', () =>
 
     it('rejects a ticket response carrying challenge-only fields', () =>
     {
-        const result = claimResponseCodec.safeParse({ upload: true, ticket: 'ticket_1', nonce: 'nonce_1' });
+        const result = claimResponseCodec.safeParse({
+            upload: true,
+            ticket: 'ticket_1',
+            chunkBytes: 8_388_608,
+            nonce: 'nonce_1',
+        });
 
         expect(result.success).toBe(false);
     });

@@ -37,7 +37,7 @@ export async function collectCapped(source : Readable, maxBytes : number, tooLar
         if(seen > maxBytes)
         {
             source.destroy();
-            throw new PayloadTooLargeError(tooLarge);
+            throw new PayloadTooLargeError(tooLarge, maxBytes);
         }
         chunks.push(buffer);
     }

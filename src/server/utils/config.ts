@@ -26,7 +26,9 @@ import {
     DEFAULT_SMTP_PORT,
     DEFAULT_STORAGE_ROOT,
     DEFAULT_TRASH_PURGE_DAYS,
+    DEFAULT_UPLOAD_CHUNK_BYTES,
     DEFAULT_UPLOAD_MAX_BYTES,
+    MIN_UPLOAD_CHUNK_BYTES,
     type ProviderSettingKey,
     databaseKinds,
     providerSettingKeys,
@@ -181,6 +183,18 @@ const configSchema = z.object({
         .int()
         .positive()
         .default(DEFAULT_AVATAR_MAX_BYTES),
+
+    // The size an upload is cut into, handed to the client with its ticket. Raising it is the reason this is tunable:
+    // an operator who knows their own proxy accepts more can spend fewer round trips, and no ceiling is imposed here
+    // because only that operator knows what their stack will take. The floor is real, though -- see the constant.
+    UPLOAD_CHUNK_BYTES: z.coerce.number()
+        .int()
+        .min(MIN_UPLOAD_CHUNK_BYTES, {
+            error: (issue) => `UPLOAD_CHUNK_BYTES is ${ issue.input }, below the ${ MIN_UPLOAD_CHUNK_BYTES }-byte `
+                + '(1 MiB) floor. A chunk that small clears no proxy anything larger does not, and only multiplies '
+                + 'the round trips a large upload costs.',
+        })
+        .default(DEFAULT_UPLOAD_CHUNK_BYTES),
 
     // First-run automation: an operator-chosen token that gates POST /api/setup instead of the boot-printed code,
     // so IaC can complete setup non-interactively. The admin PASSWORD still never rides the environment.

@@ -2,7 +2,8 @@
 // Blob Protocol Constants
 //
 // The claim/proof-of-possession parameters of the upload flow. The client leans on several of these too: the
-// small-file threshold decides its hash-then-claim UX, and the challenge TTL bounds how long it has to answer.
+// small-file threshold decides its hash-then-claim UX, and the challenge TTL bounds how long it has to answer. A
+// deployment can override the chunk size, so that one sits with the config defaults instead.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { MS_PER_MINUTE, MS_PER_SECOND } from './time.ts';
@@ -29,5 +30,16 @@ export const MAX_FAILED_PROOFS = 10;
 export const FAILED_PROOF_WINDOW_MS = 15 * MS_PER_MINUTE;
 
 export const SWEEP_INTERVAL_MS = 60 * MS_PER_SECOND;
+
+//----------------------------------------------------------------------------------------------------------------------
+// Chunk retry budget
+//----------------------------------------------------------------------------------------------------------------------
+
+// Attempts per chunk, the first included. Only transport failures and server faults are retried; a refusal the server
+// meant (an offset conflict, a rejected placement) is final.
+export const UPLOAD_CHUNK_MAX_ATTEMPTS = 3;
+
+// Backoff before re-sending a failed chunk, multiplied by the attempt number.
+export const UPLOAD_CHUNK_RETRY_DELAY_MS = 500;
 
 //----------------------------------------------------------------------------------------------------------------------

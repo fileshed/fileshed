@@ -7,9 +7,13 @@
 // creates the caller's file node -- for a known blob, resurrecting the record if it was graveyarded -- in one
 // transaction.
 //
+// Upload bytes travel as one stream or as a sequence of chunks against the same ticket, which carries how far the
+// upload has got between requests -- the chunk holding the last byte is the one that verifies and commits.
+//
 // Tickets, challenges, and the failed-proof counter are in-memory: a single-node deployment, and losing them on
-// restart only forces a client to re-claim. Expiry is enforced lazily on use (an expired entry is never honoured) and
-// swept in the background to bound growth.
+// restart only forces a client to re-claim. A restart mid-upload therefore loses the partial: the client's retry
+// starts the file over, and the abandoned staging bytes are swept. Expiry is enforced lazily on use (an expired entry
+// is never honoured) and swept in the background to bound growth.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
@@ -44,6 +48,7 @@ import {
     SizeMismatchError,
     TICKET_TTL_MS,
     TooManyRequestsError,
+    type UploadChunkAccepted,
     type UploadCommitCreate,
     type UploadCommitMetadata,
     isDirectOwner,
@@ -75,27 +80,64 @@ interface Ticket
     size : number;
     ownerID : string;
     expiresAt : number;
+
+    // How much of the claimed size has landed in staging. A whole-file PUT never touches it; a chunked upload advances
+    // it as each chunk lands and finalizes on the chunk that carries it to `size`.
+    receivedBytes : number;
+
+    // A chunk is being written right now. Chunks are sequential by contract, so a second one arriving mid-write is
+    // refused rather than interleaved into the staging file.
+    inFlight : boolean;
 }
 
-// Single-use upload tickets. consume deletes on first use and refuses an expired one.
+// Upload tickets, and the position of any chunked upload running against them. A ticket is retired by the request that
+// completes the file (or by the whole-file PUT, which is single-use as ever); the chunks before that leave it standing.
+// An expired ticket is never honoured and is dropped on the way past.
 class TicketStore
 {
     readonly #tickets = new Map<string, Ticket>();
 
     issue(sha256 : string, size : number, ownerID : string) : Ticket
     {
-        const ticket : Ticket = { id: createId(), sha256, size, ownerID, expiresAt: Date.now() + TICKET_TTL_MS };
+        const ticket : Ticket = {
+            id: createId(),
+            sha256,
+            size,
+            ownerID,
+            expiresAt: Date.now() + TICKET_TTL_MS,
+            receivedBytes: 0,
+            inFlight: false,
+        };
+
         this.#tickets.set(ticket.id, ticket);
         return ticket;
     }
 
-    consume(id : string) : Ticket | undefined
+    open(id : string) : Ticket | undefined
     {
         const ticket = this.#tickets.get(id);
         if(ticket === undefined) { return undefined; }
 
+        if(ticket.expiresAt <= Date.now())
+        {
+            this.#tickets.delete(id);
+            return undefined;
+        }
+
+        return ticket;
+    }
+
+    close(id : string) : void
+    {
         this.#tickets.delete(id);
-        return ticket.expiresAt > Date.now() ? ticket : undefined;
+    }
+
+    // Move the upload forward and push the expiry out: an upload still delivering bytes is alive, however long the
+    // whole file takes, and the partial-staging sweep reads the same window from the other side.
+    advance(ticket : Ticket, receivedBytes : number) : void
+    {
+        ticket.receivedBytes = receivedBytes;
+        ticket.expiresAt = Date.now() + TICKET_TTL_MS;
     }
 
     sweep() : void
@@ -237,10 +279,27 @@ function proofMatches(expected : string, provided : string) : boolean
     return timingSafeEqual(expectedBytes, providedBytes);
 }
 
-// Caps the streamed byte count at the claimed size while an upload is in flight: a client that streams
-// more than it claimed is aborted at the first excess byte, which rejects the put pipeline and cleans its staging file,
-// so a size lie can never push gigabytes onto disk. Exceeding the claimed size is the same size mismatch the store
-// would catch after the fact (400), so the limiter raises it as one.
+// Caps the streamed byte count at what the claim still has room for while an upload is in flight: a client that
+// streams more than it claimed is aborted at the first excess byte, which rejects the pipeline and cleans its staging
+// file, so a size lie can never push gigabytes onto disk. Exceeding the claimed size is the same size mismatch the
+// store would catch after the fact (400), so the limiter raises it as one.
+// The store's integrity refusals are the client's fault -- bytes that disagree with what it claimed -- so they travel
+// as 400s carrying the typed code. Anything else passes through untouched.
+function asIntegrityRejection(error : unknown) : unknown
+{
+    if(error instanceof HashMismatchError)
+    {
+        return new BadRequestError(`Uploaded bytes do not match the claimed hash (${ error.code }).`);
+    }
+
+    if(error instanceof SizeMismatchError)
+    {
+        return new BadRequestError(`Uploaded byte count does not match the claimed size (${ error.code }).`);
+    }
+
+    return error;
+}
+
 function byteLimiter(maxBytes : number) : Transform
 {
     let seen = 0;
@@ -259,6 +318,18 @@ function byteLimiter(maxBytes : number) : Transform
     });
 }
 
+// An upload body behind its byte cap, with both ends torn down together: a failed body kills the limiter, and a
+// limiter that cut a lying client off kills the body, so neither is left writing into a stream that is already gone.
+function capped(body : Readable, maxBytes : number) : Readable
+{
+    const limiter = byteLimiter(maxBytes);
+
+    body.on('error', (error) => limiter.destroy(error));
+    limiter.on('error', () => body.destroy());
+
+    return body.pipe(limiter);
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface BlobManagerDeps
@@ -268,6 +339,10 @@ export interface BlobManagerDeps
 
     // Read at use time, per request, so an admin raising or lowering the cap needs no restart.
     uploadMaxBytes : () => Promise<number>;
+
+    // The size a client cuts a file into, handed back with every upload ticket. A plain number, not a supplier: it is
+    // fixed at boot by the environment, and a client already mid-upload plans against the value its claim answered.
+    uploadChunkBytes : number;
 
     // The instance-wide quota every account with no limit of its own inherits, likewise read per use.
     defaultQuota : () => Promise<number>;
@@ -282,6 +357,20 @@ export interface CommittedNode
     role : Role;
 }
 
+// What a chunk that landed without completing the file leaves behind: the upload's new position. The two outcomes of
+// an upload request are told apart by `committed`, so a caller cannot read a node off a request that never made one.
+export interface UploadAccepted extends UploadChunkAccepted
+{
+    committed : false;
+}
+
+export interface UploadCommitted extends CommittedNode
+{
+    committed : true;
+}
+
+export type UploadOutcome = UploadAccepted | UploadCommitted;
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export class BlobManager
@@ -289,6 +378,7 @@ export class BlobManager
     readonly #handle : DatabaseHandle;
     readonly #blob : BlobRA;
     readonly #uploadMaxBytes : () => Promise<number>;
+    readonly #uploadChunkBytes : number;
     readonly #defaultQuota : () => Promise<number>;
 
     readonly #nodes : NodeRA;
@@ -306,6 +396,7 @@ export class BlobManager
         this.#handle = deps.handle;
         this.#blob = deps.blob;
         this.#uploadMaxBytes = deps.uploadMaxBytes;
+        this.#uploadChunkBytes = deps.uploadChunkBytes;
         this.#defaultQuota = deps.defaultQuota;
 
         this.#nodes = new NodeRA(deps.handle);
@@ -337,16 +428,17 @@ export class BlobManager
 
         if(existing === undefined)
         {
-            if(size > await this.#uploadMaxBytes())
+            const maxBytes = await this.#uploadMaxBytes();
+            if(size > maxBytes)
             {
-                throw new PayloadTooLargeError('File exceeds the maximum upload size.');
+                throw new PayloadTooLargeError('File exceeds the maximum upload size.', maxBytes);
             }
-            return { upload: true, ticket: this.#tickets.issue(request.sha256, size, caller.id).id };
+            return this.#ticketFor(request.sha256, size, caller.id);
         }
 
         if(size < SMALL_FILE_THRESHOLD_BYTES)
         {
-            return { upload: true, ticket: this.#tickets.issue(request.sha256, size, caller.id).id };
+            return this.#ticketFor(request.sha256, size, caller.id);
         }
 
         const nonce = randomBytes(NONCE_BYTES).toString('hex');
@@ -361,6 +453,17 @@ export class BlobManager
         });
 
         return { upload: false, challengeID: challenge.id, nonce, ranges };
+    }
+
+    // A fresh ticket and the chunk size to deliver against it. Both halves of what a client needs to start moving
+    // bytes, so neither branch of the claim can hand back one without the other.
+    #ticketFor(sha256 : string, size : number, ownerID : string) : ClaimResponse
+    {
+        return {
+            upload: true,
+            ticket: this.#tickets.issue(sha256, size, ownerID).id,
+            chunkBytes: this.#uploadChunkBytes,
+        };
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -436,66 +539,160 @@ export class BlobManager
     // Upload commit
     //------------------------------------------------------------------------------------------------------------------
 
-    // PUT /api/uploads/:ticket. Stream the body through the store (which verifies hash + size and rejects a liar),
-    // enforcing the byte ceiling as it goes, then commit in one transaction: create the caller's node, or replace an
-    // existing file's content in place. The placement/target facts are gathered BEFORE the bytes stream, so a bad
-    // target or parent stores nothing. The ticket is single-use: consumed here whether or not the upload succeeds.
+    // PUT /api/uploads/:ticket. The body is the whole file or one chunk of it, `offset` says where in the file those
+    // bytes belong, and the ticket carries the position between requests -- so an upload survives any proxy's
+    // request-body cap by never putting the whole file in one request.
+    //
+    // A request that declares the whole claimed size at offset 0 streams straight through the store (which verifies
+    // hash + size and rejects a liar) and retires its single-use ticket, exactly as an unchunked upload always has.
+    // Anything else appends to the ticket's staging area and answers the new position; the chunk that carries the last
+    // byte verifies the assembled file and commits it. Only that final chunk retires the ticket, so a chunk that fails
+    // in flight is retried alone rather than restarting the upload.
     async commitUpload(
         caller : SessionUser,
         ticketID : string,
         body : Readable,
         metadata : UploadCommitMetadata,
-        contentLength : number | undefined
-    ) : Promise<CommittedNode>
+        contentLength : number | undefined,
+        offset : number
+    ) : Promise<UploadOutcome>
     {
-        const ticket = this.#tickets.consume(ticketID);
+        const ticket = this.#tickets.open(ticketID);
         if(ticket === undefined) { throw new NotFoundError('Upload ticket not found or expired.'); }
         if(ticket.ownerID !== caller.id) { throw new ForbiddenError('This ticket belongs to another user.'); }
 
-        if(contentLength !== undefined && contentLength !== ticket.size)
+        // Read live, so an admin lowering the cap stops an upload already in flight against the old one.
+        const maxBytes = await this.#uploadMaxBytes();
+        if(ticket.size > maxBytes)
         {
-            throw new BadRequestError('Content-Length does not match the claimed size.');
-        }
-        if(contentLength !== undefined && contentLength > await this.#uploadMaxBytes())
-        {
-            throw new PayloadTooLargeError('Upload exceeds the maximum allowed size.');
+            throw new PayloadTooLargeError('Upload exceeds the maximum allowed size.', maxBytes);
         }
 
-        // Resolve the target (replace) or judge the parent edge (create) before a single byte is written -- a bad
-        // target/parent must store nothing. Then stream the bytes and, in either mode, persist the record as an
-        // insert-or-resurrect pinned to the backend the bytes landed on.
-        if('replaceNodeID' in metadata)
+        if(offset === 0 && contentLength === ticket.size)
         {
-            const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
-            const location = await this.#putBytes(ticket.sha256, ticket.size, body);
-            const persist = this.#insertOrResurrect(ticket.sha256, ticket.size, location);
+            this.#tickets.close(ticketID);
 
-            return this.#commitReplace(
-                target,
-                role,
-                ticket.sha256,
-                ticket.size,
-                metadata.mimeType,
-                metadata.ifBlobID,
-                persist
+            const committed = await this.#commitContent(caller, ticket, metadata, () =>
+                this.#putBytes(ticket.sha256, ticket.size, body));
+
+            return { committed: true, ...committed };
+        }
+
+        return this.#acceptChunk(caller, ticket, body, metadata, contentLength, offset);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Chunks
+    //------------------------------------------------------------------------------------------------------------------
+
+    // One chunk of a file, appended to the ticket's staging area. The client and the server must agree on where the
+    // upload stands before any bytes are written: a chunk that repeats ground already covered, or skips ahead of it, is
+    // refused with the position it should have carried rather than silently corrupting the file. The chunk that brings
+    // the staged bytes up to the claimed size verifies and commits them.
+    async #acceptChunk(
+        caller : SessionUser,
+        ticket : Ticket,
+        body : Readable,
+        metadata : UploadCommitMetadata,
+        contentLength : number | undefined,
+        offset : number
+    ) : Promise<UploadOutcome>
+    {
+        this.#assertChunkFits(ticket, contentLength, offset);
+
+        if(ticket.inFlight) { throw new ConflictError('Another chunk of this upload is still being received.'); }
+
+        ticket.inFlight = true;
+        try
+        {
+            const written = await this.#appendChunk(ticket, body, offset);
+            this.#tickets.advance(ticket, offset + written);
+
+            if(ticket.receivedBytes < ticket.size)
+            {
+                return { committed: false, receivedBytes: ticket.receivedBytes, totalBytes: ticket.size };
+            }
+
+            // The file is whole. Its ticket and its staging are spent either way -- a rejected commit leaves no bytes
+            // to resume from, and the claim that would restart the upload is a round trip the client already knows how
+            // to make.
+            this.#tickets.close(ticket.id);
+
+            try
+            {
+                const committed = await this.#commitContent(caller, ticket, metadata, () =>
+                    this.#publishStaged(ticket));
+
+                return { committed: true, ...committed };
+            }
+            finally
+            {
+                await this.#blob.discardChunked(ticket.id);
+            }
+        }
+        finally
+        {
+            ticket.inFlight = false;
+        }
+    }
+
+    // Where this chunk claims to belong, judged against where the upload actually stands. Every rejection here happens
+    // before a byte is read, so a confused client never moves the upload.
+    #assertChunkFits(ticket : Ticket, contentLength : number | undefined, offset : number) : void
+    {
+        if(offset > ticket.size)
+        {
+            throw new BadRequestError('The chunk offset is past the end of the claimed file.');
+        }
+
+        if(offset < ticket.receivedBytes)
+        {
+            throw new ConflictError(
+                `This chunk was already received; the upload holds ${ ticket.receivedBytes } of ${ ticket.size } bytes.`
             );
         }
 
-        await this.#assertParentEdge(caller.id, metadata.parentID);
-        const location = await this.#putBytes(ticket.sha256, ticket.size, body);
-        const persist = this.#insertOrResurrect(ticket.sha256, ticket.size, location);
+        if(offset > ticket.receivedBytes)
+        {
+            throw new ConflictError(
+                `The chunk starts at ${ offset }, but the upload holds ${ ticket.receivedBytes } bytes.`
+            );
+        }
 
-        const node = await this.#commitFileNode(caller, ticket.sha256, ticket.size, metadata, persist);
+        if(contentLength !== undefined && offset + contentLength > ticket.size)
+        {
+            throw new BadRequestError('The chunk would carry the upload past the claimed size.');
+        }
+    }
 
-        return { node, role: 'owner' };
+    // Append the chunk's bytes to staging, capped at what the claim has room for so a client that streams more than it
+    // declared is cut off at the first excess byte rather than growing the staging file without bound. A failed append
+    // leaves the ticket's position untouched; the retry truncates whatever landed and writes the chunk again.
+    async #appendChunk(ticket : Ticket, body : Readable, offset : number) : Promise<number>
+    {
+        return this.#blob.appendChunk(ticket.id, capped(body, ticket.size - offset), offset);
+    }
+
+    // Verify the assembled staging file against the claim and publish it, answering the pin the record will store.
+    async #publishStaged(ticket : Ticket) : Promise<BlobLocation>
+    {
+        try
+        {
+            return await this.#blob.commitChunked(ticket.id, ticket.sha256, ticket.size);
+        }
+        catch(error)
+        {
+            throw asIntegrityRejection(error);
+        }
     }
 
     //------------------------------------------------------------------------------------------------------------------
     // Background maintenance
     //------------------------------------------------------------------------------------------------------------------
 
-    // Prune expired tickets/challenges and stale failed-proof counts. Correctness never depends on this (expiry is
-    // enforced on use); it only bounds memory. The composition root starts it; it returns a stop handle.
+    // Prune expired tickets/challenges and stale failed-proof counts, and reclaim the staging bytes of abandoned
+    // uploads. Correctness never depends on this (expiry is enforced on use); it bounds memory and disk. The
+    // composition root starts it; it returns a stop handle.
     startSweeps(intervalMs : number = SWEEP_INTERVAL_MS) : () => void
     {
         const timer = setInterval(() =>
@@ -503,10 +700,33 @@ export class BlobManager
             this.#tickets.sweep();
             this.#challenges.sweep();
             this.#failedProofs.sweep();
+
+            void this.sweepPartials();
         }, intervalMs);
 
         timer.unref?.();
         return () => clearInterval(timer);
+    }
+
+    // Drop the staging bytes of uploads that stopped delivering. A chunk pushes its ticket's expiry out by the ticket
+    // TTL and touches the staging file at the same moment, so staging untouched since a cutoff that far back belongs to
+    // a ticket no chunk can be honoured against -- there is nothing left to resume and nobody left to resume it. Never
+    // throws: one failed sweep must not kill the timer that runs it.
+    async sweepPartials(cutoff : Date = new Date(Date.now() - TICKET_TTL_MS)) : Promise<number>
+    {
+        try
+        {
+            const removed = await this.#blob.sweepChunked(cutoff);
+
+            this.#logger[removed > 0 ? 'info' : 'debug']({ removed }, 'Partial upload sweep complete');
+
+            return removed;
+        }
+        catch(error)
+        {
+            this.#logger.warn({ err: error }, 'Partial upload sweep failed');
+            return 0;
+        }
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -566,29 +786,44 @@ export class BlobManager
         }
     }
 
+    // Commit an upload's bytes as the caller's file node, or onto an existing one. The target facts are gathered
+    // BEFORE `putBytes` publishes anything -- a bad target or parent must store nothing -- and the record write that
+    // follows is an insert-or-resurrect pinned to the backend the bytes landed on.
+    async #commitContent(
+        caller : SessionUser,
+        ticket : Ticket,
+        metadata : UploadCommitMetadata,
+        putBytes : () => Promise<BlobLocation>
+    ) : Promise<CommittedNode>
+    {
+        const { sha256, size } = ticket;
+
+        if('replaceNodeID' in metadata)
+        {
+            const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
+            const persist = this.#insertOrResurrect(sha256, size, await putBytes());
+
+            return this.#commitReplace(target, role, sha256, size, metadata.mimeType, metadata.ifBlobID, persist);
+        }
+
+        await this.#assertParentEdge(caller.id, metadata.parentID);
+        const persist = this.#insertOrResurrect(sha256, size, await putBytes());
+
+        return { node: await this.#commitFileNode(caller, sha256, size, metadata, persist), role: 'owner' };
+    }
+
     // Stream the body through the storage RA (onto the default backend), capping the byte count at the claimed size in
     // flight, and return the pin the record will store. Integrity failures the store raises become 400s with their
     // typed codes.
     async #putBytes(sha256 : string, size : number, body : Readable) : Promise<BlobLocation>
     {
-        const limiter = byteLimiter(size);
-        body.on('error', (error) => limiter.destroy(error));
-
         try
         {
-            return await this.#blob.put(sha256, body.pipe(limiter), size);
+            return await this.#blob.put(sha256, capped(body, size), size);
         }
         catch(error)
         {
-            if(error instanceof HashMismatchError)
-            {
-                throw new BadRequestError(`Uploaded bytes do not match the claimed hash (${ error.code }).`);
-            }
-            if(error instanceof SizeMismatchError)
-            {
-                throw new BadRequestError(`Uploaded byte count does not match the claimed size (${ error.code }).`);
-            }
-            throw error;
+            throw asIntegrityRejection(error);
         }
     }
 

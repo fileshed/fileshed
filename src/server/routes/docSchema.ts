@@ -19,10 +19,15 @@ import { type ZodType, z } from 'zod';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// The wire error shape mapManagerError emits: a message, plus the regulation violations present on 403/422 rejections.
+// The wire error shape mapManagerError emits: a message, plus the regulation violations present on 403/422 rejections
+// and the byte ceiling present on a 413.
 export const errorResponseCodec = z.object({
     error: z.string(),
     violations: z.array(z.object({ code: z.string() }).loose()).optional(),
+    maxBytes: z.number()
+        .int()
+        .positive()
+        .optional(),
 });
 
 export const ERROR_SCHEMA_NAME = 'ErrorResponse';

@@ -157,7 +157,7 @@ export class BrandingManager
         const maxBytes = await this.#maxBytes();
         if(declaredLength !== undefined && declaredLength > maxBytes)
         {
-            throw new PayloadTooLargeError('The logo exceeds the maximum size.');
+            throw new PayloadTooLargeError('The logo exceeds the maximum size.', maxBytes);
         }
 
         const bytes = await collectCapped(source, maxBytes, 'The logo exceeds the maximum size.');

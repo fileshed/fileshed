@@ -6,6 +6,10 @@
 // an existing file's content in place; the two modes are mutually exclusive at the codec. The ticket authorizes the
 // write; the manager verifies it belongs to the caller, streams the bytes through the store, and commits the node. Thin
 // over the manager: onError maps the typed errors (managers/errors.ts).
+//
+// The body may be one chunk of the file rather than all of it, with `offset` saying where those bytes belong. A chunk
+// that leaves the file incomplete answers 202 with the upload's new position; the one that completes it answers the
+// committed node, so a client reads the result off the status rather than guessing from the body.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Context, Hono } from 'hono';
@@ -66,6 +70,23 @@ function parseContentLength(header : string | undefined) : number | undefined
     return Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
+// Where in the file this body's bytes belong. An absent offset is the start, so a client with nothing to chunk sends
+// the request it always did. A malformed one is refused rather than defaulted -- guessing an offset writes bytes
+// somewhere nobody asked for.
+function readOffset(ctx : Context) : number
+{
+    const raw = ctx.req.query('offset');
+    if(raw === undefined) { return 0; }
+
+    const value = Number(raw);
+    if(!Number.isInteger(value) || value < 0)
+    {
+        throw new BadRequestError('The chunk offset must be a non-negative integer.');
+    }
+
+    return value;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export function createUploadRoutes(sessions : SessionManager, blobs : BlobManager, tags : MediaTagManager) : Hono
@@ -78,18 +99,26 @@ export function createUploadRoutes(sessions : SessionManager, blobs : BlobManage
 
         const metadata = readUploadMetadata(ctx);
         const contentLength = parseContentLength(ctx.req.header('content-length'));
+        const offset = readOffset(ctx);
 
         const body = ctx.req.raw.body;
         if(body === null) { throw new BadRequestError('An upload body is required.'); }
 
-        const { node, role } = await blobs.commitUpload(
+        const outcome = await blobs.commitUpload(
             caller.user,
             ctx.req.param('ticket'),
             Readable.fromWeb(body as NodeReadableStream<Uint8Array>),
             metadata,
-            contentLength
+            contentLength,
+            offset
         );
 
+        if(!outcome.committed)
+        {
+            return ctx.json({ receivedBytes: outcome.receivedBytes, totalBytes: outcome.totalBytes }, 202);
+        }
+
+        const { node, role } = outcome;
         if(node.type === 'file') { tags.enrichInBackground(node.blobID, node.mimeType); }
 
         return ctx.json(toNodeResponse(node, role));

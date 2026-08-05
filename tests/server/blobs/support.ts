@@ -39,6 +39,9 @@ import { SessionManager } from '@server/managers/session.ts';
 import { createBlobRoutes } from '@server/routes/blobs.ts';
 import { createUploadRoutes } from '@server/routes/uploads.ts';
 
+// Utils
+import type { Config } from '@server/utils/config.ts';
+
 // Auth support (real sign-up/sign-in over the same app)
 import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, cookieJarFrom, signIn, signUp, testConfig } from '../auth/support.ts';
 import { openTestDatabase } from '../support/database.ts';
@@ -72,7 +75,7 @@ function composeApp(auth : Auth, blobs : BlobManager, mediaTags : MediaTagManage
     app.onError((error, ctx) =>
     {
         const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status); }
+        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
         return ctx.json({ error: 'Internal Server Error' }, 500);
     });
 
@@ -81,17 +84,24 @@ function composeApp(auth : Auth, blobs : BlobManager, mediaTags : MediaTagManage
 
 export interface BlobAppOptions
 {
-    uploadMaxBytes ?: number;
+    // The single-upload ceiling. A supplier, not a number, so a spec can move it between requests the way an admin
+    // patching the setting does -- which is how a ticket outlives the cap it was issued under.
+    uploadMaxBytes ?: () => Promise<number>;
 
-    // The instance-wide quota an account with no limit of its own inherits. A supplier, not a number, so a spec can
-    // move it between requests the way an admin patching the setting does.
+    // The chunk size the instance hands out with a ticket, so a spec can drive an upload against a deployment that
+    // tuned it rather than only against the compiled default.
+    uploadChunkBytes ?: number;
+
+    // The instance-wide quota an account with no limit of its own inherits, likewise a supplier.
     defaultQuota ?: () => Promise<number>;
 }
 
 export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<BootedBlobApp>
 {
     const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-blob-flow-'));
-    const overrides = options.uploadMaxBytes === undefined ? {} : { UPLOAD_MAX_BYTES: options.uploadMaxBytes };
+    const overrides : Partial<Config> = {};
+    if(options.uploadChunkBytes !== undefined) { overrides.UPLOAD_CHUNK_BYTES = options.uploadChunkBytes; }
+
     const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot, ...overrides }));
 
     const auth = createAuth(handle, config, TEST_AUTH_SECRET);
@@ -102,7 +112,8 @@ export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<Boote
     const blobs = new BlobManager({
         handle,
         blob,
-        uploadMaxBytes: async () => config.UPLOAD_MAX_BYTES,
+        uploadMaxBytes: options.uploadMaxBytes ?? (async () => config.UPLOAD_MAX_BYTES),
+        uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
         defaultQuota: options.defaultQuota ?? (async () => UNLIMITED_QUOTA),
     });
 
@@ -211,6 +222,50 @@ export function putUpload(
 {
     const params = new URLSearchParams({ name: metadata.name, mimeType: metadata.mimeType });
     if(metadata.parentID !== null) { params.set('parentID', metadata.parentID); }
+
+    return app.request(`${ ORIGIN }/api/uploads/${ ticket }?${ params.toString() }`, {
+        method: 'PUT',
+        headers: { cookie },
+        body: new Uint8Array(bytes),
+    });
+}
+
+// One chunk of an upload: the same PUT, with the offset saying where these bytes belong in the claimed file. The
+// commit metadata rides every chunk, exactly as the client sends it, though only the chunk completing the file uses it.
+export function putChunk(
+    app : Hono,
+    cookie : string,
+    ticket : string,
+    bytes : Buffer,
+    offset : number,
+    metadata : CommitMetadata = defaultMetadata
+) : Promise<Response>
+{
+    const params = new URLSearchParams({
+        name: metadata.name,
+        mimeType: metadata.mimeType,
+        offset: String(offset),
+    });
+    if(metadata.parentID !== null) { params.set('parentID', metadata.parentID); }
+
+    return app.request(`${ ORIGIN }/api/uploads/${ ticket }?${ params.toString() }`, {
+        method: 'PUT',
+        headers: { cookie },
+        body: new Uint8Array(bytes),
+    });
+}
+
+// The replace variant of a chunk: the final chunk of a replace names the target instead of a placement.
+export function putChunkReplace(
+    app : Hono,
+    cookie : string,
+    ticket : string,
+    bytes : Buffer,
+    offset : number,
+    replaceNodeID : string
+) : Promise<Response>
+{
+    const params = new URLSearchParams({ replaceNodeID, offset: String(offset) });
 
     return app.request(`${ ORIGIN }/api/uploads/${ ticket }?${ params.toString() }`, {
         method: 'PUT',

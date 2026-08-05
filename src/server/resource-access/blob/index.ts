@@ -151,6 +151,45 @@ export class BlobRA
     }
 
     //------------------------------------------------------------------------------------------------------------------
+    // Chunked uploads
+    //
+    // A file arriving as a sequence of requests stages on the default backend and is published there, so the pin a
+    // finished chunked upload returns is the same one a single-stream put would have.
+    //------------------------------------------------------------------------------------------------------------------
+
+    async appendChunk(uploadID : string, stream : Readable, offset : number) : Promise<number>
+    {
+        const backend = await this.#facade(await this.#defaultBackend());
+
+        return backend.appendChunk(uploadID, stream, offset);
+    }
+
+    // Verify the staged bytes against the claim and publish them, answering the pin the blob record stores.
+    async commitChunked(uploadID : string, sha256 : string, size : number) : Promise<BlobLocation>
+    {
+        const backendID = await this.#defaultBackend();
+        const backend = await this.#facade(backendID);
+
+        await backend.commitChunked(uploadID, sha256, size);
+
+        return { backendID, storageKey: sha256 };
+    }
+
+    async discardChunked(uploadID : string) : Promise<void>
+    {
+        const backend = await this.#facade(await this.#defaultBackend());
+
+        await backend.discardChunked(uploadID);
+    }
+
+    async sweepChunked(cutoff : Date) : Promise<number>
+    {
+        const backend = await this.#facade(await this.#defaultBackend());
+
+        return backend.sweepChunked(cutoff);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
     // Row reads
     //------------------------------------------------------------------------------------------------------------------
 

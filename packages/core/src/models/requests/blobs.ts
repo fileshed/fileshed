@@ -16,10 +16,14 @@ export interface ClaimRequest
 // possession challenge instead of a place to put bytes.
 //----------------------------------------------------------------------------------------------------------------------
 
+// chunkBytes is the size the client cuts the file into, and it rides the ticket because the deployment can override
+// the compiled default: the client plans its chunks right after claiming, so the server's number arrives at exactly
+// the moment it is needed. A challenge carries none -- a proven blob moves no bytes to size.
 interface ClaimTicketResponse
 {
     upload : true;
     ticket : string;
+    chunkBytes : number;
 }
 
 interface ClaimChallengeResponse
@@ -62,6 +66,18 @@ export interface UploadCommitReplace
 // Discriminated by which mode's fields are present, not a literal tag: create metadata carries name (and mimeType),
 // replace metadata carries replaceNodeID. Supplying both modes or neither is rejected at the codec.
 export type UploadCommitMetadata = UploadCommitCreate | UploadCommitReplace;
+
+//----------------------------------------------------------------------------------------------------------------------
+// PUT /api/uploads/:ticket -- the answer to a chunk that landed without completing the file. The committed node comes
+// back only from the chunk that carries the last byte; every earlier one answers with where the upload now stands, so
+// a client can show progress against the size it claimed.
+//----------------------------------------------------------------------------------------------------------------------
+
+export interface UploadChunkAccepted
+{
+    receivedBytes : number;
+    totalBytes : number;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 // POST /api/blobs/claim/:challengeID -- the HMAC answer plus the commit metadata, since a successful proof commits the

@@ -68,6 +68,48 @@ export interface BlobBackend
      * @throws {InvalidSha256Error} when the address is malformed.
      */
     delete(sha256 : string) : Promise<void>;
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Chunked uploads
+    //
+    // A file may arrive as a sequence of requests rather than one stream, so the backend holds the bytes of an
+    // incomplete upload under a caller-chosen id until they add up to the claimed size. The staged bytes are not a blob
+    // and are addressed by nothing: they become one only at commitChunked, which applies the same integrity contract
+    // put does. `uploadID` is opaque -- a backend that derives a path or key from it owes the same guard put's address
+    // gets.
+    //------------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Appends a chunk to the staged bytes of an upload, creating the staging area on the first one, and answers how
+     * many bytes the stream carried. `offset` is where the caller believes the staged bytes end; a longer staging area
+     * is truncated back to it first, which is what makes a torn append safe to retry -- the same chunk sent twice
+     * leaves the same bytes either way. Staged bytes SHORTER than `offset` mean the staging area was lost underneath a
+     * live upload; that is a server fault and must throw rather than write a hole.
+     */
+    appendChunk(uploadID : string, stream : Readable, offset : number) : Promise<number>;
+
+    /**
+     * Publishes the staged bytes as the blob at `sha256`, verifying them against the claimed hash and size first. The
+     * staging area is consumed either way: on any mismatch nothing is published and nothing is left behind, exactly as
+     * a rejected put leaves nothing.
+     *
+     * @throws {HashMismatchError} when the staged bytes do not hash to `sha256`.
+     * @throws {SizeMismatchError} when the staged byte count differs from `size`.
+     * @throws {InvalidSha256Error} when the address is malformed.
+     */
+    commitChunked(uploadID : string, sha256 : string, size : number) : Promise<void>;
+
+    /**
+     * Drops an upload's staged bytes. Idempotent: discarding an upload that never staged anything is a no-op.
+     */
+    discardChunked(uploadID : string) : Promise<void>;
+
+    /**
+     * Drops every staging area untouched since `cutoff` and answers how many went, so an upload abandoned mid-flight
+     * cannot leak bytes forever. The caller owns the cutoff and must set it past the window in which a chunk can still
+     * legally land.
+     */
+    sweepChunked(cutoff : Date) : Promise<number>;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

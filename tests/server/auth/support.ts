@@ -8,7 +8,7 @@
 
 import type { Hono } from 'hono';
 
-import { UNLIMITED_QUOTA } from '@fileshed/core';
+import { DEFAULT_UPLOAD_CHUNK_BYTES, UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -77,6 +77,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         TRASH_PURGE_DAYS: 30,
         UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
         AVATAR_MAX_BYTES: 2 * 1024 * 1024,
+        UPLOAD_CHUNK_BYTES: DEFAULT_UPLOAD_CHUNK_BYTES,
         SMTP_HOST: undefined,
         SMTP_PORT: 587,
         SMTP_SECURE: false,
@@ -141,7 +142,13 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
     const nodes = new NodeManager(handle, nodeRA, blob, { defaultQuota });
 
     return createApp(auth, {
-        blobs: new BlobManager({ handle, blob, uploadMaxBytes, defaultQuota }),
+        blobs: new BlobManager({
+            handle,
+            blob,
+            uploadMaxBytes,
+            uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
+            defaultQuota,
+        }),
         mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
         setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
         avatars: new AvatarManager({ handle, blob, avatarMaxBytes }),

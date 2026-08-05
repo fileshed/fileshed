@@ -72,7 +72,7 @@ function composeApp(auth : Auth, avatars : AvatarManager, nodes : NodeManager) :
     app.onError((error, ctx) =>
     {
         const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status); }
+        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
         return ctx.json({ error: 'Internal Server Error' }, 500);
     });
 

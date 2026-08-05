@@ -14,6 +14,7 @@ import type {
     ChallengeAnswerRequest,
     ClaimRequest,
     ClaimResponse,
+    UploadChunkAccepted,
     UploadCommitCreate,
     UploadCommitMetadata,
     UploadCommitReplace,
@@ -44,6 +45,9 @@ typeAssert<Equals<z.output<typeof claimRequestCodec>, ClaimRequest>>();
 const claimTicketResponseCodec = z.strictObject({
     upload: z.literal(true),
     ticket: z.string(),
+    chunkBytes: z.number()
+        .int()
+        .positive(),
 });
 
 // [offset, length]. Ranges are random per challenge and several of them -- fixed ranges would be
@@ -106,6 +110,20 @@ typeAssert<Equals<z.output<typeof uploadCommitReplaceCodec>, UploadCommitReplace
 export const uploadCommitMetadataCodec = z.union([ uploadCommitCreateCodec, uploadCommitReplaceCodec ]);
 
 typeAssert<Equals<z.output<typeof uploadCommitMetadataCodec>, UploadCommitMetadata>>();
+
+// The answer to a chunk that landed without completing the file: how much of the claimed size the ticket now holds.
+export const uploadChunkAcceptedCodec = z.strictObject({
+    receivedBytes: z.number()
+        .int()
+        .nonnegative(),
+    totalBytes: z.number()
+        .int()
+        .nonnegative(),
+});
+
+typeAssert<Equals<z.output<typeof uploadChunkAcceptedCodec>, UploadChunkAccepted>>();
+
+//----------------------------------------------------------------------------------------------------------------------
 
 export const challengeAnswerCreateCodec = z.strictObject({
     answer: z.string(),

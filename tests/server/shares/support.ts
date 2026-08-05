@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 
 // Models
-import { UNLIMITED_QUOTA } from '@fileshed/core';
+import { DEFAULT_UPLOAD_CHUNK_BYTES, UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
@@ -79,6 +79,7 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
         handle,
         blob,
         uploadMaxBytes: async () => uploadMaxBytes,
+        uploadChunkBytes: DEFAULT_UPLOAD_CHUNK_BYTES,
         defaultQuota: async () => UNLIMITED_QUOTA,
     });
     const nodes = new NodeManager(handle, nodesRA, blob, { defaultQuota: async () => UNLIMITED_QUOTA });
@@ -101,7 +102,7 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
     app.onError((error, ctx) =>
     {
         const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status); }
+        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
         return ctx.json({ error: 'Internal Server Error' }, 500);
     });
 

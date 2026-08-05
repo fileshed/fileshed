@@ -57,7 +57,23 @@ export type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429;
 export interface MappedError
 {
     status : ErrorStatus;
-    body : { error : string; violations ?: RegulationViolation[] };
+    body : { error : string; violations ?: RegulationViolation[]; maxBytes ?: number };
+
+    // Response headers the rejection carries, for the errors that answer in a header as well as a body.
+    headers ?: Record<string, string>;
+}
+
+// The limit an oversized upload broke, in both the places a client looks for it: our own JSON body, and the
+// Upload-Limit field of the IETF resumable-uploads draft, whose max-size key is a Structured Fields Dictionary member
+// holding an Integer. The draft asks a limit-violation rejection to carry the limits it violated, so a client that
+// speaks the standard field and one that reads our body arrive at the same number.
+function payloadTooLarge(error : PayloadTooLargeError) : MappedError
+{
+    return {
+        status: 413,
+        body: { error: error.message, maxBytes: error.maxBytes },
+        headers: { 'Upload-Limit': `max-size=${ error.maxBytes }` },
+    };
 }
 
 // The single translation from a manager error to its wire status + body. app.ts's onError and the specs' composed apps
@@ -70,7 +86,7 @@ export function mapManagerError(error : unknown) : MappedError | undefined
     if(error instanceof NotFoundError) { return { status: 404, body: { error: error.message } }; }
     if(error instanceof ConflictError) { return { status: 409, body: { error: error.message } }; }
     if(error instanceof BadRequestError) { return { status: 400, body: { error: error.message } }; }
-    if(error instanceof PayloadTooLargeError) { return { status: 413, body: { error: error.message } }; }
+    if(error instanceof PayloadTooLargeError) { return payloadTooLarge(error); }
     if(error instanceof TooManyRequestsError) { return { status: 429, body: { error: error.message } }; }
 
     if(error instanceof RegulationError)

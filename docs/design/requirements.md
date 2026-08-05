@@ -17,7 +17,6 @@ FileShed (`fileshed` internally — repo, package, binary) is self-hosted, multi
 ### Non-goals (v1)
 
 - Document/spreadsheet editing (future cherry on top; nothing in the data model should preclude it).
-- Resumable/chunked uploads (tus). v1 is streaming multipart. Design the upload endpoint so tus can be added without breaking clients.
 - Cross-instance federation, WebDAV, desktop sync clients.
 - Full-text content search. v1 search is name/metadata only.
 
@@ -153,14 +152,13 @@ Notes:
 
 ### 4.3 Upload flow
 
-**Small files (< 1 MiB): plain upload, no claim dance.** Round trips cost more than the bytes.
-
-**Larger files:**
+Every file is hashed and claimed; the claim decides whether its bytes travel at all.
 
 1. Client computes SHA-256 incrementally (hash-wasm over `File.stream()`).
 2. `POST /api/blobs/claim { sha256, size }`
 3. Server:
-   - Blob unknown → respond `{ upload: true, ticket }`. Client streams the file (`PUT /api/uploads/:ticket`). Server hashes while streaming to temp staging, verifies against the claimed hash (reject mismatch — a lying client must not poison the store), then commits: move to backend, insert/resurrect blob, create node.
+   - Blob unknown → respond `{ upload: true, ticket, chunkBytes }`. Client delivers the bytes against `PUT /api/uploads/:ticket` (§4.3a). The server verifies the assembled bytes against the claimed hash (reject mismatch — a lying client must not poison the store), then commits: move to backend, insert/resurrect blob, create node.
+   - Blob known but under 1 MiB → respond with a ticket as above. Re-uploading costs less than the round trips a proof would spend.
    - Blob known (including graveyarded) → **proof-of-possession challenge**: respond `{ challenge_id, nonce, ranges: [[offset, length], …] }` — 2–4 ranges, random offsets and lengths, single-use, TTL 60s.
 4. Client answers: `File.slice()` each range, compute `HMAC-SHA256(nonce, range₀ ‖ range₁ ‖ …)`, `POST /api/blobs/claim/:challenge_id`.
 5. Server reads the same ranges via `BlobStore.read`, verifies the HMAC, then (in one transaction) resurrects if graveyarded, creates the node. Zero bytes uploaded.
@@ -170,6 +168,19 @@ Security requirements:
 - Ranges MUST be random per challenge (fixed ranges are harvest-and-replay-able). Nonce-keyed HMAC prevents replay across challenges.
 - Failed challenges are logged with user id and rate-limited per user (a failed proof = someone probing hashes they don't possess).
 - Challenges are single-use and expire; unanswered challenges are just dropped.
+
+### 4.3a Chunked delivery
+
+The bytes travel as a sequence of PUTs against one ticket, so the largest request a deployment must accept is one chunk rather than one file — that is the size a fronting proxy's request-body cap has to clear.
+
+- `PUT /api/uploads/:ticket?offset=<n>` carries one chunk, with the commit metadata on the query string. An absent offset means the start of the file.
+- Chunks are strictly sequential: each must start exactly where the last one ended. A chunk that repeats or skips ground the upload has already covered is refused `409` with the position it should have carried, as is a second chunk arriving while one is still being received. A chunk that would run past the claimed size is refused `400`. Every such refusal happens before a byte is read.
+- A chunk that leaves the file incomplete answers `202 { receivedBytes, totalBytes }`. The chunk carrying the final byte verifies the assembled file against the claimed hash and size and commits it, answering the node — there is no separate finalize call.
+- The ticket survives every chunk but the last, so a failed chunk is retried on its own instead of restarting the file. A request that carries the whole claimed size at offset 0 streams straight through and spends its ticket in one shot, which is what a client with nothing to chunk sends.
+- Staging is truncated to the accepted offset before each append, so bytes from an attempt that died mid-flight leave no trace in the file.
+- An upload's position lives in memory with its ticket. A restart mid-upload loses the partial: the client re-claims and sends the file again, and the abandoned staging bytes are reclaimed by a sweep on the same timer that expires tickets.
+- `chunkBytes` in the claim response is the size to cut the file into — `UPLOAD_CHUNK_BYTES`, 8 MiB by default and settable per deployment (minimum 1 MiB, no maximum). Clients plan against the value their claim returned, never a compiled-in constant.
+- A file over the instance's upload cap is refused `413` carrying the ceiling it broke, in the body's `maxBytes` and in an `Upload-Limit: max-size=<bytes>` response header.
 
 ### 4.4 Trash & delete semantics
 

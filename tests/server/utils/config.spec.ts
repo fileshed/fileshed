@@ -11,6 +11,9 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+// Models
+import { DEFAULT_UPLOAD_CHUNK_BYTES, MIN_UPLOAD_CHUNK_BYTES } from '@fileshed/core';
+
 // Utils
 import { loadConfig, substituteEnv } from '@server/utils/config.ts';
 
@@ -20,6 +23,7 @@ const MANAGED_KEYS = [
     'AUTH_SECRET',
     'BASE_URL',
     'TRUSTED_ORIGINS',
+    'UPLOAD_CHUNK_BYTES',
     'GITHUB_CLIENT_ID',
     'GITHUB_CLIENT_SECRET',
     'GITLAB_CLIENT_ID',
@@ -186,6 +190,50 @@ describe('loadConfig TRUSTED_ORIGINS', () =>
         process.env['TRUSTED_ORIGINS'] = 'http://192.168.1.20:3950';
 
         expect(loadConfig().TRUSTED_ORIGINS).toEqual([ 'http://192.168.1.20:3950' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('loadConfig UPLOAD_CHUNK_BYTES', () =>
+{
+    // Nothing set leaves every deployment on the compiled default, which is also what the client is handed with its
+    // ticket -- an instance that never heard of this variable behaves exactly as it did before it existed.
+    it('falls back to the compiled default when the variable is unset', () =>
+    {
+        expect(loadConfig().UPLOAD_CHUNK_BYTES).toBe(DEFAULT_UPLOAD_CHUNK_BYTES);
+    });
+
+    it('takes an override from the environment', () =>
+    {
+        process.env['UPLOAD_CHUNK_BYTES'] = '16777216';
+
+        expect(loadConfig().UPLOAD_CHUNK_BYTES).toBe(16_777_216);
+    });
+
+    // Below 1 MiB there is no proxy left to appease -- the tightest common cap is already cleared at the floor -- so a
+    // smaller value only multiplies round trips. It is a misconfiguration, and the boot says so with the value it read.
+    it('refuses a size under the 1 MiB floor, naming the value it was given', () =>
+    {
+        process.env['UPLOAD_CHUNK_BYTES'] = String(MIN_UPLOAD_CHUNK_BYTES - 1);
+
+        expect(() => loadConfig()).toThrow(/UPLOAD_CHUNK_BYTES is 1048575/);
+    });
+
+    it('accepts exactly the floor', () =>
+    {
+        process.env['UPLOAD_CHUNK_BYTES'] = String(MIN_UPLOAD_CHUNK_BYTES);
+
+        expect(loadConfig().UPLOAD_CHUNK_BYTES).toBe(MIN_UPLOAD_CHUNK_BYTES);
+    });
+
+    // No ceiling: only the operator knows what their own stack will accept in one request, so a large value is their
+    // call to make and not ours to second-guess.
+    it('imposes no upper bound', () =>
+    {
+        process.env['UPLOAD_CHUNK_BYTES'] = '1073741824';
+
+        expect(loadConfig().UPLOAD_CHUNK_BYTES).toBe(1_073_741_824);
     });
 });
 

@@ -145,19 +145,23 @@ describe('POST /api/blobs/claim + PUT /api/uploads/:ticket', () =>
         expect(staged).toHaveLength(0);
     });
 
-    it('rejects an upload whose Content-Length contradicts the claimed size', async () =>
+    it('treats a body short of the claimed size as the first chunk, committing nothing yet', async () =>
     {
         const user = await makeUser(booted, 'mismatch@example.com');
         const data = randomBytes(2048);
+        const sha256 = sha256Of(data);
 
-        // Claim ten more bytes than the body carries: the declared Content-Length disagrees with the claim up front.
-        const claimBody = await (await claim(booted.app, user.cookie, sha256Of(data), data.length + 10))
+        // Claim ten more bytes than the body carries. Bytes arriving at the start of a file that is not yet whole are
+        // the opening chunk of an upload, whatever the client meant by them -- so they are held, not committed.
+        const claimBody = await (await claim(booted.app, user.cookie, sha256, data.length + 10))
             .json() as ClaimResponse;
         if(claimBody.upload !== true) { throw new Error('expected an upload ticket'); }
 
         const putRes = await putUpload(booted.app, user.cookie, claimBody.ticket, data);
 
-        expect(putRes.status).toBe(400);
+        expect(putRes.status).toBe(202);
+        expect(await blobRowCount(booted.handle, sha256)).toBe(0);
+        expect(await fileNodesForBlob(booted.handle, sha256)).toHaveLength(0);
     });
 
     it('places the uploaded file under a parent folder the caller owns', async () =>

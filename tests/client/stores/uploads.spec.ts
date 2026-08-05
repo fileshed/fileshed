@@ -20,7 +20,7 @@ import { ApiError } from '@client/resource-access/apiError.ts';
 import { readDroppedPayload } from '@client/resource-access/droppedEntries.ts';
 import { createNode, getChildren } from '@client/resource-access/nodes.ts';
 import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
-import { uploadWithProgress } from '@client/resource-access/uploadWithProgress.ts';
+import { uploadChunked } from '@client/resource-access/chunkedUpload.ts';
 import { fetchMe } from '@client/resource-access/me.ts';
 
 // Utils
@@ -53,7 +53,7 @@ vi.mock('@client/resource-access/blobs.ts', () => ({
     uploadTicket: vi.fn(),
 }));
 
-vi.mock('@client/resource-access/uploadWithProgress.ts', () => ({ uploadWithProgress: vi.fn() }));
+vi.mock('@client/resource-access/chunkedUpload.ts', () => ({ uploadChunked: vi.fn() }));
 
 vi.mock('@client/resource-access/droppedEntries.ts', () => ({ readDroppedPayload: vi.fn() }));
 
@@ -68,7 +68,7 @@ const createNodeMock = createNode as unknown as Mock;
 const readDroppedPayloadMock = readDroppedPayload as unknown as Mock;
 const claimBlobMock = claimBlob as unknown as Mock;
 const answerChallengeMock = answerChallenge as unknown as Mock;
-const uploadMock = uploadWithProgress as unknown as Mock;
+const uploadMock = uploadChunked as unknown as Mock;
 const hashFileMock = hashFile as unknown as Mock;
 const readWindowsMock = readSampleWindows as unknown as Mock;
 const fetchMeMock = fetchMe as unknown as Mock;
@@ -76,6 +76,10 @@ const fetchMeMock = fetchMe as unknown as Mock;
 //----------------------------------------------------------------------------------------------------------------------
 
 const ISO = '2026-07-01T00:00:00.000Z';
+
+// The chunk size a claim answers with. Deliberately not the compiled default: the store must carry whatever the server
+// said to the transport, and a value that happened to match the constant would prove nothing.
+const CHUNK_BYTES = 2 * 1024 * 1024;
 
 function fileNode(id : string) : NodeResponse
 {
@@ -127,7 +131,7 @@ function mockHappyPipeline() : void
 {
     hashFileMock.mockResolvedValue('sha-1');
     getChildrenMock.mockResolvedValue(listing(0));
-    claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+    claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
     uploadMock.mockResolvedValue(fileNode('n1'));
 }
 
@@ -171,7 +175,7 @@ describe('useUploadsStore', () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode('n1'));
         const store = useUploadsStore();
 
@@ -185,11 +189,24 @@ describe('useUploadsStore', () =>
         expect(store.items[0]?.result?.id).toBe('n1');
     });
 
+    // The chunk size belongs to the instance, and the claim is where the client is told it. The store's only job with
+    // it is to hand it on unchanged -- a size of its own choosing would cut files the deployment never asked for.
+    it('cuts the file to the chunk size the claim reported', async () =>
+    {
+        mockHappyPipeline();
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('report.txt') ], 'folder1');
+        await waitFor(() => store.items[0]?.status === 'done', 'done');
+
+        expect(uploadMock.mock.calls[0]?.[0].chunkBytes).toBe(CHUNK_BYTES);
+    });
+
     it('refreshes the drive listing when the upload lands in the folder on screen', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode('n1'));
 
         const drive = useDriveStore();
@@ -221,7 +238,7 @@ describe('useUploadsStore', () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode('n1'));
 
         const drive = useDriveStore();
@@ -258,7 +275,7 @@ describe('useUploadsStore', () =>
     {
         hashFileMock.mockResolvedValueOnce('sha-1');
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockRejectedValueOnce(new ApiError(403, 'You are over your storage quota.'));
         const store = useUploadsStore();
 
@@ -298,7 +315,7 @@ describe('useUploadsStore', () =>
             .mockResolvedValueOnce(listing(1)) // report.txt collides
             .mockResolvedValueOnce(listing(1)) // report (1).txt taken
             .mockResolvedValueOnce(listing(0)); // report (2).txt free
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode('n1'));
         const store = useUploadsStore();
 
@@ -315,7 +332,7 @@ describe('useUploadsStore', () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(1, 'target-9'));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode('target-9'));
         const store = useUploadsStore();
 
@@ -346,7 +363,7 @@ describe('useUploadsStore', () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(1));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode('n1'));
         const store = useUploadsStore();
 
@@ -397,7 +414,7 @@ describe('useUploadsStore', () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockRejectedValue(new ApiError(403, 'You are over your storage quota.'));
         const store = useUploadsStore();
 
@@ -407,11 +424,46 @@ describe('useUploadsStore', () =>
         expect(store.items[0]?.error).toBe('You are over your storage quota.');
     });
 
+    // A size refusal that only says "too large" leaves the person who picked the file with no idea what would fit.
+    // The server sends the ceiling with the rejection, so the row shows it in units a human reads.
+    it('shows the limit on a row the server refused as too large', async () =>
+    {
+        hashFileMock.mockResolvedValue('sha-1');
+        getChildrenMock.mockResolvedValue(listing(0));
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
+        uploadMock.mockRejectedValue(new ApiError(413, 'Upload exceeds the maximum allowed size.', {
+            error: 'Upload exceeds the maximum allowed size.',
+            maxBytes: 5_368_709_120,
+        }));
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('report.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'error', 'error');
+
+        expect(store.items[0]?.error).toBe('Upload exceeds the maximum allowed size (5.4 GB).');
+    });
+
+    // A proxy in front of the instance answers its own 413 with no ceiling in it. The row falls back to the message
+    // rather than inventing a figure.
+    it('shows a size refusal that carries no limit as the message alone', async () =>
+    {
+        hashFileMock.mockResolvedValue('sha-1');
+        getChildrenMock.mockResolvedValue(listing(0));
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
+        uploadMock.mockRejectedValue(new ApiError(413, 'Request Entity Too Large', null));
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('report.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'error', 'error');
+
+        expect(store.items[0]?.error).toBe('Request Entity Too Large');
+    });
+
     it('re-queues a failed item on retry and can then succeed', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockRejectedValueOnce(new ApiError(503, 'Try again')).mockResolvedValue(fileNode('n1'));
         const store = useUploadsStore();
 
@@ -433,7 +485,7 @@ describe('useUploadsStore', () =>
         const releases : ((sha : string) => void)[] = [];
         hashFileMock.mockImplementation(() => new Promise<string>((resolve) => { releases.push(resolve); }));
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode('n1'));
         const store = useUploadsStore();
 
@@ -473,7 +525,7 @@ describe('useUploadsStore', () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
         getChildrenMock.mockResolvedValue(listing(0));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
+        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockImplementation((options : { signal ?: AbortSignal }) => new Promise((_resolve, reject) =>
         {
             options.signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')));

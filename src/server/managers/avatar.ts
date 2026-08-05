@@ -90,7 +90,7 @@ export class AvatarManager
 
         if(declaredLength !== undefined && declaredLength > maxBytes)
         {
-            throw new PayloadTooLargeError('Avatar exceeds the maximum size.');
+            throw new PayloadTooLargeError('Avatar exceeds the maximum size.', maxBytes);
         }
 
         const bytes = await collectCapped(source, maxBytes, 'Avatar exceeds the maximum size.');

@@ -17,6 +17,24 @@ export const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 export const DEFAULT_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_SMTP_PORT = 587;
 
+//----------------------------------------------------------------------------------------------------------------------
+// Chunk sizing
+//
+// Uploads travel as a sequence of PUTs against one ticket, so the ceiling a deployment can accept is the chunk size,
+// not the file size -- a fronting proxy's request-body cap stops mattering once no single request carries the whole
+// file. 8 MiB clears the caps that bite in practice by a wide margin (Cloudflare's 100 MB on free and pro, tunnels
+// included; API Gateway's 10 MB) while keeping the round trips per gigabyte in the low hundreds, which is noise next
+// to the bytes themselves. It also bounds what a failed chunk costs: a retry re-sends at most this much.
+//----------------------------------------------------------------------------------------------------------------------
+
+export const DEFAULT_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+
+// The smallest chunk size worth configuring. nginx ships client_max_body_size at 1m, the tightest request-body cap in
+// common use, so a 1 MiB chunk already clears every proxy anyone actually fronts this with -- going lower appeases
+// nothing and only multiplies round trips, each carrying its own authentication and ticket bookkeeping. A value under
+// it is a misconfiguration, not a tradeoff.
+export const MIN_UPLOAD_CHUNK_BYTES = 1024 * 1024;
+
 // Byte count of a generated AUTH_SECRET, written base64. Matches what `openssl rand -base64 32` produces, which is
 // what the docs tell an operator minting one by hand.
 export const GENERATED_AUTH_SECRET_BYTES = 32;

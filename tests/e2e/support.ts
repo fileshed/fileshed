@@ -346,6 +346,18 @@ export class ApiClient
         });
     }
 
+    // A PUT whose body is produced as it goes rather than handed over whole, and which the caller can cut off partway
+    // through -- the only way to drive a request that dies mid-flight over a real socket.
+    async putStream(path : string, body : ReadableStream<Uint8Array>, signal : AbortSignal) : Promise<Response>
+    {
+        return this.#request('PUT', path, {
+            headers: { 'content-type': 'application/octet-stream' },
+            body,
+            duplex: 'half',
+            signal,
+        } as RequestInit);
+    }
+
     async postBytes(path : string, bytes : Uint8Array, contentType : string) : Promise<Response>
     {
         return this.#request('POST', path, {

@@ -16,6 +16,7 @@ import { Hono } from 'hono';
 import { serveStatic } from '@hono/node-server/serve-static';
 
 import {
+    DEFAULT_UPLOAD_CHUNK_BYTES,
     type InstanceLimits,
     MEDIA_TAG_SWEEP_BATCH,
     MS_PER_DAY,
@@ -328,7 +329,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
         const mapped = mapManagerError(error);
         if(mapped)
         {
-            return ctx.json(mapped.body, mapped.status);
+            return ctx.json(mapped.body, mapped.status, mapped.headers);
         }
 
         logger.error({ err: error }, 'Unhandled error');
@@ -411,7 +412,20 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const gcGraceMs = async () : Promise<number> => await gcGraceDays() * MS_PER_DAY;
     const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
 
-    const blobs = new BlobManager({ handle, blob, uploadMaxBytes, defaultQuota });
+    // A tuned chunk size is worth one line in the boot log: it changes how every client cuts its uploads, and an
+    // operator who set it needs to see the instance agreed. The default speaks for itself.
+    if(config.UPLOAD_CHUNK_BYTES !== DEFAULT_UPLOAD_CHUNK_BYTES)
+    {
+        logger.info({ chunkBytes: config.UPLOAD_CHUNK_BYTES }, 'Upload chunk size overridden');
+    }
+
+    const blobs = new BlobManager({
+        handle,
+        blob,
+        uploadMaxBytes,
+        uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
+        defaultQuota,
+    });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
     const branding = new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes });

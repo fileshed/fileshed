@@ -197,6 +197,138 @@ describe('FsBackend', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+// Chunked uploads
+//
+// Staged bytes are not a blob until they are verified: the same integrity contract a put owes applies at the commit,
+// and until then the bytes live nowhere addressable. The expectations are hand-derived from the chunks fed in -- the
+// assembled file is the concatenation, and its address is the sha256 of that.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('FsBackend chunked uploads', () =>
+{
+    it('assembles chunks in order and publishes them at the address of the whole file', async () =>
+    {
+        const head = Buffer.from('the first half of the file, ');
+        const tail = Buffer.from('and the second half of it');
+        const whole = Buffer.concat([ head, tail ]);
+        const sha256 = sha256Of(whole);
+
+        await store.appendChunk('upload-1', streamOf(head), 0);
+        await store.appendChunk('upload-1', streamOf(tail), head.length);
+        await store.commitChunked('upload-1', sha256, whole.length);
+
+        expect(await collect(await store.getStream(sha256))).toEqual(whole);
+    });
+
+    it('answers each append with the byte count it took', async () =>
+    {
+        const bytes = randomBytes(4096);
+
+        expect(await store.appendChunk('upload-2', streamOf(bytes.subarray(0, 1000)), 0)).toBe(1000);
+        expect(await store.appendChunk('upload-2', streamOf(bytes.subarray(1000)), 1000)).toBe(3096);
+    });
+
+    it('drops the bytes a torn chunk left behind when that chunk is sent again', async () =>
+    {
+        const head = Buffer.from('chunk one');
+        const tail = Buffer.from('chunk two');
+        const whole = Buffer.concat([ head, tail ]);
+        const sha256 = sha256Of(whole);
+
+        await store.appendChunk('upload-3', streamOf(head), 0);
+
+        // The second chunk tore partway through, so the staging file runs past what the caller accepted. Its retry
+        // starts from the same offset and must land the same bytes as if the tear never happened.
+        await store.appendChunk('upload-3', streamOf(Buffer.from('chunk tw')), head.length);
+        await store.appendChunk('upload-3', streamOf(tail), head.length);
+
+        await store.commitChunked('upload-3', sha256, whole.length);
+
+        expect(await collect(await store.getStream(sha256))).toEqual(whole);
+    });
+
+    it('refuses to publish staged bytes that do not hash to the claimed address, storing nothing', async () =>
+    {
+        const bytes = Buffer.from('what actually arrived');
+        const claimed = sha256Of(Buffer.from('what the client said would arrive'));
+
+        await store.appendChunk('upload-4', streamOf(bytes), 0);
+
+        await expect(store.commitChunked('upload-4', claimed, bytes.length))
+            .rejects
+            .toBeInstanceOf(HashMismatchError);
+
+        expect(await pathExists(shardPath(root, claimed))).toBe(false);
+        expect(await readdir(join(root, '.partials'))).toEqual([]);
+    });
+
+    it('refuses to publish a staging file whose length differs from the claimed size, storing nothing', async () =>
+    {
+        const bytes = Buffer.from('nineteen bytes here');
+        const sha256 = sha256Of(bytes);
+
+        await store.appendChunk('upload-5', streamOf(bytes), 0);
+
+        await expect(store.commitChunked('upload-5', sha256, bytes.length + 10))
+            .rejects
+            .toBeInstanceOf(SizeMismatchError);
+
+        expect(await pathExists(shardPath(root, sha256))).toBe(false);
+        expect(await readdir(join(root, '.partials'))).toEqual([]);
+    });
+
+    it('leaves nothing staged once an upload is published or discarded', async () =>
+    {
+        const bytes = Buffer.from('published bytes');
+
+        await store.appendChunk('upload-6', streamOf(bytes), 0);
+        await store.commitChunked('upload-6', sha256Of(bytes), bytes.length);
+
+        await store.appendChunk('upload-7', streamOf(Buffer.from('abandoned bytes')), 0);
+        await store.discardChunked('upload-7');
+
+        expect(await readdir(join(root, '.partials'))).toEqual([]);
+    });
+
+    it('treats discarding an upload that staged nothing as a no-op', async () =>
+    {
+        await expect(store.discardChunked('upload-that-never-was')).resolves.toBeUndefined();
+    });
+
+    it('sweeps staging left by abandoned uploads and leaves the ones still being written', async () =>
+    {
+        await store.appendChunk('upload-8', streamOf(Buffer.from('abandoned mid-upload')), 0);
+
+        // Nothing has aged past a cutoff in the past, so a sweep with one reclaims nothing.
+        expect(await store.sweepChunked(new Date(Date.now() - 60_000))).toBe(0);
+        expect(await readdir(join(root, '.partials'))).toHaveLength(1);
+
+        expect(await store.sweepChunked(new Date(Date.now() + 60_000))).toBe(1);
+        expect(await readdir(join(root, '.partials'))).toEqual([]);
+    });
+
+    it('sweeps a store where no chunked upload ever ran without complaining', async () =>
+    {
+        expect(await store.sweepChunked(new Date())).toBe(0);
+    });
+
+    it('keeps one upload\'s staged bytes out of another\'s', async () =>
+    {
+        const mine = Buffer.from('my file');
+        const yours = Buffer.from('your file');
+
+        await store.appendChunk('upload-9', streamOf(mine), 0);
+        await store.appendChunk('upload-10', streamOf(yours), 0);
+
+        await store.commitChunked('upload-9', sha256Of(mine), mine.length);
+        await store.commitChunked('upload-10', sha256Of(yours), yours.length);
+
+        expect(await collect(await store.getStream(sha256Of(mine)))).toEqual(mine);
+        expect(await collect(await store.getStream(sha256Of(yours)))).toEqual(yours);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
 
 describe('resolveStorageRoot', () =>
 {

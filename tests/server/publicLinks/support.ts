@@ -21,7 +21,13 @@ import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { createId } from '@paralleldrive/cuid2';
 
-import { type ClaimResponse, type NodeResponse, type ShareRole, UNLIMITED_QUOTA } from '@fileshed/core';
+import {
+    type ClaimResponse,
+    DEFAULT_UPLOAD_CHUNK_BYTES,
+    type NodeResponse,
+    type ShareRole,
+    UNLIMITED_QUOTA,
+} from '@fileshed/core';
 
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
@@ -88,6 +94,7 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
         handle,
         blob,
         uploadMaxBytes: async () => 5 * 1024 * 1024 * 1024,
+        uploadChunkBytes: DEFAULT_UPLOAD_CHUNK_BYTES,
         defaultQuota: async () => UNLIMITED_QUOTA,
     });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
@@ -120,7 +127,7 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     app.onError((error, ctx) =>
     {
         const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status); }
+        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
         return ctx.json({ error: 'Internal Server Error' }, 500);
     });
 
