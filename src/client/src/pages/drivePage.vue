@@ -302,6 +302,11 @@
         perform(intent.handlers.resolveOpen(node));
     }
 
+    function download(nodeID : string) : void
+    {
+        perform({ kind: 'download', nodeID });
+    }
+
     function openIcon(node : NodeResponse) : string
     {
         switch (intent.handlers.resolveOpen(node).kind)
@@ -447,9 +452,17 @@
             ] ];
         }
 
-        const groups : ContextMenuItem[][] = [
-            [ { label: 'Open', icon: openIcon(node), onSelect: () => onOpen(node) } ],
+        const open : ContextMenuItem[] = [
+            { label: 'Open', icon: openIcon(node), onSelect: () => onOpen(node) },
         ];
+
+        const downloadID = intent.handlers.resolveDownload(node);
+        if(downloadID !== null)
+        {
+            open.push({ label: 'Download', icon: 'i-lucide-download', onSelect: () => download(downloadID) });
+        }
+
+        const groups : ContextMenuItem[][] = [ open ];
 
         if(!owned)
         {

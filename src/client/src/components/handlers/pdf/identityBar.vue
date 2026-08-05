@@ -21,6 +21,8 @@
                 :save-error="store.saveError"
             />
 
+            <DownloadAction v-if="store.node !== null" :node-i-d="store.node.id" />
+
             <UBadge v-if="store.readOnly" color="neutral" variant="subtle" label="Read only" icon="i-lucide-eye" />
             <UButton
                 v-else
@@ -41,6 +43,7 @@
     import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Components
+    import DownloadAction from '../downloadAction.vue';
     import EditorHeaderSlot from '../editorHeaderSlot.vue';
     import RenameTitle from '../renameTitle.vue';
     import SaveIndicator from '../saveIndicator.vue';

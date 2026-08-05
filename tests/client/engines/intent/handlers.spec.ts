@@ -13,7 +13,14 @@ import {
     type SharedTarget,
 } from '@fileshed/core';
 
-import { canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from '@client/engines/intent/handlers.ts';
+import {
+    canViewInline,
+    defaultEditorMode,
+    resolveDownload,
+    resolveOpen,
+    resolveSharedDownload,
+    resolveSharedOpen,
+} from '@client/engines/intent/handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -327,6 +334,62 @@ describe('resolveSharedOpen', () =>
         const target = sharedTarget({ type: 'file', id: 'f1', name: 'a.zip', mimeType: 'application/zip', size: 20 });
 
         expect(resolveSharedOpen(target)).toEqual({ kind: 'download', nodeID: 'f1' });
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Which node's bytes a Download acts on. Only files have bytes, so everything else resolves to null and gets no
+// Download offered at all.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('resolveDownload', () =>
+{
+    it('downloads a file by its own id', () =>
+    {
+        expect(resolveDownload(file('f1', 'application/zip'))).toBe('f1');
+    });
+
+    // Whichever family would open a file in the app, Download still means "save these bytes" -- the handler registry
+    // has no say here.
+    it('offers the bytes of files that open in an in-app handler too', () =>
+    {
+        expect(resolveDownload(fileOf({ mimeType: 'text/plain', name: 'notes.txt' }))).toBe('f1');
+        expect(resolveDownload(fileOf({ mimeType: 'application/pdf', name: 'doc.pdf' }))).toBe('f1');
+    });
+
+    it('has nothing to download for a folder', () =>
+    {
+        expect(resolveDownload(folder('dir1'))).toBe(null);
+    });
+
+    it('downloads a link to a file by the TARGET id, not the link id', () =>
+    {
+        const node = link({ id: 't1', type: 'file', name: 'a.zip', ownerID: 'u2', mimeType: 'application/zip' });
+
+        expect(resolveDownload(node)).toBe('t1');
+    });
+
+    it('has nothing to download for a link to a folder', () =>
+    {
+        expect(resolveDownload(link({ id: 't1', type: 'folder', name: 'dir', ownerID: 'u2' }))).toBe(null);
+    });
+
+    it('has nothing to download for a dead link', () =>
+    {
+        expect(resolveDownload(link(null))).toBe(null);
+    });
+});
+
+describe('resolveSharedDownload', () =>
+{
+    it('downloads a shared file by its id', () =>
+    {
+        expect(resolveSharedDownload(sharedTarget({ type: 'file', id: 'f1' }))).toBe('f1');
+    });
+
+    it('has nothing to download for a shared folder', () =>
+    {
+        expect(resolveSharedDownload(sharedTarget({ type: 'folder', id: 'dir1' }))).toBe(null);
     });
 });
 

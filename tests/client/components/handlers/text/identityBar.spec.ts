@@ -57,6 +57,7 @@ const UButtonStub = {
 
 const stubs = {
     UButton: UButtonStub,
+    DownloadAction: { props: [ 'nodeID' ], template: '<a class="download" :data-node="nodeID" />' },
     UBadge: {
         name: 'UBadge',
         props: [ 'label', 'icon', 'color', 'variant' ],
@@ -138,6 +139,22 @@ describe('TextIdentityBar', () =>
         expect(header().querySelector('.badge')
             ?.getAttribute('data-label')).toBe('Read only');
         expect(header().querySelector('[data-label="Save"]')).toBeNull();
+    });
+
+    it('offers a download of the open file', async () =>
+    {
+        await mountBar();
+
+        expect(header().querySelector('.download')
+            ?.getAttribute('data-node')).toBe('f1');
+    });
+
+    // Reading a file is enough to take a copy of it, so the control a viewer loses is Save, never Download.
+    it('still offers the download to a viewer who cannot save', async () =>
+    {
+        await mountBar({ role: 'viewer' });
+
+        expect(header().querySelector('.download')).not.toBeNull();
     });
 });
 

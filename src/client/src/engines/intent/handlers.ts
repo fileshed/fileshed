@@ -196,3 +196,23 @@ export function resolveSharedOpen(target : SharedTarget) : OpenAction
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Download Resolution
+//----------------------------------------------------------------------------------------------------------------------
+
+// A link node has no bytes of its own, so a link to a file resolves to the TARGET's id -- that is what the download
+// endpoint serves.
+export function resolveDownload(node : NodeResponse) : string | null
+{
+    if(node.type === 'file') { return node.id; }
+    if(node.type === 'folder') { return null; }
+    if(node.target === null) { return null; }
+
+    return node.target.type === 'file' ? node.target.id : null;
+}
+
+export function resolveSharedDownload(target : SharedTarget) : string | null
+{
+    return target.type === 'file' ? target.id : null;
+}
+
+//----------------------------------------------------------------------------------------------------------------------

@@ -22,6 +22,8 @@
                 :save-error="editor.saveError"
             />
 
+            <DownloadAction v-if="editor.node !== null" :node-i-d="editor.node.id" />
+
             <UBadge v-if="editor.readOnly" color="neutral" variant="subtle" label="Read only" icon="i-lucide-eye" />
             <UButton
                 v-else
@@ -42,6 +44,7 @@
     import { useEditorStore } from '../../../stores/editor.ts';
 
     // Components
+    import DownloadAction from '../downloadAction.vue';
     import EditorHeaderSlot from '../editorHeaderSlot.vue';
     import RenameTitle from '../renameTitle.vue';
     import SaveIndicator from '../saveIndicator.vue';

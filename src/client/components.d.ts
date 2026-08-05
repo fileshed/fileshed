@@ -29,6 +29,7 @@ declare module 'vue' {
     CssEditor: typeof import('./src/components/admin/branding/cssEditor.vue')['default']
     CustomCssField: typeof import('./src/components/admin/branding/customCssField.vue')['default']
     DeleteForever: typeof import('./src/components/trash/modals/deleteForever.vue')['default']
+    DownloadAction: typeof import('./src/components/handlers/downloadAction.vue')['default']
     DriveHeader: typeof import('./src/components/drive/driveHeader.vue')['default']
     DropZone: typeof import('./src/components/uploads/dropZone.vue')['default']
     EditorColorScheme: typeof import('./src/components/account/editorColorScheme.vue')['default']

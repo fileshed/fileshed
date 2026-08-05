@@ -12,6 +12,9 @@ import { createPinia, setActivePinia } from 'pinia';
 
 import type { NodeResponse } from '@fileshed/core';
 
+// Engines
+import { brokenTrack, queueFromTrack, trackFromUrl } from '@client/engines/media/queue.ts';
+
 // Stores
 import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
 
@@ -50,7 +53,10 @@ function fileNode(overrides : Partial<{ id : string; name : string; mimeType : s
     };
 }
 
-const stubs = { UIcon: { props: [ 'name' ], template: '<i :data-icon="name" />' } };
+const stubs = {
+    UIcon: { props: [ 'name' ], template: '<i :data-icon="name" />' },
+    DownloadAction: { props: [ 'nodeID' ], template: '<a class="download" :data-node="nodeID" />' },
+};
 
 function makeTarget() : void
 {
@@ -137,6 +143,49 @@ describe('MediaIdentityBar', () =>
         await nextTick();
 
         expect(header().textContent).toContain('2 of 2');
+    });
+
+    it('points the download at the playing track, not the routed one, as the queue advances', async () =>
+    {
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
+        store.add(fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' }));
+
+        mountBar();
+        await nextTick();
+
+        expect(header().querySelector('.download')
+            ?.getAttribute('data-node')).toBe('a1');
+
+        store.next();
+        await nextTick();
+
+        expect(header().querySelector('.download')
+            ?.getAttribute('data-node')).toBe('v1');
+    });
+
+    // A remote stream is somebody else's URL and a broken row resolved to no node, so neither has bytes this server
+    // could hand over.
+    it('offers no download for a remote stream', async () =>
+    {
+        const store = useMediaPlayerStore();
+        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3'));
+
+        mountBar();
+        await nextTick();
+
+        expect(header().querySelector('.download')).toBeNull();
+    });
+
+    it('offers no download for a broken playlist entry', async () =>
+    {
+        const store = useMediaPlayerStore();
+        store.queue = queueFromTrack(brokenTrack('Ghost', '0'));
+
+        mountBar();
+        await nextTick();
+
+        expect(header().querySelector('.download')).toBeNull();
     });
 });
 

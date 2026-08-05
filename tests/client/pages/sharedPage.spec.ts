@@ -227,6 +227,32 @@ describe('SharedPage', () =>
         expect(labels).not.toContain('Save a copy');
     });
 
+    // Viewer is the weakest grant there is, and the server serves bytes to it: whatever a recipient can view, they
+    // can download.
+    it('offers Download to a viewer-grant file recipient', async () =>
+    {
+        const { wrapper } = await mountShared([ entry(fileTarget('f1', 'report.txt'), 'viewer') ]);
+
+        expect(menuLabels(wrapper)).toContain('Download');
+    });
+
+    it('offers no Download for a shared folder, which carries no bytes', async () =>
+    {
+        const { wrapper } = await mountShared([ entry(folderTarget('dir1', 'Team')) ]);
+
+        expect(menuLabels(wrapper)).not.toContain('Download');
+    });
+
+    it('sends a shared file through the authed download endpoint', async () =>
+    {
+        const { wrapper } = await mountShared([ entry(fileTarget('f1', 'report.txt'), 'viewer') ]);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        await clickMenu(wrapper, 'Download');
+
+        expect(open).toHaveBeenCalledWith('/api/nodes/f1/download', '_blank');
+    });
+
     it('offers "Add to my files" for an unplaced shared item', async () =>
     {
         const { wrapper } = await mountShared([ entry(fileTarget('f1', 'report.txt'), 'viewer', false) ]);

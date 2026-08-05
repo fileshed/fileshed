@@ -21,7 +21,14 @@ import {
     reconcile,
     selectOnly,
 } from './selection.ts';
-import { canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from './handlers.ts';
+import {
+    canViewInline,
+    defaultEditorMode,
+    resolveDownload,
+    resolveOpen,
+    resolveSharedDownload,
+    resolveSharedOpen,
+} from './handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -44,6 +51,8 @@ export const intent = {
         defaultEditorMode,
         resolveOpen,
         resolveSharedOpen,
+        resolveDownload,
+        resolveSharedDownload,
     },
 } as const;
 
@@ -67,6 +76,13 @@ export {
 } from './selection.ts';
 
 export type { EditorMode, OpenAction } from './handlers.ts';
-export { canViewInline, defaultEditorMode, resolveOpen, resolveSharedOpen } from './handlers.ts';
+export {
+    canViewInline,
+    defaultEditorMode,
+    resolveDownload,
+    resolveOpen,
+    resolveSharedDownload,
+    resolveSharedOpen,
+} from './handlers.ts';
 
 //----------------------------------------------------------------------------------------------------------------------

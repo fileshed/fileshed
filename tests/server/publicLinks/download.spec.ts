@@ -190,6 +190,108 @@ describe('GET /api/nodes/:id/download — disposition', () =>
 
         expect(res.headers.get('content-disposition')?.startsWith('inline')).toBe(true);
     });
+
+    it('names the file in a quoted filename param', async () =>
+    {
+        const res = await getDownload(booted, owner.cookie, uploaded.node.id);
+
+        expect(res.headers.get('content-disposition')).toBe('attachment; filename="report.pdf"');
+    });
+
+    // A quote or backslash in a name must not terminate the quoted-string early and let the rest of the name be read
+    // as further parameters.
+    it('cannot be broken out of by a name containing a quote', async () =>
+    {
+        const evil = await uploadFile(booted, owner, fixture, { name: 'sneaky".pdf' });
+
+        const res = await getDownload(booted, owner.cookie, evil.node.id);
+        const header = res.headers.get('content-disposition') ?? '';
+
+        // Anchored, with no interior quote permitted: this only matches if the whole name stayed inside the string.
+        expect(header).toMatch(/^attachment; filename="[^"\\]*"$/);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// A non-ASCII name can't ride the quoted filename param, so RFC 5987/6266 asks for both: an ASCII-safe fallback for
+// clients that only read `filename`, and `filename*` carrying the real name as percent-encoded UTF-8.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('GET /api/nodes/:id/download — non-ASCII filenames', () =>
+{
+    it('carries the real name as RFC 5987 percent-encoded UTF-8 in filename*', async () =>
+    {
+        // é is U+00E9 (UTF-8 C3 A9) and δ is U+03B4 (UTF-8 CE B4); '-' and '.' are unreserved and stay literal.
+        const named = await uploadFile(booted, owner, fixture, { name: 'résumé-δ.pdf' });
+
+        const res = await getDownload(booted, owner.cookie, named.node.id);
+
+        expect(res.headers.get('content-disposition'))
+            .toContain('filename*=UTF-8\'\'r%C3%A9sum%C3%A9-%CE%B4.pdf');
+    });
+
+    it('pairs it with a fallback filename holding no non-ASCII bytes', async () =>
+    {
+        const named = await uploadFile(booted, owner, fixture, { name: 'résumé-δ.pdf' });
+
+        const res = await getDownload(booted, owner.cookie, named.node.id);
+        const fallback = /filename="([^"]*)"/.exec(res.headers.get('content-disposition') ?? '')?.[1];
+
+        expect(fallback).toBeDefined();
+        expect(fallback).toMatch(/^[\x20-\x7e]*$/);
+    });
+
+    it('still applies the caller\'s disposition choice to a non-ASCII name', async () =>
+    {
+        const named = await uploadFile(booted, owner, fixture, { name: 'résumé-δ.pdf' });
+
+        const res = await getDownload(booted, owner.cookie, named.node.id, { disposition: 'inline' });
+
+        expect(res.headers.get('content-disposition')?.startsWith('inline')).toBe(true);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// disposition is a presentation choice, not a capability. These ask for `inline`, the value that differs from the
+// default: a caller refused the bytes must not get them by asking to preview instead of to save.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('GET /api/nodes/:id/download — disposition never widens access', () =>
+{
+    it('still rejects an unauthenticated request with 401', async () =>
+    {
+        const res = await getDownload(booted, undefined, uploaded.node.id, { disposition: 'inline' });
+
+        expect(res.status).toBe(401);
+    });
+
+    it('still reads as absent (404) for a caller the resolver gives no role', async () =>
+    {
+        const res = await getDownload(booted, stranger.cookie, uploaded.node.id, { disposition: 'inline' });
+
+        expect(res.status).toBe(404);
+    });
+
+    it('still refuses a share recipient the bytes of a trashed file', async () =>
+    {
+        await shareWith(booted, owner, uploaded.node.id, stranger.id, 'viewer');
+        await trashNode(booted, owner, uploaded.node.id);
+
+        const res = await getDownload(booted, stranger.cookie, uploaded.node.id, { disposition: 'inline' });
+
+        expect(res.status).toBe(404);
+    });
+
+    it('refuses a folder on either disposition — only files have bytes', async () =>
+    {
+        const folder = await createFolder(booted, owner, 'not-downloadable');
+
+        const attachment = await getDownload(booted, owner.cookie, folder.id, { disposition: 'attachment' });
+        const inline = await getDownload(booted, owner.cookie, folder.id, { disposition: 'inline' });
+
+        expect(attachment.status).toBe(404);
+        expect(inline.status).toBe(404);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

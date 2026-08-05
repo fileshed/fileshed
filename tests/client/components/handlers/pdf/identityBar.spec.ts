@@ -64,6 +64,7 @@ const UButtonStub = {
 
 const stubs = {
     UButton: UButtonStub,
+    DownloadAction: { props: [ 'nodeID' ], template: '<a class="download" :data-node="nodeID" />' },
     UBadge: {
         name: 'UBadge',
         props: [ 'label', 'icon', 'color', 'variant' ],
@@ -145,6 +146,14 @@ describe('PdfIdentityBar', () =>
         expect(header().querySelector('.badge')
             ?.getAttribute('data-label')).toBe('Read only');
         expect(header().querySelector('[data-label="Save"]')).toBeNull();
+    });
+
+    it('offers a download of the open file', async () =>
+    {
+        await mountBar();
+
+        expect(header().querySelector('.download')
+            ?.getAttribute('data-node')).toBe('f1');
     });
 });
 

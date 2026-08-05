@@ -4,7 +4,7 @@
   -- The media player's contribution to the editor layout header: the current track's title and kind -- the embedded
   -- tag title with the artist beside it when the file carries them, the filename otherwise -- and its place in the
   -- queue once there is more than one track. It follows the queue, not the routed node: the header names what is
-  -- playing. Players have no save path, so the right side stays empty.
+  -- playing.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -16,6 +16,10 @@
             <span v-if="store.tracks.length > 1" class="shrink-0 text-xs text-dimmed">
                 {{ store.currentIndex + 1 }} of {{ store.tracks.length }}
             </span>
+        </div>
+
+        <div v-if="downloadableID !== null" class="ml-auto shrink-0">
+            <DownloadAction :node-i-d="downloadableID" />
         </div>
     </EditorHeaderSlot>
 </template>
@@ -29,6 +33,7 @@
     import { useMediaPlayerStore } from '../../../stores/mediaPlayer.ts';
 
     // Components
+    import DownloadAction from '../downloadAction.vue';
     import EditorHeaderSlot from '../editorHeaderSlot.vue';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -42,6 +47,16 @@
         if(store.track === null) { return 'i-lucide-list-music'; }
 
         return store.track.kind === 'video' ? 'i-lucide-film' : 'i-lucide-music';
+    });
+
+    // Only a drive track has bytes to hand over: a remote stream is somebody else's URL, and a broken row stands in
+    // for a playlist entry that resolved to no node at all.
+    const downloadableID = computed<string | null>(() =>
+    {
+        const track = store.track;
+        if(track === null || track.remoteUrl !== null || track.broken) { return null; }
+
+        return track.nodeID;
     });
 
     const currentTags = computed(() => { return store.track === null ? null : store.tagsFor(store.track.nodeID); });

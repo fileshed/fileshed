@@ -373,13 +373,13 @@ describe('DrivePage — kebab menu, ownership gating', () =>
 {
     beforeEach(() => vi.clearAllMocks());
 
-    it('offers the full owner set for an owned file: Open, Share, Rename, Move, Make a copy, Trash', async () =>
+    it('offers the full owner set for an owned file: Open, Download, Share, Rename, Move, copy, Trash', async () =>
     {
         const node = fileNode('f1');
         const wrapper = await mountDrive([ node ]);
 
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
-            [ 'Open', 'Share', 'Rename', 'Move', 'Make a copy', 'Trash' ]
+            [ 'Open', 'Download', 'Share', 'Rename', 'Move', 'Make a copy', 'Trash' ]
         );
     });
 
@@ -391,12 +391,12 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Share', 'Rename', 'Move', 'Trash' ]);
     });
 
-    it('offers Open, Rename, Move, Remove for an owned resolved link -- never Share, a link has no ACL', async () =>
+    it('offers Open, Download, Rename, Move, Remove for an owned link -- never Share, a link has no ACL', async () =>
     {
         const node = linkNode('l1');
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Rename', 'Move', 'Remove' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download', 'Rename', 'Move', 'Remove' ]);
     });
 
     it('offers only Remove for an owned dead link', async () =>
@@ -407,12 +407,12 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Remove' ]);
     });
 
-    it('offers only Open and Save a copy for a file the caller does not own', async () =>
+    it('offers only Open, Download and Save a copy for a file the caller does not own', async () =>
     {
         const node = fileNode('f1', { ownerID: 'someone-else', role: 'editor' });
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Save a copy' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download', 'Save a copy' ]);
     });
 
     it('offers only Open for a folder the caller does not own', async () =>
@@ -423,13 +423,13 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open' ]);
     });
 
-    it('offers only Open for a resolved link the caller does not own', async () =>
+    it('offers only Open and Download for a resolved link the caller does not own', async () =>
     {
         const target : LinkTarget = { id: 't2', type: 'file', name: 'y', ownerID: 'owner2' };
         const node = linkNode('l1', target, { ownerID: 'someone-else', role: 'viewer' });
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download' ]);
     });
 
     it('offers nothing for a dead link the caller does not own -- no target to open, nothing to administer', async () =>
@@ -447,7 +447,7 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         const node = fileNode('f1', { ownerID: 'contributor', role: 'owner' });
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Save a copy' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download', 'Save a copy' ]);
     });
 
     it('wires a non-owner\'s Save a copy to the same copy mutation as the owner\'s Make a copy', async () =>
@@ -462,6 +462,46 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         await flushPromises();
 
         expect(copyNodeMock).toHaveBeenCalledWith('f1', expect.objectContaining({ parentID: null }));
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Which node the chosen Download actually asks for. That it is offered at all, and to whom, is settled by the exact
+// menu-label assertions above.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — Download', () =>
+{
+    beforeEach(() => vi.clearAllMocks());
+
+    function downloadViaKebab(wrapper : VueWrapper, node : NodeResponse) : void
+    {
+        const item = buildMenuOf(wrapper)(node).flat()
+            .find((entry) => entry.label === 'Download');
+        item?.onSelect?.(new Event('click'));
+    }
+
+    it('sends a file through the authed download endpoint', async () =>
+    {
+        const node = fileNode('f1');
+        const wrapper = await mountDrive([ node ]);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        downloadViaKebab(wrapper, node);
+
+        expect(open).toHaveBeenCalledWith('/api/nodes/f1/download', '_blank');
+    });
+
+    it('downloads a link by its target id, not the link id', async () =>
+    {
+        const target : LinkTarget = { id: 't2', type: 'file', name: 'y', ownerID: 'owner2' };
+        const node = linkNode('l1', target);
+        const wrapper = await mountDrive([ node ]);
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        downloadViaKebab(wrapper, node);
+
+        expect(open).toHaveBeenCalledWith('/api/nodes/t2/download', '_blank');
     });
 });
 

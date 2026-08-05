@@ -121,6 +121,11 @@
         perform(intent.handlers.resolveSharedOpen(entry.target));
     }
 
+    function download(nodeID : string) : void
+    {
+        perform({ kind: 'download', nodeID });
+    }
+
     function openIcon(entry : SharedWithMeEntry) : string
     {
         switch (intent.handlers.resolveSharedOpen(entry.target).kind)
@@ -186,6 +191,13 @@
         const actions : DropdownMenuItem[] = [
             { label: 'Open', icon: openIcon(entry), onSelect: () => onOpen(entry) },
         ];
+
+        const downloadID = intent.handlers.resolveSharedDownload(entry.target);
+        if(downloadID !== null)
+        {
+            actions.push({ label: 'Download', icon: 'i-lucide-download', onSelect: () => download(downloadID) });
+        }
+
         if(entry.target.type === 'file')
         {
             actions.push({ label: 'Save a copy', icon: 'i-lucide-copy', onSelect: () => copy(entry) });

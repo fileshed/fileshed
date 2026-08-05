@@ -58,6 +58,7 @@ const UButtonStub = {
 
 const stubs = {
     UButton: UButtonStub,
+    DownloadAction: { props: [ 'nodeID' ], template: '<a class="download" :data-node="nodeID" />' },
     UFieldGroup: { template: '<div><slot /></div>' },
     UBadge: {
         name: 'UBadge',
@@ -209,6 +210,14 @@ describe('MarkdownIdentityBar save', () =>
         expect(header().querySelector('.badge')
             ?.getAttribute('data-label')).toBe('Read only');
         expect(header().querySelector('[data-label="Save"]')).toBeNull();
+    });
+
+    it('offers a download of the open file', async () =>
+    {
+        await mountBar();
+
+        expect(header().querySelector('.download')
+            ?.getAttribute('data-node')).toBe('f1');
     });
 });
 
