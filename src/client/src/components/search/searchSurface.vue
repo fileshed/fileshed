@@ -10,7 +10,7 @@
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div class="min-h-0 flex-1">
+    <div class="min-h-0 flex-1 select-none">
         <div v-if="store.loading" class="flex h-64 items-center justify-center text-muted">
             <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
         </div>

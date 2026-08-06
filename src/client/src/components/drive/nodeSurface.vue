@@ -8,7 +8,7 @@
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div class="min-h-0 flex-1" @click.self="emit('clear-empty')">
+    <div class="min-h-0 flex-1 select-none" @click.self="emit('clear-empty')">
         <div v-if="store.loading" class="flex h-64 items-center justify-center text-muted">
             <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
         </div>
