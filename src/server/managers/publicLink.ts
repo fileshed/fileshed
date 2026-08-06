@@ -27,14 +27,13 @@ import { createId } from '@paralleldrive/cuid2';
 import {
     BadRequestError,
     BlobNotFoundError,
-    type CreatePublicLinkRequest,
+    type ContentDisposition,
     type FileNode,
     ForbiddenError,
     type Node,
     NotFoundError,
     PUBLIC_LINK_TOKEN_BYTES,
     type PublicLink,
-    type PublicLinkDisposition,
     type Role,
     isDirectOwner,
 } from '@fileshed/core';
@@ -66,7 +65,7 @@ export interface StreamResult
 
 interface StreamOptions
 {
-    disposition : PublicLinkDisposition;
+    disposition : ContentDisposition;
     rangeHeader ?: string;
     ifNoneMatch ?: string;
 }
@@ -147,17 +146,16 @@ const NON_ASCII_GLOBAL = /[^\x20-\x7e]/g;
 // name can't ride the quoted `filename` param, so a sanitized ASCII fallback is paired with an RFC 5987 `filename*`
 // carrying the real UTF-8 name percent-encoded. Quotes and backslashes are stripped from the fallback so they cannot
 // break out of the quoted-string.
-function contentDisposition(disposition : PublicLinkDisposition, filename : string) : string
+function contentDisposition(disposition : ContentDisposition, filename : string) : string
 {
-    const type = disposition === 'attachment' ? 'attachment' : 'inline';
     const asciiFallback = filename.replace(NON_ASCII_GLOBAL, '_').replace(/["\\]/g, '_');
 
     if(NON_ASCII.test(filename))
     {
-        return `${ type }; filename="${ asciiFallback }"; filename*=UTF-8''${ encodeURIComponent(filename) }`;
+        return `${ disposition }; filename="${ asciiFallback }"; filename*=UTF-8''${ encodeURIComponent(filename) }`;
     }
 
-    return `${ type }; filename="${ asciiFallback }"`;
+    return `${ disposition }; filename="${ asciiFallback }"`;
 }
 
 // Whether If-None-Match matches the current representation. `*` matches anything; otherwise each listed entry
@@ -200,9 +198,9 @@ export class PublicLinkManager
     //------------------------------------------------------------------------------------------------------------------
 
     // Mint a public link on a file node. Sharing is the owner's authority, and a public link references a
-    // file node -- folders carry no bytes to serve -- so a non-file is refused. Multiple links per node are ok
-    // (one inline, one download), so nothing here dedups.
-    async createLink(actor : SessionUser, nodeID : string, request : CreatePublicLinkRequest) : Promise<PublicLink>
+    // file node -- folders carry no bytes to serve -- so a non-file is refused. A link has nothing to configure and
+    // several per node are ok (an owner may want separately revocable tokens), so nothing here dedups.
+    async createLink(actor : SessionUser, nodeID : string) : Promise<PublicLink>
     {
         const node = await this.#requireOwnedNode(actor, nodeID);
 
@@ -211,14 +209,11 @@ export class PublicLinkManager
             throw new BadRequestError('A public link can only target a file node.');
         }
 
-        const now = new Date();
         const link : PublicLink = {
             id: createId(),
             nodeID,
             token: randomBytes(PUBLIC_LINK_TOKEN_BYTES).toString('base64url'),
-            mode: request.mode,
-            disposition: request.disposition,
-            createdAt: now,
+            createdAt: new Date(),
             revokedAt: null,
         };
         await this.#links.insert(link);
@@ -257,7 +252,10 @@ export class PublicLinkManager
     // a trashed node is hidden from everyone, and setTrashed marks the whole subtree, so the node's own trashedAt
     // catches an ancestor-trashed file too. Every dead outcome is a 404 that never distinguishes "revoked" from "gone"
     // -- the same reads-as-absent idiom the node manager uses for no-access reads.
-    async resolveByToken(token : string, options : Omit<StreamOptions, 'disposition'>) : Promise<StreamResult>
+    //
+    // Disposition is the requester's, off the URL: the token grants the bytes and says nothing about how a browser
+    // presents them, which could never be a boundary anyway -- whoever can render a file inline can save it.
+    async resolveByToken(token : string, options : StreamOptions) : Promise<StreamResult>
     {
         const link = await this.#links.getByToken(token);
         if(link === undefined) { throw new NotFoundError('No such link.'); }
@@ -269,7 +267,7 @@ export class PublicLinkManager
             throw new NotFoundError('This link is no longer available.');
         }
 
-        return this.#streamFileNode(node, { ...options, disposition: link.disposition });
+        return this.#streamFileNode(node, options);
     }
 
     // GET /api/nodes/:id/download -- authed, same Range/ETag behavior as the public link. Viewer suffices to

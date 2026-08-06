@@ -23,6 +23,7 @@ import * as instanceSettings003 from './migrations/003_instance_settings.ts';
 import * as quotaZeroSemantics004 from './migrations/004_quota_zero_semantics.ts';
 import * as quotaAggregateIndex005 from './migrations/005_quota_aggregate_index.ts';
 import * as nameOrderingIndex006 from './migrations/006_name_ordering_index.ts';
+import * as publicLinkKindRemoval007 from './migrations/007_public_link_kind_removal.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -58,6 +59,9 @@ function migrationList(kind : DatabaseKind) : Record<string, Migration>
         '006_name_ordering_index': {
             up: (db) => nameOrderingIndex006.up(db),
             down: (db) => nameOrderingIndex006.down(db),
+        },
+        '007_public_link_kind_removal': {
+            up: (db) => publicLinkKindRemoval007.up(db),
         },
     };
 }
@@ -108,6 +112,14 @@ function reportFailures(results : { migrationName : string; status : string }[] 
 export async function migrateToLatest(db : Kysely<Database>, kind : DatabaseKind) : Promise<void>
 {
     const { error, results } = await makeMigrator(db, kind).migrateToLatest();
+    reportFailures(results, error);
+}
+
+// Stop at a named migration instead of running the lot -- the only way to stand a database up in the state some
+// later migration is about to find.
+export async function migrateTo(db : Kysely<Database>, kind : DatabaseKind, migration : string) : Promise<void>
+{
+    const { error, results } = await makeMigrator(db, kind).migrateTo(migration);
     reportFailures(results, error);
 }
 

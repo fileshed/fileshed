@@ -25,12 +25,7 @@ export {
     resolvedShareRequestStatuses,
 } from './models/shareRequest.ts';
 export type { PublicLink } from './models/publicLink.ts';
-export {
-    type PublicLinkMode,
-    type PublicLinkDisposition,
-    publicLinkModes,
-    publicLinkDispositions,
-} from './models/publicLink.ts';
+export { type ContentDisposition, contentDispositions } from './models/download.ts';
 export {
     type AccessToken,
     type AccessTokenScope,
@@ -138,11 +133,7 @@ export {
 } from './models/requests/blobs.ts';
 export { type MeResponse, type UpdatePreferencesRequest } from './models/requests/me.ts';
 export { type UserLookupQuery } from './models/requests/users.ts';
-export {
-    type CreatePublicLinkRequest,
-    type PublicLinkResponse,
-    type PublicLinkListResponse,
-} from './models/requests/publicLinks.ts';
+export { type PublicLinkResponse, type PublicLinkListResponse } from './models/requests/publicLinks.ts';
 export {
     type GrantShareRequest,
     type ShareResponse,
@@ -253,9 +244,9 @@ export {
 export { meResponseCodec, updatePreferencesRequestCodec } from './models/requests/schemas/me.ts';
 export { userLookupQueryCodec } from './models/requests/schemas/users.ts';
 export {
-    createPublicLinkRequestCodec,
     publicLinkResponseCodec,
     publicLinkListResponseCodec,
+    publicLinkPath,
     toPublicLinkResponse,
     toPublicLinkListResponse,
 } from './models/requests/schemas/publicLinks.ts';

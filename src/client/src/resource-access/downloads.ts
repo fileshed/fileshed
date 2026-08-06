@@ -7,11 +7,11 @@
 // optional -- omitted, the server forces a download (attachment); pass 'inline' for a browser preview.
 //----------------------------------------------------------------------------------------------------------------------
 
-import type { PublicLinkDisposition } from '@fileshed/core';
+import type { ContentDisposition } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function downloadUrl(nodeID : string, disposition ?: PublicLinkDisposition) : string
+export function downloadUrl(nodeID : string, disposition ?: ContentDisposition) : string
 {
     const base = `/api/nodes/${ nodeID }/download`;
 

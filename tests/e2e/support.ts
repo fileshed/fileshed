@@ -322,8 +322,12 @@ export class ApiClient
         return this.#request('GET', path, {});
     }
 
-    async post(path : string, body : unknown) : Promise<Response>
+    // Omitting the body sends a POST with no body and no content-type at all, the way an endpoint that takes none is
+    // actually called.
+    async post(path : string, body ?: unknown) : Promise<Response>
     {
+        if(body === undefined) { return this.#request('POST', path, {}); }
+
         return this.#request('POST', path, {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(body),

@@ -4,7 +4,8 @@
 // The query surface over the `public_link` table: mint a link, revoke it, list a node's links, and resolve a token.
 // getByToken fetches regardless of revoked_at -- a revoked token still RESOLVES, to a dead link (the model's documented
 // intent); the manager decides what a dead link serves. Ordering is by created_at, never by id (cuid2 is
-// non-monotonic).
+// non-monotonic) -- id appears only as a tiebreak, where two links share a timestamp and the answer must not
+// alternate between reads.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- insert values and where clauses name snake_case DB columns (house convention) */
@@ -26,8 +27,6 @@ function linkFromRow(row : Selectable<PublicLinkTable>) : PublicLink
         id: row.id,
         nodeID: row.node_id,
         token: row.token,
-        mode: row.mode,
-        disposition: row.disposition,
         createdAt: new Date(row.created_at),
         revokedAt: row.revoked_at === null ? null : new Date(row.revoked_at),
     };
@@ -85,6 +84,32 @@ export class PublicLinkRA
         return rows.map(linkFromRow);
     }
 
+    // The LIVE link on each of the given nodes, keyed by node id -- a whole listing page in one query. A revoked link
+    // is dead and never answers here. Several live links on one node answer with the oldest, id breaking a same-
+    // millisecond tie so the answer cannot alternate between reads.
+    async liveLinksByNode(nodeIDs : readonly string[]) : Promise<Map<string, PublicLink>>
+    {
+        const links = new Map<string, PublicLink>();
+        if(nodeIDs.length === 0) { return links; }
+
+        const rows = await this.#db
+            .selectFrom('public_link')
+            .selectAll()
+            .where('node_id', 'in', nodeIDs)
+            .where('revoked_at', 'is', null)
+            .orderBy('created_at', 'asc')
+            .orderBy('id', 'asc')
+            .execute();
+
+        for(const row of rows)
+        {
+            const link = linkFromRow(row);
+            if(!links.has(link.nodeID)) { links.set(link.nodeID, link); }
+        }
+
+        return links;
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Writes
     //------------------------------------------------------------------------------------------------------------------
@@ -97,8 +122,6 @@ export class PublicLinkRA
                 id: link.id,
                 node_id: link.nodeID,
                 token: link.token,
-                mode: link.mode,
-                disposition: link.disposition,
                 created_at: link.createdAt.toISOString(),
                 revoked_at: link.revokedAt === null ? null : link.revokedAt.toISOString(),
             })

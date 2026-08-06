@@ -10,12 +10,7 @@
 import { Hono } from 'hono';
 
 // Models
-import {
-    createPublicLinkRequestCodec,
-    permissionDemands,
-    toPublicLinkListResponse,
-    toPublicLinkResponse,
-} from '@fileshed/core';
+import { permissionDemands, toPublicLinkListResponse, toPublicLinkResponse } from '@fileshed/core';
 
 // Managers
 import type { PublicLinkManager } from '../managers/publicLink.ts';
@@ -23,7 +18,6 @@ import type { SessionManager } from '../managers/session.ts';
 
 // Routes
 import { createLinkSpec, listLinksSpec, revokeLinkSpec } from './links.openapi.ts';
-import { readJsonBody } from './readJsonBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -34,9 +28,8 @@ export function createPublicLinkRoutes(sessions : SessionManager, links : Public
     router.post('/nodes/:id/links', createLinkSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.sharesWrite);
-        const request = await readJsonBody(ctx, createPublicLinkRequestCodec);
 
-        const link = await links.createLink(actor.user, ctx.req.param('id'), request);
+        const link = await links.createLink(actor.user, ctx.req.param('id'));
 
         return ctx.json(toPublicLinkResponse(link), 201);
     });

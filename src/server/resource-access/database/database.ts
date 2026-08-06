@@ -183,8 +183,6 @@ export interface PublicLinkTable
     id : string;
     node_id : string;
     token : string;
-    mode : 'view' | 'download';
-    disposition : 'inline' | 'attachment';
     created_at : Timestamp;
     revoked_at : Timestamp | null;
 }

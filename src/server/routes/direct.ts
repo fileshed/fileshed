@@ -11,12 +11,24 @@
 
 import { Hono } from 'hono';
 
+// Models
+import type { ContentDisposition } from '@fileshed/core';
+
 // Managers
 import type { PublicLinkManager } from '../managers/publicLink.ts';
 
 // Routes
 import { directSpec } from './direct.openapi.ts';
 import { streamResponse } from './streamResponse.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// The address renders its file where it lands -- being hotlinkable is the whole point of this route -- and ?download
+// asks for the save-it form instead. The flag's presence is the entire switch: any value it carries is ignored.
+function readDisposition(download : string | undefined) : ContentDisposition
+{
+    return download === undefined ? 'inline' : 'attachment';
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -27,6 +39,7 @@ export function createDirectRoutes(links : PublicLinkManager) : Hono
     router.get('/:token', directSpec, async (ctx) =>
     {
         const result = await links.resolveByToken(ctx.req.param('token'), {
+            disposition: readDisposition(ctx.req.query('download')),
             rangeHeader: ctx.req.header('range'),
             ifNoneMatch: ctx.req.header('if-none-match'),
         });

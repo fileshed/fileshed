@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Link Section — list live links, create view/download links, copy, revoke
+// Link Section — list live links, create one, copy either form of it, revoke
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,8 +58,6 @@ function link(overrides : Partial<PublicLinkResponse> = {}) : PublicLinkResponse
         id: 'l1',
         nodeID: 'f1',
         token: 'tok123',
-        mode: 'view',
-        disposition: 'inline',
         url: '/d/tok123',
         createdAt: ISO,
         revokedAt: null,
@@ -68,7 +66,6 @@ function link(overrides : Partial<PublicLinkResponse> = {}) : PublicLinkResponse
 }
 
 const STUBS = {
-    UBadge: { props: [ 'label' ], template: '<span class="badge">{{ label }}</span>' },
     UButton: {
         props: [ 'label', 'loading' ],
         template: '<button class="ubtn" @click="$emit(\'click\')">{{ label }}</button>',
@@ -86,6 +83,11 @@ function clickButton(wrapper : VueWrapper, label : string) : Promise<void>
     const button = wrapper.findAll('.ubtn').find((candidate) => candidate.text() === label);
 
     return button ? button.trigger('click') : Promise.resolve();
+}
+
+function offersCreate(wrapper : VueWrapper) : boolean
+{
+    return wrapper.findAll('.ubtn').some((candidate) => candidate.text() === 'Create link');
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -116,26 +118,57 @@ describe('LinkSection', () =>
         expect(wrapper.text()).not.toContain('/d/bbb');
     });
 
-    it('creates an inline view link', async () =>
+    // One button, because there is one kind of link. Choosing between rendering and saving happens when the URL is
+    // handed out, not when the token is minted.
+    it('creates a link with nothing to choose', async () =>
     {
         const wrapper = mountSection();
         await flushPromises();
 
-        await clickButton(wrapper, 'Create view link');
+        await clickButton(wrapper, 'Create link');
         await flushPromises();
 
-        expect(createLinkMock).toHaveBeenCalledWith('f1', { mode: 'view', disposition: 'inline' });
+        expect(createLinkMock).toHaveBeenCalledWith('f1');
+        expect(wrapper.findAll('.ubtn').filter((button) => button.text().startsWith('Create'))).toHaveLength(1);
     });
 
-    it('creates an attachment download link', async () =>
+    // A second token would grant exactly what the first one already grants, so once a file has a live link there is
+    // nothing left to offer.
+    it('stops offering to create once the file has a live link', async () =>
     {
+        listLinksMock.mockResolvedValue({ links: [ link() ] });
         const wrapper = mountSection();
         await flushPromises();
 
-        await clickButton(wrapper, 'Create download link');
+        expect(offersCreate(wrapper)).toBe(false);
+    });
+
+    it('offers to create again once the last live link is revoked', async () =>
+    {
+        listLinksMock.mockResolvedValueOnce({ links: [ link() ] }).mockResolvedValue({ links: [] });
+        const wrapper = mountSection();
+        await flushPromises();
+        expect(offersCreate(wrapper)).toBe(false);
+
+        await wrapper.find('[aria-label="Revoke link"]').trigger('click');
         await flushPromises();
 
-        expect(createLinkMock).toHaveBeenCalledWith('f1', { mode: 'download', disposition: 'attachment' });
+        expect(offersCreate(wrapper)).toBe(true);
+    });
+
+    // The API may mint more links than this dialog offers to, so the listing shows what is there rather than
+    // assuming the one it would have created.
+    it('lists every live link the API reports, not just one', async () =>
+    {
+        listLinksMock.mockResolvedValue({
+            links: [ link({ id: 'a', token: 'aaa', url: '/d/aaa' }), link({ id: 'b', token: 'bbb', url: '/d/bbb' }) ],
+        });
+        const wrapper = mountSection();
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('/d/aaa');
+        expect(wrapper.text()).toContain('/d/bbb');
+        expect(wrapper.findAll('[aria-label="Revoke link"]')).toHaveLength(2);
     });
 
     it('copies the link\'s absolute URL to the clipboard and toasts', async () =>
@@ -147,8 +180,22 @@ describe('LinkSection', () =>
         await wrapper.find('[aria-label="Copy link"]').trigger('click');
         await flushPromises();
 
-        expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/d/tok123'));
+        expect(writeText).toHaveBeenCalledWith(`${ window.location.origin }/d/tok123`);
         expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
+    });
+
+    // The same row hands out the same token either way; the download form is the URL plus the flag that makes a
+    // recipient's browser save it.
+    it('copies the download form of the very same link', async () =>
+    {
+        listLinksMock.mockResolvedValue({ links: [ link() ] });
+        const wrapper = mountSection();
+        await flushPromises();
+
+        await wrapper.find('[aria-label="Copy download link"]').trigger('click');
+        await flushPromises();
+
+        expect(writeText).toHaveBeenCalledWith(`${ window.location.origin }/d/tok123?download`);
     });
 
     it('revokes a link', async () =>

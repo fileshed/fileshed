@@ -1,10 +1,11 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Link Section
   --
-  -- The share dialog's public-link surface, shown for files only (a folder carries no bytes to serve). Lists the node's
-  -- live links -- each with its disposition badge, its ready-to-use /d/<token> URL, a copy-to-clipboard button, and a
-  -- revoke -- and mints new ones: a view link (inline) and a download link (attachment). A revoked link stops serving
-  -- and drops off the list.
+  -- The share dialog's public-link surface, shown for files only (a folder carries no bytes to serve). It has two
+  -- states: nothing published yet, offering to mint a link; or the live link with its /d/<token> URL, a copy for
+  -- either form -- as it renders, or as a download -- and a revoke. One token backs both forms, so a second link
+  -- would be the same capability twice over and is not offered; revoking the last one returns the section to its
+  -- create state. The listing still handles several, since the API stays free to mint them.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -19,21 +20,15 @@
                 :key="link.id"
                 class="flex items-center gap-2 rounded-lg p-2 ring-1 ring-default"
             >
-                <UBadge
-                    :label="dispositionLabel(link)"
-                    :color="link.disposition === 'inline' ? 'primary' : 'neutral'"
-                    variant="soft"
-                    size="sm"
-                />
                 <span class="min-w-0 flex-1 truncate font-mono text-sm">{{ absoluteUrl(link) }}</span>
-                <UTooltip text="Copy link">
+                <UTooltip v-for="form in copyForms" :key="form.label" :text="form.label">
                     <UButton
-                        icon="i-lucide-copy"
+                        :icon="form.icon"
                         color="neutral"
                         variant="ghost"
                         size="sm"
-                        aria-label="Copy link"
-                        @click="copy(link)"
+                        :aria-label="form.label"
+                        @click="copy(link, form)"
                     />
                 </UTooltip>
                 <UTooltip text="Revoke link">
@@ -53,22 +48,14 @@
             No public links yet.
         </p>
 
-        <div class="flex items-center gap-2">
+        <div v-if="links.length === 0 && !loading" class="flex">
             <UButton
-                label="Create view link"
-                icon="i-lucide-eye"
+                label="Create link"
+                icon="i-lucide-link"
                 color="neutral"
                 variant="subtle"
                 :loading="creating"
-                @click="create('view', 'inline')"
-            />
-            <UButton
-                label="Create download link"
-                icon="i-lucide-download"
-                color="neutral"
-                variant="subtle"
-                :loading="creating"
-                @click="create('download', 'attachment')"
+                @click="create()"
             />
         </div>
     </section>
@@ -80,19 +67,32 @@
     import { onMounted, ref } from 'vue';
     import { useToast } from '@nuxt/ui/composables';
 
-    import type { NodeResponse, PublicLinkDisposition, PublicLinkMode, PublicLinkResponse } from '@fileshed/core';
+    import type { NodeResponse, PublicLinkResponse } from '@fileshed/core';
 
     // Resource Access
     import { createPublicLink, listLinksForNode, revokePublicLink } from '../../resource-access/publicLinks.ts';
 
     // Utils
     import { copyToClipboard } from '../../utils/copyToClipboard.ts';
+    import { publicLinkUrl } from '../../utils/publicLinkUrl.ts';
     import { useRunWithToast } from '../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
+    interface CopyForm
+    {
+        label : string;
+        icon : string;
+        download : boolean;
+    }
+
     const props = defineProps<{
         node : NodeResponse;
+    }>();
+
+    // Raised when a link is minted or killed, so a listing showing this node can re-read what it now exposes.
+    const emit = defineEmits<{
+        changed : [];
     }>();
 
     const toast = useToast();
@@ -103,18 +103,17 @@
     const creating = ref(false);
     const pendingRowID = ref<string | null>(null);
 
+    // The two ways to hand out the same token.
+    const copyForms : CopyForm[] = [
+        { label: 'Copy link', icon: 'i-lucide-copy', download: false },
+        { label: 'Copy download link', icon: 'i-lucide-download', download: true },
+    ];
+
     //------------------------------------------------------------------------------------------------------------------
 
-    // The link's full, shareable address: its /d/<token> path resolved against the app's own origin, so a recipient
-    // can paste it anywhere. The server hands back the path; the origin is the browser's.
-    function absoluteUrl(link : PublicLinkResponse) : string
+    function absoluteUrl(link : PublicLinkResponse, download = false) : string
     {
-        return `${ window.location.origin }${ link.url }`;
-    }
-
-    function dispositionLabel(link : PublicLinkResponse) : string
-    {
-        return link.disposition === 'inline' ? 'Inline' : 'Download';
+        return publicLinkUrl(link.url, download);
     }
 
     async function refresh() : Promise<void>
@@ -127,18 +126,18 @@
         await runMutation(refresh, loading);
     }
 
-    function create(mode : PublicLinkMode, disposition : PublicLinkDisposition) : void
+    function create() : void
     {
         void runMutation(async () =>
         {
-            await createPublicLink(props.node.id, { mode, disposition });
+            await createPublicLink(props.node.id);
             await refresh();
-        }, creating);
+        }, creating, () => emit('changed'));
     }
 
-    async function copy(link : PublicLinkResponse) : Promise<void>
+    async function copy(link : PublicLinkResponse, form : CopyForm) : Promise<void>
     {
-        const url = absoluteUrl(link);
+        const url = absoluteUrl(link, form.download);
 
         if(await copyToClipboard(url))
         {
@@ -161,7 +160,7 @@
         {
             await revokePublicLink(link.id);
             await refresh();
-        }).finally(() => { pendingRowID.value = null; });
+        }, undefined, () => emit('changed')).finally(() => { pendingRowID.value = null; });
     }
 
     onMounted(load);

@@ -48,7 +48,7 @@ All primary keys are **cuid2** strings, generated app-side. cuid2 is deliberatel
 - **node** — a file, folder, or link. Fields: `id`, `type` (file|folder|link), `name`, `owner_id`, `parent_id` (nullable = root level), `blob_id` (files only), `target_node_id` (links only), `size` (logical, files only), `mime_type` (files only), `created_at`, `updated_at`, `trashed_at` (nullable; never set on links — links are deleted, not trashed).
   - A **link** is the recipient-side placement of a shared item: an ordinary node, owned by the recipient, living in their tree, pointing at someone else's node. Links may not target links. Links carry no size, no quota charge, and no ACL of their own.
 - **share** — a permission grant. Fields: `id`, `node_id`, `grantee_user_id`, `role` (viewer|editor), `created_by`, `created_at`.
-- **public_link** — tokened anonymous access to a node. Fields: `id`, `node_id`, `token`, `mode` (view|download), `disposition` (inline|attachment), `created_at`, `revoked_at`.
+- **public_link** — tokened anonymous access to a node. Fields: `id`, `node_id`, `token`, `created_at`, `revoked_at`.
 - **share_request** — a recipient-initiated ask for access (§3.5). Fields: `id`, `node_id`, `requester_id`, `requested_role`, `status` (pending|granted|declined), `created_at`, `resolved_at`.
 - **blob** — content-addressed storage record. Fields: `sha256` (PK), `size`, `backend_id`, `storage_key`, `created_at`, `deleted_at` (nullable, GC grace marker).
 - **deletion_offer** — a time-boxed "save a copy" offer created when an owner hard-deletes a shared file with recipients-may-copy enabled (§4.4). Fields: `id`, `sha256` (FK → blob, `ON DELETE CASCADE`), `offeree_id`, `name`/`mime_type`/`size` snapshot, `created_by`, `created_at`, `expires_at` (= the blob GC grace deadline).
@@ -209,9 +209,9 @@ Copies & deletion offers:
 
 - Public links reference the **file node**, not the content hash — the URL survives content changes (future versioning) and dies with the node.
 - URL shape: `/d/:token` — server resolves token → node → blob and streams.
-- `disposition` per link: `inline` (hotlinking: correct `Content-Type`, no `Content-Disposition: attachment`) or `attachment` (forced download).
+- The token is the whole capability. It serves the bytes inline — hotlinking is the point of the address — and `?download` on the URL serves the same token as a forced download. Presentation is the requester's choice, never a property of the link: whoever can render a file can save it.
 - MUST support: HTTP `Range` requests (byte ranges, single range sufficient), `ETag` (the blob sha256 is the natural etag), `If-None-Match`, `Accept-Ranges`, correct `Content-Length`.
-- Links are revocable; multiple links per node allowed (e.g., one inline, one download).
+- Links are revocable; multiple links per node allowed. Revoking one kills both forms of it — they are one token.
 - No auth on `/d/:token` by design. Token entropy ≥ 128 bits.
 - Optional per-link toggles deferred to post-v1: expiry, password, download counting.
 
@@ -277,7 +277,7 @@ The UX bar is the mainstream cloud file managers. Nuxt UI v4 provides the chrome
 - **Drag & drop**: move within tree (including drop on sidebar folders), drop-from-OS to upload (files and folders via webkitdirectory/DataTransferItem traversal).
 - **Context menus** on nodes and empty space: open, download, share, get link, rename, move, remove from my drive, trash — filtered by effective role.
 - **Upload manager**: bottom-right panel, per-file progress, hash-then-claim phase shown ("checking…" → instant complete on dedup hit), cancel, error retry.
-- **Share dialog**: user picker, role select, current grants list, public link management (create inline/download links, copy, revoke).
+- **Share dialog**: user picker, role select, current grants list, public link management (create a link, copy it plain or as a download, revoke).
 - **Shared-item affordances**: shared objects must be immediately identifiable at a glance — link badge + owner on links, "shared" indicator on nodes you own that have grants. "Leave share" is a standard action on any shared-with-you object (context menu on the link *and* in Shared with me). "Remove from my drive" (delete link) triggers a prompt offering to also leave the share — deleting the placement without surfacing that option leaves the item haunting Shared with me, which users will file as a bug. "Trash" applies to owned nodes only.
 - **Link stubs**: unresolvable links render greyed with a link badge, stored name, target owner, "you don't have access", [Request access], [Remove from my drive]. Folder context menus offer "Clean up broken links" (user-initiated purge, §3.2b).
 - **Sharing requests**: owners get a "Sharing requests" view (grant/decline); requesters see request status on the stub. "Save a copy to my drive" appears on any file shared to you; pending deletion offers surface alongside Shared with me.

@@ -314,17 +314,22 @@ export async function seedEmptyFile(booted : BootedServeApp, user : TestUser, na
 // Link management
 //----------------------------------------------------------------------------------------------------------------------
 
+// Minting takes no body: a link has nothing to configure. `body`, when a spec passes one, is what that spec is about --
+// proving the endpoint gives it no meaning.
 export function createLink(
     booted : BootedServeApp,
     user : TestUser,
     nodeID : string,
-    body : Record<string, unknown> = {}
+    body ?: Record<string, unknown>
 ) : Promise<Response>
 {
+    const headers : Record<string, string> = { cookie: user.cookie };
+    if(body !== undefined) { headers['content-type'] = 'application/json'; }
+
     return booted.app.request(`${ ORIGIN }/api/nodes/${ nodeID }/links`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'cookie': user.cookie },
-        body: JSON.stringify(body),
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
     });
 }
 
@@ -362,10 +367,16 @@ function serveHeaders(extra : ServeHeaders, cookie ?: string) : Record<string, s
     return headers;
 }
 
-// GET /d/:token -- anonymous, no cookie by design.
-export function getDirect(booted : BootedServeApp, token : string, extra : ServeHeaders = {}) : Promise<Response>
+// GET /d/:token -- anonymous, no cookie by design. `query` is the raw query string, spelled out at the call site
+// because the exact spelling is what the disposition specs are asserting.
+export function getDirect(
+    booted : BootedServeApp,
+    token : string,
+    extra : ServeHeaders = {},
+    query = ''
+) : Promise<Response>
 {
-    return booted.app.request(`${ ORIGIN }/d/${ token }`, { headers: serveHeaders(extra) });
+    return booted.app.request(`${ ORIGIN }/d/${ token }${ query }`, { headers: serveHeaders(extra) });
 }
 
 export function getDownload(

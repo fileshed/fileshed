@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Direct Link Serving (GET /d/:token) — the byte-serving contract, over real streamed bytes
 //
-// Direct links serve bytes with Range, ETag, If-None-Match, Accept-Ranges, Content-Length, and inline vs attachment
-// disposition; a link is revocable and needs no auth, and a trashed node is hidden from everyone. Streamed windows are
-// compared byte-for-byte against the fixture buffer -- the point of the endpoint is the exact bytes, not just a status
-// code.
+// Direct links serve bytes with Range, ETag, If-None-Match, Accept-Ranges and Content-Length; they render in place
+// unless the URL asks for a download; and a link is revocable, needs no auth, and dies with a trashed node. Streamed
+// windows are compared byte-for-byte against the fixture buffer -- the point of the endpoint is the exact bytes, not
+// just a status code.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomBytes } from 'node:crypto';
@@ -60,11 +60,16 @@ afterEach(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-async function mintLink(disposition : 'inline' | 'attachment' = 'attachment') : Promise<PublicLinkResponse>
+async function mintLink(nodeID = uploaded.node.id) : Promise<PublicLinkResponse>
 {
-    const res = await createLink(booted, owner, uploaded.node.id, { disposition });
+    const res = await createLink(booted, owner, nodeID);
     expect(res.status).toBe(201);
     return res.json() as Promise<PublicLinkResponse>;
+}
+
+function dispositionOf(res : Response) : string
+{
+    return res.headers.get('content-disposition') ?? '';
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -195,8 +200,7 @@ describe('GET /d/:token — empty file', () =>
     it('rejects a suffix range against a zero-byte file with 416, never a malformed Content-Range', async () =>
     {
         const emptyID = await seedEmptyFile(booted, owner);
-        const link = await (await createLink(booted, owner, emptyID, { disposition: 'attachment' }))
-            .json() as PublicLinkResponse;
+        const link = await mintLink(emptyID);
 
         const res = await getDirect(booted, link.token, { range: 'bytes=-5' });
 
@@ -207,8 +211,7 @@ describe('GET /d/:token — empty file', () =>
     it('rejects an open-ended range against a zero-byte file with 416', async () =>
     {
         const emptyID = await seedEmptyFile(booted, owner);
-        const link = await (await createLink(booted, owner, emptyID, { disposition: 'attachment' }))
-            .json() as PublicLinkResponse;
+        const link = await mintLink(emptyID);
 
         const res = await getDirect(booted, link.token, { range: 'bytes=0-' });
 
@@ -219,8 +222,7 @@ describe('GET /d/:token — empty file', () =>
     it('serves the zero-byte file itself as an empty 200', async () =>
     {
         const emptyID = await seedEmptyFile(booted, owner);
-        const link = await (await createLink(booted, owner, emptyID, { disposition: 'attachment' }))
-            .json() as PublicLinkResponse;
+        const link = await mintLink(emptyID);
 
         const res = await getDirect(booted, link.token);
 
@@ -254,33 +256,64 @@ describe('GET /d/:token — conditional request', () =>
 
 describe('GET /d/:token — disposition', () =>
 {
-    it('sets Content-Disposition: inline for an inline (hotlink) link', async () =>
+    it('renders the file in place by default — the address exists to be hotlinkable', async () =>
     {
-        const link = await mintLink('inline');
+        const link = await mintLink();
 
         const res = await getDirect(booted, link.token);
 
-        expect(res.headers.get('content-disposition')?.startsWith('inline')).toBe(true);
-        expect(res.headers.get('content-disposition')).not.toContain('attachment');
+        expect(dispositionOf(res)).toMatch(/^inline/);
+        expect(dispositionOf(res)).not.toContain('attachment');
     });
 
-    it('sets Content-Disposition: attachment for a forced-download link', async () =>
+    it('serves the same token as an attachment when the URL says ?download', async () =>
     {
-        const link = await mintLink('attachment');
+        const link = await mintLink();
 
-        const res = await getDirect(booted, link.token);
+        const res = await getDirect(booted, link.token, {}, '?download');
 
-        expect(res.headers.get('content-disposition')?.startsWith('attachment')).toBe(true);
+        expect(dispositionOf(res)).toMatch(/^attachment/);
+        expect((await bodyBytes(res)).equals(fixture)).toBe(true);
+    });
+
+    // The flag is a flag: it is there or it is not, so the shortest thing anyone can append to a pasted URL works and
+    // no one has to learn which value means yes.
+    it('takes the flag\'s presence as the switch, whatever value it carries', async () =>
+    {
+        const link = await mintLink();
+
+        expect(dispositionOf(await getDirect(booted, link.token, {}, '?download='))).toMatch(/^attachment/);
+        expect(dispositionOf(await getDirect(booted, link.token, {}, '?download=0'))).toMatch(/^attachment/);
+    });
+
+    // The URL is the only thing that decides this. Minting cannot express a kind, so a body that names one buys
+    // nothing: the link it creates still renders in place, and still saves under the flag.
+    it('gives a create body naming a kind no effect on how the link serves', async () =>
+    {
+        const res = await createLink(booted, owner, uploaded.node.id, { mode: 'download', disposition: 'attachment' });
+        const link = await res.json() as PublicLinkResponse;
+
+        expect(res.status).toBe(201);
+        expect(dispositionOf(await getDirect(booted, link.token))).toMatch(/^inline/);
+        expect(dispositionOf(await getDirect(booted, link.token, {}, '?download'))).toMatch(/^attachment/);
+    });
+
+    it('serves every link on a node identically — no token carries a kind of its own', async () =>
+    {
+        const first = await mintLink();
+        const second = await mintLink();
+
+        expect(first.token).not.toBe(second.token);
+        expect(dispositionOf(await getDirect(booted, first.token)))
+            .toBe(dispositionOf(await getDirect(booted, second.token)));
     });
 
     it('encodes a non-ASCII filename with an RFC 5987 filename* plus an ASCII fallback', async () =>
     {
         const named = await uploadFile(booted, owner, fixture, { name: 'résumé.pdf', mimeType: 'application/pdf' });
-        const res = await createLink(booted, owner, named.node.id, { disposition: 'attachment' });
-        const link = await res.json() as PublicLinkResponse;
+        const link = await mintLink(named.node.id);
 
-        const served = await getDirect(booted, link.token);
-        const disposition = served.headers.get('content-disposition') ?? '';
+        const disposition = dispositionOf(await getDirect(booted, link.token, {}, '?download'));
 
         // The real UTF-8 name rides filename* percent-encoded; the quoted filename is a sanitized ASCII fallback.
         expect(disposition).toContain(`filename*=UTF-8''${ encodeURIComponent('résumé.pdf') }`);
@@ -299,16 +332,16 @@ describe('GET /d/:token — dead links serve nothing', () =>
         expect(res.status).toBe(404);
     });
 
-    it('returns 404 once the link is revoked (a revoked link is dead)', async () =>
+    // Revocation kills the token, and both forms are the same token -- there is no second thing left to revoke.
+    it('returns 404 for both forms once the link is revoked (a revoked link is dead)', async () =>
     {
         const link = await mintLink();
 
         const revoked = await revokeLink(booted, owner, link.id);
         expect(revoked.status).toBe(204);
 
-        const res = await getDirect(booted, link.token);
-
-        expect(res.status).toBe(404);
+        expect((await getDirect(booted, link.token)).status).toBe(404);
+        expect((await getDirect(booted, link.token, {}, '?download')).status).toBe(404);
     });
 
     it('returns 404 when the target file is trashed (trashed nodes are hidden from everyone)', async () =>

@@ -47,19 +47,22 @@ afterEach(async () =>
     await booted.cleanup();
 });
 
+async function mintLink() : Promise<PublicLinkResponse>
+{
+    return (await createLink(booted, owner, uploaded.node.id)).json() as Promise<PublicLinkResponse>;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('POST /api/nodes/:id/links', () =>
 {
-    it('mints a link on a file node and returns the token plus its /d/:token URL', async () =>
+    it('mints a link on a file node from no body at all, returning the token plus its /d/:token URL', async () =>
     {
-        const res = await createLink(booted, owner, uploaded.node.id, { mode: 'view', disposition: 'inline' });
+        const res = await createLink(booted, owner, uploaded.node.id);
         const link = await res.json() as PublicLinkResponse;
 
         expect(res.status).toBe(201);
         expect(link.nodeID).toBe(uploaded.node.id);
-        expect(link.mode).toBe('view');
-        expect(link.disposition).toBe('inline');
         // Token entropy >= 128 bits. base64url packs 6 bits per character, so the encoded token must be at
         // least ceil(bytes * 8 / 6) characters long -- an assertion that fails if the token width is ever narrowed.
         expect(PUBLIC_LINK_TOKEN_BYTES * 8).toBeGreaterThanOrEqual(128);
@@ -68,43 +71,39 @@ describe('POST /api/nodes/:id/links', () =>
         expect(link.revokedAt).toBeNull();
     });
 
-    it('allows multiple distinct links on one node (e.g. one inline, one download)', async () =>
+    // A link is a capability and nothing else, so there is no field on it -- and none in the response -- naming how
+    // the bytes come back. That is the URL's business, per request.
+    it('hands back a link with no presentation kind on it', async () =>
     {
-        const inline = await (await createLink(booted, owner, uploaded.node.id, { disposition: 'inline' }))
-            .json() as PublicLinkResponse;
-        const download = await (await createLink(booted, owner, uploaded.node.id, { disposition: 'attachment' }))
-            .json() as PublicLinkResponse;
+        const link = await (await createLink(booted, owner, uploaded.node.id, { mode: 'view', disposition: 'inline' }))
+            .json() as Record<string, unknown>;
 
-        expect(inline.token).not.toBe(download.token);
-
-        const list = await (await listLinks(booted, owner, uploaded.node.id)).json() as PublicLinkListResponse;
-        expect(list.links.map((entry) => entry.id).sort()).toEqual([ inline.id, download.id ].sort());
+        expect(Object.keys(link).sort()).toEqual([ 'createdAt', 'id', 'nodeID', 'revokedAt', 'token', 'url' ]);
     });
 
-    // Both toggles are optional; an empty JSON object takes the documented safe pair (forced download) rather than
-    // guessing at a hotlink.
-    it('defaults an unspecified link to the download/attachment pair', async () =>
+    it('allows multiple distinct links on one node', async () =>
     {
-        const res = await createLink(booted, owner, uploaded.node.id, {});
-        const link = await res.json() as PublicLinkResponse;
+        const first = await mintLink();
+        const second = await mintLink();
 
-        expect(res.status).toBe(201);
-        expect(link.mode).toBe('download');
-        expect(link.disposition).toBe('attachment');
+        expect(first.token).not.toBe(second.token);
+
+        const list = await (await listLinks(booted, owner, uploaded.node.id)).json() as PublicLinkListResponse;
+        expect(list.links.map((entry) => entry.id).sort()).toEqual([ first.id, second.id ].sort());
     });
 
     it('refuses a link on a folder node (public links reference file nodes)', async () =>
     {
         const folder = await createFolder(booted, owner, 'shared');
 
-        const res = await createLink(booted, owner, folder.id, { disposition: 'attachment' });
+        const res = await createLink(booted, owner, folder.id);
 
         expect(res.status).toBe(400);
     });
 
     it('refuses a non-owner minting a link (sharing is the owner\'s authority)', async () =>
     {
-        const res = await createLink(booted, stranger, uploaded.node.id, { disposition: 'attachment' });
+        const res = await createLink(booted, stranger, uploaded.node.id);
 
         expect(res.status).toBe(403);
     });
@@ -113,8 +112,6 @@ describe('POST /api/nodes/:id/links', () =>
     {
         const res = await booted.app.request(`${ ORIGIN }/api/nodes/${ uploaded.node.id }/links`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ disposition: 'attachment' }),
         });
 
         expect(res.status).toBe(401);
@@ -127,8 +124,7 @@ describe('GET /api/nodes/:id/links', () =>
 {
     it('lists the node\'s links for the owner', async () =>
     {
-        const created = await (await createLink(booted, owner, uploaded.node.id, { disposition: 'attachment' }))
-            .json() as PublicLinkResponse;
+        const created = await mintLink();
 
         const list = await (await listLinks(booted, owner, uploaded.node.id)).json() as PublicLinkListResponse;
 
@@ -138,7 +134,7 @@ describe('GET /api/nodes/:id/links', () =>
 
     it('refuses a non-owner listing a node\'s links', async () =>
     {
-        await createLink(booted, owner, uploaded.node.id, { disposition: 'attachment' });
+        await createLink(booted, owner, uploaded.node.id);
 
         const res = await listLinks(booted, stranger, uploaded.node.id);
 
@@ -152,8 +148,7 @@ describe('DELETE /api/links/:id', () =>
 {
     it('revokes the owner\'s link and marks revokedAt on the listing', async () =>
     {
-        const link = await (await createLink(booted, owner, uploaded.node.id, { disposition: 'attachment' }))
-            .json() as PublicLinkResponse;
+        const link = await mintLink();
 
         const revoked = await revokeLink(booted, owner, link.id);
         expect(revoked.status).toBe(204);
@@ -165,8 +160,7 @@ describe('DELETE /api/links/:id', () =>
 
     it('refuses a non-owner revoking a link', async () =>
     {
-        const link = await (await createLink(booted, owner, uploaded.node.id, { disposition: 'attachment' }))
-            .json() as PublicLinkResponse;
+        const link = await mintLink();
 
         const res = await revokeLink(booted, stranger, link.id);
 

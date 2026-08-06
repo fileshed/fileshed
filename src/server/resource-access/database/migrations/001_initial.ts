@@ -14,14 +14,7 @@
 import { type Kysely, type RawBuilder, sql } from 'kysely';
 
 // Models
-import {
-    nodeTypes,
-    publicLinkDispositions,
-    publicLinkModes,
-    shareRequestStatuses,
-    shareRoles,
-    storageBackendKinds,
-} from '@fileshed/core';
+import { nodeTypes, shareRequestStatuses, shareRoles, storageBackendKinds } from '@fileshed/core';
 
 // Database
 import type { DatabaseKind } from '../database.ts';
@@ -36,6 +29,12 @@ function inList(values : readonly string[]) : RawBuilder<unknown>
 {
     return sql.join(values.map((value) => sql.lit(value)));
 }
+
+// A public link once carried a kind -- how the served response presented itself -- and these were its two vocabularies.
+// Presentation is the requester's choice now, not the link's, so these are spelled out rather than borrowed from a
+// domain that no longer has them.
+const legacyLinkModes = [ 'view', 'download' ] as const;
+const legacyLinkDispositions = [ 'inline', 'attachment' ] as const;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -200,10 +199,10 @@ export async function up(db : Kysely<unknown>, kind : DatabaseKind) : Promise<vo
         .addColumn('token', 'text', (col) => col.notNull().unique())
         .addColumn('mode', 'text', (col) => col
             .notNull()
-            .check(sql`mode in (${ inList(publicLinkModes) })`))
+            .check(sql`mode in (${ inList(legacyLinkModes) })`))
         .addColumn('disposition', 'text', (col) => col
             .notNull()
-            .check(sql`disposition in (${ inList(publicLinkDispositions) })`))
+            .check(sql`disposition in (${ inList(legacyLinkDispositions) })`))
         .addColumn('created_at', timestamp, (col) => col.notNull())
         .addColumn('revoked_at', timestamp)
         .execute();

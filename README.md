@@ -35,8 +35,8 @@ way you expect. The web UI does not feel like a compromise for having been self-
 - **Shared folders that are actually folders.** Share a folder as viewer or editor; editors can add files and create
   subfolders inside it. Recipients place what is shared with them anywhere in their own tree rather than in a separate
   "shared" bucket.
-- **Public links.** Per file, set to download or to render inline. Inline links are hotlinkable, which is what you
-  want for images.
+- **Public links.** One revocable link per file, hotlinkable as-is. Copy it plain and it renders in place; copy the
+  download form and it saves.
 - **Per-user quotas.** Charged by file ownership, with an instance-wide default and per-user overrides. A file you own
   counts against you wherever it sits.
 - **Trash with retention.** Deletes are recoverable until the retention window the admin sets expires.

@@ -5,10 +5,10 @@
 import { describeRoute } from 'hono-openapi';
 
 // Models
-import { createPublicLinkRequestCodec, publicLinkListResponseCodec, publicLinkResponseCodec } from '@fileshed/core';
+import { publicLinkListResponseCodec, publicLinkResponseCodec } from '@fileshed/core';
 
 // Routes
-import { emptyResponse, errorResponse, jsonBody, jsonResponse, pathParam } from './docSchema.ts';
+import { emptyResponse, errorResponse, jsonResponse, pathParam } from './docSchema.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -19,13 +19,13 @@ const LINK_TAG = 'Links';
 export const createLinkSpec = describeRoute({
     tags: [ LINK_TAG ],
     summary: 'Create a public link',
-    description: 'Mints a hotlinkable public link on a file node, owner-only. Folders carry no bytes to serve, so a '
-        + 'non-file is refused. Multiple links per node are allowed (for example one inline, one download).',
+    description: 'Mints a hotlinkable public link on a file node, owner-only, with no body: the token is the whole '
+        + 'grant, and whether a recipient renders or saves the bytes is a parameter on the link\'s own URL. Folders '
+        + 'carry no bytes to serve, so a non-file is refused. Multiple links per node are allowed.',
     parameters: [ pathParam('id', 'The file node ID.') ],
-    requestBody: jsonBody(createPublicLinkRequestCodec),
     responses: {
         201: jsonResponse('The created link.', publicLinkResponseCodec),
-        400: errorResponse('The body is invalid, or the node is not a file.'),
+        400: errorResponse('The node is not a file.'),
         401: errorResponse('No session.'),
         403: errorResponse('The caller does not own this node.'),
         404: errorResponse('No node at this ID.'),

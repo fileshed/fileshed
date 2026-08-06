@@ -1,14 +1,14 @@
 //----------------------------------------------------------------------------------------------------------------------
 // E2E — Direct links and authed downloads
 //
-// The direct-link surface over real sockets. An owner mints two public links on one file -- an inline hotlink and an
-// attachment download -- and the database holds two public_link rows with distinct, >=128-bit tokens. Anonymous fetches
-// of /d/:token (no cookies, the token is the whole capability) serve 200 with the right
-// Content-Type/Content-Disposition and bytes that hash back to the fixture; a Range yields 206 with exactly those bytes
-// and a Content-Range; a matching If-None-Match yields 304. Revoking a link 404s its token permanently while the other
-// still serves; trashing the file kills the live link, and restoring heals it (a revoked link stays dead -- revocation
-// is permanent, trash is transient). Finally the authed /api/nodes/:id/download ladder: owner 200, a granted viewer 200
-// (the share-aware resolver over real HTTP), a stranger 404, anonymous 401.
+// The direct-link surface over real sockets. An owner mints two public links on one file and the database holds two
+// public_link rows with distinct, >=128-bit tokens. Anonymous fetches of /d/:token (no cookies, the token is the whole
+// capability) serve 200 with the right Content-Type and bytes that hash back to the fixture, rendered in place until
+// the URL says ?download; a Range yields 206 with exactly those bytes and a Content-Range; a matching If-None-Match
+// yields 304. Revoking a link 404s its token permanently -- in both forms, since both are the one token -- while the
+// other still serves; trashing the file kills the live link, and restoring heals it (a revoked link stays dead --
+// revocation is permanent, trash is transient). Finally the authed /api/nodes/:id/download ladder: owner 200, a
+// granted viewer 200 (the share-aware resolver over real HTTP), a stranger 404, anonymous 401.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -35,10 +35,9 @@ let stranger : ApiClient;
 let viewerID : string;
 
 let fileID : string;
-let inlineLink : PublicLinkResponse;
-let attachmentLink : PublicLinkResponse;
-let inlineCreateStatus : number;
-let attachmentCreateStatus : number;
+let link : PublicLinkResponse;
+let spare : PublicLinkResponse;
+let createStatus : number;
 
 async function callerID(client : ApiClient) : Promise<string>
 {
@@ -47,15 +46,15 @@ async function callerID(client : ApiClient) : Promise<string>
 }
 
 // A cookieless GET of the anonymous direct-link surface -- raw fetch, no jar, no Origin: the token is the capability.
-function direct(token : string, headers : Record<string, string> = {}) : Promise<Response>
+function direct(token : string, headers : Record<string, string> = {}, query = '') : Promise<Response>
 {
-    return fetch(`${ server.baseURL }/d/${ token }`, { headers });
+    return fetch(`${ server.baseURL }/d/${ token }${ query }`, { headers });
 }
 
 // Status only, draining the body so the socket frees between calls.
-async function directStatus(token : string, headers : Record<string, string> = {}) : Promise<number>
+async function directStatus(token : string, headers : Record<string, string> = {}, query = '') : Promise<number>
 {
-    const res = await direct(token, headers);
+    const res = await direct(token, headers, query);
     await res.arrayBuffer();
     return res.status;
 }
@@ -95,16 +94,11 @@ beforeAll(async () =>
 
     fileID = (await upload(owner, 'poster.png', data, MIME)).id;
 
-    const inlineRes = await owner.post(`/api/nodes/${ fileID }/links`, { mode: 'view', disposition: 'inline' });
-    inlineCreateStatus = inlineRes.status;
-    inlineLink = await inlineRes.json() as PublicLinkResponse;
+    const createRes = await owner.post(`/api/nodes/${ fileID }/links`);
+    createStatus = createRes.status;
+    link = await createRes.json() as PublicLinkResponse;
 
-    const attachmentRes = await owner.post(`/api/nodes/${ fileID }/links`, {
-        mode: 'download',
-        disposition: 'attachment',
-    });
-    attachmentCreateStatus = attachmentRes.status;
-    attachmentLink = await attachmentRes.json() as PublicLinkResponse;
+    spare = await (await owner.post(`/api/nodes/${ fileID }/links`)).json() as PublicLinkResponse;
 });
 
 afterAll(async () =>
@@ -118,15 +112,12 @@ afterAll(async () =>
 
 describe('link creation', () =>
 {
-    it('mints an inline and an attachment link on the same file', () =>
+    it('mints a link from a POST with no body, answering with the token and its URL', () =>
     {
-        expect(inlineCreateStatus).toBe(201);
-        expect(inlineLink.disposition).toBe('inline');
-        expect(inlineLink.url).toBe(`/d/${ inlineLink.token }`);
-
-        expect(attachmentCreateStatus).toBe(201);
-        expect(attachmentLink.disposition).toBe('attachment');
-        expect(attachmentLink.nodeID).toBe(fileID);
+        expect(createStatus).toBe(201);
+        expect(link.nodeID).toBe(fileID);
+        expect(link.url).toBe(`/d/${ link.token }`);
+        expect(link.revokedAt).toBeNull();
     });
 
     it('records two public_link rows with distinct, >=128-bit tokens', async () =>
@@ -154,9 +145,9 @@ describe('link creation', () =>
 
 describe('anonymous /d/:token', () =>
 {
-    it('serves the inline link with an inline disposition and the bytes held in the blob store', async () =>
+    it('renders the file in place and streams the bytes held in the blob store', async () =>
     {
-        const res = await direct(inlineLink.token);
+        const res = await direct(link.token);
         const bytes = Buffer.from(await res.arrayBuffer());
 
         expect(res.status).toBe(200);
@@ -171,19 +162,19 @@ describe('anonymous /d/:token', () =>
         expect(bytes.equals(await readBlobFile(server.storageRoot, sha))).toBe(true);
     });
 
-    it('serves the attachment link with an attachment disposition', async () =>
+    it('saves the same token under ?download, filename and all', async () =>
     {
-        const res = await direct(attachmentLink.token);
+        const res = await direct(link.token, {}, '?download');
         const bytes = Buffer.from(await res.arrayBuffer());
 
         expect(res.status).toBe(200);
-        expect(res.headers.get('content-disposition') ?? '').toMatch(/^attachment/);
+        expect(res.headers.get('content-disposition') ?? '').toBe('attachment; filename="poster.png"');
         expect(sha256Of(bytes)).toBe(sha);
     });
 
     it('honors a byte range with 206 and exactly the requested bytes', async () =>
     {
-        const res = await direct(inlineLink.token, { range: 'bytes=100-199' });
+        const res = await direct(link.token, { range: 'bytes=100-199' });
         const bytes = Buffer.from(await res.arrayBuffer());
 
         expect(res.status).toBe(206);
@@ -195,7 +186,7 @@ describe('anonymous /d/:token', () =>
 
     it('answers a matching If-None-Match with a bodiless 304', async () =>
     {
-        const res = await direct(inlineLink.token, { 'if-none-match': etag });
+        const res = await direct(link.token, { 'if-none-match': etag });
         await res.arrayBuffer();
 
         expect(res.status).toBe(304);
@@ -204,7 +195,7 @@ describe('anonymous /d/:token', () =>
     it('answers an unsatisfiable range with 416 and a Content-Range of the full size', async () =>
     {
         // first-byte-pos at the blob size is past the last byte -- a valid but unsatisfiable range.
-        const res = await direct(inlineLink.token, { range: `bytes=${ data.length }-` });
+        const res = await direct(link.token, { range: `bytes=${ data.length }-` });
         await res.arrayBuffer();
 
         expect(res.status).toBe(416);
@@ -224,20 +215,22 @@ describe('revocation and trash', () =>
     it('kills a revoked link permanently and a trashed one only until restore', async () =>
     {
         // Revoking one link leaves the other serving -- multiple links per node, independently revocable.
-        expect((await owner.del(`/api/links/${ attachmentLink.id }`)).status).toBe(204);
-        expect(await directStatus(attachmentLink.token)).toBe(404);
-        expect(await directStatus(inlineLink.token)).toBe(200);
+        expect((await owner.del(`/api/links/${ spare.id }`)).status).toBe(204);
+        expect(await directStatus(spare.token)).toBe(404);
+        // Both forms of the revoked token are dead, because both forms are the one token.
+        expect(await directStatus(spare.token, {}, '?download')).toBe(404);
+        expect(await directStatus(link.token)).toBe(200);
 
         // Trashing the file takes the still-live link down with it -- trashed nodes are hidden from everyone.
         expect((await owner.post(`/api/nodes/${ fileID }/trash`, {})).status).toBe(200);
-        expect(await directStatus(inlineLink.token)).toBe(404);
-        expect(await directStatus(attachmentLink.token)).toBe(404);
+        expect(await directStatus(link.token)).toBe(404);
+        expect(await directStatus(link.token, {}, '?download')).toBe(404);
 
         // Restoring heals the trashed link -- trash death is transient...
         expect((await owner.post(`/api/nodes/${ fileID }/restore`, {})).status).toBe(200);
-        expect(await directStatus(inlineLink.token)).toBe(200);
+        expect(await directStatus(link.token)).toBe(200);
         // ...but revocation is not.
-        expect(await directStatus(attachmentLink.token)).toBe(404);
+        expect(await directStatus(spare.token)).toBe(404);
     });
 });
 
@@ -276,15 +269,12 @@ describe('GET /api/nodes/:id/links', () =>
 
         expect(res.status).toBe(200);
         // Both minted links list for the owner (a revoked link still lists so the owner sees it is dead).
-        const ids = list.links.map((link) => link.id);
-        expect(ids).toContain(inlineLink.id);
-        expect(ids).toContain(attachmentLink.id);
+        const ids = list.links.map((entry) => entry.id);
+        expect(ids).toContain(link.id);
+        expect(ids).toContain(spare.id);
 
         // Minting a link is the owner's authority; a stranger cannot publish content they do not own.
-        const strangerMint = await stranger.post(`/api/nodes/${ fileID }/links`, {
-            mode: 'view',
-            disposition: 'inline',
-        });
+        const strangerMint = await stranger.post(`/api/nodes/${ fileID }/links`);
         expect(strangerMint.status).toBe(403);
     });
 });

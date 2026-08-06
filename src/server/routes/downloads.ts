@@ -13,7 +13,7 @@
 import { Hono } from 'hono';
 
 // Models
-import { type PublicLinkDisposition, permissionDemands } from '@fileshed/core';
+import { type ContentDisposition, permissionDemands } from '@fileshed/core';
 
 // Managers
 import type { PublicLinkManager } from '../managers/publicLink.ts';
@@ -27,7 +27,7 @@ import { streamResponse } from './streamResponse.ts';
 
 // The download disposition off the query string: inline for a browser preview, attachment (the default) for a forced
 // download. Anything else falls back to attachment rather than failing the request.
-function readDisposition(value : string | undefined) : PublicLinkDisposition
+function readDisposition(value : string | undefined) : ContentDisposition
 {
     return value === 'inline' ? 'inline' : 'attachment';
 }

@@ -247,13 +247,8 @@ const rows : EndpointRow[] = [
     },
 
     // Public links
-    {
-        name: 'createPublicLink',
-        call: () => createPublicLink('n1', { mode: 'download', disposition: 'attachment' }),
-        method: 'POST',
-        path: '/api/nodes/n1/links',
-        body: { mode: 'download', disposition: 'attachment' },
-    },
+    // Minting sends nothing: a link has nothing to configure.
+    { name: 'createPublicLink', call: () => createPublicLink('n1'), method: 'POST', path: '/api/nodes/n1/links' },
     { name: 'listLinksForNode', call: () => listLinksForNode('n1'), method: 'GET', path: '/api/nodes/n1/links' },
     { name: 'revokePublicLink', call: () => revokePublicLink('l1'), method: 'DELETE', path: '/api/links/l1' },
 
