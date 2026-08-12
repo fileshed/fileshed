@@ -54,7 +54,7 @@ function envelope(nodes : NodeResponse[], overrides : Partial<SearchResponse> = 
         nodes.map((node) : [ string, NodeLocation ] => [ node.id, { crumbs: [], foreign: false } ])
     );
 
-    return { nodes, total: nodes.length, limit: 50, offset: 0, owners: [], locations, ...overrides };
+    return { nodes, total: nodes.length, limit: 50, offset: 0, owners: [], locations, sharing: {}, ...overrides };
 }
 
 const STUBS = {

@@ -50,7 +50,7 @@
 
         <RenameNode ref="renameModal" />
         <MoveNodes ref="moveModal" />
-        <ShareDialog ref="shareModal" />
+        <ShareDialog ref="shareModal" @changed="onShareChanged" />
         <NewFolder />
         <NewDocument />
     </section>
@@ -93,7 +93,9 @@
     import { type SelectionState, intent } from '../engines/intent/index.ts';
 
     // Utils
+    import { copyToClipboard } from '../utils/copyToClipboard.ts';
     import { isDeadLink } from '../utils/formatters/index.ts';
+    import { publicLinkUrl } from '../utils/publicLinkUrl.ts';
     import { ownerIDFor, resolveOwner } from '../utils/resolveOwner.ts';
     import { useOpenNode } from '../utils/openNode.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
@@ -342,6 +344,26 @@
         shareModal.value?.open(node);
     }
 
+    // A grant or a link changed while the dialog is open: re-read that one node's sharing so its badges and its
+    // copy-link entries follow immediately, rather than the listing carrying a stale answer until the next load.
+    function onShareChanged(nodeID : string) : void
+    {
+        store.refreshSharingFor(nodeID).catch(() => undefined);
+    }
+
+    // The listing already holds the link, so the write happens inside the click that asked for it -- a clipboard write
+    // issued after an await has lost the user activation browsers require. One that is refused anyway puts the URL in
+    // the toast to copy by hand.
+    async function copyLink(path : string, asDownload = false) : Promise<void>
+    {
+        const url = publicLinkUrl(path, asDownload);
+        const copied = await copyToClipboard(url);
+
+        toast.add(copied
+            ? { title: 'Link copied', description: url, color: 'success' }
+            : { title: 'Couldn\'t copy the link', description: url, color: 'error' });
+    }
+
     function moveSelection() : void
     {
         if(!canMove.value) { return; }
@@ -435,8 +457,8 @@
     // bar above. A dead link owned by someone else offers nothing: there is no target to open and no administering it.
     // A foreign file (a viewer or editor's own contribution, or a node reached through a traversed folder link) gets
     // Open plus Save a copy -- Copy asks only read access, so it rides for any role -- so a non-owner is never left
-    // with a bare Open. Every owner-only action -- Share, Rename, Move, Trash/Remove -- disappears entirely for a node
-    // the caller does not directly own.
+    // with a bare Open. Every owner-only action -- Share, the copy-link entries, Rename, Move, Trash/Remove --
+    // disappears entirely for a node the caller does not directly own.
     //------------------------------------------------------------------------------------------------------------------
 
     function buildMenu(node : NodeResponse) : ContextMenuItem[][]
@@ -476,7 +498,30 @@
 
         if(node.type !== 'link')
         {
-            groups.push([ { label: 'Share', icon: 'i-lucide-user-plus', onSelect: () => openShare(node) } ]);
+            const sharing : ContextMenuItem[] = [
+                { label: 'Share', icon: 'i-lucide-user-plus', onSelect: () => openShare(node) },
+            ];
+
+            // A node with a live public link hands it out from here, in either form, without the dialog: the dialog is
+            // where links are minted and killed, not where an existing one is fetched. Nothing to copy, no entries.
+            const linkUrl = node.sharing?.linkUrl ?? null;
+            if(linkUrl !== null)
+            {
+                sharing.push(
+                    {
+                        label: 'Copy link',
+                        icon: 'i-lucide-link',
+                        onSelect: () => void copyLink(linkUrl),
+                    },
+                    {
+                        label: 'Copy download link',
+                        icon: 'i-lucide-file-down',
+                        onSelect: () => void copyLink(linkUrl, true),
+                    }
+                );
+            }
+
+            groups.push(sharing);
         }
 
         const edit : ContextMenuItem[] = [

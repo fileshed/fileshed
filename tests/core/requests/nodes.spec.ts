@@ -11,6 +11,7 @@ import {
     linkTargetCodec,
     nodeListResponseCodec,
     nodeResponseCodec,
+    nodeSharingCodec,
     patchNodeRequestCodec,
     toNodeResponse,
     userSummaryCodec,
@@ -153,6 +154,31 @@ describe('nodeListResponseCodec', () =>
     });
 });
 
+describe('nodeSharingCodec', () =>
+{
+    // The two are independent: a node can be granted to people with no public link, published with no grants, or
+    // both at once.
+    it('accepts grants without a link, a link without grants, and both together', () =>
+    {
+        expect(nodeSharingCodec.safeParse({ granteeCount: 3, linkUrl: null }).success).toBe(true);
+        expect(nodeSharingCodec.safeParse({ granteeCount: 0, linkUrl: '/d/abc' }).success).toBe(true);
+        expect(nodeSharingCodec.safeParse({ granteeCount: 1, linkUrl: '/d/abc' }).success).toBe(true);
+    });
+
+    // linkUrl is required-but-nullable: "no link" is an explicit null, so a reader never has to tell an absent key
+    // from a node that carries no link.
+    it('rejects an entry that omits linkUrl entirely', () =>
+    {
+        expect(nodeSharingCodec.safeParse({ granteeCount: 1 }).success).toBe(false);
+    });
+
+    it('rejects a grantee count that is negative or fractional', () =>
+    {
+        expect(nodeSharingCodec.safeParse({ granteeCount: -1, linkUrl: null }).success).toBe(false);
+        expect(nodeSharingCodec.safeParse({ granteeCount: 1.5, linkUrl: null }).success).toBe(false);
+    });
+});
+
 describe('nodeResponseCodec', () =>
 {
     const base = {
@@ -164,6 +190,7 @@ describe('nodeResponseCodec', () =>
         trashedAt: null,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
+        sharing: null,
     };
 
     // every node-returning endpoint includes the caller's effective role, and it must be a real Role ('owner' |
@@ -275,7 +302,7 @@ describe('toNodeResponse', () =>
             trashedAt: null,
         };
 
-        const response = toNodeResponse(folder, 'owner');
+        const response = toNodeResponse(folder, { role: 'owner' });
 
         expect(response).toMatchObject({
             type: 'folder',
@@ -315,7 +342,7 @@ describe('toNodeResponse', () =>
             trashedAt: null,
         };
 
-        const response = toNodeResponse(link, 'owner', target);
+        const response = toNodeResponse(link, { role: 'owner', target });
 
         expect(response.type).toBe('link');
         if(response.type === 'link')
@@ -356,7 +383,7 @@ describe('toNodeResponse', () =>
             trashedAt: null,
         };
 
-        const response = toNodeResponse(link, 'viewer', target);
+        const response = toNodeResponse(link, { role: 'viewer', target });
 
         expect(response.type).toBe('link');
         if(response.type === 'link') { expect(response.target?.ownerID).toBe('original-owner'); }
@@ -377,7 +404,7 @@ describe('toNodeResponse', () =>
             targetNodeID: 'gone',
         };
 
-        const response = toNodeResponse(link, 'owner');
+        const response = toNodeResponse(link, { role: 'owner' });
 
         expect(response.type).toBe('link');
         if(response.type === 'link') { expect(response.target).toBeNull(); }

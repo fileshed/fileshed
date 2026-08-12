@@ -25,6 +25,7 @@ import {
     type MoveRequest,
     type NodeListResponse,
     type NodeResponse,
+    type NodeSharing,
     type PatchNodeRequest,
     type PurgeBrokenLinksResponse,
     type RenameRequest,
@@ -191,6 +192,15 @@ export const linkTargetCodec = z.strictObject({
 
 typeAssert<Equals<z.output<typeof linkTargetCodec>, LinkTarget>>();
 
+export const nodeSharingCodec = z.strictObject({
+    granteeCount: z.number()
+        .int()
+        .nonnegative(),
+    linkUrl: z.string().nullable(),
+});
+
+typeAssert<Equals<z.output<typeof nodeSharingCodec>, NodeSharing>>();
+
 const nodeResponseBaseShape = {
     id: z.string(),
     name: z.string(),
@@ -199,6 +209,7 @@ const nodeResponseBaseShape = {
     createdAt: isoDateTimeCodec,
     updatedAt: isoDateTimeCodec,
     role: roleCodec,
+    sharing: nodeSharingCodec.nullable(),
 };
 
 const fileNodeResponseCodec = z.strictObject({
@@ -257,8 +268,9 @@ typeAssert<Equals<z.output<typeof nodeListResponseCodec>, NodeListResponse>>();
 
 //----------------------------------------------------------------------------------------------------------------------
 // Serialization -- the single domain Node -> wire NodeResponse crossing. Every node-returning endpoint routes through
-// here so a Node's Date fields become ISO strings in exactly one place and the effective role is attached uniformly.
-// `target` is the link's already-resolved target node, or null when unresolvable; it is ignored otherwise.
+// here so a Node's Date fields become ISO strings in exactly one place and the caller-relative facts are attached
+// uniformly. `target` is the link's already-resolved target node, or null when unresolvable; it is ignored otherwise.
+// `sharing` defaults to null, the answer for a caller with no business knowing -- an endpoint that has one says so.
 //----------------------------------------------------------------------------------------------------------------------
 
 function linkTargetOf(target : Node | null) : LinkTarget | null
@@ -280,8 +292,13 @@ function linkTargetOf(target : Node | null) : LinkTarget | null
     return { id: target.id, type: target.type, name: target.name, ownerID: target.ownerID };
 }
 
-export function toNodeResponse(node : Node, role : Role, target : Node | null = null) : NodeResponse
+export function toNodeResponse(
+    node : Node,
+    facts : { role : Role; sharing ?: NodeSharing | null; target ?: Node | null }
+) : NodeResponse
 {
+    const { role, sharing = null, target = null } = facts;
+
     const base = {
         id: node.id,
         name: node.name,
@@ -290,6 +307,7 @@ export function toNodeResponse(node : Node, role : Role, target : Node | null = 
         createdAt: node.createdAt.toISOString(),
         updatedAt: node.updatedAt.toISOString(),
         role,
+        sharing,
     };
 
     switch (node.type)

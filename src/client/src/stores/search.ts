@@ -2,10 +2,10 @@
 // Search Store
 //
 // State and orchestration behind the Search view: the caller's most recent query, its results loaded a page at a
-// time, and the owners facet and locations each page carries. The facet rides the same NodeListResponse shape a folder
-// listing uses, so a page renders owner attribution the identical way, scoped to that page's own hits rather than a
-// whole folder's. A blank query never reaches the RA -- the page calls load only once it has a non-empty term -- so
-// there is no listing-vs-no-query ambiguity to track here.
+// time, and the owners facet, locations, and sharing each page carries. The facet rides the same NodeListResponse
+// shape a folder listing uses, so a page renders owner attribution the identical way, scoped to that page's own hits
+// rather than a whole folder's. A blank query never reaches the RA -- the page calls load only once it has a non-empty
+// term -- so there is no listing-vs-no-query ambiguity to track here.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';

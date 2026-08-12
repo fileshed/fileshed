@@ -65,7 +65,7 @@
     import { computed } from 'vue';
     import type { ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse, NodeSortKey, SortDirection, UserSummary } from '@fileshed/core';
+    import type { NodeResponse, NodeSharing, NodeSortKey, SortDirection, UserSummary } from '@fileshed/core';
 
     // Components
     import NodeRow from './nodeRow.vue';

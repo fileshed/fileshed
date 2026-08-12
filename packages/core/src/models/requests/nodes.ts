@@ -137,8 +137,8 @@ export interface ChildrenQuery
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Responses -- the domain Node shape (models/node.ts) plus the caller's effective role, which rides on every
-// node-returning endpoint, and ISO-string dates.
+// Responses -- the domain Node shape (models/node.ts) plus the caller-relative facts that ride on every node-returning
+// endpoint (the effective role, what the node currently shares), and ISO-string dates.
 //----------------------------------------------------------------------------------------------------------------------
 
 // A link's resolved target, for display: enough of the target to render its name and type, plus size and mime
@@ -158,6 +158,15 @@ export interface LinkTarget
     size ?: number;
 }
 
+// How far one node currently reaches beyond its owner: how many people hold a grant on it, and the `/d/<token>` path
+// of its live public link. Both are derived at read time, never stored, so a revoked grant or link stops counting on
+// the very next read.
+export interface NodeSharing
+{
+    granteeCount : number;
+    linkUrl : string | null;
+}
+
 interface NodeResponseBase
 {
     id : string;
@@ -167,6 +176,13 @@ interface NodeResponseBase
     createdAt : string;
     updatedAt : string;
     role : Role;
+
+    // What the node reaches beyond its owner, as far as this caller may see it. The two answers are distinct and both
+    // mean something: null is "not yours to know" -- the caller does not own the node, or their access token lacks
+    // shares:read -- while a zero count with a null link is the owner's own answer that nothing is granted and nothing
+    // is published. A node that currently reaches no one at all reports the zeros without asking: one just created,
+    // and one in the trash, whose links serve nothing until it is restored.
+    sharing : NodeSharing | null;
 }
 
 interface FileNodeResponse extends NodeResponseBase

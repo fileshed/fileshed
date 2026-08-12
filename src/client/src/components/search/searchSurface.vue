@@ -2,11 +2,11 @@
   -- Search Surface
   --
   -- The body of the Search view: the loading spinner, the load error with its retry, "No files match" when the query
-  -- resolved to nothing, and otherwise the result count line plus a dense row per hit -- name, owner, size, modified,
-  -- type, the same facts the drive's list view shows. The name outranks the metadata columns, which leave as the
-  -- surface narrows until only the name and the go-to-folder jump remain. Opening relays up so the page runs the
-  -- shared open intent; there is no selection and no per-row menu here, since search is a finder, not a manager. Reads
-  -- the search store for its listing state directly.
+  -- resolved to nothing, and otherwise the result count line plus a dense row per hit -- name with its sharing
+  -- sharing, plus owner, size, modified, and type, the same facts the drive's list view shows. The name outranks the
+  -- metadata columns, which leave as the surface narrows until only the name and the go-to-folder jump remain. Opening
+  -- relays up so the page runs the shared open intent; there is no selection and no per-row menu here, since search is
+  -- a finder, not a manager. Reads the search store for its listing state directly.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -85,6 +85,7 @@
                             :root-label="session.rootLabel"
                         />
                     </div>
+                    <SharingBadges :sharing="row.node.sharing" />
                 </div>
 
                 <div class="hidden min-w-0 items-center gap-2 lg:flex">
@@ -137,6 +138,7 @@
     import { useSessionStore } from '../../stores/session.ts';
 
     // Components
+    import SharingBadges from '../share/sharingBadges.vue';
     import LocationLine from './locationLine.vue';
 
     // Engines

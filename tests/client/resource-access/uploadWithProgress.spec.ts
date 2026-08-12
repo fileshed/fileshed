@@ -82,6 +82,9 @@ const NODE_JSON = {
     size: 10,
     mimeType: 'text/plain',
     trashedAt: null,
+
+    // A node fresh off an upload has nothing granted and nothing published.
+    sharing: { granteeCount: 0, linkUrl: null },
 };
 
 function lastRequest() : FakeXHR

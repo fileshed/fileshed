@@ -13,7 +13,7 @@
 import { Hono } from 'hono';
 
 // Models
-import { UNLIMITED_QUOTA } from '@fileshed/core';
+import { type AccessTokenScope, UNLIMITED_QUOTA, statementForScopes } from '@fileshed/core';
 
 // Resource Access
 import type { SessionUser } from '@server/resource-access/auth.ts';
@@ -21,7 +21,7 @@ import { NodeRA } from '@server/resource-access/nodes/node.ts';
 
 // Managers
 import { NodeManager, type NodePolicy, type OrphanedBlobs } from '@server/managers/node.ts';
-import { SessionManager } from '@server/managers/session.ts';
+import { type Actor, SessionManager } from '@server/managers/session.ts';
 import { mapManagerError } from '@server/managers/errors.ts';
 
 // Routes
@@ -193,6 +193,19 @@ export function testActor(init : ActorInit) : SessionUser
         createdAt,
         updatedAt: createdAt,
     } as unknown as SessionUser;
+}
+
+// The signed-in browser plane, for the reads that take a whole Actor: a session carries no permission statement,
+// which is exactly what makes it the unrestricted one.
+export function testSession(init : ActorInit) : Actor
+{
+    return { kind: 'session', user: testActor(init) };
+}
+
+// A key-bearing caller with an explicit statement, for the reads whose disclosure depends on the key's scopes.
+export function testToken(init : ActorInit, scopes : readonly AccessTokenScope[]) : Actor
+{
+    return { kind: 'token', user: testActor(init), permissions: statementForScopes(scopes) };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

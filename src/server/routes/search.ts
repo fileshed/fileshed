@@ -31,7 +31,7 @@ export function createSearchRoutes(sessions : SessionManager, nodes : NodeManage
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesRead);
         const query = parseQuery(ctx, searchQueryCodec);
 
-        return ctx.json(await nodes.search(actor.user, query));
+        return ctx.json(await nodes.search(actor, query));
     });
 
     return router;

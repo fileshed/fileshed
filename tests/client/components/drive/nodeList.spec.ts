@@ -30,7 +30,8 @@ const STUBS = {
     UIcon: true,
     NodeRow: {
         props: [ 'node', 'selected', 'menuItems', 'owners' ],
-        template: '<div class="node-row" :data-id="node.id" :data-owners="owners.map((o) => o.id).join(\',\')" />',
+        template: '<div class="node-row" :data-id="node.id" :data-owners="owners.map((o) => o.id).join(\',\')" '
+            + ':data-link="node.sharing?.linkUrl ?? \'none\'" />',
     },
 };
 
@@ -84,6 +85,23 @@ describe('NodeList — Owner column header', () =>
         await wrapper.find('button').trigger('click');
 
         expect(wrapper.emitted('sort')?.[0]).toEqual([ 'name' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// Each row states its own node's sharing -- never the one beside it.
+describe('NodeList — sharing wiring', () =>
+{
+    it('gives each row the sharing its own node carries', () =>
+    {
+        const linked = folderNode('first', 'u1');
+        linked.sharing = { granteeCount: 0, linkUrl: '/d/tok' };
+
+        const rows = mountList([ linked, folderNode('second', 'u1') ], []).findAll('.node-row');
+
+        expect(rows[0]?.attributes('data-link')).toBe('/d/tok');
+        expect(rows[1]?.attributes('data-link')).toBe('none');
     });
 });
 

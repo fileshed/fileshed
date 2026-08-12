@@ -69,18 +69,22 @@ export const permissionDemands = {
     accountRead: { account: [ 'read' ] },
 } satisfies Record<string, PermissionStatement>;
 
+// Whether a held statement covers everything a demand names -- the containment test verification runs, for the places
+// that must ask it themselves rather than at a route gate.
+export function statementSatisfies(held : PermissionStatement, demanded : PermissionStatement) : boolean
+{
+    return Object.entries(demanded).every(([ resource, actions ]) =>
+    {
+        const granted = held[resource];
+        return granted !== undefined && actions.every((action) => granted.includes(action));
+    });
+}
+
 // The scopes a stored statement satisfies, for displaying a key's capabilities. A scope is granted when every
-// action its statement demands is present -- the same containment test verification runs.
+// action its statement demands is present.
 export function scopesFromStatement(statement : PermissionStatement) : AccessTokenScope[]
 {
-    return accessTokenScopes.filter((scope) =>
-    {
-        return Object.entries(scopeStatements[scope]).every(([ resource, actions ]) =>
-        {
-            const held = statement[resource];
-            return held !== undefined && actions.every((action) => held.includes(action));
-        });
-    });
+    return accessTokenScopes.filter((scope) => statementSatisfies(statement, scopeStatements[scope]));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

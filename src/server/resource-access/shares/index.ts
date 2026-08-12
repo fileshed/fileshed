@@ -188,6 +188,26 @@ export class ShareRA
         return rows.map((row) => row.grantee_user_id);
     }
 
+    // How many people hold a grant on each of the given nodes, keyed by node id -- a whole listing page in one query.
+    // DIRECT grants only, matching what the node's own share dialog lists: a grant on an ancestor is that ancestor's
+    // exposure, reported on the ancestor's own row. A node nobody holds a grant on is absent from the map.
+    async granteeCountsByNode(nodeIDs : readonly string[]) : Promise<Map<string, number>>
+    {
+        const counts = new Map<string, number>();
+        if(nodeIDs.length === 0) { return counts; }
+
+        const rows = await this.#db
+            .selectFrom('share')
+            .select((eb) => [ 'node_id', eb.fn.countAll().as('count') ])
+            .where('node_id', 'in', nodeIDs)
+            .groupBy('node_id')
+            .execute();
+
+        for(const row of rows) { counts.set(row.node_id, Number(row.count)); }
+
+        return counts;
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Share rows
     //------------------------------------------------------------------------------------------------------------------

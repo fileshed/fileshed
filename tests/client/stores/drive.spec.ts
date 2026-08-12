@@ -7,7 +7,7 @@ import { createHmac } from 'node:crypto';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeListResponse, NodeResponse, UserSummary } from '@fileshed/core';
+import type { NodeListResponse, NodeResponse, NodeSharing, UserSummary } from '@fileshed/core';
 
 // Resource Access
 import { ApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
@@ -36,6 +36,7 @@ import { useDriveStore } from '@client/stores/drive.ts';
 vi.mock('@client/resource-access/nodes.ts', () => ({
     getChildren: vi.fn(),
     getNode: vi.fn(),
+    getNodeSharing: vi.fn(),
     createNode: vi.fn(),
     patchNode: vi.fn(),
     trashNode: vi.fn(),
@@ -82,9 +83,10 @@ function folderNode(id : string, parentID : string | null = null, name : string 
     };
 }
 
-function fileNode(id : string, name : string = id) : NodeResponse
+function fileNode(id : string, name : string = id, sharing : NodeSharing | null = null) : NodeResponse
 {
     return {
+        sharing,
         id,
         name,
         ownerID: ME_ID,
@@ -740,6 +742,55 @@ describe('useDriveStore', () =>
         expect(store.children).toEqual([]);
         expect(store.total).toBe(0);
         expect(store.isEmpty).toBe(false);
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Sharing
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('keeps each listed node\'s own sharing', async () =>
+    {
+        const shared = fileNode('f1', 'f1', { granteeCount: 2, linkUrl: '/d/tok' });
+        const theirs = fileNode('f2');
+        getChildrenMock.mockResolvedValue(page([ shared, theirs ], 2));
+        const store = useDriveStore();
+
+        await store.load(null);
+
+        expect(store.children[0]?.sharing).toEqual({ granteeCount: 2, linkUrl: '/d/tok' });
+        expect(store.children[1]?.sharing).toBeNull();
+    });
+
+    // The share dialog changes a grant or a link on one node; the surface behind it re-reads that node alone rather
+    // than the whole folder, and takes the server's answer rather than guessing at the new state.
+    it('re-reads one node without disturbing the rest', async () =>
+    {
+        const first = fileNode('f1', 'f1', { granteeCount: 1, linkUrl: null });
+        const second = fileNode('f2', 'f2', { granteeCount: 0, linkUrl: '/d/other' });
+        getChildrenMock.mockResolvedValue(page([ first, second ], 2));
+        getNodeMock.mockResolvedValue(fileNode('f1', 'f1', { granteeCount: 1, linkUrl: '/d/fresh' }));
+        const store = useDriveStore();
+        await store.load(null);
+
+        await store.refreshSharingFor('f1');
+
+        expect(getNodeMock).toHaveBeenCalledWith('f1');
+        expect(store.children[0]?.sharing).toEqual({ granteeCount: 1, linkUrl: '/d/fresh' });
+        expect(store.children[1]?.sharing).toEqual({ granteeCount: 0, linkUrl: '/d/other' });
+    });
+
+    // Revoking the last grant and the last link leaves the owner's own answer that nothing is shared -- zeros, which
+    // the badges and the copy-link menu read as nothing to offer. It is not the same as the null a stranger gets.
+    it('reports zeros once the last grant and link are revoked', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([ fileNode('f1', 'f1', { granteeCount: 1, linkUrl: '/d/tok' }) ], 1));
+        getNodeMock.mockResolvedValue(fileNode('f1', 'f1', { granteeCount: 0, linkUrl: null }));
+        const store = useDriveStore();
+        await store.load(null);
+
+        await store.refreshSharingFor('f1');
+
+        expect(store.children[0]?.sharing).toEqual({ granteeCount: 0, linkUrl: null });
     });
 
     it('propagates a regulation rejection from a mutation to the caller', async () =>

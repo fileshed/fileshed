@@ -121,7 +121,7 @@ export function createUploadRoutes(sessions : SessionManager, blobs : BlobManage
         const { node, role } = outcome;
         if(node.type === 'file') { tags.enrichInBackground(node.blobID, node.mimeType); }
 
-        return ctx.json(toNodeResponse(node, role));
+        return ctx.json(toNodeResponse(node, { role, sharing: { granteeCount: 0, linkUrl: null } }));
     });
 
     return router;

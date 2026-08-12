@@ -74,7 +74,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesRead);
         const query = parseQuery(ctx, childrenQueryCodec);
 
-        return ctx.json(await nodes.children(actor.user, null, query));
+        return ctx.json(await nodes.children(actor, null, query));
     });
 
     router.get('/nodes/:id/children', childrenSpec, async (ctx) =>
@@ -82,14 +82,14 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesRead);
         const query = parseQuery(ctx, childrenQueryCodec);
 
-        return ctx.json(await nodes.children(actor.user, ctx.req.param('id'), query));
+        return ctx.json(await nodes.children(actor, ctx.req.param('id'), query));
     });
 
     router.get('/nodes/:id', getNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesRead);
 
-        return ctx.json(await nodes.get(actor.user, ctx.req.param('id')));
+        return ctx.json(await nodes.get(actor, ctx.req.param('id')));
     });
 
     router.post('/nodes', createNodeSpec, async (ctx) =>
@@ -99,7 +99,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
 
         const created = request.type === 'folder'
             ? await nodes.createFolder(actor.user, request)
-            : await nodes.createLink(actor.user, request);
+            : await nodes.createLink(actor, request);
 
         return ctx.json(created, 201);
     });
@@ -109,21 +109,21 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
         const patch = await readJsonBody(ctx, patchNodeRequestCodec);
 
-        return ctx.json(await nodes.patch(actor.user, ctx.req.param('id'), patch));
+        return ctx.json(await nodes.patch(actor, ctx.req.param('id'), patch));
     });
 
     router.post('/nodes/:id/trash', trashNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
 
-        return ctx.json(await nodes.trash(actor.user, ctx.req.param('id')));
+        return ctx.json(await nodes.trash(actor, ctx.req.param('id')));
     });
 
     router.post('/nodes/:id/restore', restoreNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
 
-        return ctx.json(await nodes.restore(actor.user, ctx.req.param('id')));
+        return ctx.json(await nodes.restore(actor, ctx.req.param('id')));
     });
 
     router.post('/nodes/:id/copy', copyNodeSpec, async (ctx) =>

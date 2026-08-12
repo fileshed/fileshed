@@ -40,6 +40,7 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     trashNode: vi.fn(),
     copyNode: vi.fn(),
     hardDeleteNode: vi.fn(),
+    getNodeSharing: vi.fn(),
 }));
 
 vi.mock('@client/resource-access/legacyViewMode.ts', () => ({ takeLegacyViewMode: vi.fn(() => null) }));
@@ -63,7 +64,7 @@ const ISO = '2026-07-01T00:00:00.000Z';
 
 const BASE = { ownerID: ME_ID, parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
 
-type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role'>>;
+type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role' | 'sharing'>>;
 
 function fileNode(id : string, overrides : Overrides = {}) : NodeResponse
 {
@@ -391,6 +392,29 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Share', 'Rename', 'Move', 'Trash' ]);
     });
 
+    // A node with a live public link hands it out from the menu itself, in either form, beside Share -- the dialog is
+    // where links are minted and killed, not where an existing one is fetched.
+    it('offers both copy-link entries beside Share for a node with a live public link', async () =>
+    {
+        const node = fileNode('f1', { sharing: { granteeCount: 0, linkUrl: '/d/tok' } });
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
+            [ 'Open', 'Download', 'Share', 'Copy link', 'Copy download link', 'Rename', 'Move', 'Make a copy', 'Trash' ]
+        );
+    });
+
+    // Nothing to copy, no entries: a node shared with people but never published carries no link.
+    it('offers no copy-link entries for a node that is shared but not published', async () =>
+    {
+        const node = fileNode('f1', { sharing: { granteeCount: 2, linkUrl: null } });
+        const wrapper = await mountDrive([ node ]);
+
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
+            [ 'Open', 'Download', 'Share', 'Rename', 'Move', 'Make a copy', 'Trash' ]
+        );
+    });
+
     it('offers Open, Download, Rename, Move, Remove for an owned link -- never Share, a link has no ACL', async () =>
     {
         const node = linkNode('l1');
@@ -462,6 +486,43 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         await flushPromises();
 
         expect(copyNodeMock).toHaveBeenCalledWith('f1', expect.objectContaining({ parentID: null }));
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// What the copy-link entries actually put on the clipboard: the app's own origin in front of the token's /d path, and
+// the download form of that same token. Whether they are offered at all is settled by the menu-label assertions above.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('DrivePage — copying a public link', () =>
+{
+    const writeText = vi.fn(async () => undefined);
+
+    beforeEach(() =>
+    {
+        vi.clearAllMocks();
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    });
+
+    async function chooseFromKebab(wrapper : VueWrapper, node : NodeResponse, label : string) : Promise<void>
+    {
+        const item = buildMenuOf(wrapper)(node).flat()
+            .find((entry) => entry.label === label);
+        item?.onSelect?.(new Event('click'));
+
+        await flushPromises();
+    }
+
+    it('copies the link as it renders, and the download form of the same token', async () =>
+    {
+        const node = fileNode('f1', { sharing: { granteeCount: 0, linkUrl: '/d/tok' } });
+        const wrapper = await mountDrive([ node ]);
+
+        await chooseFromKebab(wrapper, node, 'Copy link');
+        await chooseFromKebab(wrapper, node, 'Copy download link');
+
+        expect(writeText).toHaveBeenNthCalledWith(1, `${ window.location.origin }/d/tok`);
+        expect(writeText).toHaveBeenNthCalledWith(2, `${ window.location.origin }/d/tok?download`);
     });
 });
 

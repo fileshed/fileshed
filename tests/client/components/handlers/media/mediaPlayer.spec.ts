@@ -30,7 +30,12 @@ vi.mock('@client/resource-access/mediaTags.ts', () => ({
     releaseMediaTags: vi.fn(),
 }));
 
-vi.mock('@client/resource-access/nodes.ts', () => ({ getChildren: vi.fn(), getNode: vi.fn() }));
+vi.mock('@client/resource-access/nodes.ts', () => ({
+    getChildren: vi.fn(),
+
+    // The identity bar reads the playing track's sharing off the node it fetches, so this has to answer a node.
+    getNode: vi.fn(async (id : string) => ({ id, sharing: null })),
+}));
 vi.mock('@client/resource-access/blobs.ts', () => ({
     claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
 }));
@@ -83,6 +88,7 @@ const stubs = {
         template: '<div class="file-picker" />',
     },
     EditorHeaderSlot: { template: '<div class="header-slot"><slot /></div>' },
+    UTooltip: { props: [ 'text' ], template: '<span><slot /></span>' },
 };
 
 beforeAll(() =>

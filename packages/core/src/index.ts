@@ -34,6 +34,7 @@ export {
     scopeStatements,
     permissionDemands,
     statementForScopes,
+    statementSatisfies,
     scopesFromStatement,
 } from './models/accessToken.ts';
 export {
@@ -109,6 +110,7 @@ export {
     type DeleteNodeQuery,
     type LinkTarget,
     type NodeResponse,
+    type NodeSharing,
     type NodeListResponse,
     type UserSummary,
     type PurgeBrokenLinksResponse,
@@ -220,6 +222,7 @@ export {
     emptyTrashResponseCodec,
     linkTargetCodec,
     nodeResponseCodec,
+    nodeSharingCodec,
     nodeListResponseCodec,
     userSummaryCodec,
     toNodeResponse,

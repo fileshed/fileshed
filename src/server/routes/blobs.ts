@@ -71,7 +71,7 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager,
         // then, and covers the first-claim-after-resurrection case when it is not.
         if(node.type === 'file') { tags.enrichInBackground(node.blobID, node.mimeType); }
 
-        return ctx.json(toNodeResponse(node, role));
+        return ctx.json(toNodeResponse(node, { role, sharing: { granteeCount: 0, linkUrl: null } }));
     });
 
     return router;

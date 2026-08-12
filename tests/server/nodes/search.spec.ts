@@ -11,7 +11,7 @@ import type { Hono } from 'hono';
 
 // Support
 import { ORIGIN, bootTestApp, cookieFrom, signUp } from '../auth/support.ts';
-import { composeNodeApp } from './support.ts';
+import { composeNodeApp, seedShareRow, userIDByEmail } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -30,13 +30,15 @@ async function signedUp(app : Hono, email : string) : Promise<string>
     return cookieFrom(await signUp(app, email, 'correct-horse-battery'));
 }
 
-async function createFolder(app : Hono, cookie : string, name : string) : Promise<void>
+async function createFolder(app : Hono, cookie : string, name : string) : Promise<string>
 {
-    await app.request(`${ ORIGIN }/api/nodes`, {
+    const res = await app.request(`${ ORIGIN }/api/nodes`, {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({ type: 'folder', name, parentID: null }),
     });
+
+    return ((await res.json()) as { id : string }).id;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -87,6 +89,35 @@ describe('GET /api/search', () =>
 
         expect((await request(app, 'GET', '/api/search?q=', cookie)).status).toBe(400);
         expect((await request(app, 'GET', '/api/search', cookie)).status).toBe(400);
+    });
+
+    // Search results are listed nodes like any others, so the envelope carries the same exposure sidecar a folder
+    // listing does -- and the same owner-only rule: a hit the caller does not own says nothing about who can reach it.
+    it('carries sharing on the caller\'s own hits and none on a stranger\'s', async () =>
+    {
+        const booted = await bootTestApp();
+        const app = composeNodeApp(booted);
+        const cookieB = await signedUp(app, 'b@example.com');
+        const cookieA = await signedUp(app, 'a@example.com');
+
+        const mine = await createFolder(app, cookieA, 'Alpha Report');
+        const theirs = await createFolder(app, cookieB, 'Beta Report');
+
+        const idA = await userIDByEmail(booted, 'a@example.com');
+        const idB = await userIDByEmail(booted, 'b@example.com');
+
+        await seedShareRow(booted, { nodeID: mine, granteeID: idB, role: 'viewer', createdBy: idA });
+        await seedShareRow(booted, { nodeID: theirs, granteeID: idA, role: 'viewer', createdBy: idB });
+
+        const res = await request(app, 'GET', '/api/search?q=report', cookieA);
+        const body = await res.json() as { nodes : { id : string; sharing : Json }[] };
+
+        expect(body.nodes).toHaveLength(2);
+
+        // The owner's own hit states what it shares; a stranger's says null -- not zeros, which would be the owner
+        // answering that nothing is shared.
+        expect(body.nodes.find((node) => node.id === mine)?.sharing).toEqual({ granteeCount: 1, linkUrl: null });
+        expect(body.nodes.find((node) => node.id === theirs)?.sharing).toBeNull();
     });
 
     it('rejects search without a session with 401', async () =>

@@ -31,7 +31,13 @@ import {
     seedUser,
     setUserQuota,
 } from '../resource-access/nodes/support.ts';
-import { RecordingOrphanedBlobs, noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
+import {
+    RecordingOrphanedBlobs,
+    noopOrphanedBlobs,
+    testActor,
+    testNodePolicy,
+    testSession,
+} from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -203,9 +209,9 @@ describe('NodeManager trashed visibility', () =>
         await seedTrashedSharedFolder();
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
-        await expect(manager.get(testActor({ id: 'bob' }), 'dir')).rejects.toThrow(NotFoundError);
+        await expect(manager.get(testSession({ id: 'bob' }), 'dir')).rejects.toThrow(NotFoundError);
 
-        const owned = await manager.get(testActor({ id: 'alice' }), 'dir');
+        const owned = await manager.get(testSession({ id: 'alice' }), 'dir');
         expect(owned).toMatchObject({ id: 'dir', role: 'owner' });
     });
 
@@ -215,8 +221,8 @@ describe('NodeManager trashed visibility', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const query = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
-        await expect(manager.children(testActor({ id: 'bob' }), 'dir', query)).rejects.toThrow(NotFoundError);
-        await expect(manager.children(testActor({ id: 'alice' }), 'dir', query)).resolves.toBeDefined();
+        await expect(manager.children(testSession({ id: 'bob' }), 'dir', query)).rejects.toThrow(NotFoundError);
+        await expect(manager.children(testSession({ id: 'alice' }), 'dir', query)).resolves.toBeDefined();
     });
 });
 
@@ -236,8 +242,8 @@ describe('NodeManager.children owner facet', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
-        const unfiltered = await manager.children(testActor({ id: 'alice' }), 'p', base);
-        const byBob = await manager.children(testActor({ id: 'alice' }), 'p', { ...base, ownerID: 'bob' });
+        const unfiltered = await manager.children(testSession({ id: 'alice' }), 'p', base);
+        const byBob = await manager.children(testSession({ id: 'alice' }), 'p', { ...base, ownerID: 'bob' });
 
         // The facet lists both owners in both calls.
         expect(new Set(unfiltered.owners.map((owner) => owner.id))).toEqual(new Set([ 'alice', 'bob' ]));
@@ -274,7 +280,7 @@ describe('NodeManager.children — link row owner attribution', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
-        const result = await manager.children(testActor({ id: 'alice' }), 'p', base);
+        const result = await manager.children(testSession({ id: 'alice' }), 'p', base);
         const link = result.nodes.find((node) => node.id === 'lnk');
 
         expect(link?.type).toBe('link');
@@ -294,7 +300,7 @@ describe('NodeManager.children — link row owner attribution', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
-        const result = await manager.children(testActor({ id: 'alice' }), 'p2', base);
+        const result = await manager.children(testSession({ id: 'alice' }), 'p2', base);
         const link = result.nodes.find((node) => node.id === 'deadlnk');
 
         expect(link?.type).toBe('link');
@@ -327,7 +333,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
-        const result = await manager.children(testActor({ id: 'alice' }), 'p', base);
+        const result = await manager.children(testSession({ id: 'alice' }), 'p', base);
 
         expect(new Set(result.owners.map((owner) => owner.id))).toEqual(new Set([ 'alice', 'carol' ]));
     });
@@ -344,7 +350,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
-        const result = await manager.children(testActor({ id: 'alice' }), 'p2', base);
+        const result = await manager.children(testSession({ id: 'alice' }), 'p2', base);
 
         expect(result.owners.map((owner) => owner.id)).toEqual([ 'alice' ]);
     });
@@ -371,7 +377,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
 
-        const result = await manager.children(testActor({ id: 'alice' }), 'p3', base);
+        const result = await manager.children(testSession({ id: 'alice' }), 'p3', base);
 
         expect(result.owners.map((owner) => owner.id).sort()).toEqual([ 'alice', 'bob' ]);
     });
@@ -416,8 +422,8 @@ describe('NodeManager.children through a folder link', () =>
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
-        const throughLink = await manager.children(testActor({ id: 'alice' }), 'lnk', base);
-        const direct = await manager.children(testActor({ id: 'alice' }), 'docs', base);
+        const throughLink = await manager.children(testSession({ id: 'alice' }), 'lnk', base);
+        const direct = await manager.children(testSession({ id: 'alice' }), 'docs', base);
 
         // reports: max(viewer inherited, editor direct) = editor; secret: viewer inherited. And the whole page equals
         // what a direct read of the target would return.
@@ -440,7 +446,7 @@ describe('NodeManager.children through a folder link', () =>
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
-        const result = await manager.children(testActor({ id: 'alice' }), 'lnk', base);
+        const result = await manager.children(testSession({ id: 'alice' }), 'lnk', base);
 
         // The target folder is empty, so bob owns none of its children -- he rides the facet only as the traversed
         // link's target owner.
@@ -459,7 +465,7 @@ describe('NodeManager.children through a folder link', () =>
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
-        await expect(manager.children(testActor({ id: 'alice' }), 'deadlnk', base)).rejects.toThrow(NotFoundError);
+        await expect(manager.children(testSession({ id: 'alice' }), 'deadlnk', base)).rejects.toThrow(NotFoundError);
     });
 
     // A link to a trashed folder owned by someone else is absent to the recipient: the resolver ignores trash state,
@@ -474,7 +480,7 @@ describe('NodeManager.children through a folder link', () =>
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
-        await expect(manager.children(testActor({ id: 'alice' }), 'trlnk', base)).rejects.toThrow(NotFoundError);
+        await expect(manager.children(testSession({ id: 'alice' }), 'trlnk', base)).rejects.toThrow(NotFoundError);
     });
 
     // The breadcrumb reads the current-folder crumb off get(linkID): it must return the LINK node -- its own name and
@@ -489,7 +495,7 @@ describe('NodeManager.children through a folder link', () =>
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
-        const node = await manager.get(testActor({ id: 'alice' }), 'lnk');
+        const node = await manager.get(testSession({ id: 'alice' }), 'lnk');
 
         expect(node).toMatchObject({ id: 'lnk', type: 'link', name: 'Case Test\'s Docs', role: 'owner' });
         if(node.type === 'link')

@@ -2,9 +2,9 @@
   -- Node Tile
   --
   -- One card in the grid: a type icon (a link overlays a small badge; a dead link dims to a broken glyph), the name
-  -- truncated with the full name on hover, and size plus modified time for files. Presentational only -- a click emits
-  -- selection intent with its modifiers, a double-click emits open, and the menu items (right-click, or the corner
-  -- kebab) arrive as a prop.
+  -- truncated with the full name on hover, size plus modified time for files, and the node's sharing in the
+  -- top-left corner, opposite the kebab. Presentational only -- a click emits selection intent with its modifiers, a
+  -- double-click emits open, and the menu items (right-click, or the corner kebab) arrive as a prop.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -22,6 +22,13 @@
             @dblclick="emit('open', node)"
             @keydown.enter="emit('open', node)"
         >
+            <SharingBadges
+                class="absolute left-1 top-1"
+                :sharing="node.sharing"
+                @click.stop
+                @dblclick.stop
+            />
+
             <div
                 class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100
                     focus-within:opacity-100 pointer-coarse:opacity-100"
@@ -69,10 +76,13 @@
     import { computed } from 'vue';
     import type { ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse } from '@fileshed/core';
+    import type { NodeResponse, NodeSharing } from '@fileshed/core';
 
     // Stores
     import { useSessionStore } from '../../stores/session.ts';
+
+    // Components
+    import SharingBadges from '../share/sharingBadges.vue';
 
     // Utils
     import { formatBytes, formatNodeDate, isDeadLink, nodePresentation } from '../../utils/formatters/index.ts';

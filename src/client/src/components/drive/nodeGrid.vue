@@ -24,7 +24,7 @@
 <script setup lang="ts">
     import type { ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse } from '@fileshed/core';
+    import type { NodeResponse, NodeSharing } from '@fileshed/core';
 
     // Components
     import NodeTile from './nodeTile.vue';

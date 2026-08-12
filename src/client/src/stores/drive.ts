@@ -306,6 +306,21 @@ export const useDriveStore = defineStore('drive', () =>
         cacheNodes(page.nodes);
     }
 
+    // Re-read one node and swap it into the open listing, leaving the page the user has paged open alone. The share
+    // dialog calls this after every grant, revoke, publish, or kill, so the badges and the copy-link entries follow
+    // without a reload. It asks the server rather than mirroring the mutation: what still stands is the server's to
+    // say. A node that has left the listing simply is not there to replace.
+    async function refreshSharingFor(nodeID : string) : Promise<void>
+    {
+        const current = await getNode(nodeID);
+
+        children.value = children.value.map((node) =>
+        {
+            return node.id === nodeID ? current : node;
+        });
+        cacheNodes([ current ]);
+    }
+
     async function reSort(key : NodeSortKey, direction : SortDirection) : Promise<void>
     {
         sortKey.value = key;
@@ -427,6 +442,7 @@ export const useDriveStore = defineStore('drive', () =>
         load,
         loadMore,
         refresh,
+        refreshSharingFor,
         reSort,
         setTypeFamilies,
         setOwner,

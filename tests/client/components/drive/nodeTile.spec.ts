@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { LinkTarget, NodeResponse } from '@fileshed/core';
+import type { LinkTarget, NodeResponse, NodeSharing } from '@fileshed/core';
 
 import NodeTile from '@client/components/drive/nodeTile.vue';
 
@@ -22,10 +22,11 @@ const BASE = {
     role: 'owner' as const,
 };
 
-function fileNode() : NodeResponse
+function fileNode(sharing : NodeSharing | null = null) : NodeResponse
 {
     return {
         ...BASE,
+        sharing,
         name: 'notes.txt',
         type: 'file',
         blobID: 'b1',
@@ -45,6 +46,7 @@ const STUBS = {
     UDropdownMenu: { template: '<div><slot /></div>' },
     UButton: { template: '<button class="ubtn" />' },
     UIcon: { props: [ 'name' ], template: '<i :data-icon="name" />' },
+    UTooltip: { props: [ 'text' ], template: '<span class="badge" :data-text="text"><slot /></span>' },
 };
 
 function mountTile(node : NodeResponse, selected = false) : VueWrapper
@@ -108,6 +110,23 @@ describe('NodeTile — live nodes', () =>
         const wrapper = mountTile(fileNode(), true);
 
         expect(wrapper.find('.ring-primary').exists()).toBe(true);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// A tile states the node's sharing in its corner. Which icons stand for which state is the badge component's own
+// contract; what matters here is that the tile surfaces them at all, and shows nothing for an unexposed node.
+describe('NodeTile — sharing', () =>
+{
+    it('carries the badges for a shared node and none for a private one', () =>
+    {
+        const exposed = mountTile(fileNode({ granteeCount: 1, linkUrl: '/d/tok' }));
+        const priv = mountTile(fileNode());
+
+        expect(exposed.findAll('.badge').map((badge) => badge.attributes('data-text')))
+            .toEqual([ 'Shared with 1 person', 'Public link' ]);
+        expect(priv.findAll('.badge')).toHaveLength(0);
     });
 });
 

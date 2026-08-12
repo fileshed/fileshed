@@ -1,10 +1,10 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Markdown Identity Bar
   --
-  -- The markdown handler's contribution to the editor layout header: the file name, a save-state readout, the
-  -- Preview/Source toggle, and Save (a Read only badge in its place for a viewer). It reads and drives the shared editor
-  -- store for the file session; only the view toggle, which the editor owns, is emitted. Formatting lives on the fixed
-  -- toolbar below the header, not here.
+  -- The markdown handler's contribution to the editor layout header: the file name and what it exposes, a save-state
+  -- readout, the Preview/Source toggle, and Save (a Read only badge in its place for a viewer). It reads and drives the
+  -- shared editor store for the file session; only the view toggle, which the editor owns, is emitted. Formatting lives
+  -- on the fixed toolbar below the header, not here.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -12,6 +12,7 @@
         <div class="flex min-w-0 items-center gap-2">
             <UIcon name="i-lucide-file-pen" class="shrink-0 text-dimmed" />
             <RenameTitle :name="store.node?.name ?? 'Untitled'" :read-only="store.readOnly" :rename="store.rename" />
+            <SharingBadges :sharing="store.node?.sharing ?? null" />
         </div>
 
         <div class="ml-auto flex shrink-0 items-center gap-3">
@@ -59,12 +60,15 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
+    import { computed } from 'vue';
+
     // Stores
     import { useEditorStore } from '../../../stores/editor.ts';
 
     // Components
     import DownloadAction from '../downloadAction.vue';
     import EditorHeaderSlot from '../editorHeaderSlot.vue';
+    import SharingBadges from '../../share/sharingBadges.vue';
     import RenameTitle from '../renameTitle.vue';
     import SaveIndicator from '../saveIndicator.vue';
 
@@ -81,6 +85,7 @@
     }>();
 
     const store = useEditorStore();
+
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

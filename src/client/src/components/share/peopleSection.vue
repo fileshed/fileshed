@@ -191,6 +191,12 @@
         owner : UserSummary | null;
     }>();
 
+    // Raised whenever the set of people holding a grant changes, so a listing showing this node can re-read what it
+    // now exposes. A role change is not one of these: the same people still hold access.
+    const emit = defineEmits<{
+        changed : [];
+    }>();
+
     const toast = useToast();
     const { runMutation } = useRunWithToast();
 
@@ -281,6 +287,7 @@
             granting,
             () =>
             {
+                emit('changed');
                 email.value = '';
                 candidate.value = null;
                 role.value = 'viewer';
@@ -308,7 +315,7 @@
         {
             await revokeShare(entry.share.id);
             await refresh();
-        }).finally(() => { pendingRowID.value = null; });
+        }, undefined, () => emit('changed')).finally(() => { pendingRowID.value = null; });
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -324,7 +331,7 @@
         {
             await grantAccessRequest(request.id);
             await refresh();
-        }).finally(() => { pendingRequestID.value = null; });
+        }, undefined, () => emit('changed')).finally(() => { pendingRequestID.value = null; });
     }
 
     function decline(request : AccessRequestResponse) : void

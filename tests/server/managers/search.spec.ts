@@ -31,7 +31,7 @@ import {
     seedBlob,
     seedUser,
 } from '../resource-access/nodes/support.ts';
-import { noopOrphanedBlobs, testActor, testNodePolicy } from '../nodes/support.ts';
+import { noopOrphanedBlobs, testNodePolicy, testSession } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -79,7 +79,7 @@ function manager() : NodeManager
 
 function search(actorID : string, term : string, limit = 50, offset = 0) : Promise<SearchResponse>
 {
-    return manager().search(testActor({ id: actorID }), { q: term, limit, offset });
+    return manager().search(testSession({ id: actorID }), { q: term, limit, offset });
 }
 
 function crumbNamesOf(result : SearchResponse, nodeID : string) : string[]

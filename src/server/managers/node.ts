@@ -34,6 +34,7 @@ import {
     type NodeListResponse,
     type NodeLocation,
     type NodeResponse,
+    type NodeSharing,
     NotFoundError,
     type PatchNodeRequest,
     type PurgeBrokenLinksResponse,
@@ -46,6 +47,9 @@ import {
     type UserSummary,
     isDirectOwner,
     maxRole,
+    permissionDemands,
+    publicLinkPath,
+    statementSatisfies,
     toNodeResponse,
     toUserPreferences,
 } from '@fileshed/core';
@@ -55,6 +59,9 @@ import { applyPreferencesPatch } from '../engines/preferences.ts';
 import { effectiveQuota } from '../engines/quota.ts';
 import { resolveLocation } from '../engines/location.ts';
 import { type RegulationResult, regulation } from '../engines/regulation/index.ts';
+
+// Managers
+import type { Actor } from './session.ts';
 
 // Resource Access
 import type { SessionUser } from '../resource-access/auth.ts';
@@ -66,6 +73,7 @@ import {
     type NodeFilters,
     NodeRA,
 } from '../resource-access/nodes/node.ts';
+import { PublicLinkRA } from '../resource-access/publicLinks/index.ts';
 import { ShareRA } from '../resource-access/shares/index.ts';
 import { UserRA } from '../resource-access/users/index.ts';
 
@@ -95,6 +103,18 @@ export interface FileCopySnapshot
     blobID : string;
 }
 
+// The answer for a node that reaches no one, and the one a node just created always earns: no grants, no link. It
+// costs no query, unlike the same answer arrived at by asking.
+const NOTHING_SHARED : NodeSharing = { granteeCount: 0, linkUrl: null };
+
+// Sharing answers to the sharing demand: a session sees it, an access token only with shares:read -- what
+// GET /nodes/:id/links and GET /nodes/:id/shares already demand. A link URL is not a description of the capability,
+// it IS the capability, so a files:read key must never harvest one off a listing it may otherwise read.
+function maySeeSharing(caller : Actor) : boolean
+{
+    return caller.kind === 'session' || statementSatisfies(caller.permissions, permissionDemands.sharesRead);
+}
+
 // The tunables the manager reads rather than remembers: each is a supplier called at use time, so an admin moving one
 // applies to the very next request instead of the next restart. An omitted supplier answers the shipped default --
 // except defaultQuota, which every composition must state, because guessing it wrong fails open on storage.
@@ -111,6 +131,7 @@ export class NodeManager
     readonly #kind : DatabaseHandle['kind'];
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
+    readonly #links : PublicLinkRA;
     readonly #offers : DeletionOfferRA;
     readonly #users : UserRA;
     readonly #orphanedBlobs : OrphanedBlobs;
@@ -124,6 +145,7 @@ export class NodeManager
         this.#kind = handle.kind;
         this.#nodes = nodes;
         this.#shares = new ShareRA(handle);
+        this.#links = new PublicLinkRA(handle);
         this.#offers = new DeletionOfferRA(handle);
         this.#users = new UserRA(handle);
         this.#orphanedBlobs = orphanedBlobs;
@@ -136,24 +158,24 @@ export class NodeManager
     // Reads
     //------------------------------------------------------------------------------------------------------------------
 
-    async get(actor : SessionUser, id : string) : Promise<NodeResponse>
+    async get(caller : Actor, id : string) : Promise<NodeResponse>
     {
         const node = await this.#nodes.get(id);
         if(node === undefined) { throw new NotFoundError(`No node ${ id }.`); }
 
-        const role = await this.#shares.effectiveRole(actor.id, node.id);
+        const role = await this.#shares.effectiveRole(caller.user.id, node.id);
 
         // A read of a node the caller has no access to reads as absent -- a 404 that never confirms the node exists. A
         // viewer or editor resolves to a non-null role and reads it. A trashed node is likewise absent to everyone but
         // its direct owner: the resolver deliberately ignores trash state (a pure ancestor walk), so this guard is
         // where recipients lose sight of trashed items -- the same doctrine download and copy apply.
         if(role === null) { throw new NotFoundError(`No node ${ id }.`); }
-        if(node.type !== 'link' && node.trashedAt !== null && !isDirectOwner(node, actor.id))
+        if(node.type !== 'link' && node.trashedAt !== null && !isDirectOwner(node, caller.user.id))
         {
             throw new NotFoundError(`No node ${ id }.`);
         }
 
-        return this.#respondNode(actor, node, role);
+        return this.#respondNode(caller, node, role);
     }
 
     // `parentID` null lists the caller's own root. A folder lists everything under it regardless of owner, so
@@ -168,8 +190,10 @@ export class NodeManager
     // parent's chain is already folded into the parent's resolved role, so role(child) = max(parentRole,
     // ownership(child), direct grant on child). That is one recursive walk for the parent plus one flat grant lookup
     // for the page, instead of a walk per child.
-    async children(actor : SessionUser, parentID : string | null, query : ChildrenQuery) : Promise<NodeListResponse>
+    async children(caller : Actor, parentID : string | null, query : ChildrenQuery) : Promise<NodeListResponse>
     {
+        const actor = caller.user;
+
         // null for a root listing: root-level nodes have no ancestors, so they carry no inherited role. The location
         // parent is the effective folder to list under -- the target for a folder-link parent, otherwise parentID.
         let parentRole : Role | null = null;
@@ -228,9 +252,10 @@ export class NodeManager
             this.#nodes.ownersOf(listing),
         ]);
 
-        const [ grants, targets ] = await Promise.all([
+        const [ grants, targets, sharing ] = await Promise.all([
             this.#shares.directGrants(actor.id, page.map((node) => node.id)),
             this.#resolveTargets(actor, page),
+            this.#sharingOf(caller, page),
         ]);
 
         const roleFor = (node : Node) : Role =>
@@ -249,8 +274,9 @@ export class NodeManager
         const nodes = page.map((node) =>
         {
             const role = roleFor(node);
-            if(node.type !== 'link') { return toNodeResponse(node, role); }
-            return toNodeResponse(node, role, targets.get(node.targetNodeID) ?? null);
+            const facts = { role, sharing: sharing.get(node.id) ?? null };
+            if(node.type !== 'link') { return toNodeResponse(node, facts); }
+            return toNodeResponse(node, { ...facts, target: targets.get(node.targetNodeID) ?? null });
         });
 
         const owners = await this.#withTargetOwners(folderOwners, targets, traversedTargetOwnerID);
@@ -264,8 +290,9 @@ export class NodeManager
     // Pagination runs over those survivors -- accessibility can't be pushed into the SQL pagination, so `total` is the
     // count the caller may actually reach, and a page never leaks a node they cannot resolve. Each hit also carries
     // where it lives, trimmed to the part of its ancestry the caller may see.
-    async search(actor : SessionUser, query : SearchQuery) : Promise<SearchResponse>
+    async search(caller : Actor, query : SearchQuery) : Promise<SearchResponse>
     {
+        const actor = caller.user;
         const candidates = await this.#nodes.searchByName(query.q, SEARCH_CANDIDATE_LIMIT);
 
         const roles = await this.#shares.effectiveRoles(actor.id, candidates.map((node) => node.id));
@@ -274,7 +301,10 @@ export class NodeManager
         const page = accessible.slice(query.offset, query.offset + query.limit);
         const targets = await this.#resolveTargets(actor, page);
         const owners = await this.#ownersOfPage(page, targets);
-        const locations = await this.#locationsOf(actor, page);
+        const [ locations, sharing ] = await Promise.all([
+            this.#locationsOf(actor, page),
+            this.#sharingOf(caller, page),
+        ]);
 
         const nodes = page.map((node) =>
         {
@@ -284,13 +314,60 @@ export class NodeManager
             // map disagree, so refuse loudly rather than stamp a role the resolver never granted.
             if(role === null) { throw new Error(`search returned node ${ node.id } without a resolvable role`); }
 
-            if(node.type !== 'link') { return toNodeResponse(node, role); }
-            return toNodeResponse(node, role, targets.get(node.targetNodeID) ?? null);
+            const facts = { role, sharing: sharing.get(node.id) ?? null };
+            if(node.type !== 'link') { return toNodeResponse(node, facts); }
+            return toNodeResponse(node, { ...facts, target: targets.get(node.targetNodeID) ?? null });
         });
 
         // A search envelope spans many owners rather than one folder's worth, but the caller can already see every
         // node it returns, so the page's distinct owners disclose nothing a folder listing wouldn't.
-        return { nodes, total: accessible.length, limit: query.limit, offset: query.offset, owners, locations };
+        return {
+            nodes,
+            total: accessible.length,
+            limit: query.limit,
+            offset: query.offset,
+            owners,
+            locations,
+        };
+    }
+
+    // What a page of nodes currently shares, keyed by node id. Only the caller's OWN nodes are asked about: listing a
+    // node's grants or its links is owner-only authority everywhere else in the API, and a badge must not disclose what
+    // the dialog behind it would refuse. An owned node always gets an entry, zeros included -- an absent one means "not
+    // yours to know", which is a different answer from the owner's own "nothing is shared". A trashed node is hidden
+    // from recipients and its links serve nothing until it is restored, so it reaches no one, and that answer costs no
+    // query. The rest take two flat queries for the whole page, however long it is.
+    async #sharingOf(caller : Actor, page : readonly Node[]) : Promise<Map<string, NodeSharing>>
+    {
+        const sharing = new Map<string, NodeSharing>();
+        if(!maySeeSharing(caller)) { return sharing; }
+
+        const liveIDs : string[] = [];
+        for(const node of page)
+        {
+            if(isDirectOwner(node, caller.user.id) && node.type !== 'link')
+            {
+                if(node.trashedAt === null) { liveIDs.push(node.id); }
+                else { sharing.set(node.id, NOTHING_SHARED); }
+            }
+        }
+        if(liveIDs.length === 0) { return sharing; }
+
+        const [ granteeCounts, links ] = await Promise.all([
+            this.#shares.granteeCountsByNode(liveIDs),
+            this.#links.liveLinksByNode(liveIDs),
+        ]);
+
+        for(const id of liveIDs)
+        {
+            const link = links.get(id);
+            sharing.set(id, {
+                granteeCount: granteeCounts.get(id) ?? 0,
+                linkUrl: link === undefined ? null : publicLinkPath(link.token),
+            });
+        }
+
+        return sharing;
     }
 
     // Where each hit on a page lives, keyed by node id. Two queries for the whole page however long it is: one
@@ -355,7 +432,9 @@ export class NodeManager
         ]);
 
         return {
-            nodes: page.map((node) => toNodeResponse(node, 'owner')),
+            // Every node here is trashed, and a trashed node reaches no one: it is hidden from recipients and its
+            // links serve nothing until it is restored. That answer costs no query (see #sharingOf).
+            nodes: page.map((node) => toNodeResponse(node, { role: 'owner', sharing: NOTHING_SHARED })),
             total,
             limit: query.limit,
             offset: query.offset,
@@ -423,10 +502,10 @@ export class NodeManager
         };
         await this.#nodes.insert(node);
 
-        return toNodeResponse(node, 'owner');
+        return toNodeResponse(node, { role: 'owner', sharing: NOTHING_SHARED });
     }
 
-    async createLink(actor : SessionUser, request : CreateLinkRequest) : Promise<NodeResponse>
+    async createLink(caller : Actor, request : CreateLinkRequest) : Promise<NodeResponse>
     {
         const target = await this.#nodes.get(request.targetNodeID);
         if(target === undefined) { throw new NotFoundError(`No target node ${ request.targetNodeID }.`); }
@@ -435,8 +514,8 @@ export class NodeManager
         const id = createId();
 
         const [ creatorRoleOnTarget, parentEdge ] = await Promise.all([
-            this.#shares.effectiveRole(actor.id, target.id),
-            this.#judgeParentEdge(actor, parent),
+            this.#shares.effectiveRole(caller.user.id, target.id),
+            this.#judgeParentEdge(caller.user, parent),
         ]);
 
         this.#enforce(regulation.combine([
@@ -455,7 +534,7 @@ export class NodeManager
             type: 'link',
             id,
             name: request.name ?? target.name,
-            ownerID: actor.id,
+            ownerID: caller.user.id,
             parentID: request.parentID,
             targetNodeID: target.id,
             createdAt: now,
@@ -463,7 +542,7 @@ export class NodeManager
         };
         await this.#nodes.insert(node);
 
-        return this.#respondNode(actor, node, 'owner');
+        return this.#respondNode(caller, node, 'owner');
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -516,41 +595,41 @@ export class NodeManager
 
     // Rename and/or move, owner-only. Facts are gathered and judged before either write lands, so a rejected move never
     // leaves a half-applied rename behind.
-    async patch(actor : SessionUser, id : string, patch : PatchNodeRequest) : Promise<NodeResponse>
+    async patch(caller : Actor, id : string, patch : PatchNodeRequest) : Promise<NodeResponse>
     {
-        const node = await this.#requireOwned(actor, id);
+        const node = await this.#requireOwned(caller.user, id);
 
         if(patch.parentID !== undefined)
         {
-            await this.#judgeMove(actor, node, patch.parentID);
+            await this.#judgeMove(caller.user, node, patch.parentID);
         }
 
         if(patch.name !== undefined) { await this.#nodes.rename(id, patch.name); }
         if(patch.parentID !== undefined) { await this.#nodes.move(id, patch.parentID); }
 
-        return this.#reread(actor, id);
+        return this.#reread(caller, id);
     }
 
     //------------------------------------------------------------------------------------------------------------------
     // Trash lifecycle
     //------------------------------------------------------------------------------------------------------------------
 
-    async trash(actor : SessionUser, id : string) : Promise<NodeResponse>
+    async trash(caller : Actor, id : string) : Promise<NodeResponse>
     {
         const node = await this.#nodes.get(id);
         if(node === undefined) { throw new NotFoundError(`No node ${ id }.`); }
 
         // judgeTrash owns both rules: links are deleted, never trashed (422), and only the owner may trash (403).
-        this.#enforce(regulation.node.trash({ node, actorID: actor.id }));
+        this.#enforce(regulation.node.trash({ node, actorID: caller.user.id }));
 
         await this.#nodes.setTrashed(id, new Date());
 
-        return this.#reread(actor, id);
+        return this.#reread(caller, id);
     }
 
-    async restore(actor : SessionUser, id : string) : Promise<NodeResponse>
+    async restore(caller : Actor, id : string) : Promise<NodeResponse>
     {
-        const node = await this.#requireOwned(actor, id);
+        const node = await this.#requireOwned(caller.user, id);
 
         // Restore returns the node where it was, unless its original parent is gone or still trashed -- then it lands
         // in the owner's root. setTrashed clears the whole subtree, so a restored folder brings its descendants back
@@ -561,7 +640,7 @@ export class NodeManager
         }
         await this.#nodes.setTrashed(id, null);
 
-        return this.#reread(actor, id);
+        return this.#reread(caller, id);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -818,7 +897,7 @@ export class NodeManager
             await nodes.insert(node);
         });
 
-        return toNodeResponse(node, 'owner');
+        return toNodeResponse(node, { role: 'owner', sharing: NOTHING_SHARED });
     }
 
     // The cap an owner is held to right now: their quota_limit read from their user row, with the instance default
@@ -866,12 +945,12 @@ export class NodeManager
 
     // Re-read after a write so the response carries the RA-stamped updated_at (and cleared/set trashed_at). The row is
     // the one we just wrote as owner, so 'owner' is the effective role.
-    async #reread(actor : SessionUser, id : string) : Promise<NodeResponse>
+    async #reread(caller : Actor, id : string) : Promise<NodeResponse>
     {
         const node = await this.#nodes.get(id);
         if(node === undefined) { throw new NotFoundError(`No node ${ id }.`); }
 
-        return this.#respondNode(actor, node, 'owner');
+        return this.#respondNode(caller, node, 'owner');
     }
 
     // Resolve a page of nodes' link targets in one round trip. A target the viewer cannot resolve -- the row is gone,
@@ -943,15 +1022,19 @@ export class NodeManager
         return [ ...base, ...extra ].sort((left, right) => left.name.localeCompare(right.name));
     }
 
-    async #respondNode(actor : SessionUser, node : Node, role : Role) : Promise<NodeResponse>
+    // The single-node answer, for a read or for an endpoint reporting what it just changed. Sharing is looked up rather
+    // than assumed: the client writes these responses straight back into the row it changed, so a null would blank a
+    // badge the file still earns. A link costs nothing to ask about -- one never carries sharing of its own.
+    async #respondNode(caller : Actor, node : Node, role : Role) : Promise<NodeResponse>
     {
-        if(node.type !== 'link') { return toNodeResponse(node, role); }
+        const sharing = (await this.#sharingOf(caller, [ node ])).get(node.id) ?? null;
+        if(node.type !== 'link') { return toNodeResponse(node, { role, sharing }); }
 
         const target = await this.#nodes.get(node.targetNodeID);
-        const targetRole = target === undefined ? null : await this.#shares.effectiveRole(actor.id, target.id);
+        const targetRole = target === undefined ? null : await this.#shares.effectiveRole(caller.user.id, target.id);
         const resolved = target !== undefined && targetRole !== null ? target : null;
 
-        return toNodeResponse(node, role, resolved);
+        return toNodeResponse(node, { role, sharing, target: resolved });
     }
 }
 

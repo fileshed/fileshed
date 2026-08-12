@@ -137,6 +137,71 @@ describe('ShareRA share rows', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+// Grantee counts -- the batched question a listing asks
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('ShareRA.granteeCountsByNode', () =>
+{
+    it('counts the people holding a grant on each node asked about', async () =>
+    {
+        await nodes.insert(folderNode({ id: 'shared-twice', ownerID: 'owner' }));
+        await nodes.insert(folderNode({ id: 'shared-once', ownerID: 'owner' }));
+        await shares.upsertShare(shareOf('s1', 'shared-twice', 'grantee', 'viewer'));
+        await shares.upsertShare(shareOf('s2', 'shared-twice', 'other', 'editor'));
+        await shares.upsertShare(shareOf('s3', 'shared-once', 'grantee', 'viewer'));
+
+        const counts = await shares.granteeCountsByNode([ 'shared-twice', 'shared-once' ]);
+
+        expect(counts.get('shared-twice')).toBe(2);
+        expect(counts.get('shared-once')).toBe(1);
+    });
+
+    // "Nobody holds a grant" is the absence of an entry, not a zero -- the listing reads a missing entry as no
+    // exposure, so a node with no grants must not appear.
+    it('leaves a node nobody holds a grant on out of the map', async () =>
+    {
+        await nodes.insert(folderNode({ id: 'private', ownerID: 'owner' }));
+
+        const counts = await shares.granteeCountsByNode([ 'private' ]);
+
+        expect(counts.has('private')).toBe(false);
+    });
+
+    // Revoking is a row delete, and the count is derived on every read -- so the count follows the revoke with no
+    // stored flag to go stale.
+    it('drops a revoked grant from the count', async () =>
+    {
+        await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
+        await shares.upsertShare(shareOf('s1', 'f', 'grantee', 'viewer'));
+        await shares.upsertShare(shareOf('s2', 'f', 'other', 'viewer'));
+
+        await shares.deleteShare('s1');
+        const counts = await shares.granteeCountsByNode([ 'f' ]);
+
+        expect(counts.get('f')).toBe(1);
+    });
+
+    // Direct grants only. A grant on a folder is that folder's exposure, reported on the folder; the file inside it
+    // carries none of its own, which is what keeps the badge in step with the share dialog the node itself opens.
+    it('does not lend an ancestor\'s grant to the nodes beneath it', async () =>
+    {
+        await nodes.insert(folderNode({ id: 'parent', ownerID: 'owner' }));
+        await nodes.insert(fileNode({ id: 'child', ownerID: 'owner', blobID: 'sha-a', parentID: 'parent' }));
+        await shares.upsertShare(shareOf('s1', 'parent', 'grantee', 'viewer'));
+
+        const counts = await shares.granteeCountsByNode([ 'parent', 'child' ]);
+
+        expect(counts.get('parent')).toBe(1);
+        expect(counts.has('child')).toBe(false);
+    });
+
+    it('asks nothing of the database for an empty page', async () =>
+    {
+        expect(await shares.granteeCountsByNode([])).toEqual(new Map());
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
 // Shared with me
 //----------------------------------------------------------------------------------------------------------------------
 
