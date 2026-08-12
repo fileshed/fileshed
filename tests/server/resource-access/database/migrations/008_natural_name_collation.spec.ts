@@ -40,7 +40,7 @@ const PARENT_ID = 'folder-1';
 // straight from the table and sort, and would prove nothing about the index.
 const ROW_COUNT = SEARCH_CANDIDATE_LIMIT * 5;
 
-const INSERT_BATCH = 2000;
+const INSERT_BATCH = 1000;
 
 //----------------------------------------------------------------------------------------------------------------------
 

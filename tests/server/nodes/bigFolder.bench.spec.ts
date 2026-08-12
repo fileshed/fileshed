@@ -9,6 +9,8 @@
 /* eslint-disable camelcase -- the seed builds snake_case DB rows (house convention for Kysely inserts) */
 
 import { appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { createId } from '@paralleldrive/cuid2';
 
@@ -23,8 +25,9 @@ import { type BootedServeApp, ORIGIN, type TestUser, bootServeApp, makeUser } fr
 
 const SIZES = [ 500, 10_000 ];
 
-const REPORT = '/private/tmp/claude-501/-Users-morgul-devel-fileshed/'
-    + 'b78f54de-fa10-474c-ad46-2d3791b4d305/scratchpad/bigfolder.txt';
+// The measurement is the point, and vitest swallows console output, so it lands in a file. The system temp
+// directory rather than anywhere clever: this runs on developer machines and on CI, and both have one.
+const REPORT = join(tmpdir(), 'fileshed-listing-bench.txt');
 
 let booted : BootedServeApp;
 let owner : TestUser;

@@ -25,7 +25,10 @@ const PROBES = [ 'track-10.mp3', 'track-9.mp3' ];
 const FILLER_PREFIX = 'zz-filler';
 
 const SHA256 = 'd'.repeat(64);
-const INSERT_BATCH = 5000;
+// Rows per insert. SQLite caps bound parameters per statement -- 32,766 since 3.32, and a node row binds twelve
+// columns -- so this stays far enough under that a build with a lower cap than the one it was written on still
+// seeds. 5,000 rows was 60,000 parameters and only worked by the grace of whichever SQLite the runtime shipped.
+const INSERT_BATCH = 1000;
 
 let booted : BootedServeApp;
 let owner : TestUser;
