@@ -1,10 +1,11 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Sharing Badges
   --
-  -- What a node currently reaches beyond its owner, as icons: people when someone holds a grant, a link when a live
-  -- public link stands. The two are independent -- "I gave someone access" and "anyone with the URL can fetch this" are
-  -- different sharings -- so both can show at once. Icons only: the tooltip carries the words, since these sit in a
-  -- tile corner and beside a truncating name. A node with nothing to report renders nothing at all.
+  -- What a node currently reaches beyond its owner, as icons: people when someone holds a grant, a globe when a live
+  -- public link stands. A globe rather than a chain, which already marks a link NODE on these same surfaces. The two
+  -- are independent -- "I gave someone access" and "anyone with the URL can fetch this" are different sharings -- so
+  -- both can show at once. Icons only: the tooltip carries the words, since these sit in a tile corner and beside a
+  -- truncating name. A node with nothing to report renders nothing at all.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -13,7 +14,7 @@
             <UIcon name="i-lucide-users" class="size-4 text-muted" role="img" :aria-label="peopleLabel" />
         </UTooltip>
         <UTooltip v-if="linkLabel !== null" :text="linkLabel">
-            <UIcon name="i-lucide-link" class="size-4 text-primary" role="img" :aria-label="linkLabel" />
+            <UIcon name="i-lucide-globe" class="size-4 text-primary" role="img" :aria-label="linkLabel" />
         </UTooltip>
     </span>
 </template>
