@@ -312,6 +312,7 @@ export {
 } from './models/requests/schemas/accessTokens.ts';
 
 // Utils
+export { compareNames } from './utils/naturalOrder.ts';
 export { type Equals, typeAssert } from './utils/typeAssert.ts';
 export {
     type ColorRamp,

@@ -1,18 +1,19 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Search Store
 //
-// State and orchestration behind the Search view: the caller's most recent query, its results loaded a page at a
-// time, and the owners facet, locations, and sharing each page carries. The facet rides the same NodeListResponse
-// shape a folder listing uses, so a page renders owner attribution the identical way, scoped to that page's own hits
-// rather than a whole folder's. A blank query never reaches the RA -- the page calls load only once it has a non-empty
-// term -- so there is no listing-vs-no-query ambiguity to track here.
+// State and orchestration behind the Search view: the caller's most recent query, its results, and the owners facet,
+// locations, and sharing they carry. The facet rides the same NodeListResponse shape a folder listing uses, so results
+// render owner attribution the identical way, scoped to the hits rather than a whole folder's. A search can never
+// surface more hits than the server's candidate cap, and the largest page it will serve is that same cap, so one
+// request answers any search in full -- there is nothing here to page. A blank query never reaches the RA -- the page
+// calls load only once it has a non-empty term -- so there is no listing-vs-no-query ambiguity to track here.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import {
-    DEFAULT_SEARCH_LIMIT,
+    MAX_SEARCH_LIMIT,
     type NodeLocation,
     type NodeResponse,
     type UserSummary,
@@ -20,19 +21,6 @@ import {
 
 // Resource Access
 import { search } from '../resource-access/search.ts';
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// Unlike a folder listing's facet (the whole folder, every page), search's facet is scoped to each response's own
-// page, so a later page's owners merge into the running set rather than replacing it -- otherwise an earlier page's
-// owner would drop out of attribution the moment a further page loads.
-function mergeOwners(existing : readonly UserSummary[], incoming : readonly UserSummary[]) : UserSummary[]
-{
-    const merged = new Map(existing.map((owner) => [ owner.id, owner ]));
-    for(const owner of incoming) { merged.set(owner.id, owner); }
-
-    return [ ...merged.values() ];
-}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -44,10 +32,8 @@ export const useSearchStore = defineStore('search', () =>
     const locations = ref<Record<string, NodeLocation>>({});
     const total = ref(0);
     const loading = ref(false);
-    const loadingMore = ref(false);
     const error = ref<Error | null>(null);
 
-    const hasMore = computed(() => nodes.value.length < total.value);
     const isEmpty = computed(() => !loading.value && error.value === null && nodes.value.length === 0);
 
     async function load(term : string) : Promise<void>
@@ -58,7 +44,7 @@ export const useSearchStore = defineStore('search', () =>
 
         try
         {
-            const page = await search(term, { limit: DEFAULT_SEARCH_LIMIT, offset: 0 });
+            const page = await search(term, { limit: MAX_SEARCH_LIMIT, offset: 0 });
             nodes.value = page.nodes;
             owners.value = page.owners;
             locations.value = page.locations;
@@ -75,25 +61,6 @@ export const useSearchStore = defineStore('search', () =>
         finally
         {
             loading.value = false;
-        }
-    }
-
-    async function loadMore() : Promise<void>
-    {
-        if(loadingMore.value || !hasMore.value) { return; }
-
-        loadingMore.value = true;
-        try
-        {
-            const page = await search(q.value, { limit: DEFAULT_SEARCH_LIMIT, offset: nodes.value.length });
-            nodes.value = [ ...nodes.value, ...page.nodes ];
-            owners.value = mergeOwners(owners.value, page.owners);
-            locations.value = { ...locations.value, ...page.locations };
-            total.value = page.total;
-        }
-        finally
-        {
-            loadingMore.value = false;
         }
     }
 
@@ -120,12 +87,9 @@ export const useSearchStore = defineStore('search', () =>
         locations,
         total,
         loading,
-        loadingMore,
         error,
-        hasMore,
         isEmpty,
         load,
-        loadMore,
         retry,
         clear,
     };

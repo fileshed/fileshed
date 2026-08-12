@@ -10,75 +10,82 @@
   -- column. The owner avatar resolves against the listing's owners facet -- a link attributes to its resolved
   -- TARGET's owner, falling back to the link's own owner when dead; a miss (should not happen for a drive listing)
   -- falls back to an initials avatar keyed off the raw owner id instead of hiding the cell.
+  --
+  -- The row is a fixed height, which is what lets the list place it without measuring, and it carries its node's id so
+  -- a right-click anywhere in the list can tell which row it landed on. The kebab's menu and the owner's hover card
+  -- wait for the pointer: in a folder of ten thousand a row is mounted every time it scrolls back into view, and
+  -- neither can be reached before the pointer or the focus is on it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <UContextMenu :items="menuItems">
-        <div
-            class="group grid cursor-default grid-cols-[minmax(0,1fr)_2.5rem_2.5rem]
-                sm:grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
-                lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
-                xl:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] items-center gap-2
-                border-b border-default px-3 py-2 text-sm transition-colors sm:gap-4"
-            :class="selected ? 'bg-primary/10' : 'hover:bg-elevated/50'"
-            role="button"
-            tabindex="0"
-            :aria-label="node.name"
-            @click="onClick"
-            @dblclick="emit('open', node)"
-            @keydown.enter="emit('open', node)"
-        >
-            <div class="flex min-w-0 items-center gap-2">
-                <div class="relative shrink-0" :class="{ 'opacity-40': dead }">
-                    <UIcon :name="presentation.icon" class="size-5" :class="presentation.color" />
-                    <UIcon
-                        v-if="node.type === 'link' && !dead"
-                        name="i-lucide-link"
-                        class="absolute -bottom-1 -right-1 size-3 rounded-full bg-default text-muted"
-                    />
-                </div>
-                <div class="flex min-w-0 flex-col">
-                    <span class="truncate font-medium" :class="{ 'text-dimmed': dead }" :title="node.name">
-                        {{ node.name }}
-                    </span>
-                    <span class="truncate text-xs text-muted sm:hidden">{{ metaLine }}</span>
-                </div>
-                <SharingBadges :sharing="node.sharing" @click.stop @dblclick.stop />
+    <div
+        class="group grid cursor-default grid-cols-[minmax(0,1fr)_2.5rem_2.5rem]
+            sm:grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
+            lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
+            xl:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] h-14 items-center gap-2
+            border-b border-default px-3 text-sm transition-colors sm:h-12 sm:gap-4"
+        :class="selected ? 'bg-primary/10' : 'hover:bg-elevated/50'"
+        role="button"
+        tabindex="0"
+        :data-node-id="node.id"
+        :aria-label="node.name"
+        v-on="controls.listeners"
+        @click="onClick"
+        @dblclick="emit('open', node)"
+        @keydown.enter="emit('open', node)"
+    >
+        <div class="flex min-w-0 items-center gap-2">
+            <div class="relative shrink-0" :class="{ 'opacity-40': dead }">
+                <UIcon :name="presentation.icon" class="size-5" :class="presentation.color" />
+                <UIcon
+                    v-if="node.type === 'link' && !dead"
+                    name="i-lucide-link"
+                    class="absolute -bottom-1 -right-1 size-3 rounded-full bg-default text-muted"
+                />
             </div>
-
-            <div class="flex justify-center" @click.stop @dblclick.stop>
-                <UserSummaryHover v-if="owner !== null" :summary="owner">
-                    <UAvatar :src="owner.image ?? undefined" :alt="owner.name" size="xs" />
-                </UserSummaryHover>
-                <UAvatar v-else :alt="ownerID" size="xs" />
+            <div class="flex min-w-0 flex-col">
+                <span class="truncate font-medium" :class="{ 'text-dimmed': dead }" :title="node.name">
+                    {{ node.name }}
+                </span>
+                <span class="truncate text-xs text-muted sm:hidden">{{ metaLine }}</span>
             </div>
-
-            <span class="hidden truncate text-muted lg:block">
-                {{ node.type === 'file' ? formatBytes(node.size) : '—' }}
-            </span>
-            <span class="hidden truncate text-muted sm:block">
-                {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
-            </span>
-            <span class="hidden truncate text-muted xl:block">{{ kindLabel }}</span>
-
-            <div
-                class="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100
-                    pointer-coarse:opacity-100"
-                @click.stop
-                @dblclick.stop
-            >
-                <UDropdownMenu :items="menuItems" :ui="{ content: 'w-48' }">
-                    <UButton
-                        icon="i-lucide-ellipsis-vertical"
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        aria-label="More actions"
-                    />
-                </UDropdownMenu>
-            </div>
+            <SharingBadges :sharing="node.sharing" @click.stop @dblclick.stop />
         </div>
-    </UContextMenu>
+
+        <div class="flex justify-center" @click.stop @dblclick.stop>
+            <UserSummaryHover v-if="owner !== null && controls.ready.value" :summary="owner">
+                <UAvatar :src="owner.image ?? undefined" :alt="owner.name" size="xs" />
+            </UserSummaryHover>
+            <UAvatar v-else-if="owner !== null" :src="owner.image ?? undefined" :alt="owner.name" size="xs" />
+            <UAvatar v-else :alt="ownerID" size="xs" />
+        </div>
+
+        <span class="hidden truncate text-muted lg:block">
+            {{ node.type === 'file' ? formatBytes(node.size) : '—' }}
+        </span>
+        <span class="hidden truncate text-muted sm:block">
+            {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
+        </span>
+        <span class="hidden truncate text-muted xl:block">{{ kindLabel }}</span>
+
+        <div
+            class="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100
+                pointer-coarse:opacity-100"
+            @click.stop
+            @dblclick.stop
+        >
+            <UDropdownMenu v-if="controls.ready.value" :items="menuItems" :ui="{ content: 'w-48' }">
+                <UButton
+                    icon="i-lucide-ellipsis-vertical"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    aria-label="More actions"
+                />
+            </UDropdownMenu>
+            <div v-else class="size-6" />
+        </div>
+    </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
@@ -97,6 +104,7 @@
     import UserSummaryHover from '../userSummaryHover.vue';
 
     // Utils
+    import { useDeferredControls } from '../../utils/deferredControls.ts';
     import {
         formatBytes,
         formatNodeDate,
@@ -123,6 +131,7 @@
     //------------------------------------------------------------------------------------------------------------------
 
     const session = useSessionStore();
+    const controls = useDeferredControls();
 
     const presentation = computed(() => nodePresentation(props.node));
     const dead = computed(() => isDeadLink(props.node));

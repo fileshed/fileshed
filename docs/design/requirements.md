@@ -42,6 +42,8 @@ Domain modeling convention: canonical TypeScript domain types with Zod codecs at
 
 All primary keys are **cuid2** strings, generated app-side. cuid2 is deliberately non-monotonic — order by `created_at`, never by id.
 
+Names order by **ICU collation at primary strength with numeric runs**: case and accents never separate two names, `track-9` precedes `track-10`, and ties break on id. Both dialects and the client produce that same order — Postgres through a collation, SQLite by ordering in the server, which caps at 100,000 children in one folder and falls back to alphabetical beyond it.
+
 ### 3.1 Core entities
 
 - **user** — BetterAuth-managed identity plus app profile (quota limit, role: admin/user).
@@ -222,6 +224,7 @@ Copies & deletion offers:
 REST, JSON, cookie session auth (BetterAuth). Sketch — exact DTOs defined in code with Zod:
 
 - `GET /api/nodes/:id` · `GET /api/nodes/:id/children` (owned nodes and links interleaved, paginated, sortable)
+  - A page carries at most 1,000 items. The client pulls folders up to 50,000 items to completion and sorts and filters them locally; past that it pages on demand and the server does both.
 - `POST /api/nodes` (create folder) · `PATCH /api/nodes/:id` (rename/move) · `POST /api/nodes/:id/trash` · `/restore` · `DELETE /api/nodes/:id` (permanent)
 - `POST /api/blobs/claim` · `POST /api/blobs/claim/:challengeId` · `PUT /api/uploads/:ticket`
 - `GET /api/nodes/:id/download` (authed download, same Range/ETag behavior as public links)

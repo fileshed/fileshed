@@ -166,6 +166,24 @@ describe('applyClick — shift range', () =>
 
         expect(ids(state.selected)).toEqual([ 'a', 'b', 'c' ]);
     });
+
+    // A range spans display order, and display order is the whole folder once it is loaded -- so a range reaches
+    // across as many rows as the folder has, not as many as one read of it returned.
+    it('spans a range far wider than a single chunk of the folder', () =>
+    {
+        const order = Array.from({ length: 2500 }, (_unused, index) => `n${ index }`);
+        const anchored = applyClick(emptySelection(), order, 'n5', PLAIN);
+
+        const state = applyClick(anchored, order, 'n2400', RANGE);
+
+        expect(state.selected.size).toBe(2396);
+        expect(state.selected.has('n5')).toBe(true);
+        expect(state.selected.has('n999')).toBe(true);
+        expect(state.selected.has('n1000')).toBe(true);
+        expect(state.selected.has('n2400')).toBe(true);
+        expect(state.selected.has('n4')).toBe(false);
+        expect(state.selected.has('n2401')).toBe(false);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

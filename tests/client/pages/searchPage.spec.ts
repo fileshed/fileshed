@@ -13,10 +13,13 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { type Router, createMemoryHistory, createRouter } from 'vue-router';
 
-import type { NodeLocation, NodeResponse, SearchResponse } from '@fileshed/core';
+import { MAX_SEARCH_LIMIT, type NodeLocation, type NodeResponse, type SearchResponse } from '@fileshed/core';
 
 // Resource Access
 import { search } from '@client/resource-access/search.ts';
+
+// Support
+import { SCROLL_AREA_STUB } from '../support.ts';
 
 // Under test
 import SearchPage from '@client/pages/searchPage.vue';
@@ -58,6 +61,7 @@ function envelope(nodes : NodeResponse[], overrides : Partial<SearchResponse> = 
 }
 
 const STUBS = {
+    UScrollArea: SCROLL_AREA_STUB,
     UButton: {
         props: [ 'label', 'to' ],
         template: '<button class="ubtn" :data-label="label" :data-to="to" @click="$emit(\'click\')">'
@@ -168,25 +172,25 @@ describe('SearchPage', () =>
         expect(wrapper.find('[data-alt="Ada Lovelace"]').attributes('data-src')).toBe('/api/avatars/deadbeef');
     });
 
-    // The facet is scoped to each response's own page, so loading a further page must merge its owners into the
-    // running set rather than replace it -- otherwise the first page's rows would lose their attribution.
-    it('keeps an earlier page\'s owner attribution after loading a further page', async () =>
+    // A search can never surface more hits than the server's candidate cap, and the endpoint serves a page that
+    // large, so one request answers any search in full -- there is no second page, and no facet to merge across one.
+    it('asks for the whole result set in one request, attributing every owner in it', async () =>
     {
-        searchMock.mockResolvedValueOnce(envelope(
-            [ fileNode('f1', 'first-hit.txt', 'owner1') ],
-            { total: 2, owners: [ { id: 'owner1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ] }
+        searchMock.mockResolvedValue(envelope(
+            [ fileNode('f1', 'first-hit.txt', 'owner1'), fileNode('f2', 'second-hit.txt', 'owner2') ],
+            {
+                total: 2,
+                owners: [
+                    { id: 'owner1', name: 'Ada Lovelace', email: 'ada@example.com', image: null },
+                    { id: 'owner2', name: 'Grace Hopper', email: 'grace@example.com', image: null },
+                ],
+            }
         ));
+
         const { wrapper } = await mountSearch('hit');
 
-        expect(wrapper.text()).toContain('Ada Lovelace');
-
-        searchMock.mockResolvedValueOnce(envelope(
-            [ fileNode('f2', 'second-hit.txt', 'owner2') ],
-            { total: 2, owners: [ { id: 'owner2', name: 'Grace Hopper', email: 'grace@example.com', image: null } ] }
-        ));
-        await wrapper.get('[data-label="Load more"]').trigger('click');
-        await flushPromises();
-
+        expect(searchMock).toHaveBeenCalledTimes(1);
+        expect(searchMock).toHaveBeenCalledWith('hit', { limit: MAX_SEARCH_LIMIT, offset: 0 });
         expect(wrapper.text()).toContain('Ada Lovelace');
         expect(wrapper.text()).toContain('Grace Hopper');
     });

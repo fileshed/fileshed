@@ -1,11 +1,13 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Drive Store
 //
-// The state and orchestration behind the drive view: which folder is open, its children accumulated a page at a time,
-// the sort in force, and the breadcrumb chain from My Files down to the current folder. Mutations (new folder, new
-// empty file, rename, move, trash, copy, remove-dead-link) call the RA then refetch the current folder -- there is no
-// query cache to invalidate, so the store re-reads what it changed. Regulation and API errors from mutations propagate
-// to the caller so the view can toast them; a failed listing lands in `error` for the surface's retry state instead.
+// The state and orchestration behind the drive view: which folder is open, its children, the sort in force, and the
+// breadcrumb chain from My Files down to the current folder. A folder arrives in chunks -- the first paints, the rest
+// follow behind it -- so all but the largest folders are whole within a moment of opening. Once whole, sorting and
+// filtering are local array work with no request behind them and no scroll reset; past the ceiling the listing keeps
+// loading as the viewport reaches for it and both stay the server's. Mutations call the RA then re-read the folder --
+// there is no query cache to invalidate. Regulation and API errors from mutations propagate to the caller so the view
+// can toast them; a failed listing lands in `error` for the surface's retry state instead.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -13,15 +15,18 @@ import { defineStore } from 'pinia';
 
 import {
     type ChildrenQuery,
-    DEFAULT_CHILDREN_LIMIT,
-    MAX_CHILDREN_LIMIT,
+    LISTING_CHUNK_SIZE,
     MAX_TREE_DEPTH,
+    type NodeListResponse,
     type NodeResponse,
     type NodeSortKey,
     type NodeTypeFamily,
     type SortDirection,
     type UserSummary,
 } from '@fileshed/core';
+
+// Engines
+import { type ListingFilters, listing } from '../engines/listing/index.ts';
 
 // Stores
 import { useSessionStore } from './session.ts';
@@ -70,12 +75,20 @@ export const useDriveStore = defineStore('drive', () =>
     const session = useSessionStore();
 
     const folderID = ref<string | null>(null);
-    const children = ref<NodeResponse[]>([]);
+
+    // The rows in hand, in the order the server sent them, and how many the current query has in all. What the surface
+    // renders is `children` below -- these two are the raw material the chunk loop works against.
+    const loaded = ref<NodeResponse[]>([]);
     const total = ref(0);
+
+    // Whether the rows in hand came back from a request that carried the filters. It decides which side filtering
+    // happens on from here: a narrowed listing can be narrowed further locally but never widened, so clearing a filter
+    // over one has to go back to the server.
+    const serverFiltered = ref(false);
+
     const sortKey = ref<NodeSortKey>('name');
     const sortDirection = ref<SortDirection>('asc');
     const loading = ref(false);
-    const loadingMore = ref(false);
     const error = ref<Error | null>(null);
     const breadcrumb = ref<NodeResponse[]>([]);
 
@@ -92,8 +105,8 @@ export const useDriveStore = defineStore('drive', () =>
         return root.parentID !== null || root.ownerID !== session.me?.id;
     });
 
-    // The active filters (server-applied) and the owner facet the current folder faces. The facet is the whole folder's
-    // distinct owners, so the owner menu is complete even while an owner filter narrows the listing.
+    // The active filters and the owner facet the current folder faces. The facet is the whole folder's distinct
+    // owners, so the owner menu is complete even while an owner filter narrows the listing.
     const typeFamilies = ref<NodeTypeFamily[]>([]);
     const owner = ref<UserSummary | null>(null);
     const modified = ref<ModifiedFilter | null>(null);
@@ -109,11 +122,43 @@ export const useDriveStore = defineStore('drive', () =>
     const ownerDirectory = ref(new Map<string, UserSummary>());
     const knownOwners = computed(() => [ ...ownerDirectory.value.values() ]);
 
-    const hasMore = computed(() => children.value.length < total.value);
-    const isEmpty = computed(() => !loading.value && error.value === null && children.value.length === 0);
+    // Past the ceiling the folder is too big to hold whole: it loads as the viewport reaches for it, and its order and
+    // its filtering stay the server's. `complete` is every row of the current query in hand; `wholeFolder` is that AND
+    // nothing having narrowed it on the way in, which is what makes a filter change a local narrowing.
+    const capped = computed(() => listing.chunks.isCapped(total.value));
+    const complete = computed(() => listing.chunks.isComplete(loaded.value.length, total.value));
+    const wholeFolder = computed(() => complete.value && !serverFiltered.value);
+
     const hasActiveFilters = computed(
         () => typeFamilies.value.length > 0 || owner.value !== null || modified.value !== null
     );
+
+    // The current filters as the listing engine states them.
+    function localFilters() : ListingFilters
+    {
+        const window = modified.value === null ? {} : modifiedRange(modified.value);
+
+        return {
+            types: typeFamilies.value,
+            ownerID: owner.value?.id ?? null,
+            after: window.after ?? null,
+            before: window.before ?? null,
+        };
+    }
+
+    // What the surface renders. While the folder is still arriving it is what has arrived, in the order it arrived;
+    // once it is whole the client owns the presentation -- it narrows and orders the rows itself, so a sort or a
+    // filter costs no request and moves no scrollbar.
+    const children = computed<NodeResponse[]>(() =>
+    {
+        if(!complete.value) { return loaded.value; }
+
+        const rows = wholeFolder.value ? listing.filter.filterNodes(loaded.value, localFilters()) : loaded.value;
+
+        return listing.order.sortNodes(rows, sortKey.value, sortDirection.value);
+    });
+
+    const isEmpty = computed(() => !loading.value && error.value === null && children.value.length === 0);
 
     // The children came back empty because a filter excluded everything, not because the folder is bare -- the surface
     // says so and offers to clear, rather than showing the plain empty-folder state.
@@ -199,6 +244,103 @@ export const useDriveStore = defineStore('drive', () =>
     }
 
     //------------------------------------------------------------------------------------------------------------------
+    // Chunked reading -- a listing arrives one chunk at a time. `generation` marks which listing a chunk belongs to,
+    // so anything still in flight for a folder the user has left lands nowhere.
+    //------------------------------------------------------------------------------------------------------------------
+
+    let generation = 0;
+    let chunkInFlight = false;
+
+    // A listing the client holds whole filters itself, so its reads go out unfiltered and stay whole. Anything else
+    // leaves filtering to the server, the only side that can narrow rows the client has never seen. A navigation has
+    // just cleared the filters, so it reads unfiltered whichever way this falls.
+    function readsFiltered() : boolean
+    {
+        return !wholeFolder.value && hasActiveFilters.value;
+    }
+
+    async function fetchChunk(offset : number, filtered : boolean) : Promise<NodeListResponse>
+    {
+        return getChildren(folderID.value, {
+            limit: LISTING_CHUNK_SIZE,
+            offset,
+            sortKey: sortKey.value,
+            sortDirection: sortDirection.value,
+            ...(filtered ? filterParams() : {}),
+        });
+    }
+
+    function adopt(page : NodeListResponse, filtered : boolean) : void
+    {
+        loaded.value = page.nodes;
+        total.value = page.total;
+        serverFiltered.value = filtered;
+        owners.value = page.owners;
+        rememberOwners(page.owners);
+        cacheNodes(page.nodes);
+    }
+
+    // A later chunk extends the rows and re-states the totals; the owner facet spans the whole folder, so every chunk
+    // carries the same one.
+    function append(page : NodeListResponse) : void
+    {
+        loaded.value = [ ...loaded.value, ...page.nodes ];
+        total.value = page.total;
+        owners.value = page.owners;
+        rememberOwners(page.owners);
+        cacheNodes(page.nodes);
+    }
+
+    // One chunk from where the rows leave off. A chunk that comes back empty answers false as a failure does: the
+    // folder shrank under us, and a loop chasing a total it can no longer reach would never end.
+    async function pullChunk(token : number) : Promise<boolean>
+    {
+        if(chunkInFlight || token !== generation) { return false; }
+
+        chunkInFlight = true;
+        try
+        {
+            const page = await fetchChunk(loaded.value.length, serverFiltered.value);
+            if(token !== generation || page.nodes.length === 0) { return false; }
+
+            append(page);
+
+            return true;
+        }
+        catch
+        {
+            // A chunk that fails leaves the listing short rather than replacing what is already on screen with an
+            // error state. Scrolling toward the end of it asks again.
+            return false;
+        }
+        finally
+        {
+            chunkInFlight = false;
+        }
+    }
+
+    // Pull the rest of the folder behind the first chunk, so it is whole moments after it paints. A folder past the
+    // ceiling is left alone here -- it loads on demand instead.
+    async function fillRest(token : number) : Promise<void>
+    {
+        while(token === generation && listing.chunks.shouldPrefetch(loaded.value.length, total.value))
+        {
+            // The next offset is only known once the chunk before it lands, so the reads are necessarily sequential.
+            // eslint-disable-next-line no-await-in-loop
+            const landed = await pullChunk(token);
+            if(!landed) { return; }
+        }
+    }
+
+    // How far down the listing the surface has rendered. A listing still short of its total pulls the next chunk
+    // before the user arrives at the end of what is loaded -- this is what carries a folder past the ceiling, and what
+    // picks a fill back up after a chunk failed.
+    function reachedIndex(index : number) : void
+    {
+        if(listing.chunks.reachesEnd(index, loaded.value.length, total.value)) { void pullChunk(generation); }
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
 
     async function load(target : string | null) : Promise<void>
     {
@@ -217,25 +359,19 @@ export const useDriveStore = defineStore('drive', () =>
         // reload (sort or a filter change) keeps them, since that is exactly the reload those actions want.
         if(!sameFolder) { resetFilters(); }
 
+        const filtered = readsFiltered();
+        const token = ++generation;
+
         folderID.value = target;
         loading.value = true;
         error.value = null;
 
         try
         {
-            const page = await getChildren(target, {
-                limit: DEFAULT_CHILDREN_LIMIT,
-                offset: 0,
-                sortKey: sortKey.value,
-                sortDirection: sortDirection.value,
-                ...filterParams(),
-            });
+            const page = await fetchChunk(0, filtered);
+            if(token !== generation) { return; }
 
-            children.value = page.nodes;
-            total.value = page.total;
-            owners.value = page.owners;
-            rememberOwners(page.owners);
-            cacheNodes(page.nodes);
+            adopt(page, filtered);
 
             // A same-folder reload leaves the open folder unchanged, so its breadcrumb stands. A descent extends the
             // chain on screen; anything else (a cold load, a jump) walks the parent edges from scratch.
@@ -247,63 +383,35 @@ export const useDriveStore = defineStore('drive', () =>
         }
         catch(caught)
         {
+            if(token !== generation) { return; }
+
             error.value = caught instanceof Error ? caught : new Error('Failed to load this folder.');
-            children.value = [];
+            loaded.value = [];
             total.value = 0;
             owners.value = [];
             breadcrumb.value = [];
         }
         finally
         {
-            loading.value = false;
+            if(token === generation) { loading.value = false; }
         }
+
+        await fillRest(token);
     }
 
-    async function loadMore() : Promise<void>
-    {
-        if(loadingMore.value || !hasMore.value) { return; }
-
-        loadingMore.value = true;
-        try
-        {
-            const page = await getChildren(folderID.value, {
-                limit: DEFAULT_CHILDREN_LIMIT,
-                offset: children.value.length,
-                sortKey: sortKey.value,
-                sortDirection: sortDirection.value,
-                ...filterParams(),
-            });
-
-            children.value = [ ...children.value, ...page.nodes ];
-            total.value = page.total;
-            owners.value = page.owners;
-            rememberOwners(page.owners);
-            cacheNodes(page.nodes);
-        }
-        finally
-        {
-            loadingMore.value = false;
-        }
-    }
-
-    // Re-read the current folder, holding the window the user has paged open. A mutation calls this so the surface
-    // reflects the change without collapsing back to the first page.
+    // Re-read the open folder from the top. A mutation calls this so the surface reflects the change; the rest of the
+    // folder follows behind the first chunk exactly as it does on a fresh load.
     async function refresh() : Promise<void>
     {
-        const window = Math.min(Math.max(children.value.length, DEFAULT_CHILDREN_LIMIT), MAX_CHILDREN_LIMIT);
-        const page = await getChildren(folderID.value, {
-            limit: window,
-            offset: 0,
-            sortKey: sortKey.value,
-            sortDirection: sortDirection.value,
-            ...filterParams(),
-        });
+        const filtered = readsFiltered();
+        const token = ++generation;
 
-        children.value = page.nodes;
-        total.value = page.total;
-        owners.value = page.owners;
-        rememberOwners(page.owners);
-        cacheNodes(page.nodes);
+        const page = await fetchChunk(0, filtered);
+        if(token !== generation) { return; }
+
+        adopt(page, filtered);
+
+        await fillRest(token);
     }
 
     // Re-read one node and swap it into the open listing, leaving the page the user has paged open alone. The share
@@ -314,48 +422,59 @@ export const useDriveStore = defineStore('drive', () =>
     {
         const current = await getNode(nodeID);
 
-        children.value = children.value.map((node) =>
+        loaded.value = loaded.value.map((node) =>
         {
             return node.id === nodeID ? current : node;
         });
         cacheNodes([ current ]);
     }
 
+    // A folder in hand re-orders where it stands: no request, no spinner, and the scrollbar doesn't move. One still
+    // arriving, or one past the ceiling, re-reads -- the order of rows the client has never seen is the server's.
     async function reSort(key : NodeSortKey, direction : SortDirection) : Promise<void>
     {
         sortKey.value = key;
         sortDirection.value = direction;
 
+        if(complete.value) { return; }
+
         await load(folderID.value);
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    // Filters -- each sets its slice of the filter state and reloads the current folder from the first page (a filter
-    // change resets pagination). load keeps the filters because the reload targets the same folder.
+    // Filters -- each sets its slice of the filter state, then narrows the folder in hand or re-reads it narrowed.
+    // A re-read targets the same folder, which is why load keeps the filters instead of clearing them.
     //------------------------------------------------------------------------------------------------------------------
+
+    async function applyFilters() : Promise<void>
+    {
+        if(wholeFolder.value) { return; }
+
+        await load(folderID.value);
+    }
 
     async function setTypeFamilies(families : NodeTypeFamily[]) : Promise<void>
     {
         typeFamilies.value = [ ...families ];
-        await load(folderID.value);
+        await applyFilters();
     }
 
     async function setOwner(next : UserSummary | null) : Promise<void>
     {
         owner.value = next;
-        await load(folderID.value);
+        await applyFilters();
     }
 
     async function setModified(next : ModifiedFilter | null) : Promise<void>
     {
         modified.value = next;
-        await load(folderID.value);
+        await applyFilters();
     }
 
     async function clearFilters() : Promise<void>
     {
         resetFilters();
-        await load(folderID.value);
+        await applyFilters();
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -426,7 +545,6 @@ export const useDriveStore = defineStore('drive', () =>
         sortKey,
         sortDirection,
         loading,
-        loadingMore,
         error,
         breadcrumb,
         breadcrumbForeign,
@@ -435,12 +553,13 @@ export const useDriveStore = defineStore('drive', () =>
         modified,
         owners,
         knownOwners,
-        hasMore,
+        capped,
+        complete,
         isEmpty,
         hasActiveFilters,
         filteredEmpty,
         load,
-        loadMore,
+        reachedIndex,
         refresh,
         refreshSharingFor,
         reSort,

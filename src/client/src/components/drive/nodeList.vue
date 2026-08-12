@@ -4,16 +4,20 @@
   -- The dense drive surface: a sortable table of rows. Clicking a column header emits its sort key; the view decides
   -- the direction and drives the store. Selection and open intents relay up from the rows unchanged. Owner is a
   -- plain header cell, not a sort button -- the listing API has no owner sort key.
+  --
+  -- The header sits outside the scroller so it stays put while the rows move under it, which leaves the two to be
+  -- lined up by hand: the scroller always reserves its scrollbar gutter and the header pads itself by the same width.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div>
+    <div class="flex min-h-0 flex-col">
         <div
-            class="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem]
+            class="grid shrink-0 grid-cols-[minmax(0,1fr)_2.5rem_2.5rem]
                 sm:grid-cols-[minmax(0,1fr)_2.5rem_9rem_2.5rem]
                 lg:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_2.5rem]
                 xl:grid-cols-[minmax(0,1fr)_2.5rem_7rem_9rem_6rem_2.5rem] gap-2 border-b border-default px-3 pb-2
                 text-xs font-semibold text-muted sm:gap-4"
+            :style="{ paddingRight: `calc(0.75rem + ${ gutter }px)` }"
         >
             <button type="button" class="flex items-center gap-1 text-left hover:text-default" @click="emit('sort', 'name')">
                 Name
@@ -46,29 +50,43 @@
             </button>
         </div>
 
-        <NodeRow
-            v-for="node in nodes"
-            :key="node.id"
-            :node="node"
-            :selected="selection.has(node.id)"
-            :menu-items="buildMenu(node)"
-            :owners="owners"
-            @select="(n, event) => emit('select', n, event)"
-            @open="(n) => emit('open', n)"
-        />
+        <VirtualScroller
+            ref="scroller"
+            class="min-h-0 flex-1 [scrollbar-gutter:stable]"
+            :items="nodes"
+            :item-height="rowHeight"
+            @empty-click="emit('clear-empty')"
+            @reached="(index : number) => emit('reached', index)"
+        >
+            <template #default="{ item } : { item : NodeResponse }">
+                <NodeRow
+                    :node="item"
+                    :selected="selection.has(item.id)"
+                    :menu-items="buildMenu(item)"
+                    :owners="owners"
+                    @select="(n, event) => emit('select', n, event)"
+                    @open="(n) => emit('open', n)"
+                />
+            </template>
+        </VirtualScroller>
     </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed } from 'vue';
+    import { computed, useTemplateRef } from 'vue';
     import type { ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse, NodeSharing, NodeSortKey, SortDirection, UserSummary } from '@fileshed/core';
+    import type { NodeResponse, NodeSortKey, SortDirection, UserSummary } from '@fileshed/core';
 
     // Components
     import NodeRow from './nodeRow.vue';
+    import VirtualScroller from '../listing/virtualScroller.vue';
+
+    // Resource Access
+    import { useListingMetrics } from '../../resource-access/listingMetrics.ts';
+    import { scrollbarWidth } from '../../resource-access/scrollbarWidth.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -82,17 +100,30 @@
     }>();
 
     const emit = defineEmits<{
-        select : [ node : NodeResponse, event : MouseEvent ];
-        open : [ node : NodeResponse ];
-        sort : [ key : NodeSortKey ];
+        'select' : [ node : NodeResponse, event : MouseEvent ];
+        'open' : [ node : NodeResponse ];
+        'sort' : [ key : NodeSortKey ];
+        'reached' : [ index : number ];
+        'clear-empty' : [];
     }>();
 
     //------------------------------------------------------------------------------------------------------------------
+
+    const { rowHeight } = useListingMetrics();
+    const gutter = scrollbarWidth();
+    const scroller = useTemplateRef('scroller');
 
     const directionIcon = computed(() =>
     {
         return props.sortDirection === 'asc' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down';
     });
+
+    function scrollToIndex(index : number) : void
+    {
+        scroller.value?.scrollToIndex(index);
+    }
+
+    defineExpose({ scrollToIndex });
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

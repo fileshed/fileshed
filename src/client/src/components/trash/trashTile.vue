@@ -9,7 +9,7 @@
 
 <template>
     <div
-        class="group relative flex flex-col items-center gap-2 rounded-lg border border-default p-4 text-center"
+        class="group relative flex h-33 flex-col items-center gap-2 rounded-lg border border-default p-4 text-center"
         :aria-label="node.name"
     >
         <div

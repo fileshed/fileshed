@@ -5,9 +5,18 @@
 import { createHmac } from 'node:crypto';
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
+import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeListResponse, NodeResponse, NodeSharing, UserSummary } from '@fileshed/core';
+import {
+    type ChildrenQuery,
+    LISTING_CHUNK_SIZE,
+    MAX_COMPLETE_LISTING,
+    type NodeListResponse,
+    type NodeResponse,
+    type NodeSharing,
+    type UserSummary,
+} from '@fileshed/core';
 
 // Resource Access
 import { ApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
@@ -83,7 +92,12 @@ function folderNode(id : string, parentID : string | null = null, name : string 
     };
 }
 
-function fileNode(id : string, name : string = id, sharing : NodeSharing | null = null) : NodeResponse
+function fileNode(
+    id : string,
+    name : string = id,
+    sharing : NodeSharing | null = null,
+    mimeType = 'text/plain'
+) : NodeResponse
 {
     return {
         sharing,
@@ -97,7 +111,7 @@ function fileNode(id : string, name : string = id, sharing : NodeSharing | null 
         type: 'file',
         blobID: 'b1',
         size: 100,
-        mimeType: 'text/plain',
+        mimeType,
         trashedAt: null,
     };
 }
@@ -132,6 +146,26 @@ function ownerSummary(id : string) : UserSummary
     return { id, name: id, email: `${ id }@example.com`, image: null };
 }
 
+// A folder of `size` files, answered a chunk at a time the way the listing endpoint does: the rows the query asks for
+// and the folder's whole count beside them. Names are zero-padded so the display order is the seeded order.
+function servesFolder(size : number) : void
+{
+    getChildrenMock.mockImplementation((_parentID : string | null, query : Partial<ChildrenQuery>) =>
+    {
+        const offset = query.offset ?? 0;
+        const limit = query.limit ?? LISTING_CHUNK_SIZE;
+        const count = Math.max(0, Math.min(limit, size - offset));
+
+        const nodes = Array.from({ length: count }, (_unused, index) =>
+        {
+            const at = offset + index;
+            return fileNode(`f${ at }`, `file-${ String(at).padStart(6, '0') }`);
+        });
+
+        return Promise.resolve(page(nodes, size));
+    });
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 describe('useDriveStore', () =>
@@ -146,43 +180,97 @@ describe('useDriveStore', () =>
     // Listing
     //------------------------------------------------------------------------------------------------------------------
 
-    it('populates children and total from the root listing', async () =>
+    // A folder in hand is presented by the client, and folders lead however the rest is sorted -- so a listing that
+    // arrives file-first is shown folder-first.
+    it('populates children and total from the root listing, folders leading', async () =>
     {
         getChildrenMock.mockResolvedValue(page([ fileNode('f1'), folderNode('d1') ], 2));
         const store = useDriveStore();
 
         await store.load(null);
 
-        expect(store.children.map((node) => node.id)).toEqual([ 'f1', 'd1' ]);
+        expect(store.children.map((node) => node.id)).toEqual([ 'd1', 'f1' ]);
         expect(store.total).toBe(2);
         expect(store.folderID).toBeNull();
         expect(store.error).toBeNull();
         expect(store.breadcrumb).toEqual([]);
     });
 
-    it('reports more to load while fewer children than the total are held', async () =>
+    //------------------------------------------------------------------------------------------------------------------
+    // Chunked reading -- a folder arrives a chunk at a time until it is whole, or until the ceiling says to stop.
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('reads a folder that fits in one chunk with a single request', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1'), fileNode('f2') ], 8));
+        servesFolder(400);
         const store = useDriveStore();
 
         await store.load(null);
 
-        expect(store.hasMore).toBe(true);
+        expect(getChildrenMock).toHaveBeenCalledTimes(1);
+        expect(getChildrenMock).toHaveBeenCalledWith(
+            null,
+            expect.objectContaining({ limit: LISTING_CHUNK_SIZE, offset: 0 })
+        );
+        expect(store.children).toHaveLength(400);
+        expect(store.complete).toBe(true);
     });
 
-    it('accumulates the next page onto the current children on loadMore', async () =>
+    it('keeps pulling chunks behind the first until the whole folder is in hand', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('f1'), fileNode('f2') ], 3))
-            .mockResolvedValueOnce(page([ fileNode('f3') ], 3));
+        servesFolder(2500);
+        const store = useDriveStore();
+
+        await store.load(null);
+
+        const offsets = getChildrenMock.mock.calls.map((call) => (call[1] as Partial<ChildrenQuery>).offset);
+        expect(offsets).toEqual([ 0, 1000, 2000 ]);
+        expect(store.children).toHaveLength(2500);
+        expect(store.complete).toBe(true);
+        expect(store.capped).toBe(false);
+    });
+
+    it('stops after the first chunk of a folder past the ceiling and reports itself incomplete', async () =>
+    {
+        servesFolder(MAX_COMPLETE_LISTING + 1);
+        const store = useDriveStore();
+
+        await store.load(null);
+
+        expect(getChildrenMock).toHaveBeenCalledTimes(1);
+        expect(store.children).toHaveLength(LISTING_CHUNK_SIZE);
+        expect(store.capped).toBe(true);
+        expect(store.complete).toBe(false);
+    });
+
+    it('pulls the next chunk when the rendering reaches the end of what is loaded', async () =>
+    {
+        servesFolder(MAX_COMPLETE_LISTING + 1);
         const store = useDriveStore();
         await store.load(null);
 
-        await store.loadMore();
+        store.reachedIndex(LISTING_CHUNK_SIZE - 1);
+        await flushPromises();
 
-        expect(store.children.map((node) => node.id)).toEqual([ 'f1', 'f2', 'f3' ]);
-        expect(store.hasMore).toBe(false);
-        expect(getChildrenMock).toHaveBeenLastCalledWith(null, expect.objectContaining({ offset: 2 }));
+        expect(store.children).toHaveLength(2 * LISTING_CHUNK_SIZE);
+        expect(getChildrenMock).toHaveBeenLastCalledWith(
+            null,
+            expect.objectContaining({ offset: LISTING_CHUNK_SIZE })
+        );
+    });
+
+    it('leaves a capped listing alone while the rendering is nowhere near the end of it', async () =>
+    {
+        servesFolder(MAX_COMPLETE_LISTING + 1);
+        const store = useDriveStore();
+        await store.load(null);
+        getChildrenMock.mockClear();
+
+        store.reachedIndex(20);
+        await flushPromises();
+
+        expect(getChildrenMock).not.toHaveBeenCalled();
+        expect(store.children).toHaveLength(LISTING_CHUNK_SIZE);
     });
 
     //------------------------------------------------------------------------------------------------------------------
@@ -455,22 +543,37 @@ describe('useDriveStore', () =>
     // Sort
     //------------------------------------------------------------------------------------------------------------------
 
-    it('reloads the folder with the new key and direction on reSort', async () =>
+    // A folder the client holds whole re-orders where it stands: the point of holding it is that sorting costs no
+    // request and moves no scrollbar.
+    it('re-orders a folder in hand without asking the server', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('a'), fileNode('b') ]))
-            .mockResolvedValueOnce(page([ fileNode('b'), fileNode('a') ]));
+        getChildrenMock.mockResolvedValue(page([ fileNode('a'), fileNode('b'), fileNode('c') ], 3));
         const store = useDriveStore();
         await store.load(null);
+        getChildrenMock.mockClear();
+
+        await store.reSort('name', 'desc');
+
+        expect(store.sortKey).toBe('name');
+        expect(store.sortDirection).toBe('desc');
+        expect(store.children.map((node) => node.id)).toEqual([ 'c', 'b', 'a' ]);
+        expect(getChildrenMock).not.toHaveBeenCalled();
+    });
+
+    // Past the ceiling the client has never seen most of the folder, so only the server can order it.
+    it('re-reads a folder past the ceiling to sort it', async () =>
+    {
+        servesFolder(MAX_COMPLETE_LISTING + 1);
+        const store = useDriveStore();
+        await store.load(null);
+        getChildrenMock.mockClear();
 
         await store.reSort('size', 'desc');
 
         expect(store.sortKey).toBe('size');
-        expect(store.sortDirection).toBe('desc');
-        expect(store.children.map((node) => node.id)).toEqual([ 'b', 'a' ]);
-        expect(getChildrenMock).toHaveBeenLastCalledWith(
+        expect(getChildrenMock).toHaveBeenCalledWith(
             null,
-            expect.objectContaining({ sortKey: 'size', sortDirection: 'desc' })
+            expect.objectContaining({ sortKey: 'size', sortDirection: 'desc', offset: 0 })
         );
     });
 
@@ -506,63 +609,87 @@ describe('useDriveStore', () =>
         expect(store.knownOwners.map((owner) => owner.id)).toContain('bob');
     });
 
-    it('reloads with the selected type families and marks filters active', async () =>
+    // A folder held whole narrows itself: the rows the filter excludes are still in hand, so clearing it costs
+    // nothing either.
+    it('narrows a folder in hand by type without asking the server, and widens it back on clear', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        getChildrenMock.mockResolvedValue(page(
+            [ fileNode('doc', 'doc', null, 'text/plain'), fileNode('pic', 'pic', null, 'image/png') ],
+            2
+        ));
         const store = useDriveStore();
         await store.load(null);
+        getChildrenMock.mockClear();
 
-        await store.setTypeFamilies([ 'images', 'pdfs' ]);
+        await store.setTypeFamilies([ 'images' ]);
 
-        expect(store.typeFamilies).toEqual([ 'images', 'pdfs' ]);
+        expect(store.typeFamilies).toEqual([ 'images' ]);
         expect(store.hasActiveFilters).toBe(true);
-        expect(getChildrenMock).toHaveBeenLastCalledWith(
-            null,
-            expect.objectContaining({ types: [ 'images', 'pdfs' ], offset: 0 })
-        );
+        expect(store.children.map((node) => node.id)).toEqual([ 'pic' ]);
+
+        await store.clearFilters();
+
+        expect(store.children.map((node) => node.id)).toEqual([ 'doc', 'pic' ]);
+        expect(getChildrenMock).not.toHaveBeenCalled();
     });
 
-    it('reloads with the selected owner id', async () =>
+    it('narrows a folder in hand by owner without asking the server', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        const mine = fileNode('mine');
+        const theirs = { ...fileNode('theirs'), ownerID: 'u2' };
+        getChildrenMock.mockResolvedValue(page([ mine, theirs ], 2));
         const store = useDriveStore();
         await store.load(null);
+        getChildrenMock.mockClear();
 
         await store.setOwner(ownerSummary('u2'));
 
         expect(store.owner?.id).toBe('u2');
-        expect(getChildrenMock).toHaveBeenLastCalledWith(null, expect.objectContaining({ ownerID: 'u2' }));
+        expect(store.children.map((node) => node.id)).toEqual([ 'theirs' ]);
+        expect(getChildrenMock).not.toHaveBeenCalled();
     });
 
-    it('reloads with a modified window when a preset is chosen', async () =>
+    it('narrows a folder in hand by modified date without asking the server', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        const recent = { ...fileNode('recent'), updatedAt: new Date().toISOString() };
+        getChildrenMock.mockResolvedValue(page([ fileNode('ancient'), recent ], 2));
         const store = useDriveStore();
         await store.load(null);
+        getChildrenMock.mockClear();
 
         await store.setModified({ kind: 'preset', preset: 'last7' });
 
-        expect(getChildrenMock).toHaveBeenLastCalledWith(
-            null,
-            expect.objectContaining({ updatedAfter: expect.any(String) })
-        );
+        expect(store.children.map((node) => node.id)).toEqual([ 'recent' ]);
+        expect(getChildrenMock).not.toHaveBeenCalled();
     });
 
-    it('drops every filter param on clearFilters', async () =>
+    // Past the ceiling the client holds only a slice, so the filter is the server's to apply -- and clearing it has
+    // to go back for the rows the narrowed read never returned.
+    it('sends the filter to the server for a folder past the ceiling, and reads unfiltered again on clear', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        servesFolder(MAX_COMPLETE_LISTING + 1);
+        const filteredPage = page([ fileNode('pic', 'pic', null, 'image/png') ], 1);
+        const unfiltered = getChildrenMock.getMockImplementation();
+        getChildrenMock.mockImplementation((parentID : string | null, query : Partial<ChildrenQuery>) =>
+        {
+            return query.types === undefined ? unfiltered?.(parentID, query) : Promise.resolve(filteredPage);
+        });
         const store = useDriveStore();
         await store.load(null);
+
         await store.setTypeFamilies([ 'images' ]);
-        await store.setOwner(ownerSummary('u2'));
+
+        expect(getChildrenMock).toHaveBeenLastCalledWith(
+            null,
+            expect.objectContaining({ types: [ 'images' ], offset: 0 })
+        );
+        expect(store.children.map((node) => node.id)).toEqual([ 'pic' ]);
 
         await store.clearFilters();
 
         expect(store.hasActiveFilters).toBe(false);
-        const lastQuery = getChildrenMock.mock.calls.at(-1)?.[1] ?? {};
-        expect(lastQuery).not.toHaveProperty('types');
-        expect(lastQuery).not.toHaveProperty('ownerID');
-        expect(lastQuery).not.toHaveProperty('updatedAfter');
+        expect(getChildrenMock.mock.calls.at(-1)?.[1]).not.toHaveProperty('types');
+        expect(store.capped).toBe(true);
     });
 
     // An empty result WITH an active filter is a distinct surface state from a truly empty folder.
@@ -611,7 +738,7 @@ describe('useDriveStore', () =>
         await store.createFolder('New');
 
         expect(createNodeMock).toHaveBeenCalledWith({ type: 'folder', name: 'New', parentID: null });
-        expect(store.children.map((node) => node.id)).toEqual([ 'f1', 'new' ]);
+        expect(store.children.map((node) => node.id)).toEqual([ 'new', 'f1' ]);
     });
 
     it('renames via patch, then refetches', async () =>

@@ -3,6 +3,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type VNode, h } from 'vue';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { type Router, createMemoryHistory, createRouter } from 'vue-router';
@@ -57,6 +58,7 @@ const updatePreferencesMock = updatePreferences as unknown as Mock;
 const renameOpen = vi.fn();
 const moveOpen = vi.fn();
 const shareOpen = vi.fn();
+const scrollToIndex = vi.fn();
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -144,8 +146,19 @@ const STUBS = {
     FilterBar: { name: 'FilterBar', template: '<div class="filter-bar" />' },
     NodeList: true,
     // buildMenu is declared as a real prop (not just a passthrough attr) so the kebab specs can pull the live
-    // function off the stub and invoke it directly, exactly as NodeGrid would when a row's kebab opens.
-    NodeGrid: { name: 'NodeGrid', props: [ 'buildMenu' ], template: '<div class="node-grid" />' },
+    // function off the stub and invoke it directly, exactly as NodeGrid would when a row's kebab opens. The grid also
+    // exposes scrollToIndex, which is how the page brings a node into view -- with only the rows in view mounted, the
+    // listing has to be told to go there.
+    NodeGrid: {
+        name: 'NodeGrid',
+        props: [ 'buildMenu' ],
+        setup(_props : unknown, { expose } : { expose : (api : unknown) => void }) : () => VNode
+        {
+            expose({ scrollToIndex });
+
+            return () => h('div', { class: 'node-grid' });
+        },
+    },
 };
 
 // The default signed-in caller owns every fixture node (BASE.ownerID is ME_ID) -- the ordinary My Files case.
@@ -834,6 +847,16 @@ describe('DrivePage — arrival selection', () =>
         const wrapper = await mountDrive([ fileNode('f1'), fileNode('f2') ], meFixture(), '/?select=f2');
 
         expect(wrapper.text()).toContain('1 selected');
+    });
+
+    // Only the rows in view are mounted, so a node the caller was sent to is nowhere on screen until the listing is
+    // told to go to it -- marking it selected would leave them staring at a folder that looks untouched.
+    it('scrolls the listing to the node it was sent to, not just marking it', async () =>
+    {
+        await mountDrive([ fileNode('f1'), fileNode('f2'), fileNode('f3') ], meFixture(), '/?select=f3');
+        await flushPromises();
+
+        expect(scrollToIndex).toHaveBeenCalledWith(2);
     });
 
     // The param is a one-shot instruction, not standing state: leaving it in the URL would re-select the node on every

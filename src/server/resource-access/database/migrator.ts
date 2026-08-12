@@ -24,6 +24,7 @@ import * as quotaZeroSemantics004 from './migrations/004_quota_zero_semantics.ts
 import * as quotaAggregateIndex005 from './migrations/005_quota_aggregate_index.ts';
 import * as nameOrderingIndex006 from './migrations/006_name_ordering_index.ts';
 import * as publicLinkKindRemoval007 from './migrations/007_public_link_kind_removal.ts';
+import * as naturalNameCollation008 from './migrations/008_natural_name_collation.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -62,6 +63,10 @@ function migrationList(kind : DatabaseKind) : Record<string, Migration>
         },
         '007_public_link_kind_removal': {
             up: (db) => publicLinkKindRemoval007.up(db),
+        },
+        '008_natural_name_collation': {
+            up: (db) => naturalNameCollation008.up(db, kind),
+            down: (db) => naturalNameCollation008.down(db, kind),
         },
     };
 }

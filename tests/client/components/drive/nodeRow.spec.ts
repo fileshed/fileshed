@@ -58,12 +58,18 @@ const STUBS = {
     UAvatar: { props: [ 'src', 'alt' ], template: '<span class="avatar" :data-alt="alt" :data-src="src" />' },
 };
 
-function mountRow(node : NodeResponse, owners : UserSummary[]) : VueWrapper
+// The owner hover card and the kebab's menu are mounted when the pointer arrives on the row, which is the only way
+// either can be reached, so a spec about them puts the pointer there first.
+async function mountRow(node : NodeResponse, owners : UserSummary[]) : Promise<VueWrapper>
 {
-    return mount(NodeRow, {
+    const wrapper = mount(NodeRow, {
         props: { node, selected: false, menuItems: [ [ { label: 'x' } ] ], owners },
         global: { stubs: STUBS },
     });
+
+    await wrapper.find('.group').trigger('mouseenter');
+
+    return wrapper;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -75,11 +81,11 @@ beforeEach(() => setActivePinia(createPinia()));
 
 describe('NodeRow — owner column', () =>
 {
-    it('shows the owner avatar behind the hover summary when the facet carries that owner', () =>
+    it('shows the owner avatar behind the hover summary when the facet carries that owner', async () =>
     {
         const owners : UserSummary[]
             = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: 'https://cdn.example/ada.png' } ];
-        const wrapper = mountRow(fileNode('u1'), owners);
+        const wrapper = await mountRow(fileNode('u1'), owners);
 
         const hover = wrapper.find('.user-summary-hover');
         expect(hover.attributes('data-owner-id')).toBe('u1');
@@ -89,32 +95,75 @@ describe('NodeRow — owner column', () =>
         expect(avatar.attributes('data-src')).toBe('https://cdn.example/ada.png');
     });
 
-    it('passes an imageless owner through with no src, so the avatar falls back to initials', () =>
+    it('passes an imageless owner through with no src, so the avatar falls back to initials', async () =>
     {
         const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
-        const wrapper = mountRow(fileNode('u1'), owners);
+        const wrapper = await mountRow(fileNode('u1'), owners);
 
         expect(wrapper.find('.user-summary-hover .avatar').attributes('data-src')).toBeUndefined();
     });
 
-    it('falls back to a bare avatar keyed by the raw owner id when the facet has no match', () =>
+    it('falls back to a bare avatar keyed by the raw owner id when the facet has no match', async () =>
     {
-        const wrapper = mountRow(fileNode('u1'), []);
+        const wrapper = await mountRow(fileNode('u1'), []);
 
         expect(wrapper.find('.user-summary-hover').exists()).toBe(false);
         expect(wrapper.find('.avatar').attributes('data-alt')).toBe('u1');
     });
 
-    it('picks the row\'s own owner out of a multi-owner facet rather than the first entry', () =>
+    it('picks the row\'s own owner out of a multi-owner facet rather than the first entry', async () =>
     {
         const owners : UserSummary[] = [
             { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null },
             { id: 'u2', name: 'Grace Hopper', email: 'grace@example.com', image: null },
         ];
-        const wrapper = mountRow(fileNode('u2'), owners);
+        const wrapper = await mountRow(fileNode('u2'), owners);
 
         expect(wrapper.find('.user-summary-hover').attributes('data-owner-id')).toBe('u2');
         expect(wrapper.find('.avatar').attributes('data-alt')).toBe('Grace Hopper');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// A row is mounted again every time it scrolls back into view, so what it carries is paid for over and over. Neither
+// the hover card nor the kebab's menu can be reached before the pointer is on the row, so neither is built until it
+// arrives -- and the row still shows the owner's avatar and reserves the kebab's place in the meantime.
+describe('NodeRow — controls the pointer has not reached', () =>
+{
+    it('shows the owner avatar with no hover card until the pointer is on the row', () =>
+    {
+        const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
+        const wrapper = mount(NodeRow, {
+            props: { node: fileNode('u1'), selected: false, menuItems: [ [ { label: 'x' } ] ], owners },
+            global: { stubs: STUBS },
+        });
+
+        expect(wrapper.find('.user-summary-hover').exists()).toBe(false);
+        expect(wrapper.find('.avatar').attributes('data-alt')).toBe('Ada Lovelace');
+        expect(wrapper.find('.ubtn').exists()).toBe(false);
+    });
+
+    it('builds the hover card and the kebab once the pointer arrives', async () =>
+    {
+        const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
+        const wrapper = await mountRow(fileNode('u1'), owners);
+
+        expect(wrapper.find('.user-summary-hover').exists()).toBe(true);
+        expect(wrapper.find('.ubtn').exists()).toBe(true);
+    });
+
+    // The keyboard never hovers: focus landing on the row is what makes its own controls tabbable.
+    it('builds them for a keyboard that focuses the row', async () =>
+    {
+        const wrapper = mount(NodeRow, {
+            props: { node: fileNode('u1'), selected: false, menuItems: [ [ { label: 'x' } ] ], owners: [] },
+            global: { stubs: STUBS },
+        });
+
+        await wrapper.find('.group').trigger('focusin');
+
+        expect(wrapper.find('.ubtn').exists()).toBe(true);
     });
 });
 
@@ -124,10 +173,10 @@ describe('NodeRow — column order', () =>
 {
     // Owner sits immediately after Name -- Drive's convention, matching the search results page -- not at the row's
     // end before the kebab.
-    it('places the owner cell immediately after the name, ahead of size, modified, and type', () =>
+    it('places the owner cell immediately after the name, ahead of size, modified, and type', async () =>
     {
         const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
-        const wrapper = mountRow(fileNode('u1'), owners);
+        const wrapper = await mountRow(fileNode('u1'), owners);
 
         const cells = [ ...wrapper.find('.group').element.children ];
 
@@ -144,25 +193,25 @@ describe('NodeRow — owner column for a link', () =>
 {
     // A link placed via "Add to my files" points at someone else's file; the Owner column must name that someone
     // (the target's owner), not the recipient who placed the link.
-    it('shows the resolved target\'s owner, not the link\'s own owner', () =>
+    it('shows the resolved target\'s owner, not the link\'s own owner', async () =>
     {
         const owners : UserSummary[] = [
             { id: 'recipient', name: 'Recipient', email: 'recipient@example.com', image: null },
             { id: 'original-owner', name: 'Ada Lovelace', email: 'ada@example.com', image: null },
         ];
         const target : LinkTarget = { id: 't1', type: 'file', name: 'shared.txt', ownerID: 'original-owner' };
-        const wrapper = mountRow(linkNode('recipient', target), owners);
+        const wrapper = await mountRow(linkNode('recipient', target), owners);
 
         expect(wrapper.find('.user-summary-hover').attributes('data-owner-id')).toBe('original-owner');
         expect(wrapper.find('.avatar').attributes('data-alt')).toBe('Ada Lovelace');
     });
 
     // A dead link has no resolvable target, so it falls back to displaying its own (the recipient's) ownership.
-    it('falls back to the link\'s own owner when the target is unresolved (dead link)', () =>
+    it('falls back to the link\'s own owner when the target is unresolved (dead link)', async () =>
     {
         const owners : UserSummary[]
             = [ { id: 'recipient', name: 'Recipient', email: 'recipient@example.com', image: null } ];
-        const wrapper = mountRow(linkNode('recipient', null), owners);
+        const wrapper = await mountRow(linkNode('recipient', null), owners);
 
         expect(wrapper.find('.user-summary-hover').attributes('data-owner-id')).toBe('recipient');
     });

@@ -17,13 +17,16 @@ import type { DeletionOfferResponse, MeResponse, NodeListResponse, NodeResponse 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
 
+// Components
+import TrashTile from '@client/components/trash/trashTile.vue';
+
 // Resource Access
 import { emptyTrash, getTrash, hardDeleteNode, restoreNode } from '@client/resource-access/nodes.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 import { listDeletionOffers } from '@client/resource-access/deletionOffers.ts';
 
 // Support
-import { ME_ID, meFixture } from '../support.ts';
+import { ME_ID, SCROLL_AREA_STUB, meFixture } from '../support.ts';
 
 // Under test
 import TrashPage from '@client/pages/trashPage.vue';
@@ -86,6 +89,7 @@ function offer(id : string, name : string) : DeletionOfferResponse
 }
 
 const STUBS = {
+    UScrollArea: SCROLL_AREA_STUB,
     UButton: {
         props: [ 'label' ],
         template: '<button class="ubtn" :aria-label="$attrs[\'aria-label\']" @click="$emit(\'click\')">'
@@ -284,15 +288,16 @@ describe('TrashPage — view toggle', () =>
         );
         const session = useSessionStore();
 
-        // Grid is the seeded preference, so the trashed roots are a wall of cards -- no row list yet.
-        expect(wrapper.find('ul').exists()).toBe(false);
+        // Grid is the seeded preference, so the trashed roots are a wall of cards -- no rows yet.
+        expect(wrapper.findComponent(TrashTile).exists()).toBe(true);
 
         await wrapper.find('[aria-label="List view"]').trigger('click');
         await flushPromises();
 
         expect(session.viewMode).toBe('list');
         expect(updatePreferencesMock).toHaveBeenCalledWith({ viewMode: 'list' });
-        expect(wrapper.find('ul').exists()).toBe(true);
+        expect(wrapper.findComponent(TrashTile).exists()).toBe(false);
+        expect(wrapper.find('[aria-label="notes.txt"]').exists()).toBe(true);
     });
 
     it('leaves the preference untouched when the already-active mode is clicked', async () =>

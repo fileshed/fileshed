@@ -38,6 +38,7 @@
 
         <DropZone :label="currentFolderName" class="min-h-0 flex-1" @drop-upload="onDropUpload">
             <NodeSurface
+                ref="surface"
                 :view-mode="viewMode"
                 :selection="selection.selected"
                 :build-menu="buildMenu"
@@ -59,7 +60,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+    import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { useToast } from '@nuxt/ui/composables';
     import type { ContextMenuItem } from '@nuxt/ui';
@@ -114,6 +115,7 @@
     const { perform } = useOpenNode();
 
     const selection = ref<SelectionState>(intent.selection.emptySelection());
+    const surface = ref<InstanceType<typeof NodeSurface> | null>(null);
     const renameModal = ref<InstanceType<typeof RenameNode> | null>(null);
     const moveModal = ref<InstanceType<typeof MoveNodes> | null>(null);
     const shareModal = ref<InstanceType<typeof ShareDialog> | null>(null);
@@ -143,16 +145,24 @@
         return typeof select === 'string' && select.length > 0 ? select : null;
     }
 
-    // Trim selection to what's actually present after any listing change (navigation, refresh, load-more).
-    watch(() => store.children, () =>
+    // Trim selection to what's actually present after any listing change (navigation, a mutation's re-read, a chunk
+    // landing). Arriving pointed at a node also scrolls to it: only the rows in view are mounted, so a node three
+    // thousand rows down is nowhere on screen until the listing is told to go there.
+    watch(() => store.children, async () =>
     {
         selection.value = intent.selection.reconcile(selection.value, store.children.map((node) => node.id));
 
         const arriving = arrivalSelectID();
-        if(arriving === null || !store.children.some((node) => node.id === arriving)) { return; }
+        if(arriving === null) { return; }
+
+        const index = store.children.findIndex((node) => node.id === arriving);
+        if(index === -1) { return; }
 
         selection.value = intent.selection.selectOnly(arriving);
         void router.replace({ path: route.path });
+
+        await nextTick();
+        surface.value?.scrollToIndex(index);
     });
 
     function onKeydown(event : KeyboardEvent) : void

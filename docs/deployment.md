@@ -205,8 +205,22 @@ docker compose -f compose.postgres.yaml up -d
 Running your own Postgres instead: set `DATABASE_KIND=postgres` and `DATABASE_URL`, drop `DATABASE_PATH`.
 Migrations run at boot against either dialect.
 
-Names sort case-insensitively on both dialects; accented characters then order by the collation of the database
-itself, so a Postgres instance places them wherever the locale it was created with says they belong.
+Postgres must be built with ICU support, which FileShed orders names with. A server without it stops the migration at
+boot with a message saying so, having changed nothing.
+
+## Listings
+
+A folder listing arrives in chunks of 1,000 items. Up to 50,000 items the client holds the folder whole and sorts and
+filters it in the browser. Past that it loads the stretch you are looking at as you scroll, and the server sorts and
+filters instead.
+
+Names order identically on both dialects and in the browser. The order is ICU's, at primary strength with numeric
+runs: case and accents never separate two names, and `track-9` comes before `track-10`. Postgres orders through a
+collation the migrations create. SQLite has no ICU, so the server orders those listings itself and holds one folder's
+names in memory to do it — past 100,000 items in a single folder it hands the ordering back to SQLite and names fall
+back to alphabetical, where `track-10` precedes `track-9`. Postgres has no such limit.
+
+None of these four numbers are configurable.
 
 ## Updating
 

@@ -21,15 +21,18 @@ import {
     type LinkNode,
     MAX_TREE_DEPTH,
     MIME_FAMILY_SPECS,
+    NATURAL_ORDER_COLLATION,
     type Node,
     type NodeTypeFamily,
     PLAYLIST_EXTENSIONS,
     PLAYLIST_MIME_LIST,
+    SQLITE_MAX_SORTED_IN_MEMORY,
     type UserSummary,
+    compareNames,
 } from '@fileshed/core';
 
 // Resource Access
-import type { Database, DatabaseHandle } from '../database/database.ts';
+import type { Database, DatabaseHandle, DatabaseKind } from '../database/database.ts';
 import { nodeFromRow, rowFromNode } from './transforms.ts';
 
 // Utils
@@ -114,14 +117,60 @@ function lowerName(column : 'name' | 'node.name') : Expression<string>
     return sql<string>`lower(${ sql.ref(column) })`;
 }
 
+// 0 for a folder, 1 for anything else: a plain integer key that sorts folders first on both dialects. CASE is
+// portable, and sql.ref quotes the `type` column so the SQL keyword can never be read as bare identifier.
+const folderRank = sql<number>`case when ${ sql.ref('type') } = 'folder' then 0 else 1 end`;
+
+// Postgres orders names through the ICU collation migration 008 creates -- the same rule compareNames states and the
+// client sorts by. SQLite reaches this only when a folder is too big to sort in Node (see #naturallySortedPage), and
+// gets the folded lexical ordering that was the whole listing's before.
+function naturalName(kind : DatabaseKind) : Expression<string>
+{
+    return kind === 'postgres'
+        ? sql<string>`${ sql.ref('name') } collate ${ sql.ref(NATURAL_ORDER_COLLATION) }`
+        : lowerName('name');
+}
+
 // Name is the one sort column that orders on a derived value rather than what is stored; every other column sorts as
 // it sits.
-function sortTarget(column : SortColumn) : SortColumn | Expression<string>
+function sortTarget(kind : DatabaseKind, column : SortColumn) : SortColumn | Expression<string>
 {
-    return column === 'name' ? lowerName('name') : column;
+    return column === 'name' ? naturalName(kind) : column;
 }
 
 type NodeExpressionBuilder = ExpressionBuilder<Database, 'node'>;
+
+// The predicate a listing pages over, as conditions rather than a built query, so the two listings can hand the same
+// selection to either ordering.
+type NodeConditions = (eb : NodeExpressionBuilder) => Expression<SqlBool>[];
+
+// Everything the SQLite name sort reads and nothing more: the whole selection crosses the wire to be ordered, and the
+// page's rows are fetched by id once the order is known.
+interface NameSortRow
+{
+    id : string;
+    name : string;
+    type : Database['node']['type'];
+}
+
+function placeRank(row : NameSortRow) : number
+{
+    return row.type === 'folder' ? 0 : 1;
+}
+
+// The SQL ordering, restated for Node: folders above everything, the name within each partition, and an ascending id
+// tiebreak that the sort direction never flips -- exactly what `orderBy(folderRank).orderBy(name, dir).orderBy(id)`
+// spells on the other dialect.
+function compareSortKeys(left : NameSortRow, right : NameSortRow, direction : SortDirection) : number
+{
+    const places = placeRank(left) - placeRank(right);
+    if(places !== 0) { return places; }
+
+    const named = compareNames(left.name, right.name) * (direction === 'asc' ? 1 : -1);
+    if(named !== 0) { return named; }
+
+    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+}
 
 // Membership in the playlists family goes beyond mime: browsers and servers disagree on m3u mimes often enough
 // that uploads arrive with empty or generic types, so the file EXTENSION is the more reliable witness -- the same
@@ -268,29 +317,53 @@ export class NodeRA
     // ids are non-monotonic and never stand in for insertion order).
     async children(query : ChildrenQuery, options : ChildrenOptions, filters ?: NodeFilters) : Promise<Node[]>
     {
+        return this.#page((eb) =>
+        {
+            const conditions : Expression<SqlBool>[] = [ eb('trashed_at', 'is', null) ];
+
+            if(query.parentID === null)
+            {
+                conditions.push(eb('parent_id', 'is', null), eb('owner_id', '=', query.ownerID));
+            }
+            else { conditions.push(eb('parent_id', '=', query.parentID)); }
+
+            if(filters !== undefined && hasFilters(filters)) { conditions.push(...filterConditions(eb, filters)); }
+
+            return conditions;
+        }, options);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Listing order
+    //------------------------------------------------------------------------------------------------------------------
+
+    // A page of one selection, ordered the way the whole product orders names. Postgres does it in SQL; SQLite does it
+    // in Node, because it has no collation that orders naturally and JS has no sort key to give it one.
+    async #page(conditions : NodeConditions, options : ChildrenOptions) : Promise<Node[]>
+    {
+        if(this.#kind === 'sqlite' && options.sort.key === 'name')
+        {
+            const page = await this.#naturallySortedPage(conditions, options.pagination, options.sort.direction);
+
+            if(page !== undefined) { return page; }
+        }
+
+        return this.#orderedPage(conditions, options);
+    }
+
+    async #orderedPage(conditions : NodeConditions, options : ChildrenOptions) : Promise<Node[]>
+    {
         const { pagination, sort } = options;
 
         let builder = this.#db
             .selectFrom('node')
+            .where((eb) => eb.and(conditions(eb)))
             .selectAll()
-            .where('trashed_at', 'is', null);
-
-        builder = query.parentID === null
-            ? builder.where('parent_id', 'is', null).where('owner_id', '=', query.ownerID)
-            : builder.where('parent_id', '=', query.parentID);
-
-        if(filters !== undefined && hasFilters(filters))
-        {
-            builder = builder.where((eb) => eb.and(filterConditions(eb, filters)));
-        }
-
-        // 0 for a folder, 1 for anything else: a plain integer key that sorts folders first on both dialects. CASE is
-        // portable, and sql.ref quotes the `type` column so the SQL keyword can never be read as bare identifier.
-        builder = builder.orderBy(sql<number>`case when ${ sql.ref('type') } = 'folder' then 0 else 1 end`, 'asc');
+            .orderBy(folderRank, 'asc');
 
         for(const column of sortColumns[sort.key])
         {
-            builder = builder.orderBy(sortTarget(column), (ob) =>
+            builder = builder.orderBy(sortTarget(this.#kind, column), (ob) =>
             {
                 return sort.direction === 'asc' ? ob.asc().nullsLast() : ob.desc().nullsFirst();
             });
@@ -303,6 +376,53 @@ export class NodeRA
             .execute();
 
         return rows.map(nodeFromRow);
+    }
+
+    // The SQLite name ordering: pull the selection's sort keys, order them through the shared comparator, then fetch
+    // only the page's rows. Undefined when the selection is over the in-memory guard, which sends the caller back to
+    // the SQL ordering -- the fetch stops one row past the guard rather than reading a folder it has already refused.
+    //
+    // Takes the direction rather than the whole sort, because this orders by name and nothing else. A folder sitting
+    // exactly on the guard that grows mid-pagination switches orderings between one chunk and the next, which shifts
+    // rows the client has already read; the offset pagination it rides on has the same exposure to a concurrent write.
+    async #naturallySortedPage(
+        conditions : NodeConditions,
+        pagination : Pagination,
+        direction : SortDirection
+    ) : Promise<Node[] | undefined>
+    {
+        const keys = await this.#db
+            .selectFrom('node')
+            .where((eb) => eb.and(conditions(eb)))
+            .select([ 'id', 'name', 'type' ])
+            .limit(SQLITE_MAX_SORTED_IN_MEMORY + 1)
+            .execute();
+
+        if(keys.length > SQLITE_MAX_SORTED_IN_MEMORY) { return undefined; }
+
+        keys.sort((left, right) => compareSortKeys(left, right, direction));
+
+        const page = keys.slice(pagination.offset, pagination.offset + pagination.limit);
+        if(page.length === 0) { return []; }
+
+        // The selection's own predicate rides along with the ids: a row trashed, restored, or moved out between the
+        // two queries would otherwise come back and render in a state this listing does not model.
+        const rows = await this.#db
+            .selectFrom('node')
+            .selectAll()
+            .where((eb) => eb.and(conditions(eb)))
+            .where('id', 'in', page.map((key) => key.id))
+            .execute();
+
+        const byID = new Map(rows.map((row) => [ row.id, row ]));
+
+        // Whatever left the selection in between is dropped from the page rather than invented back into it.
+        return page.flatMap((key) =>
+        {
+            const row = byID.get(key.id);
+
+            return row === undefined ? [] : [ nodeFromRow(row) ];
+        });
     }
 
     // The unpaginated child count for the same location `children` lists -- the grand total a page envelope reports so
@@ -553,35 +673,14 @@ export class NodeRA
     // lists once while everything inside it travels with it. Links never carry trashed_at, so none reach here.
     async trashedRoots(ownerID : string, options : ChildrenOptions, filters ?: NodeFilters) : Promise<Node[]>
     {
-        const { pagination, sort } = options;
-
-        let builder = this.#db
-            .selectFrom('node')
-            .selectAll()
-            .where((eb) => eb.and(trashedRootConditions(eb, ownerID)));
-
-        if(filters !== undefined && hasFilters(filters))
+        return this.#page((eb) =>
         {
-            builder = builder.where((eb) => eb.and(filterConditions(eb, filters)));
-        }
+            const conditions = trashedRootConditions(eb, ownerID);
 
-        builder = builder.orderBy(sql<number>`case when ${ sql.ref('type') } = 'folder' then 0 else 1 end`, 'asc');
+            if(filters !== undefined && hasFilters(filters)) { conditions.push(...filterConditions(eb, filters)); }
 
-        for(const column of sortColumns[sort.key])
-        {
-            builder = builder.orderBy(sortTarget(column), (ob) =>
-            {
-                return sort.direction === 'asc' ? ob.asc().nullsLast() : ob.desc().nullsFirst();
-            });
-        }
-
-        const rows = await builder
-            .orderBy('id', 'asc')
-            .limit(pagination.limit)
-            .offset(pagination.offset)
-            .execute();
-
-        return rows.map(nodeFromRow);
+            return conditions;
+        }, options);
     }
 
     // The unpaginated count of the caller's trashed roots -- the grand total the trash-view envelope reports, over the

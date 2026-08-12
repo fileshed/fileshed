@@ -7,6 +7,10 @@ import { type VueWrapper, mount } from '@vue/test-utils';
 
 import type { NodeResponse, UserSummary } from '@fileshed/core';
 
+// Support
+import { SCROLL_AREA_STUB } from '../../support.ts';
+
+// Under test
 import NodeList from '@client/components/drive/nodeList.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -27,6 +31,7 @@ function folderNode(id : string, ownerID : string) : NodeResponse
 }
 
 const STUBS = {
+    UScrollArea: SCROLL_AREA_STUB,
     UIcon: true,
     NodeRow: {
         props: [ 'node', 'selected', 'menuItems', 'owners' ],

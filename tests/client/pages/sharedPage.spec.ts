@@ -17,13 +17,16 @@ import type { MeResponse, ShareRole, SharedTarget, SharedWithMeEntry, UserSummar
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
 
+// Components
+import SharedTile from '@client/components/shared/sharedTile.vue';
+
 // Resource Access
 import { copyNode } from '@client/resource-access/nodes.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 import { leaveShare, sharedWithMe } from '@client/resource-access/shares.ts';
 
 // Support
-import { ME_ID, meFixture } from '../support.ts';
+import { ME_ID, SCROLL_AREA_STUB, meFixture } from '../support.ts';
 
 // Under test
 import SharedPage from '@client/pages/sharedPage.vue';
@@ -76,6 +79,7 @@ function entry(target : SharedTarget, role : ShareRole = 'viewer', placed = fals
 }
 
 const STUBS = {
+    UScrollArea: SCROLL_AREA_STUB,
     UButton: {
         props: [ 'label' ],
         template: '<button class="ubtn" :aria-label="$attrs[\'aria-label\']" @click="$emit(\'click\')">'
@@ -335,15 +339,16 @@ describe('SharedPage — view toggle', () =>
         );
         const session = useSessionStore();
 
-        // Grid is the seeded preference, so the listing is a wall of cards -- no row list yet.
-        expect(wrapper.find('ul').exists()).toBe(false);
+        // Grid is the seeded preference, so the listing is a wall of cards -- no rows yet.
+        expect(wrapper.findComponent(SharedTile).exists()).toBe(true);
 
         await wrapper.find('[aria-label="List view"]').trigger('click');
         await flushPromises();
 
         expect(session.viewMode).toBe('list');
         expect(updatePreferencesMock).toHaveBeenCalledWith({ viewMode: 'list' });
-        expect(wrapper.find('ul').exists()).toBe(true);
+        expect(wrapper.findComponent(SharedTile).exists()).toBe(false);
+        expect(wrapper.find('[aria-label="report.txt"]').exists()).toBe(true);
     });
 
     it('leaves the preference untouched when the already-active mode is clicked', async () =>

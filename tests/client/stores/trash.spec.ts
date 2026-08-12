@@ -2,10 +2,10 @@
 // Trash Store — emptyAll and filters
 //
 // emptyAll empties every one of the caller's trashed roots in one call and resets the listing to empty directly,
-// without a refetch -- the whole trash just went, so there is nothing left to page. A failed purge propagates and
-// leaves the listing as it was, so the caller's toast reports the truth. The Type/Modified filters re-query the trash
-// from the first page with the filter folded in, are per-page-visit (a fresh load drops them), and mark a
-// filtered-to-nothing result distinctly from a genuinely empty trash.
+// without a re-read -- the whole trash just went, so there is nothing left to show. A failed purge propagates and
+// leaves the listing as it was, so the caller's toast reports the truth. The Type/Modified filters narrow the listing
+// the client already holds, are per-page-visit (a fresh load drops them), and mark a filtered-to-nothing result
+// distinctly from a genuinely empty trash.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -55,6 +55,25 @@ function folder(id : string) : NodeResponse
         updatedAt: ISO,
         role: 'owner',
         trashedAt: ISO,
+    };
+}
+
+function trashedFile(id : string, mimeType : string) : NodeResponse
+{
+    return {
+        id,
+        name: id,
+        type: 'file',
+        ownerID: 'u1',
+        parentID: null,
+        createdAt: ISO,
+        updatedAt: ISO,
+        role: 'owner',
+        trashedAt: ISO,
+        blobID: 'b1',
+        size: 100,
+        mimeType,
+        sharing: null,
     };
 }
 
@@ -128,37 +147,40 @@ describe('useTrashStore — filters', () =>
         setActivePinia(createPinia());
     });
 
-    it('re-reads the trash from the first page with the selected type families folded in', async () =>
+    // The trash is in hand once it has been read, so a Type filter narrows the rows already held rather than asking
+    // for a narrower read.
+    it('narrows the listing in hand by type without asking the server', async () =>
     {
-        getTrashMock.mockResolvedValue(page([]));
+        getTrashMock.mockResolvedValue(page([ trashedFile('doc', 'text/plain'), trashedFile('pic', 'image/png') ]));
         const store = useTrashStore();
         await store.load();
+        getTrashMock.mockClear();
 
-        await store.setTypeFamilies([ 'images', 'pdfs' ]);
+        await store.setTypeFamilies([ 'images' ]);
 
-        expect(store.typeFamilies).toEqual([ 'images', 'pdfs' ]);
+        expect(store.typeFamilies).toEqual([ 'images' ]);
         expect(store.hasActiveFilters).toBe(true);
-        expect(getTrashMock).toHaveBeenLastCalledWith(
-            expect.objectContaining({ types: [ 'images', 'pdfs' ], offset: 0 })
-        );
+        expect(store.items.map((node) => node.id)).toEqual([ 'pic' ]);
+        expect(getTrashMock).not.toHaveBeenCalled();
     });
 
-    it('re-reads with a modified window when a preset is chosen', async () =>
+    it('narrows the listing in hand by modified date without asking the server', async () =>
     {
-        getTrashMock.mockResolvedValue(page([]));
+        const recent = { ...trashedFile('recent', 'text/plain'), updatedAt: new Date().toISOString() };
+        getTrashMock.mockResolvedValue(page([ trashedFile('ancient', 'text/plain'), recent ]));
         const store = useTrashStore();
         await store.load();
+        getTrashMock.mockClear();
 
         await store.setModified({ kind: 'preset', preset: 'last7' });
 
-        expect(getTrashMock).toHaveBeenLastCalledWith(
-            expect.objectContaining({ updatedAfter: expect.any(String) })
-        );
+        expect(store.items.map((node) => node.id)).toEqual([ 'recent' ]);
+        expect(getTrashMock).not.toHaveBeenCalled();
     });
 
-    it('drops every filter param on clearFilters', async () =>
+    it('brings back every filtered-out row on clearFilters', async () =>
     {
-        getTrashMock.mockResolvedValue(page([]));
+        getTrashMock.mockResolvedValue(page([ trashedFile('doc', 'text/plain'), trashedFile('pic', 'image/png') ]));
         const store = useTrashStore();
         await store.load();
         await store.setTypeFamilies([ 'images' ]);
@@ -167,9 +189,7 @@ describe('useTrashStore — filters', () =>
         await store.clearFilters();
 
         expect(store.hasActiveFilters).toBe(false);
-        const lastQuery = getTrashMock.mock.calls.at(-1)?.[0] ?? {};
-        expect(lastQuery).not.toHaveProperty('types');
-        expect(lastQuery).not.toHaveProperty('updatedAfter');
+        expect(store.items.map((node) => node.id)).toEqual([ 'doc', 'pic' ]);
     });
 
     // An empty result WITH an active filter is a distinct surface state from a genuinely empty trash.

@@ -5,69 +5,75 @@
   -- truncated with the full name on hover, size plus modified time for files, and the node's sharing in the
   -- top-left corner, opposite the kebab. Presentational only -- a click emits selection intent with its modifiers, a
   -- double-click emits open, and the menu items (right-click, or the corner kebab) arrive as a prop.
+  --
+  -- The tile is a fixed height, which is what lets the grid place it without measuring, and it carries its node's id
+  -- so a right-click anywhere in the grid can tell which tile it landed on. The kebab's menu waits for the pointer:
+  -- in a folder of ten thousand, a tile is mounted every time it scrolls back into view, and a menu nobody has
+  -- reached for yet is the most expensive thing on the card.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <UContextMenu :items="menuItems">
+    <div
+        class="group relative flex h-33 cursor-default flex-col items-center gap-2 rounded-lg border p-4
+            text-center transition-colors"
+        :class="selected
+            ? 'border-primary bg-primary/10 ring-1 ring-primary'
+            : 'border-default hover:bg-elevated/50'"
+        role="button"
+        tabindex="0"
+        :data-node-id="node.id"
+        :aria-label="node.name"
+        v-on="controls.listeners"
+        @click="onClick"
+        @dblclick="emit('open', node)"
+        @keydown.enter="emit('open', node)"
+    >
+        <SharingBadges
+            class="absolute left-1 top-1"
+            :sharing="node.sharing"
+            @click.stop
+            @dblclick.stop
+        />
+
         <div
-            class="group relative flex cursor-default flex-col items-center gap-2 rounded-lg border p-4 text-center
-                transition-colors"
-            :class="selected
-                ? 'border-primary bg-primary/10 ring-1 ring-primary'
-                : 'border-default hover:bg-elevated/50'"
-            role="button"
-            tabindex="0"
-            :aria-label="node.name"
-            @click="onClick"
-            @dblclick="emit('open', node)"
-            @keydown.enter="emit('open', node)"
+            class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100
+                focus-within:opacity-100 pointer-coarse:opacity-100"
+            @click.stop
+            @dblclick.stop
         >
-            <SharingBadges
-                class="absolute left-1 top-1"
-                :sharing="node.sharing"
-                @click.stop
-                @dblclick.stop
-            />
-
-            <div
-                class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100
-                    focus-within:opacity-100 pointer-coarse:opacity-100"
-                @click.stop
-                @dblclick.stop
-            >
-                <UDropdownMenu :items="menuItems" :ui="{ content: 'w-48' }">
-                    <UButton
-                        icon="i-lucide-ellipsis-vertical"
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        aria-label="More actions"
-                    />
-                </UDropdownMenu>
-            </div>
-
-            <div class="relative" :class="{ 'opacity-40': dead }">
-                <UIcon :name="presentation.icon" class="size-12" :class="presentation.color" />
-                <UIcon
-                    v-if="node.type === 'link' && !dead"
-                    name="i-lucide-link"
-                    class="absolute -bottom-0.5 -right-0.5 size-4 rounded-full bg-default p-0.5 text-muted"
+            <UDropdownMenu v-if="controls.ready.value" :items="menuItems" :ui="{ content: 'w-48' }">
+                <UButton
+                    icon="i-lucide-ellipsis-vertical"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    aria-label="More actions"
                 />
-            </div>
-
-            <div class="min-w-0 w-full">
-                <p class="truncate text-sm font-medium" :class="{ 'text-dimmed': dead }" :title="node.name">
-                    {{ node.name }}
-                </p>
-                <p v-if="node.type === 'file'" class="mt-0.5 truncate text-xs text-muted">
-                    {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
-                </p>
-                <p v-else-if="dead" class="mt-0.5 text-xs text-dimmed">
-                    Broken link
-                </p>
-            </div>
+            </UDropdownMenu>
+            <div v-else class="size-6" />
         </div>
-    </UContextMenu>
+
+        <div class="relative" :class="{ 'opacity-40': dead }">
+            <UIcon :name="presentation.icon" class="size-12" :class="presentation.color" />
+            <UIcon
+                v-if="node.type === 'link' && !dead"
+                name="i-lucide-link"
+                class="absolute -bottom-0.5 -right-0.5 size-4 rounded-full bg-default p-0.5 text-muted"
+            />
+        </div>
+
+        <div class="min-w-0 w-full">
+            <p class="truncate text-sm font-medium" :class="{ 'text-dimmed': dead }" :title="node.name">
+                {{ node.name }}
+            </p>
+            <p v-if="node.type === 'file'" class="mt-0.5 truncate text-xs text-muted">
+                {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
+            </p>
+            <p v-else-if="dead" class="mt-0.5 text-xs text-dimmed">
+                Broken link
+            </p>
+        </div>
+    </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
@@ -85,6 +91,7 @@
     import SharingBadges from '../share/sharingBadges.vue';
 
     // Utils
+    import { useDeferredControls } from '../../utils/deferredControls.ts';
     import { formatBytes, formatNodeDate, isDeadLink, nodePresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -103,6 +110,7 @@
     //------------------------------------------------------------------------------------------------------------------
 
     const session = useSessionStore();
+    const controls = useDeferredControls();
 
     const presentation = computed(() => nodePresentation(props.node));
     const dead = computed(() => isDeadLink(props.node));

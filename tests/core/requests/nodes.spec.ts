@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    MAX_CHILDREN_LIMIT,
     type Node,
     childrenQueryCodec,
     createNodeRequestCodec,
@@ -49,9 +50,18 @@ describe('childrenQueryCodec', () =>
 
     it('rejects a limit above the page-size ceiling rather than silently truncating it', () =>
     {
-        const result = childrenQueryCodec.safeParse({ limit: '500' });
+        const result = childrenQueryCodec.safeParse({ limit: String(MAX_CHILDREN_LIMIT + 1) });
 
         expect(result.success).toBe(false);
+    });
+
+    // The client reads a folder a chunk at a time and asks for the largest page there is, so the ceiling itself has
+    // to be a limit the endpoint accepts.
+    it('accepts a limit at the ceiling', () =>
+    {
+        const result = childrenQueryCodec.safeParse({ limit: String(MAX_CHILDREN_LIMIT) });
+
+        expect(result.success).toBe(true);
     });
 
     // Type families ride one comma-separated param, so it must parse back into the family array the server filters on.

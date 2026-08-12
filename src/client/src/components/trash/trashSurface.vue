@@ -5,11 +5,11 @@
   -- filtered-to-nothing state, and otherwise the caller's trashed roots as a grid of cards or a dense row list, per the
   -- view toggle. Each item carries Restore and Delete forever behind a kebab; the actions relay up so the page owns
   -- restore (a direct mutation) and Delete forever (a confirm modal). Reads the trash store for its listing state
-  -- directly.
+  -- directly, and tells it how far the rendering has reached so a listing past the ceiling keeps loading as it scrolls.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div class="min-h-0 flex-1 select-none">
+    <div class="flex min-h-0 flex-1 flex-col gap-3 select-none">
         <div v-if="store.loading" class="flex h-64 items-center justify-center text-muted">
             <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
         </div>
@@ -41,50 +41,56 @@
         </div>
 
         <template v-else>
-            <div
+            <CappedNotice v-if="store.capped" class="shrink-0" subject="trash" />
+
+            <VirtualScroller
                 v-if="viewMode === 'grid'"
-                class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                class="min-h-0 flex-1"
+                :items="store.items"
+                :item-height="LISTING_TILE_HEIGHT"
+                :columns="columns"
+                :gap="LISTING_GRID_GAP"
+                @reached="store.reachedIndex"
             >
-                <TrashTile
-                    v-for="node in store.items"
-                    :key="node.id"
-                    :node="node"
-                    :menu-items="menuFor(node)"
-                />
-            </div>
+                <template #default="{ item } : { item : NodeResponse }">
+                    <TrashTile :node="item" :menu-items="menuFor(item)" />
+                </template>
+            </VirtualScroller>
 
-            <ul v-else class="divide-y divide-default">
-                <li
-                    v-for="node in store.items"
-                    :key="node.id"
-                    :aria-label="node.name"
-                    class="flex items-center gap-3 px-3 py-2 text-sm"
-                >
-                    <UIcon :name="presentationOf(node).icon" class="size-5 shrink-0" :class="presentationOf(node).color" />
-                    <span class="min-w-0 flex-1 truncate font-medium" :title="node.name">{{ node.name }}</span>
-                    <span class="hidden w-24 shrink-0 truncate text-right text-muted sm:block">{{ sizeOf(node) }}</span>
-
-                    <UDropdownMenu :items="menuFor(node)" :ui="{ content: 'w-48' }">
-                        <UButton
-                            icon="i-lucide-ellipsis-vertical"
-                            color="neutral"
-                            variant="ghost"
-                            size="sm"
-                            aria-label="More actions"
+            <VirtualScroller
+                v-else
+                class="min-h-0 flex-1"
+                :items="store.items"
+                :item-height="rowHeight"
+                @reached="store.reachedIndex"
+            >
+                <template #default="{ item } : { item : NodeResponse }">
+                    <div
+                        :aria-label="item.name"
+                        class="flex h-14 items-center gap-3 border-b border-default px-3 text-sm sm:h-12"
+                    >
+                        <UIcon
+                            :name="presentationOf(item).icon"
+                            class="size-5 shrink-0"
+                            :class="presentationOf(item).color"
                         />
-                    </UDropdownMenu>
-                </li>
-            </ul>
+                        <span class="min-w-0 flex-1 truncate font-medium" :title="item.name">{{ item.name }}</span>
+                        <span class="hidden w-24 shrink-0 truncate text-right text-muted sm:block">
+                            {{ sizeOf(item) }}
+                        </span>
 
-            <div v-if="store.hasMore" class="mt-4 flex justify-center">
-                <UButton
-                    color="neutral"
-                    variant="subtle"
-                    label="Load more"
-                    :loading="store.loadingMore"
-                    @click="store.loadMore"
-                />
-            </div>
+                        <UDropdownMenu :items="menuFor(item)" :ui="{ content: 'w-48' }">
+                            <UButton
+                                icon="i-lucide-ellipsis-vertical"
+                                color="neutral"
+                                variant="ghost"
+                                size="sm"
+                                aria-label="More actions"
+                            />
+                        </UDropdownMenu>
+                    </div>
+                </template>
+            </VirtualScroller>
         </template>
     </div>
 </template>
@@ -94,13 +100,18 @@
 <script setup lang="ts">
     import type { DropdownMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse, ViewMode } from '@fileshed/core';
+    import { LISTING_GRID_GAP, LISTING_TILE_HEIGHT, type NodeResponse, type ViewMode } from '@fileshed/core';
 
     // Stores
     import { useTrashStore } from '../../stores/trash.ts';
 
     // Components
     import TrashTile from './trashTile.vue';
+    import CappedNotice from '../listing/cappedNotice.vue';
+    import VirtualScroller from '../listing/virtualScroller.vue';
+
+    // Resource Access
+    import { useListingMetrics } from '../../resource-access/listingMetrics.ts';
 
     // Utils
     import { type NodeTypePresentation, formatBytes, nodePresentation } from '../../utils/formatters/index.ts';
@@ -117,6 +128,7 @@
     }>();
 
     const store = useTrashStore();
+    const { columns, rowHeight } = useListingMetrics();
 
     function presentationOf(node : NodeResponse) : NodeTypePresentation
     {

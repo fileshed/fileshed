@@ -8,8 +8,8 @@
 
 <template>
     <div
-        class="group relative flex cursor-default flex-col items-center gap-2 rounded-lg border border-default p-4
-            text-center transition-colors hover:bg-elevated/50"
+        class="group relative flex h-41 cursor-default flex-col items-center gap-2 rounded-lg border border-default
+            p-4 text-center transition-colors hover:bg-elevated/50"
         role="button"
         tabindex="0"
         :aria-label="entry.target.name"
