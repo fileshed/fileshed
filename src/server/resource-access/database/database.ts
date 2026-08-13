@@ -259,6 +259,31 @@ function postgresTypeParser(oid : number) : ReturnType<typeof pgTypes.getTypePar
 const postgresTypes = { getTypeParser: postgresTypeParser };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Postgres pool errors
+//----------------------------------------------------------------------------------------------------------------------
+
+// A failure on an IDLE pooled connection has no query to reject, so pg reports it on the pool -- and an EventEmitter
+// with no 'error' listener throws, which ends the process. Everything that severs a quiet connection arrives this way:
+// a Postgres restart or failover, a DBA terminate, idle_session_timeout, a firewall reaping the socket.
+//
+// Logging is the entire handler. pg has already discarded the dead client by the time this runs and the next checkout
+// dials a fresh one; reconnecting from here would race the pool for no gain.
+//
+// warn, not error: nothing failed. A query that was in flight rejects through its own caller, and pitching a routine
+// failover at error level pages someone for a connection the pool already replaced. warn still clears the default
+// level, so an operator chasing a flapping database sees every one of these.
+//
+// The message and the SQLSTATE, spelled out rather than handed over as `err`: pg-pool hangs the whole failed client
+// off the error it emits, and pino's error serializer would walk that into the log -- host, user, database and a
+// kilobyte of socket state per dropped connection.
+function logPoolError(error : Error) : void
+{
+    const { code } = error as NodeJS.ErrnoException;
+
+    logger.warn({ code, reason: error.message }, 'Postgres dropped an idle pooled connection; the pool will reconnect');
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // SQLite connection
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -283,9 +308,10 @@ export function createDatabase(config : Config) : DatabaseHandle
             throw new Error('DATABASE_URL is required when DATABASE_KIND=postgres');
         }
 
-        const dialect = new PostgresDialect({
-            pool: new Pool({ connectionString: config.DATABASE_URL, types: postgresTypes }),
-        });
+        const pool = new Pool({ connectionString: config.DATABASE_URL, types: postgresTypes });
+        pool.on('error', logPoolError);
+
+        const dialect = new PostgresDialect({ pool });
 
         return { db: new Kysely<Database>({ dialect }), kind: 'postgres' };
     }
