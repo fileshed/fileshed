@@ -22,6 +22,7 @@ import type { SessionManager } from '../managers/session.ts';
 
 // Routes
 import { deleteAvatarSpec, getAvatarSpec, uploadAvatarSpec } from './avatars.openapi.ts';
+import { USER_CONTENT_HEADERS } from './userContentHeaders.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -81,6 +82,7 @@ export function createAvatarRoutes(sessions : SessionManager, avatars : AvatarMa
         return new Response(Readable.toWeb(served.stream) as BodyInit, {
             status: 200,
             headers: {
+                ...USER_CONTENT_HEADERS,
                 'content-type': served.mime,
                 'content-length': String(served.size),
                 'cache-control': AVATAR_CACHE_CONTROL,

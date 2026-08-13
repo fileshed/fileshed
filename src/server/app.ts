@@ -202,6 +202,19 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
     const app = new Hono();
 
     //------------------------------------------------------------------------------------------------------------------
+    // Response hardening
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Every response, because the browser guessing a content type is never something this server wants. An upload is
+    // served back under the type it was stored with; a browser that sniffs past that can decide a file is a document
+    // on evidence the uploader controls.
+    app.use('*', async (ctx, next) =>
+    {
+        await next();
+        ctx.header('x-content-type-options', 'nosniff');
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
     // Gate (before the auth mount)
     //------------------------------------------------------------------------------------------------------------------
 

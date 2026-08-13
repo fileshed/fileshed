@@ -162,6 +162,18 @@ describe('anonymous /d/:token', () =>
         expect(bytes.equals(await readBlobFile(server.storageRoot, sha))).toBe(true);
     });
 
+    // A public link is a URL anyone can be sent, and it answers from the same origin the signed-in app lives on. An
+    // uploaded page rendered there without these would be running on that origin, able to spend the session of
+    // whoever opened it -- so the headers that stop it are asserted on the wire, not assumed from the code.
+    it('serves the bytes sandboxed, and refuses to let a browser guess their type', async () =>
+    {
+        const res = await direct(link.token);
+        await res.arrayBuffer();
+
+        expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(res.headers.get('content-security-policy') ?? '').toMatch(/(^|\s)sandbox(\s|$)/);
+    });
+
     it('saves the same token under ?download, filename and all', async () =>
     {
         const res = await direct(link.token, {}, '?download');

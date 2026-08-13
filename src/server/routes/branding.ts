@@ -29,6 +29,7 @@ import {
     uploadLogoSpec,
 } from './branding.openapi.ts';
 import { readJsonBody } from './readJsonBody.ts';
+import { USER_CONTENT_HEADERS } from './userContentHeaders.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -99,6 +100,7 @@ export function createBrandingRoutes(sessions : SessionManager, branding : Brand
         return new Response(Readable.toWeb(served.stream) as BodyInit, {
             status: 200,
             headers: {
+                ...USER_CONTENT_HEADERS,
                 'content-type': served.mime,
                 'content-length': String(served.size),
                 'cache-control': LOGO_CACHE_CONTROL,
