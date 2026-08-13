@@ -19,7 +19,6 @@ export * from './preferences.ts';
 export * from './publicLink.ts';
 export * from './quota.ts';
 export * from './search.ts';
-export * from './session.ts';
 export * from './time.ts';
 export * from './tree.ts';
 export * from './user.ts';

@@ -71,6 +71,8 @@ declare module 'vue' {
     RequestAccess: typeof import('./src/components/share/requestAccess.vue')['default']
     RestartBanner: typeof import('./src/components/admin/restartBanner.vue')['default']
     RevealToken: typeof import('./src/components/account/tokens/modals/revealToken.vue')['default']
+    RevokeCredentials: typeof import('./src/components/account/revokeCredentials.vue')['default']
+    RevokeCredentialsModal: typeof import('./src/components/account/modals/revokeCredentialsModal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RunSweepButton: typeof import('./src/components/admin/runSweepButton.vue')['default']

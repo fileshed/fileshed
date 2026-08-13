@@ -229,10 +229,9 @@ describe('admin-set quota enforced by the blob upload flow', () =>
     });
 
     // The cases that separate a live read from a cached one, and the reason they send `jar` rather than `cookie`: the
-    // user signs in FIRST, so the session_data cookie they carry holds a snapshot of the row taken under the OLD cap,
-    // and nothing between the admin's change and the user's next request refreshes it. Judging against that snapshot
-    // is the bug; the cap the admin has already set is the answer. Both directions, because a live read that only
-    // ever refuses is just a broken quota.
+    // user signs in FIRST, so everything their browser holds predates the admin's change. The cap the admin has
+    // already set is the answer, whatever the request carries. Both directions, because a live read that only ever
+    // refuses is just a broken quota.
     it('refuses the next claim under a cap the admin lowered after the user signed in', async () =>
     {
         const adminCookie = await adminOn(booted);

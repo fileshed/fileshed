@@ -32,6 +32,7 @@ import { createAccessTokenRoutes } from './routes/accessTokens.ts';
 import { createAdminRoutes, createAdminRuntimeRoutes } from './routes/admin.ts';
 import { createAvatarRoutes } from './routes/avatars.ts';
 import { createBlobRoutes } from './routes/blobs.ts';
+import { createCredentialRoutes } from './routes/credentials.ts';
 import { createMeRoutes } from './routes/me.ts';
 import { createAccessRequestRoutes } from './routes/accessRequests.ts';
 import { createDeletionOfferRoutes } from './routes/deletionOffers.ts';
@@ -75,6 +76,7 @@ import { AdminManager } from './managers/admin.ts';
 import { managedAuthSecretFile, resolveAuthSecret } from './managers/authSecret.ts';
 import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
+import { CredentialManager } from './managers/credentials.ts';
 import { DeletionOfferManager } from './managers/deletionOffer.ts';
 import { MailManager } from './managers/mail.ts';
 import { MediaTagManager, startMediaTagTimer } from './managers/mediaTags.ts';
@@ -147,6 +149,7 @@ export interface AppServices
 {
     blobs : BlobManager;
     mediaTags : MediaTagManager;
+    credentials : CredentialManager;
     avatars : AvatarManager;
     nodes : NodeManager;
     shares : ShareManager;
@@ -281,6 +284,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             app.route('/api', createNodeRoutes(sessions, services.nodes));
             app.route('/api', createSearchRoutes(sessions, services.nodes));
             app.route('/api', createMeRoutes(sessions, services.nodes));
+            app.route('/api', createCredentialRoutes(sessions, services.credentials));
             app.route('/api', createUserRoutes(sessions, services.users));
             app.route('/api', createAvatarRoutes(sessions, services.avatars, services.nodes));
             app.route('/api', createShareRoutes(sessions, services.shares));
@@ -429,6 +433,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         defaultQuota,
     });
     const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
+    const credentials = new CredentialManager({ auth, handle });
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
     const branding = new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes });
     const nodes = new NodeManager(handle, nodeRA, blob, {
@@ -505,6 +510,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     const services = {
         blobs,
         mediaTags,
+        credentials,
         avatars,
         nodes,
         shares,

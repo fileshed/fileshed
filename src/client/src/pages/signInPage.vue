@@ -21,10 +21,10 @@
                 @submit="onSubmit"
             >
                 <UAlert
-                    v-if="wasSignedOut && !errorMessage"
-                    color="warning"
+                    v-if="arrival && !errorMessage"
+                    :color="arrival.color"
                     variant="soft"
-                    description="Your session ended — you may have been signed out elsewhere. Sign in to continue."
+                    :description="arrival.description"
                 />
 
                 <UAlert
@@ -143,8 +143,29 @@
     const providers = ref<SocialProviderID[]>([]);
     const socialPending = ref<SocialProviderID | null>(null);
 
-    // The session-kick redirect carries reason=signed-out so this page can say why the visitor landed here.
-    const wasSignedOut = computed(() => route.query.reason === 'signed-out');
+    // Why the visitor is looking at sign-in rather than the app. The session kick sends reason=signed-out, which is
+    // news to them; the account's own sign-out-everywhere sends reason=revoked, which is the action working and so
+    // is not dressed as a warning.
+    const arrival = computed<{ description : string; color : 'warning' | 'success' } | null>(() =>
+    {
+        if(route.query.reason === 'signed-out')
+        {
+            return {
+                description: 'Your session ended — you may have been signed out elsewhere. Sign in to continue.',
+                color: 'warning',
+            };
+        }
+
+        if(route.query.reason === 'revoked')
+        {
+            return {
+                description: 'Every session ended and every access token was revoked. Sign in to continue.',
+                color: 'success',
+            };
+        }
+
+        return null;
+    });
 
     // Only same-origin absolute paths are honoured, so a crafted ?redirect can't bounce a fresh sign-in off-site.
     function redirectTarget() : string

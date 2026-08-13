@@ -27,6 +27,13 @@
             </h2>
             <ConnectedAccounts />
         </section>
+
+        <section class="flex flex-col gap-3">
+            <h2 class="text-lg font-semibold text-highlighted">
+                Sessions and tokens
+            </h2>
+            <RevokeCredentials />
+        </section>
     </div>
 </template>
 
@@ -37,6 +44,7 @@
     import AccountStorage from '../../components/account/accountStorage.vue';
     import ChangePassword from '../../components/account/changePassword.vue';
     import ConnectedAccounts from '../../components/account/connectedAccounts.vue';
+    import RevokeCredentials from '../../components/account/revokeCredentials.vue';
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

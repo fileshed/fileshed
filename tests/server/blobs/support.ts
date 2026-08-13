@@ -142,9 +142,9 @@ export interface TestUser
     id : string;
     cookie : string;
 
-    // The session token PLUS better-auth's session_data cache, the way a browser carries them. The cache holds a
-    // signed snapshot of the user row, so a spec exercising a row that changes after sign-in must send this rather
-    // than `cookie` -- with the token alone the server reads the session fresh and no snapshot is ever consulted.
+    // Every cookie sign-in set, the way a browser carries them. With the session cookie cache off that is the token
+    // alone, so a spec exercising a user row that changes after sign-in sends this to say the answer must come from
+    // the row whatever the browser holds -- and to fail if a cached snapshot ever reappears.
     jar : string;
     email : string;
 }

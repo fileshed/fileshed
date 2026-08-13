@@ -8,7 +8,7 @@
 
 import type { Hono } from 'hono';
 
-import { DEFAULT_UPLOAD_CHUNK_BYTES, UNLIMITED_QUOTA } from '@fileshed/core';
+import { DEFAULT_UPLOAD_CHUNK_BYTES, MS_PER_DAY, UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -28,6 +28,7 @@ import { AdminManager } from '@server/managers/admin.ts';
 import { AvatarManager } from '@server/managers/avatar.ts';
 import { BlobManager } from '@server/managers/blob.ts';
 import { BrandingManager } from '@server/managers/branding.ts';
+import { CredentialManager } from '@server/managers/credentials.ts';
 import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
 import { LastRunTracker } from '@server/managers/lastRun.ts';
 import { MailManager } from '@server/managers/mail.ts';
@@ -38,7 +39,10 @@ import { SettingsManager } from '@server/managers/settings.ts';
 import { SetupManager } from '@server/managers/setup.ts';
 import { ShareManager } from '@server/managers/share.ts';
 import { StatusManager } from '@server/managers/status.ts';
+import { SweepManager } from '@server/managers/sweeps.ts';
 import { UserManager } from '@server/managers/user.ts';
+import { runGcOnce } from '@server/managers/gc.ts';
+import { runTrashPurgeOnce } from '@server/managers/trashPurge.ts';
 
 // App
 import { createApp } from '@server/app.ts';
@@ -140,6 +144,14 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
     const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
 
     const nodes = new NodeManager(handle, nodeRA, blob, { defaultQuota });
+    const tracker = new LastRunTracker();
+
+    // The same suppliers bootApp wires, so a spec can lower a retention through the settings route and have the very
+    // next sweep run obey it.
+    const gcGraceMs = async () : Promise<number> => await settings.numberValue('GC_GRACE_DAYS', config.GC_GRACE_DAYS)
+        * MS_PER_DAY;
+    const trashGraceMs = async () : Promise<number> =>
+        await settings.numberValue('TRASH_PURGE_DAYS', config.TRASH_PURGE_DAYS) * MS_PER_DAY;
 
     return createApp(auth, {
         blobs: new BlobManager({
@@ -150,6 +162,7 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
             defaultQuota,
         }),
         mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
+        credentials: new CredentialManager({ auth, handle }),
         setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
         avatars: new AvatarManager({ handle, blob, avatarMaxBytes }),
         nodes,
@@ -162,13 +175,20 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
             nodes: nodeRA,
             users: userRA,
             shares: shareRA,
-            tracker: new LastRunTracker(),
+            tracker,
             version: VERSION,
             databaseKind: handle.kind,
             startedAt,
             activeProviders: 0,
             emailEnabled: () => mail.isConfigured(),
             signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),
+        }),
+        sweeps: new SweepManager({
+            runners: {
+                gc: () => runGcOnce({ blob, graceMs: gcGraceMs }),
+                trashPurge: () => runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: trashGraceMs }),
+            },
+            tracker,
         }),
         users: new UserManager(userRA),
         settings,
@@ -229,10 +249,10 @@ export function cookieFrom(res : Response) : string
     return res.headers.get('set-cookie')?.split(';')[0] ?? '';
 }
 
-// Every cookie the response sets, joined as a browser would send them back -- including better-auth's session_data
-// cache, which carries a signed SNAPSHOT of the user row for its Max-Age. cookieFrom keeps only the session token, so
-// a request built from it makes the server read the session fresh. A spec whose subject is a user row changing after
-// sign-in must send the whole jar, or the staleness it means to exercise never happens.
+// Every cookie the response sets, joined as a browser would send them back. The session cookie cache is off, so this
+// is the session token and nothing beside it -- which is the point of still having it: a spec that sends the whole jar
+// asserts the answer came from the session row no matter what the browser happens to be carrying. Turn the cache back
+// on and better-auth adds a signed snapshot of the user row here, and these are the specs that notice.
 export function cookieJarFrom(res : Response) : string
 {
     return res.headers.getSetCookie()

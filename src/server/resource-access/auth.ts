@@ -31,7 +31,6 @@ import {
     PLAYBACK_TOKEN_PREFIX,
     PLAYBACK_TOKEN_TTL_MS,
     type ProviderSettingKey,
-    SESSION_COOKIE_CACHE_SECONDS,
     type SocialProviderID,
     providerCredentialKeys,
     providerRequiredKeys,
@@ -235,11 +234,16 @@ const authOptionsShape = {
     // reflects that social providers may be configured.
     socialProviders: undefined as BetterAuthOptions['socialProviders'],
     session: {
-        // Serve the session from a short-lived signed cookie so getSession on hot paths skips a DB round-trip.
-        // The cookie lives in the BROWSER, so revoking DB sessions (a ban does) cannot reach it before it expires
-        // -- SESSION_COOKIE_CACHE_SECONDS caps that window, at a cost of one session read per user per window.
-        // Access tokens have no such lag: the ban hooks delete them outright.
-        cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
+        // OFF, and it has to stay off. The cache serves a session from a signed snapshot in the browser, so deleting
+        // the session row cannot reach it -- for the length of the window, a revoked cookie still authenticates.
+        // "Sign out everywhere" cannot survive that: inside the window a stolen cookie mints an access token, and
+        // that token outlives the revocation forever. What makes it unfixable at the endpoint is that nothing marks
+        // the account, so no later request has anything to re-check. A ban is different only because it sets a
+        // standing `banned` flag that every token resolution reads.
+        //
+        // The price is one indexed read of the session row per request, which is the cost of a revocation meaning
+        // what it says.
+        cookieCache: { enabled: false },
     },
     plugins: [ admin(), apiKey(apiKeyConfigurations) ],
     // Placeholder for the type only, like socialProviders: createAuth supplies the live hooks, which need the
@@ -275,10 +279,10 @@ export type Auth = ReturnType<typeof betterAuth<typeof authOptionsShape>>;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// Access-token cleanup shared by the ban and deletion hooks. The apikey table is better-auth territory (its
+// Every access token an account holds, dropped in one statement. The apikey table is better-auth territory (its
 // migrator owns it, camelCase columns, referenceId has no FK to user), so this is raw SQL rather than a typed
 // Kysely table: keys must not survive their owner losing standing.
-async function deleteAccessTokensFor(handle : DatabaseHandle, userID : string) : Promise<void>
+export async function deleteAccessTokensFor(handle : DatabaseHandle, userID : string) : Promise<void>
 {
     await sql`delete from apikey where "referenceId" = ${ userID }`.execute(handle.db);
 }
