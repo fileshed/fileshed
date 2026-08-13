@@ -22,7 +22,10 @@ import { z } from 'zod';
 import { BlobNotFoundError, HashMismatchError, InvalidSha256Error, SizeMismatchError } from '@fileshed/core';
 
 // Resource Access
-import type { BlobBackend, BlobRange } from '../interfaces/blob.ts';
+import type { BlobBackend, BlobRange, StagedSweep } from '../interfaces/blob.ts';
+
+// Utils
+import { getLogger } from '../../utils/logger.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Config
@@ -53,6 +56,8 @@ export function resolveStorageRoot(root : string) : string
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+
+const logger = getLogger('fs-backend');
 
 // A canonical, lowercase sha256 hex digest. Enforcing the form keeps the same blob from landing under two shard
 // paths and stops a crafted address from escaping the root via path traversal.
@@ -247,22 +252,44 @@ export class FsBackend implements BlobBackend
         await rm(this.#partialPath(uploadID), { force: true });
     }
 
-    async sweepChunked(cutoff : Date) : Promise<number>
+    // A staging file already gone by the time it is measured -- committed, discarded, or taken by another server's
+    // sweep -- is no candidate: nothing to reclaim, nothing to report. One that goes in the window between being
+    // measured and being deleted is still counted here, since the delete is forced and cannot tell the difference,
+    // so two servers sweeping at once can each bill themselves for the same bytes. That costs an overstated readout
+    // and nothing else. One that will not delete is counted and logged rather than thrown, so a single unreadable
+    // file cannot strand every other abandoned upload's bytes.
+    async sweepChunked(cutoff : Date) : Promise<StagedSweep>
     {
         const names = await readdir(this.#partials).catch(() => [] as string[]);
 
-        const swept = await Promise.all(names.map(async (name) =>
+        const outcomes = await Promise.all(names.map(async (name) =>
         {
             const path = join(this.#partials, name);
 
             const stats = await stat(path).catch(() => null);
-            if(stats === null || stats.mtimeMs >= cutoff.getTime()) { return false; }
+            if(stats === null || stats.mtimeMs >= cutoff.getTime()) { return null; }
 
-            await rm(path, { force: true });
-            return true;
+            try
+            {
+                await rm(path, { force: true });
+                return { reclaimed: true, bytes: stats.size };
+            }
+            catch(error)
+            {
+                logger.error({ err: error, path }, 'Abandoned upload staging would not delete; bytes leaked');
+                return { reclaimed: false, bytes: 0 };
+            }
         }));
 
-        return swept.filter(Boolean).length;
+        const candidates = outcomes.filter((outcome) => outcome !== null);
+        const reclaimed = candidates.filter((outcome) => outcome.reclaimed);
+
+        return {
+            candidates: candidates.length,
+            reclaimed: reclaimed.length,
+            failed: candidates.length - reclaimed.length,
+            bytesFreed: reclaimed.reduce((total, outcome) => total + outcome.bytes, 0),
+        };
     }
 
     #assertSha256(sha256 : string) : void

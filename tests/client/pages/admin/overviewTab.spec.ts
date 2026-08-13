@@ -76,6 +76,10 @@ function statusFixture(overrides : Partial<AdminStatusResponse> = {}) : AdminSta
             summary: { candidates: 4, deleted: 3, kept: 1, bytesFailed: 0, bytesFreed: 250_000 },
         },
         trashPurge: null,
+        partials: {
+            ranAt: '2026-07-28T10:30:00.000Z',
+            summary: { candidates: 5, reclaimed: 5, failed: 0, bytesFreed: 120_000 },
+        },
         ...overrides,
     };
 }
@@ -196,6 +200,8 @@ describe('Admin OverviewTab', () =>
         expect(wrapper.find('.badge').text()).toBe('Default');
         expect(wrapper.text()).toContain('250 kB reclaimed');
         expect(wrapper.text()).toContain('3 of 4 collected');
+        expect(wrapper.text()).toContain('120 kB reclaimed');
+        expect(wrapper.text()).toContain('5 of 5 cleared');
     });
 
     // The figures a sweep moves are on this page, so the run has to leave the page showing the instance as it now
@@ -247,6 +253,18 @@ describe('Admin OverviewTab', () =>
 
         expect(runSweepMock).toHaveBeenCalledWith('trashPurge');
         expect(toasts[0]?.description).toBe('2 of 2 purged.');
+
+        runSweepMock.mockResolvedValue({
+            sweep: 'partials',
+            ranAt: '2026-07-28T11:05:00.000Z',
+            summary: { candidates: 3, reclaimed: 3, failed: 0, bytesFreed: 90_000 },
+        });
+
+        await wrapper.findAll('.run')[2]?.trigger('click');
+        await flushPromises();
+
+        expect(runSweepMock).toHaveBeenCalledWith('partials');
+        expect(toasts[1]?.description).toBe('90 kB reclaimed, 3 of 3 cleared.');
     });
 
     it('says a sweep has not run yet instead of faking a timestamp', async () =>

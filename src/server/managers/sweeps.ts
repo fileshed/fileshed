@@ -1,11 +1,12 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Sweep Manager
 //
-// Within one process, the only way the GC and trash-purge sweeps start, whether their timer asks or an admin does.
+// Within one process, the only way a storage-reclaiming sweep starts, whether its timer asks or an admin does.
 // That is the whole point of the class: the in-flight latch can only answer "already running" honestly if both callers
 // pass through it, and the run an admin collides with is nearly always the scheduled one rather than a second button
-// press. The latch is per-process; two servers against one database sweep on their own timers, and what keeps that
-// from corrupting anything is the conditional delete inside each sweep, not this class.
+// press. The latch is per-process; two servers against one store sweep on their own timers, and what keeps that from
+// corrupting anything is each sweep's own rule -- a conditional delete, a cutoff nothing live can be behind -- not
+// this class.
 //
 // The two callers differ only in what a collision means. An admin is told (409) -- they asked for something specific
 // and deserve to know it did not happen. A timer tick is skipped and logged at debug, because the interval will come
@@ -19,6 +20,7 @@ import {
     type GcRunSummary,
     MS_PER_SECOND,
     NotFoundError,
+    type PartialsRunSummary,
     type SweepKind,
     type SweepRunResponse,
     type TrashPurgeRunSummary,
@@ -41,6 +43,7 @@ const logger = getLogger('sweeps');
 const sweepLabels : Record<SweepKind, string> = {
     gc: 'garbage collection',
     trashPurge: 'trash purge',
+    partials: 'abandoned upload',
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -52,6 +55,7 @@ export interface SweepRunners
 {
     gc : () => Promise<GcRunSummary>;
     trashPurge : () => Promise<TrashPurgeRunSummary>;
+    partials : () => Promise<PartialsRunSummary>;
 }
 
 export interface SweepManagerDeps
@@ -98,12 +102,13 @@ export class SweepManager
         return this.#start(kind);
     }
 
-    // Runs every sweep shortly after boot and then on a fixed interval. The boot pass matters more than it looks: a
-    // deployment restarted more often than the interval would otherwise never sweep at all, and the admin status page
-    // would report an eternal "never". Returns a handle that stops all of them.
-    startTimers(intervalMs : number) : () => void
+    // Runs every sweep shortly after boot and then each on its own interval -- what one sweep costs and how fast what
+    // it reclaims piles up are its own, not the set's. The boot pass matters more than it looks: a deployment restarted
+    // more often than the interval would otherwise never sweep at all, and the admin status page would report an
+    // eternal "never". Returns a handle that stops all of them.
+    startTimers(intervals : Record<SweepKind, number>) : () => void
     {
-        const stops = sweepKinds.map((kind) => this.#schedule(kind, intervalMs));
+        const stops = sweepKinds.map((kind) => this.#schedule(kind, intervals[kind]));
 
         return () =>
         {
@@ -173,6 +178,13 @@ export class SweepManager
                 const last = this.#tracker.recordTrashPurge(await this.#runners.trashPurge());
 
                 return { sweep: 'trashPurge', ranAt: last.at.toISOString(), summary: last.summary };
+            }
+
+            case 'partials':
+            {
+                const last = this.#tracker.recordPartials(await this.#runners.partials());
+
+                return { sweep: 'partials', ranAt: last.at.toISOString(), summary: last.summary };
             }
         }
     }

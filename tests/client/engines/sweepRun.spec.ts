@@ -9,7 +9,12 @@
 import { describe, expect, it } from 'vitest';
 
 // Under test
-import { describeGcRun, describeSweepRun, describeTrashPurgeRun } from '@client/engines/sweepRun.ts';
+import {
+    describeGcRun,
+    describePartialsRun,
+    describeSweepRun,
+    describeTrashPurgeRun,
+} from '@client/engines/sweepRun.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -66,9 +71,35 @@ describe('describeTrashPurgeRun', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+describe('describePartialsRun', () =>
+{
+    it('leads with the space the abandoned staging was holding', () =>
+    {
+        const line = describePartialsRun({ candidates: 3, reclaimed: 3, failed: 0, bytesFreed: 2_500_000 });
+
+        expect(line).toBe('2.5 MB reclaimed, 3 of 3 cleared.');
+    });
+
+    it('says nothing about failures on a sweep that had none', () =>
+    {
+        const line = describePartialsRun({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 });
+
+        expect(line).toBe('0 B reclaimed, 0 of 0 cleared.');
+    });
+
+    it('names the staging it could not drop', () =>
+    {
+        const line = describePartialsRun({ candidates: 4, reclaimed: 3, failed: 1, bytesFreed: 3072 });
+
+        expect(line).toContain('1 left behind');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('describeSweepRun', () =>
 {
-    it('describes each sweep in its own terms rather than a shared one that fits neither', () =>
+    it('describes each sweep in its own terms rather than a shared one that fits none of them', () =>
     {
         const collected = describeSweepRun({
             sweep: 'gc',
@@ -82,8 +113,15 @@ describe('describeSweepRun', () =>
             summary: { candidates: 2, purged: 2, failed: 0 },
         });
 
+        const reaped = describeSweepRun({
+            sweep: 'partials',
+            ranAt: '2026-08-12T10:00:00.000Z',
+            summary: { candidates: 2, reclaimed: 2, failed: 0, bytesFreed: 4096 },
+        });
+
         expect(collected).toBe('4.1 kB reclaimed, 1 of 1 collected.');
         expect(purged).toBe('2 of 2 purged.');
+        expect(reaped).toBe('4.1 kB reclaimed, 2 of 2 cleared.');
     });
 });
 

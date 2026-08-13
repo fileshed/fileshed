@@ -57,7 +57,6 @@ export interface BootedBlobApp
     auth : Auth;
     blob : BlobRA;
     backendID : string;
-    blobs : BlobManager;
     storageRoot : string;
     cleanup : () => Promise<void>;
 }
@@ -123,7 +122,6 @@ export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<Boote
         auth,
         blob,
         backendID,
-        blobs,
         storageRoot,
         cleanup: async () =>
         {

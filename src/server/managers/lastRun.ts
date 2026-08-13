@@ -11,7 +11,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import type { GcRunSummary, TrashPurgeRunSummary } from '@fileshed/core';
+import type { GcRunSummary, PartialsRunSummary, TrashPurgeRunSummary } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -25,6 +25,7 @@ export class LastRunTracker
 {
     #gc : LastRun<GcRunSummary> | null = null;
     #trashPurge : LastRun<TrashPurgeRunSummary> | null = null;
+    #partials : LastRun<PartialsRunSummary> | null = null;
 
     recordGc(summary : GcRunSummary) : LastRun<GcRunSummary>
     {
@@ -40,6 +41,13 @@ export class LastRunTracker
         return this.#trashPurge;
     }
 
+    recordPartials(summary : PartialsRunSummary) : LastRun<PartialsRunSummary>
+    {
+        this.#partials = { summary, at: new Date() };
+
+        return this.#partials;
+    }
+
     get gc() : LastRun<GcRunSummary> | null
     {
         return this.#gc;
@@ -48,6 +56,11 @@ export class LastRunTracker
     get trashPurge() : LastRun<TrashPurgeRunSummary> | null
     {
         return this.#trashPurge;
+    }
+
+    get partials() : LastRun<PartialsRunSummary> | null
+    {
+        return this.#partials;
     }
 }
 

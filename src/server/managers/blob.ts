@@ -29,6 +29,7 @@ import {
     type ClaimRequest,
     type ClaimResponse,
     ConflictError,
+    EXPIRY_PRUNE_INTERVAL_MS,
     FAILED_PROOF_WINDOW_MS,
     type FileNode,
     ForbiddenError,
@@ -44,7 +45,6 @@ import {
     RegulationError,
     type Role,
     SMALL_FILE_THRESHOLD_BYTES,
-    SWEEP_INTERVAL_MS,
     SizeMismatchError,
     TICKET_TTL_MS,
     TooManyRequestsError,
@@ -697,43 +697,21 @@ export class BlobManager
     // Background maintenance
     //------------------------------------------------------------------------------------------------------------------
 
-    // Prune expired tickets/challenges and stale failed-proof counts, and reclaim the staging bytes of abandoned
-    // uploads. Correctness never depends on this (expiry is enforced on use); it bounds memory and disk. The
-    // composition root starts it; it returns a stop handle.
-    startSweeps(intervalMs : number = SWEEP_INTERVAL_MS) : () => void
+    // Prune expired tickets, challenges, and stale failed-proof counts. Correctness never depends on this -- an expired
+    // entry is refused on use whether it has been pruned or not -- it bounds what the process holds in memory. The
+    // staging bytes an expired ticket leaves on disk are the partials sweep's to reclaim, on the sweep manager's timer.
+    // The composition root starts this; it returns a stop handle.
+    startExpiryPruning() : () => void
     {
         const timer = setInterval(() =>
         {
             this.#tickets.sweep();
             this.#challenges.sweep();
             this.#failedProofs.sweep();
-
-            void this.sweepPartials();
-        }, intervalMs);
+        }, EXPIRY_PRUNE_INTERVAL_MS);
 
         timer.unref?.();
         return () => clearInterval(timer);
-    }
-
-    // Drop the staging bytes of uploads that stopped delivering. A chunk pushes its ticket's expiry out by the ticket
-    // TTL and touches the staging file at the same moment, so staging untouched since a cutoff that far back belongs to
-    // a ticket no chunk can be honoured against -- there is nothing left to resume and nobody left to resume it. Never
-    // throws: one failed sweep must not kill the timer that runs it.
-    async sweepPartials(cutoff : Date = new Date(Date.now() - TICKET_TTL_MS)) : Promise<number>
-    {
-        try
-        {
-            const removed = await this.#blob.sweepChunked(cutoff);
-
-            this.#logger[removed > 0 ? 'info' : 'debug']({ removed }, 'Partial upload sweep complete');
-
-            return removed;
-        }
-        catch(error)
-        {
-            this.#logger.warn({ err: error }, 'Partial upload sweep failed');
-            return 0;
-        }
     }
 
     //------------------------------------------------------------------------------------------------------------------

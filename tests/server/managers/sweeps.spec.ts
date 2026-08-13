@@ -16,6 +16,7 @@ import {
     type GcRunSummary,
     MS_PER_SECOND,
     NotFoundError,
+    type PartialsRunSummary,
     type TrashPurgeRunSummary,
 } from '@fileshed/core';
 
@@ -33,8 +34,12 @@ const MEMBER = testActor({ id: 'member-actor', role: 'user' });
 
 const INTERVAL_MS = 60 * MS_PER_SECOND;
 
+// Comfortably inside INTERVAL_MS, so a sweep on this one comes round while the others are still waiting.
+const BRISK_INTERVAL_MS = 5 * MS_PER_SECOND;
+
 const GC_RECLAIMED : GcRunSummary = { candidates: 5, deleted: 4, kept: 1, bytesFailed: 0, bytesFreed: 8192 };
 const TRASH_PURGED : TrashPurgeRunSummary = { candidates: 3, purged: 3, failed: 0 };
+const PARTIALS_REAPED : PartialsRunSummary = { candidates: 2, reclaimed: 2, failed: 0, bytesFreed: 4096 };
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -105,6 +110,7 @@ function fakeSweep<T>() : FakeSweep<T>
 
 let gc : FakeSweep<GcRunSummary>;
 let trashPurge : FakeSweep<TrashPurgeRunSummary>;
+let partials : FakeSweep<PartialsRunSummary>;
 let tracker : LastRunTracker;
 let manager : SweepManager;
 let stopTimers : (() => void) | null;
@@ -113,10 +119,14 @@ beforeEach(() =>
 {
     gc = fakeSweep<GcRunSummary>();
     trashPurge = fakeSweep<TrashPurgeRunSummary>();
+    partials = fakeSweep<PartialsRunSummary>();
     tracker = new LastRunTracker();
     stopTimers = null;
 
-    manager = new SweepManager({ runners: { gc: gc.run, trashPurge: trashPurge.run }, tracker });
+    manager = new SweepManager({
+        runners: { gc: gc.run, trashPurge: trashPurge.run, partials: partials.run },
+        tracker,
+    });
 });
 
 afterEach(() =>
@@ -125,12 +135,21 @@ afterEach(() =>
     vi.useRealTimers();
 });
 
-// Start the schedule and let the boot pass fire, which claims the latch for both sweeps exactly as a timer would.
-function startScheduledSweeps() : void
+// Start the schedule and let the boot pass fire, which claims the latch for every sweep exactly as a timer would.
+// Most of what these tests drive is indifferent to how often a sweep comes round, so they put every sweep on one
+// interval and vary it only where the cadence is the point.
+function startScheduledSweeps(partialsIntervalMs = INTERVAL_MS) : void
 {
     vi.useFakeTimers();
-    stopTimers = manager.startTimers(INTERVAL_MS);
+    stopTimers = manager.startTimers({ gc: INTERVAL_MS, trashPurge: INTERVAL_MS, partials: partialsIntervalMs });
     vi.advanceTimersByTime(MS_PER_SECOND);
+}
+
+function releaseScheduledSweeps() : void
+{
+    gc.release(GC_RECLAIMED);
+    trashPurge.release(TRASH_PURGED);
+    partials.release(PARTIALS_REAPED);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -160,6 +179,18 @@ describe('SweepManager.run', () =>
         expect(tracker.trashPurge?.at.toISOString()).toBe(outcome.ranAt);
     });
 
+    it('answers a partials run with what the reaper reclaimed, and records that run', async () =>
+    {
+        const running = manager.run(ADMIN, 'partials');
+        partials.release(PARTIALS_REAPED);
+
+        const outcome = await running;
+
+        expect(outcome).toEqual({ sweep: 'partials', ranAt: expect.any(String), summary: PARTIALS_REAPED });
+        expect(tracker.partials?.summary).toEqual(PARTIALS_REAPED);
+        expect(tracker.partials?.at.toISOString()).toBe(outcome.ranAt);
+    });
+
     it('refuses a second run while the first is still going, without starting the sweep again', async () =>
     {
         const running = manager.run(ADMIN, 'gc');
@@ -178,8 +209,7 @@ describe('SweepManager.run', () =>
         await expect(manager.run(ADMIN, 'gc')).rejects.toThrow(/already running/i);
         expect(gc.entered()).toBe(1);
 
-        gc.release(GC_RECLAIMED);
-        trashPurge.release(TRASH_PURGED);
+        releaseScheduledSweeps();
     });
 
     // Against the same manager on purpose: a latch that only ever clears on failure would satisfy a second manager
@@ -209,16 +239,19 @@ describe('SweepManager.run', () =>
         expect(gc.entered()).toBe(2);
     });
 
-    it('holds each sweep\'s latch separately, so one running does not refuse the other', async () =>
+    it('holds each sweep\'s latch separately, so one running does not refuse the others', async () =>
     {
         const collecting = manager.run(ADMIN, 'gc');
         const purging = manager.run(ADMIN, 'trashPurge');
+        const reaping = manager.run(ADMIN, 'partials');
 
         gc.release(GC_RECLAIMED);
         trashPurge.release(TRASH_PURGED);
+        partials.release(PARTIALS_REAPED);
 
         await expect(collecting).resolves.toMatchObject({ sweep: 'gc' });
         await expect(purging).resolves.toMatchObject({ sweep: 'trashPurge' });
+        await expect(reaping).resolves.toMatchObject({ sweep: 'partials' });
     });
 
     it('refuses a caller who is not an admin, and runs nothing', async () =>
@@ -232,6 +265,7 @@ describe('SweepManager.run', () =>
         await expect(manager.run(ADMIN, 'defragment')).rejects.toThrow(NotFoundError);
         expect(gc.entered()).toBe(0);
         expect(trashPurge.entered()).toBe(0);
+        expect(partials.entered()).toBe(0);
     });
 
     it('judges authority before the sweep name, so a stranger learns nothing about which sweeps exist', async () =>
@@ -252,8 +286,7 @@ describe('SweepManager.startTimers', () =>
 
         expect(gc.entered()).toBe(1);
 
-        gc.release(GC_RECLAIMED);
-        trashPurge.release(TRASH_PURGED);
+        releaseScheduledSweeps();
         await running;
     });
 
@@ -263,19 +296,20 @@ describe('SweepManager.startTimers', () =>
 
         expect(gc.entered()).toBe(1);
         expect(trashPurge.entered()).toBe(1);
+        expect(partials.entered()).toBe(1);
     });
 
     it('goes on sweeping every interval, not only the once at boot', async () =>
     {
         startScheduledSweeps();
 
-        gc.release(GC_RECLAIMED);
-        trashPurge.release(TRASH_PURGED);
+        releaseScheduledSweeps();
 
         await vi.advanceTimersByTimeAsync(INTERVAL_MS);
 
         expect(gc.entered()).toBe(2);
         expect(trashPurge.entered()).toBe(2);
+        expect(partials.entered()).toBe(2);
     });
 
     // A sweep that throws takes its rejection no further than the tick that started it. If it did, the failure would
@@ -286,22 +320,39 @@ describe('SweepManager.startTimers', () =>
 
         gc.fail(new Error('the backend went away'));
         trashPurge.release(TRASH_PURGED);
+        partials.release(PARTIALS_REAPED);
 
         await vi.advanceTimersByTimeAsync(INTERVAL_MS);
 
         expect(gc.entered()).toBe(2);
     });
 
+    // Abandoned upload staging is reclaimed far more often than the sweeps that read the database, so a sweep must
+    // come round on its own cadence rather than the slowest one in the set.
+    it('runs a sweep on its own interval rather than making it wait out the others', async () =>
+    {
+        startScheduledSweeps(BRISK_INTERVAL_MS);
+
+        releaseScheduledSweeps();
+
+        await vi.advanceTimersByTimeAsync(BRISK_INTERVAL_MS);
+
+        expect(partials.entered()).toBe(2);
+        expect(gc.entered()).toBe(1);
+        expect(trashPurge.entered()).toBe(1);
+    });
+
     it('stops sweeping once the handle is called', () =>
     {
         vi.useFakeTimers();
-        const stop = manager.startTimers(INTERVAL_MS);
+        const stop = manager.startTimers({ gc: INTERVAL_MS, trashPurge: INTERVAL_MS, partials: INTERVAL_MS });
         stop();
 
         vi.advanceTimersByTime(INTERVAL_MS * 3);
 
         expect(gc.entered()).toBe(0);
         expect(trashPurge.entered()).toBe(0);
+        expect(partials.entered()).toBe(0);
     });
 });
 

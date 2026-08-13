@@ -182,9 +182,20 @@ const trashPurgeRunStatusCodec = z.strictObject({
     }),
 });
 
+const partialsRunStatusCodec = z.strictObject({
+    ranAt: isoDateTimeCodec,
+    summary: z.strictObject({
+        candidates: wholeCount,
+        reclaimed: wholeCount,
+        failed: wholeCount,
+        bytesFreed: wholeCount,
+    }),
+});
+
 export const sweepRunResponseCodec = z.discriminatedUnion('sweep', [
     gcRunStatusCodec.extend({ sweep: z.literal('gc') }),
     trashPurgeRunStatusCodec.extend({ sweep: z.literal('trashPurge') }),
+    partialsRunStatusCodec.extend({ sweep: z.literal('partials') }),
 ]);
 
 typeAssert<Equals<z.output<typeof sweepRunResponseCodec>, SweepRunResponse>>();
@@ -228,6 +239,7 @@ export const adminStatusResponseCodec = z.strictObject({
     backends: z.array(storageBackendStatusCodec),
     gc: gcRunStatusCodec.nullable(),
     trashPurge: trashPurgeRunStatusCodec.nullable(),
+    partials: partialsRunStatusCodec.nullable(),
 });
 
 typeAssert<Equals<z.output<typeof adminStatusResponseCodec>, AdminStatusResponse>>();

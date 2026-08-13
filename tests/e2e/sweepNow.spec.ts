@@ -9,17 +9,21 @@
 // reports is checked against the disk and the database, because a summary nobody corroborates is just a number.
 //----------------------------------------------------------------------------------------------------------------------
 
+import { readdir, utimes } from 'node:fs/promises';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Models
-import type {
-    AdminStatusResponse,
-    ClaimResponse,
-    GcSweepRunResponse,
-    NodeResponse,
-    TrashPurgeSweepRunResponse,
+import {
+    type AdminStatusResponse,
+    type ClaimResponse,
+    type GcSweepRunResponse,
+    type NodeResponse,
+    type PartialsSweepRunResponse,
+    TICKET_TTL_MS,
+    type TrashPurgeSweepRunResponse,
 } from '@fileshed/core';
 
 // Support
@@ -39,14 +43,20 @@ const SETUP_TOKEN = 'e2e-sweep-now-token';
 const ADMIN_EMAIL = 'sweep-now-admin@fileshed.test';
 const ADMIN_PASSWORD = 'admin-password-e2e';
 
-// Held open so nothing this spec stages can be taken by a scheduled pass, and scheduled an hour out so the only sweep
-// that runs inside the spec is the one an admin asks for.
+// The two database sweeps are held wide open and scheduled an hour out, so the gc and trash-purge runs asserted below
+// are the ones an admin asked for. The partials reaper has a fixed minute cadence that nothing can hold open, and does
+// not need one: staging is only a candidate once it has aged past a whole ticket lifetime, and the one file that ever
+// does is aged by hand a moment before the sweep this spec runs.
 const HELD_OPEN = { GC_GRACE_DAYS: '7', TRASH_PURGE_DAYS: '30', GC_INTERVAL_MINUTES: '60' };
 
 // The boot pass fires a second after the server starts, so setup is usually past it already; this is the backstop
 // for the run where it is not.
 const BOOT_PASS_TIMEOUT_MS = 10_000;
 const BOOT_PASS_POLL_MS = 50;
+
+// How much of the abandoned upload gets delivered before it stops: the bytes its staging is holding, and the figure
+// the reaper has to hand back.
+const PARTIAL_BYTES = 4096;
 
 const collectible = smallFixture('sweep-now-collectible');
 const collectibleSha = sha256Of(collectible);
@@ -78,18 +88,33 @@ async function uploadFile(name : string, bytes : Buffer) : Promise<NodeResponse>
 }
 
 // The server sweeps once shortly after boot, and a run that lands inside that pass is refused -- so every test here
-// would be racing however long setup happened to take. The readout naming both sweeps is that pass having finished,
+// would be racing however long setup happened to take. The readout naming every sweep is that pass having finished,
 // which is a signal rather than a guess.
 async function waitOutTheBootPass(deadline = Date.now() + BOOT_PASS_TIMEOUT_MS) : Promise<void>
 {
     const body = await (await admin.get('/api/admin/status')).json() as AdminStatusResponse;
-    if(body.gc !== null && body.trashPurge !== null) { return; }
+    if(body.gc !== null && body.trashPurge !== null && body.partials !== null) { return; }
 
     if(Date.now() >= deadline) { throw new Error('setup: the server never finished its boot sweeps'); }
 
     await delay(BOOT_PASS_POLL_MS);
 
     return waitOutTheBootPass(deadline);
+}
+
+async function stagedPartials() : Promise<string[]>
+{
+    return readdir(join(server.storageRoot, '.partials')).catch(() => []);
+}
+
+// Age every staging file past the ticket TTL. The reaper judges staging by when a chunk last touched it, so this is
+// what "nobody has delivered against this upload in half an hour" looks like without waiting half an hour.
+async function abandonStagedPartials() : Promise<void>
+{
+    const touched = new Date(Date.now() - (TICKET_TTL_MS * 2));
+    const staged = await stagedPartials();
+
+    await Promise.all(staged.map((name) => utimes(join(server.storageRoot, '.partials', name), touched, touched)));
 }
 
 async function blobRowExists(sha256 : string) : Promise<boolean>
@@ -205,6 +230,43 @@ describe('running a sweep from the admin surface', () =>
             .where('id', '=', lingeringNodeID)
             .executeTakeFirst());
         expect(node).toBeUndefined();
+    });
+
+    // The reaper end to end: part of a file lands, nobody ever delivers the rest, and the space that staging is
+    // holding comes back when an admin asks rather than at the next interval.
+    it('reclaims the staging of an upload nobody finished, and quotes the bytes it handed back', async () =>
+    {
+        const abandoned = smallFixture('sweep-now-abandoned');
+        const delivered = abandoned.subarray(0, PARTIAL_BYTES);
+
+        const claim = await (await admin.post('/api/blobs/claim', {
+            sha256: sha256Of(abandoned),
+            size: abandoned.length,
+        })).json() as ClaimResponse;
+        if(claim.upload !== true) { throw new Error('setup: expected an upload ticket for the abandoned upload'); }
+
+        const params = new URLSearchParams({
+            name: 'abandoned.bin',
+            mimeType: 'application/octet-stream',
+            offset: '0',
+        });
+
+        expect((await admin.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, delivered)).status).toBe(202);
+        expect(await stagedPartials()).toHaveLength(1);
+
+        await abandonStagedPartials();
+
+        const res = await admin.post('/api/admin/sweeps/partials/run');
+        expect(res.status).toBe(200);
+
+        // What it says it reclaimed is the delivered chunk's own size, and the staging directory agrees.
+        const body = await res.json() as PartialsSweepRunResponse;
+        expect(body.sweep).toBe('partials');
+        expect(body.summary).toEqual({ candidates: 1, reclaimed: 1, failed: 0, bytesFreed: delivered.length });
+        expect(await stagedPartials()).toEqual([]);
+
+        const status = await (await admin.get('/api/admin/status')).json() as AdminStatusResponse;
+        expect(status.partials).toEqual({ ranAt: body.ranAt, summary: body.summary });
     });
 
     it('refuses a caller who is not an admin', async () =>

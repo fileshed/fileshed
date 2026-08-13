@@ -95,7 +95,7 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `UPLOAD_CHUNK_BYTES` | no | 8 MiB | Bytes per upload request. Minimum 1 MiB. See below. |
 | `AVATAR_MAX_BYTES` | no | 2 MiB | Avatar image cap. |
 | `GC_GRACE_DAYS` | no | 7 | Days a dereferenced blob lingers before deletion. |
-| `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). |
+| `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). Abandoned upload staging is reclaimed on a fixed one-minute cadence of its own, since it costs only a directory read. |
 | `FILESHED_SETUP_TOKEN` | no | — | Operator-chosen first-run setup token (for automation); omit to use the boot-printed code. |
 | `SMTP_HOST` | no | — | Outgoing mail server; unset leaves email off. Also settable in the admin Email tab. |
 | `SMTP_PORT` | no | 587 | 587 (STARTTLS) or 465 (TLS). |

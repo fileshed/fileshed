@@ -29,7 +29,14 @@ export const NONCE_BYTES = 32;
 export const MAX_FAILED_PROOFS = 10;
 export const FAILED_PROOF_WINDOW_MS = 15 * MS_PER_MINUTE;
 
-export const SWEEP_INTERVAL_MS = 60 * MS_PER_SECOND;
+// How often the in-memory bookkeeping is pruned: expired tickets, spent challenges, lapsed failed-proof counts. It
+// costs a walk of three small maps, so it is cheap enough to run often and only ever reclaims heap.
+export const EXPIRY_PRUNE_INTERVAL_MS = 60 * MS_PER_SECOND;
+
+// How often abandoned upload staging is reclaimed from disk. Deliberately far shorter than the database sweeps: one
+// abandoned upload can be holding gigabytes, and finding out costs a readdir of the staging directory. What bounds
+// how long those bytes linger is this plus TICKET_TTL_MS, not this alone.
+export const PARTIALS_SWEEP_INTERVAL_MS = 60 * MS_PER_SECOND;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Chunk retry budget

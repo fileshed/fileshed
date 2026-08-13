@@ -20,6 +20,17 @@ export interface BlobRange
     length : number;
 }
 
+// What one pass over the staging area did. Candidates are the staging areas past the cutoff; the uploads still inside
+// it were never candidates and are counted nowhere. A candidate the backend could not drop is counted in `failed` and
+// its size stays out of `bytesFreed` -- it is still occupying the space.
+export interface StagedSweep
+{
+    candidates : number;
+    reclaimed : number;
+    failed : number;
+    bytesFreed : number;
+}
+
 export interface BlobBackend
 {
     /**
@@ -105,11 +116,12 @@ export interface BlobBackend
     discardChunked(uploadID : string) : Promise<void>;
 
     /**
-     * Drops every staging area untouched since `cutoff` and answers how many went, so an upload abandoned mid-flight
-     * cannot leak bytes forever. The caller owns the cutoff and must set it past the window in which a chunk can still
-     * legally land.
+     * Drops every staging area untouched since `cutoff` and answers what that reclaimed, so an upload abandoned
+     * mid-flight cannot leak bytes forever. The caller owns the cutoff and must set it past the window in which a chunk
+     * can still legally land. One staging area the backend cannot drop is reported, never thrown: the rest of the
+     * abandoned staging must still go.
      */
-    sweepChunked(cutoff : Date) : Promise<number>;
+    sweepChunked(cutoff : Date) : Promise<StagedSweep>;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -119,7 +119,7 @@ export interface AdminUserPage
 //
 // A single admin diagnostics readout: the configured storage backends and the outcome of the last background sweeps.
 // A backend row never carries its config blob -- it can hold backend credentials (s3/azure keys) that no status view
-// should expose. gc and trashPurge are null until their sweep has run at least once this process.
+// should expose. Each sweep's field is null until that sweep has run at least once this process.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface StorageBackendStatus
@@ -147,6 +147,17 @@ export interface TrashPurgeRunSummary
     failed : number;
 }
 
+// Candidates are the staging areas of uploads nobody can still deliver to; the rest are live uploads the sweep left
+// alone and never counted. bytesFreed follows the same rule gc's does -- a staging area counted in failed still
+// occupies its space.
+export interface PartialsRunSummary
+{
+    candidates : number;
+    reclaimed : number;
+    failed : number;
+    bytesFreed : number;
+}
+
 export interface GcRunStatus
 {
     ranAt : string;
@@ -159,6 +170,12 @@ export interface TrashPurgeRunStatus
     summary : TrashPurgeRunSummary;
 }
 
+export interface PartialsRunStatus
+{
+    ranAt : string;
+    summary : PartialsRunSummary;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Run a sweep now (POST /api/admin/sweeps/:sweep/run)
 //
@@ -167,7 +184,7 @@ export interface TrashPurgeRunStatus
 // admin asking for space back is answered with what this sweep reclaimed, not with an acknowledgement.
 //----------------------------------------------------------------------------------------------------------------------
 
-export const sweepKinds = [ 'gc', 'trashPurge' ] as const;
+export const sweepKinds = [ 'gc', 'trashPurge', 'partials' ] as const;
 export type SweepKind = typeof sweepKinds[number];
 
 export interface GcSweepRunResponse extends GcRunStatus
@@ -180,7 +197,12 @@ export interface TrashPurgeSweepRunResponse extends TrashPurgeRunStatus
     sweep : 'trashPurge';
 }
 
-export type SweepRunResponse = GcSweepRunResponse | TrashPurgeSweepRunResponse;
+export interface PartialsSweepRunResponse extends PartialsRunStatus
+{
+    sweep : 'partials';
+}
+
+export type SweepRunResponse = GcSweepRunResponse | TrashPurgeSweepRunResponse | PartialsSweepRunResponse;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Overview aggregates (part of GET /api/admin/status)
@@ -249,6 +271,7 @@ export interface AdminStatusResponse
     backends : StorageBackendStatus[];
     gc : GcRunStatus | null;
     trashPurge : TrashPurgeRunStatus | null;
+    partials : PartialsRunStatus | null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

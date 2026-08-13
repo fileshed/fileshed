@@ -297,19 +297,23 @@ describe('FsBackend chunked uploads', () =>
 
     it('sweeps staging left by abandoned uploads and leaves the ones still being written', async () =>
     {
-        await store.appendChunk('upload-8', streamOf(Buffer.from('abandoned mid-upload')), 0);
+        const staged = Buffer.from('abandoned mid-upload');
+        await store.appendChunk('upload-8', streamOf(staged), 0);
 
-        // Nothing has aged past a cutoff in the past, so a sweep with one reclaims nothing.
-        expect(await store.sweepChunked(new Date(Date.now() - 60_000))).toBe(0);
+        // Nothing has aged past a cutoff in the past, so a sweep with one reclaims nothing and counts no candidate.
+        expect(await store.sweepChunked(new Date(Date.now() - 60_000)))
+            .toEqual({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 });
         expect(await readdir(join(root, '.partials'))).toHaveLength(1);
 
-        expect(await store.sweepChunked(new Date(Date.now() + 60_000))).toBe(1);
+        expect(await store.sweepChunked(new Date(Date.now() + 60_000)))
+            .toEqual({ candidates: 1, reclaimed: 1, failed: 0, bytesFreed: staged.length });
         expect(await readdir(join(root, '.partials'))).toEqual([]);
     });
 
     it('sweeps a store where no chunked upload ever ran without complaining', async () =>
     {
-        expect(await store.sweepChunked(new Date())).toBe(0);
+        expect(await store.sweepChunked(new Date()))
+            .toEqual({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 });
     });
 
     it('keeps one upload\'s staged bytes out of another\'s', async () =>

@@ -8,7 +8,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomBytes } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
+import { readdir, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -18,8 +18,12 @@ import {
     type ClaimResponse,
     DEFAULT_UPLOAD_CHUNK_BYTES,
     type NodeResponse,
+    TICKET_TTL_MS,
     type UploadChunkAccepted,
 } from '@fileshed/core';
+
+// Managers
+import { runPartialsOnce } from '@server/managers/partials.ts';
 
 // Support
 import {
@@ -236,6 +240,10 @@ describe('chunked upload', () =>
         const skipped = await putChunk(booted.app, user.cookie, ticket, data.subarray(2500), 2500);
         expect(skipped.status).toBe(409);
 
+        // Where the upload actually stands rides the refusal: the client asked about byte 2500 and is told the upload
+        // holds 1000, which is the byte its next chunk belongs at.
+        expect(await skipped.json()).toMatchObject({ code: 'upload.offsetConflict', receivedBytes: 1000 });
+
         // The refusal left the upload where it was, so the chunk that does belong next still lands.
         const resumed = await putChunk(booted.app, user.cookie, ticket, data.subarray(1000, 2500), 1000);
         expect(await resumed.json() as UploadChunkAccepted).toEqual({ receivedBytes: 2500, totalBytes: 3000 });
@@ -259,8 +267,9 @@ describe('chunked upload', () =>
         expect(replayed.status).toBe(409);
 
         // Named as the client's mistake, never as the transient one it retries: a replay coded chunkInFlight would
-        // be re-sent three times and then fail the upload over bytes the server already had.
-        expect(await replayed.json()).toMatchObject({ code: 'upload.offsetConflict' });
+        // be re-sent three times and then fail the upload over bytes the server already had. The position it is
+        // ahead by comes with it, so the client can pick the upload back up instead of giving up on it.
+        expect(await replayed.json()).toMatchObject({ code: 'upload.offsetConflict', receivedBytes: 2500 });
 
         // The replay changed nothing: the upload finishes with the bytes it was always going to have.
         const last = await putChunk(booted.app, user.cookie, ticket, data.subarray(2500), 2500);
@@ -496,7 +505,10 @@ describe('chunked upload', () =>
         }
     });
 
-    it('reclaims the staging of an abandoned upload and leaves one still delivering alone', async () =>
+    // Two passes rather than one, because an upload mid-delivery and an abandoned one cannot be staged side by side
+    // here -- the first has to finish before the second can start. A pass over a mixed staging directory is proven
+    // against the reaper directly, in the partials spec.
+    it('spares an upload that just delivered a chunk, and reclaims one nobody came back to', async () =>
     {
         const user = await makeUser(booted, 'reaper@example.com');
         const data = randomBytes(3000);
@@ -506,19 +518,25 @@ describe('chunked upload', () =>
         await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1000), 0);
 
         // A sweep over the real window leaves an upload that just delivered a chunk untouched, and the upload finishes.
-        expect(await booted.blobs.sweepPartials()).toBe(0);
+        expect(await runPartialsOnce({ blob: booted.blob, ttlMs: TICKET_TTL_MS }))
+            .toMatchObject({ candidates: 0, reclaimed: 0 });
         expect(await partials()).toHaveLength(1);
 
         await putChunk(booted.app, user.cookie, ticket, data.subarray(1000), 1000);
         expect(await storedBytes(booted, sha256)).toEqual(data);
 
-        // An upload nobody will finish: once its window closes -- a cutoff past everything staged so far -- its
-        // staging is reclaimed.
+        // An upload nobody will finish. Aged past the window by hand rather than waited out, since what separates it
+        // from a slow upload is only how long its staging has sat untouched.
         const abandoned = randomBytes(3000);
         const abandonedTicket = await ticketFor(user, abandoned);
         await putChunk(booted.app, user.cookie, abandonedTicket, abandoned.subarray(0, 1000), 0);
 
-        expect(await booted.blobs.sweepPartials(new Date(Date.now() + 1000))).toBe(1);
+        const aged = new Date(Date.now() - (TICKET_TTL_MS * 2));
+        const staged = await partials();
+        await Promise.all(staged.map((name) => utimes(join(booted.storageRoot, '.partials', name), aged, aged)));
+
+        expect(await runPartialsOnce({ blob: booted.blob, ttlMs: TICKET_TTL_MS }))
+            .toMatchObject({ candidates: 1, reclaimed: 1, bytesFreed: 1000 });
         expect(await partials()).toEqual([]);
     });
 });

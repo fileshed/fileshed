@@ -6,7 +6,7 @@
 // rather than a shared vocabulary that would fit none of them.
 //----------------------------------------------------------------------------------------------------------------------
 
-import type { GcRunSummary, SweepRunResponse, TrashPurgeRunSummary } from '@fileshed/core';
+import type { GcRunSummary, PartialsRunSummary, SweepRunResponse, TrashPurgeRunSummary } from '@fileshed/core';
 
 // Utils
 import { formatBytes } from '../utils/formatters/index.ts';
@@ -40,9 +40,28 @@ export function describeTrashPurgeRun(summary : TrashPurgeRunSummary) : string
     return `${ parts.join(', ') }.`;
 }
 
+// Bytes lead here for the same reason they do on a collection: the staging of an upload nobody finished is space the
+// instance is holding for nothing, and reclaiming it is the whole errand.
+export function describePartialsRun(summary : PartialsRunSummary) : string
+{
+    const parts = [
+        `${ formatBytes(summary.bytesFreed) } reclaimed`,
+        `${ summary.reclaimed } of ${ summary.candidates } cleared`,
+    ];
+
+    if(summary.failed > 0) { parts.push(`${ summary.failed } left behind`); }
+
+    return `${ parts.join(', ') }.`;
+}
+
 export function describeSweepRun(run : SweepRunResponse) : string
 {
-    return run.sweep === 'gc' ? describeGcRun(run.summary) : describeTrashPurgeRun(run.summary);
+    switch (run.sweep)
+    {
+        case 'gc': return describeGcRun(run.summary);
+        case 'trashPurge': return describeTrashPurgeRun(run.summary);
+        case 'partials': return describePartialsRun(run.summary);
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------

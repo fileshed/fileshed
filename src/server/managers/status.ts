@@ -79,6 +79,7 @@ export class StatusManager
             backends,
             gc: this.#gcStatus(),
             trashPurge: this.#trashPurgeStatus(),
+            partials: this.#partialsStatus(),
         };
     }
 
@@ -134,6 +135,12 @@ export class StatusManager
     #trashPurgeStatus() : AdminStatusResponse['trashPurge']
     {
         const last = this.#deps.tracker.trashPurge;
+        return last === null ? null : { ranAt: last.at.toISOString(), summary: last.summary };
+    }
+
+    #partialsStatus() : AdminStatusResponse['partials']
+    {
+        const last = this.#deps.tracker.partials;
         return last === null ? null : { ranAt: last.at.toISOString(), summary: last.summary };
     }
 }

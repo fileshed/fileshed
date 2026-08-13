@@ -180,7 +180,7 @@ The bytes travel as a sequence of PUTs against one ticket, so the largest reques
 - A chunk that leaves the file incomplete answers `202 { receivedBytes, totalBytes }`. The chunk carrying the final byte verifies the assembled file against the claimed hash and size and commits it, answering the node — there is no separate finalize call.
 - The ticket survives every chunk but the last, so a failed chunk is retried on its own instead of restarting the file. A request that carries the whole claimed size at offset 0 streams straight through and spends its ticket in one shot, which is what a client with nothing to chunk sends.
 - Staging is truncated to the accepted offset before each append, so bytes from an attempt that died mid-flight leave no trace in the file.
-- An upload's position lives in memory with its ticket. A restart mid-upload loses the partial: the client re-claims and sends the file again, and the abandoned staging bytes are reclaimed by a sweep on the same timer that expires tickets.
+- An upload's position lives in memory with its ticket. A restart mid-upload loses the partial: the client re-claims and sends the file again, and the abandoned staging bytes are reclaimed by a sweep of their own once the staging has sat untouched for a whole ticket lifetime. An admin can run that sweep on demand rather than wait for it.
 - `chunkBytes` in the claim response is the size to cut the file into — `UPLOAD_CHUNK_BYTES`, 8 MiB by default and settable per deployment (minimum 1 MiB, no maximum). Clients plan against the value their claim returned, never a compiled-in constant.
 - A file over the instance's upload cap is refused `413` carrying the ceiling it broke, in the body's `maxBytes` and in an `Upload-Limit: max-size=<bytes>` response header.
 

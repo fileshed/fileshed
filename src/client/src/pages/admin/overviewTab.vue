@@ -102,6 +102,15 @@
                 >
                     {{ status.trashPurge === null ? '' : describeTrashPurgeRun(status.trashPurge.summary) }}
                 </SweepSummary>
+
+                <SweepSummary
+                    title="Abandoned uploads"
+                    sweep="partials"
+                    :run="status.partials"
+                    @ran="load"
+                >
+                    {{ status.partials === null ? '' : describePartialsRun(status.partials.summary) }}
+                </SweepSummary>
             </section>
         </template>
     </div>
@@ -121,7 +130,7 @@
     import { adminStatus } from '../../resource-access/admin.ts';
 
     // Engines
-    import { describeGcRun, describeTrashPurgeRun } from '../../engines/sweepRun.ts';
+    import { describeGcRun, describePartialsRun, describeTrashPurgeRun } from '../../engines/sweepRun.ts';
 
     // Components
     import BackendList from '../../components/admin/backendList.vue';

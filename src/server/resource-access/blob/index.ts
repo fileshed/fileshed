@@ -22,7 +22,7 @@ import {
 
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
-import { type BlobBackend, type BlobRange } from '../interfaces/blob.ts';
+import { type BlobBackend, type BlobRange, type StagedSweep } from '../interfaces/blob.ts';
 import { FsBackend, parseFsBackendConfig } from './fsBackend.ts';
 
 // The blob error vocabulary and the backend contract, re-exported here so a consumer branches on a failure or types a
@@ -37,7 +37,7 @@ export {
     SizeMismatchError,
     UnsupportedBackendError,
 } from '@fileshed/core';
-export type { BlobBackend } from '../interfaces/blob.ts';
+export type { BlobBackend, StagedSweep } from '../interfaces/blob.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Types
@@ -183,7 +183,7 @@ export class BlobRA
         await backend.discardChunked(uploadID);
     }
 
-    async sweepChunked(cutoff : Date) : Promise<number>
+    async sweepChunked(cutoff : Date) : Promise<StagedSweep>
     {
         const backend = await this.#facade(await this.#defaultBackend());
 

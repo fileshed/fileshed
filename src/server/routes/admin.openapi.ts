@@ -193,7 +193,7 @@ export const runSweepSpec = describeRoute({
         + 'waits for the sweep to finish. The same run is recorded as the sweep\'s last outcome, so the status '
         + 'endpoint agrees with what this returned. A sweep already running -- usually the scheduled one -- is not '
         + 'started a second time; the request is refused instead.',
-    parameters: [ pathParam('sweep', `Which sweep to run: ${ sweepKinds.join(' or ') }.`) ],
+    parameters: [ pathParam('sweep', `Which sweep to run: ${ sweepKinds.join(', ') }.`) ],
     responses: {
         200: jsonResponse('What the sweep reclaimed.', sweepRunResponseCodec),
         401: errorResponse('No session.'),

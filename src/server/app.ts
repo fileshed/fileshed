@@ -21,7 +21,9 @@ import {
     MEDIA_TAG_SWEEP_BATCH,
     MS_PER_DAY,
     MS_PER_MINUTE,
+    PARTIALS_SWEEP_INTERVAL_MS,
     type SocialProviderID,
+    TICKET_TTL_MS,
     UNLIMITED_QUOTA,
     providerSettingKeys,
 } from '@fileshed/core';
@@ -93,6 +95,7 @@ import { LastRunTracker } from './managers/lastRun.ts';
 import { SweepManager } from './managers/sweeps.ts';
 import { mapManagerError } from './managers/errors.ts';
 import { runGcOnce } from './managers/gc.ts';
+import { runPartialsOnce } from './managers/partials.ts';
 import { runTrashPurgeOnce } from './managers/trashPurge.ts';
 
 // Utils
@@ -460,7 +463,8 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     });
 
     // Both grace windows are resolved per sweep rather than closed over once, so an admin who lowers a retention and
-    // then runs the sweep gets the window they just set, not the one this process booted with.
+    // then runs the sweep gets the window they just set, not the one this process booted with. The partials window is
+    // no setting at all: it is the ticket TTL, the point past which no chunk of that upload can still be honoured.
     const sweeps = new SweepManager({
         runners: {
             gc: () => runGcOnce({ blob, graceMs: gcGraceMs }),
@@ -469,6 +473,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
                 purger: nodes,
                 graceMs: async () => await trashPurgeDays() * MS_PER_DAY,
             }),
+            partials: () => runPartialsOnce({ blob, ttlMs: TICKET_TTL_MS }),
         },
         tracker,
     });
@@ -495,15 +500,21 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         (userID, nodeID) => shareRA.effectiveRole(userID, nodeID)
     );
 
+    // The two sweeps that read the database run on the configured interval. The partials reaper runs far more often
+    // on a cadence of its own: it only reads the staging directory, and what it reclaims is disk rather than rows.
     const sweepIntervalMs = config.GC_INTERVAL_MINUTES * MS_PER_MINUTE;
-    const stopReclaim = sweeps.startTimers(sweepIntervalMs);
-    const stopSweeps = blobs.startSweeps();
+    const stopReclaim = sweeps.startTimers({
+        gc: sweepIntervalMs,
+        trashPurge: sweepIntervalMs,
+        partials: PARTIALS_SWEEP_INTERVAL_MS,
+    });
+    const stopPruning = blobs.startExpiryPruning();
     const stopMediaTags = startMediaTagTimer(mediaTags, sweepIntervalMs, MEDIA_TAG_SWEEP_BATCH);
 
     const shutdown = () : void =>
     {
         stopReclaim();
-        stopSweeps();
+        stopPruning();
         stopMediaTags();
     };
 
