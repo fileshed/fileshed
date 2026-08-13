@@ -36,6 +36,7 @@
                     :description="field.description"
                     :unit="field.unit"
                     :zero-label="field.zeroLabel"
+                    :sweep="field.sweep"
                 />
             </section>
         </template>
@@ -47,7 +48,7 @@
 <script setup lang="ts">
     import { computed, onMounted } from 'vue';
 
-    import type { AdminSettingEntry, AdminSettingKey } from '@fileshed/core';
+    import type { AdminSettingEntry, AdminSettingKey, SweepKind } from '@fileshed/core';
 
     // Stores
     import { useAdminSettingsStore } from '../../stores/adminSettings.ts';
@@ -67,6 +68,7 @@
         description : string;
         unit ?: 'bytes' | 'days';
         zeroLabel ?: string;
+        sweep ?: { kind : SweepKind; label : string };
     }
 
     const groupLayout : { heading : string; keys : FieldPresentation[] }[] = [
@@ -115,6 +117,7 @@
                     description: 'How many days a trashed item survives before it is permanently deleted. '
                         + '0 purges on the next sweep.',
                     unit: 'days',
+                    sweep: { kind: 'trashPurge', label: 'Trash purge' },
                 },
                 {
                     key: 'GC_GRACE_DAYS',
@@ -122,6 +125,7 @@
                     description: 'How many days the bytes behind a deleted file are kept before collection, and how '
                         + 'long an owner can still be offered them back. 0 collects on the next sweep.',
                     unit: 'days',
+                    sweep: { kind: 'gc', label: 'Garbage collection' },
                 },
             ],
         },

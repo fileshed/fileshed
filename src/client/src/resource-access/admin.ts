@@ -20,6 +20,8 @@ import {
     type SetPasswordRequest,
     type SetQuotaRequest,
     type SetRoleRequest,
+    type SweepKind,
+    type SweepRunResponse,
     type TestEmailResponse,
     type UpdateBrandingRequest,
     type UserRole,
@@ -28,6 +30,7 @@ import {
     adminUserPageResponseCodec,
     adminUserResponseCodec,
     instanceThemeCodec,
+    sweepRunResponseCodec,
     testEmailResponseCodec,
 } from '@fileshed/core';
 
@@ -115,6 +118,13 @@ export async function sendTestEmail() : Promise<TestEmailResponse>
 export async function adminStatus() : Promise<AdminStatusResponse>
 {
     return requestJson('/api/admin/status', { codec: adminStatusResponseCodec });
+}
+
+// Resolves only once the sweep has finished, with what it reclaimed. A sweep already running answers 409, which
+// surfaces as an ApiError carrying the server's sentence.
+export async function runSweep(sweep : SweepKind) : Promise<SweepRunResponse>
+{
+    return requestJson(`/api/admin/sweeps/${ sweep }/run`, { method: 'POST', codec: sweepRunResponseCodec });
 }
 
 export async function fetchAdminSettings() : Promise<AdminSettingsResponse>

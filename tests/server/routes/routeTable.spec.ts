@@ -36,6 +36,7 @@ const EXPECTED_ROUTES = [
     'POST /api/admin/users/:id/password',
     'POST /api/admin/users/:id/revoke-sessions',
     'GET /api/admin/status',
+    'POST /api/admin/sweeps/:sweep/run',
     'GET /api/admin/settings',
     'PATCH /api/admin/settings',
     'POST /api/admin/email/test',
@@ -63,6 +64,7 @@ const EXPECTED_ROUTES = [
     // Me
     'GET /api/me',
     'PATCH /api/me/preferences',
+    'POST /api/me/revoke-credentials',
 
     // Access tokens (the only key-management surface; the plugin's own endpoints are gated shut)
     'POST /api/me/access-tokens',

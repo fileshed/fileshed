@@ -165,6 +165,10 @@ export {
     type TrashPurgeRunSummary,
     type GcRunStatus,
     type TrashPurgeRunStatus,
+    type SweepKind,
+    type GcSweepRunResponse,
+    type TrashPurgeSweepRunResponse,
+    type SweepRunResponse,
     type OverviewUsers,
     type OverviewNodes,
     type OverviewStorage,
@@ -178,6 +182,7 @@ export {
     type AdminUserPage,
     adminUserSortKeys,
     adminUserSearchFields,
+    sweepKinds,
 } from './models/requests/admin.ts';
 export {
     type DeletionOfferResponse,
@@ -281,6 +286,7 @@ export {
     setPasswordRequestCodec,
     testEmailResponseCodec,
     adminStatusResponseCodec,
+    sweepRunResponseCodec,
     adminUserResponseCodec,
     adminUserPageResponseCodec,
     toAdminUserResponse,

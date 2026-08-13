@@ -71,10 +71,11 @@ export interface BlobRow
 }
 
 // Enough of a graveyarded record for GC to delete its bytes and route to the right backend (records pin their
-// backend).
+// backend), plus the size it reclaims by doing so -- read here because the row is gone by the time the bytes go.
 export interface GcCandidate
 {
     sha256 : string;
+    size : number;
     backendID : string;
     storageKey : string;
 }
@@ -221,12 +222,13 @@ export class BlobRA
     {
         const rows = await this.#db
             .selectFrom('blob')
-            .select([ 'sha256', 'backend_id', 'storage_key' ])
+            .select([ 'sha256', 'size', 'backend_id', 'storage_key' ])
             .where('deleted_at', '<', cutoff.toISOString())
             .execute();
 
         return rows.map((row) => ({
             sha256: row.sha256,
+            size: row.size,
             backendID: row.backend_id,
             storageKey: row.storage_key,
         }));

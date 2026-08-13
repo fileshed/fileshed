@@ -27,6 +27,7 @@ import type {
     SetPasswordRequest,
     SetQuotaRequest,
     SetRoleRequest,
+    SweepRunResponse,
     TestEmailResponse,
 } from '../admin.ts';
 
@@ -168,6 +169,7 @@ const gcRunStatusCodec = z.strictObject({
         deleted: wholeCount,
         kept: wholeCount,
         bytesFailed: wholeCount,
+        bytesFreed: wholeCount,
     }),
 });
 
@@ -179,6 +181,13 @@ const trashPurgeRunStatusCodec = z.strictObject({
         failed: wholeCount,
     }),
 });
+
+export const sweepRunResponseCodec = z.discriminatedUnion('sweep', [
+    gcRunStatusCodec.extend({ sweep: z.literal('gc') }),
+    trashPurgeRunStatusCodec.extend({ sweep: z.literal('trashPurge') }),
+]);
+
+typeAssert<Equals<z.output<typeof sweepRunResponseCodec>, SweepRunResponse>>();
 
 const adminOverviewCodec = z.strictObject({
     users: z.strictObject({

@@ -129,12 +129,15 @@ export interface StorageBackendStatus
     isDefault : boolean;
 }
 
+// bytesFreed counts only the candidates whose bytes actually left the store. A candidate counted in bytesFailed still
+// occupies its space -- its row is gone, so nothing references it, but nothing has reclaimed it either.
 export interface GcRunSummary
 {
     candidates : number;
     deleted : number;
     kept : number;
     bytesFailed : number;
+    bytesFreed : number;
 }
 
 export interface TrashPurgeRunSummary
@@ -155,6 +158,29 @@ export interface TrashPurgeRunStatus
     ranAt : string;
     summary : TrashPurgeRunSummary;
 }
+
+//----------------------------------------------------------------------------------------------------------------------
+// Run a sweep now (POST /api/admin/sweeps/:sweep/run)
+//
+// The response is the run that just finished, in the same shape the status endpoint reports for that sweep, named by
+// the sweep that produced it. Each sweep counts different things, so there is no summary common to all of them -- an
+// admin asking for space back is answered with what this sweep reclaimed, not with an acknowledgement.
+//----------------------------------------------------------------------------------------------------------------------
+
+export const sweepKinds = [ 'gc', 'trashPurge' ] as const;
+export type SweepKind = typeof sweepKinds[number];
+
+export interface GcSweepRunResponse extends GcRunStatus
+{
+    sweep : 'gc';
+}
+
+export interface TrashPurgeSweepRunResponse extends TrashPurgeRunStatus
+{
+    sweep : 'trashPurge';
+}
+
+export type SweepRunResponse = GcSweepRunResponse | TrashPurgeSweepRunResponse;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Overview aggregates (part of GET /api/admin/status)

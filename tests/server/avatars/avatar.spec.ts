@@ -218,7 +218,7 @@ describe('avatar GC interaction', () =>
         const sha256 = sha256Of(bytes);
         await postAvatar(booted.app, user.cookie, bytes, 'image/png');
 
-        const summary = await runGcOnce({ handle: booted.handle, blob: booted.blob, graceMs: async () => 0 });
+        const summary = await runGcOnce({ blob: booted.blob, graceMs: async () => 0 });
 
         expect(summary.deleted).toBe(0);
         expect(await blobRowExists(booted, sha256)).toBe(true);
@@ -237,7 +237,7 @@ describe('avatar GC interaction', () =>
         // A cutoff 1s in the future puts the just-graveyarded blob unambiguously past the grace window (a 0 grace can
         // tie the same millisecond the delete stamped deleted_at). The point is that the removed avatar no longer
         // protects the blob, so the sweep is now free to reap it.
-        await runGcOnce({ handle: booted.handle, blob: booted.blob, graceMs: async () => -1000 });
+        await runGcOnce({ blob: booted.blob, graceMs: async () => -1000 });
 
         expect(await blobRowExists(booted, sha256)).toBe(false);
         expect(await bytesExist(booted, sha256)).toBe(false);

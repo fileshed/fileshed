@@ -9,7 +9,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import { MS_PER_SECOND } from '@fileshed/core';
+import type { TrashPurgeRunSummary } from '@fileshed/core';
 
 // Resource Access
 import type { NodeRA } from '../resource-access/nodes/node.ts';
@@ -38,16 +38,9 @@ export interface TrashPurgeDeps
     graceMs : () => Promise<number>;
 }
 
-export interface TrashPurgeSummary
-{
-    candidates : number;
-    purged : number;
-    failed : number;
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function runTrashPurgeOnce(deps : TrashPurgeDeps) : Promise<TrashPurgeSummary>
+export async function runTrashPurgeOnce(deps : TrashPurgeDeps) : Promise<TrashPurgeRunSummary>
 {
     const cutoff = new Date(Date.now() - await deps.graceMs());
     const roots = await deps.nodes.expiredTrashRootIDs(cutoff);
@@ -76,39 +69,6 @@ export async function runTrashPurgeOnce(deps : TrashPurgeDeps) : Promise<TrashPu
     logger[level]({ candidates: roots.length, purged, failed }, 'trash purge sweep complete');
 
     return { candidates: roots.length, purged, failed };
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// Runs runTrashPurgeOnce shortly after boot and then on a fixed interval. The boot pass keeps short-uptime
-// deployments honest: a box restarted more often than the interval would otherwise never purge, and thirty-day
-// trash would live forever. Pure wiring beyond that: swallows a failed sweep with a log so one bad run never
-// kills the timer, unrefs so it does not hold the process open, and reports each completed sweep's summary to
-// `onComplete` (the status tracker). Returns a stop handle.
-export function startTrashPurgeTimer(
-    deps : TrashPurgeDeps,
-    intervalMs : number,
-    onComplete ?: (summary : TrashPurgeSummary) => void
-) : () => void
-{
-    const sweep = () : void =>
-    {
-        runTrashPurgeOnce(deps)
-            .then((summary) => onComplete?.(summary))
-            .catch((error) => logger.error({ err: error }, 'trash purge sweep failed'));
-    };
-
-    const kickoff = setTimeout(sweep, MS_PER_SECOND);
-    kickoff.unref?.();
-
-    const timer = setInterval(sweep, intervalMs);
-    timer.unref?.();
-
-    return () =>
-    {
-        clearTimeout(kickoff);
-        clearInterval(timer);
-    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

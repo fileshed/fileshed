@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminOverview, AdminStatusResponse } from '@fileshed/core';
 
 // Resource Access
-import { adminStatus, fetchAdminSettings } from '@client/resource-access/admin.ts';
+import { adminStatus, fetchAdminSettings, runSweep } from '@client/resource-access/admin.ts';
 
 // Under test
 import OverviewTab from '@client/pages/admin/overviewTab.vue';
@@ -25,11 +25,17 @@ vi.mock('@client/resource-access/admin.ts', () => ({
     adminStatus: vi.fn(),
     fetchAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
+    runSweep: vi.fn(),
 }));
-vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
+
+const toasts : { description ?: string }[] = [];
+vi.mock('@nuxt/ui/composables', () => ({
+    useToast: () => ({ add: (toast : { description ?: string }) => { toasts.push(toast); } }),
+}));
 
 const statusMock = adminStatus as unknown as Mock;
 const settingsMock = fetchAdminSettings as unknown as Mock;
+const runSweepMock = runSweep as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -67,7 +73,7 @@ function statusFixture(overrides : Partial<AdminStatusResponse> = {}) : AdminSta
         ],
         gc: {
             ranAt: '2026-07-28T10:00:00.000Z',
-            summary: { candidates: 4, deleted: 3, kept: 1, bytesFailed: 0 },
+            summary: { candidates: 4, deleted: 3, kept: 1, bytesFailed: 0, bytesFreed: 250_000 },
         },
         trashPurge: null,
         ...overrides,
@@ -86,6 +92,12 @@ function mountTab() : VueWrapper
                 },
                 UIcon: true,
                 UBadge: { name: 'UBadge', props: [ 'label' ], template: '<span class="badge">{{ label }}</span>' },
+                UButton: {
+                    name: 'UButton',
+                    props: [ 'label' ],
+                    emits: [ 'click' ],
+                    template: '<button class="run" @click="$emit(\'click\')">{{ label }}</button>',
+                },
             },
         },
     });
@@ -108,6 +120,7 @@ describe('Admin OverviewTab', () =>
     {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        toasts.length = 0;
         settingsMock.mockResolvedValue({ settings: [], restartRequired: false });
     });
 
@@ -181,8 +194,59 @@ describe('Admin OverviewTab', () =>
 
         expect(wrapper.text()).toContain('filesystem');
         expect(wrapper.find('.badge').text()).toBe('Default');
-        expect(wrapper.text()).toContain('4 candidates');
-        expect(wrapper.text()).toContain('3 deleted');
+        expect(wrapper.text()).toContain('250 kB reclaimed');
+        expect(wrapper.text()).toContain('3 of 4 collected');
+    });
+
+    // The figures a sweep moves are on this page, so the run has to leave the page showing the instance as it now
+    // stands -- reporting a reclaim beside a graveyard total that still counts the blobs it just deleted would be
+    // worse than not reporting it.
+    it('runs the sweep on demand and re-reads the instance, so the reclaim shows where it happened', async () =>
+    {
+        const swept = statusFixture({
+            overview: overviewFixture({
+                storage: { logicalBytes: 4_000_000, physicalBytes: 2_750_000, graveyardBytes: 0, graveyardCount: 0 },
+            }),
+            gc: {
+                ranAt: '2026-07-28T11:00:00.000Z',
+                summary: { candidates: 6, deleted: 6, kept: 0, bytesFailed: 0, bytesFreed: 250_000 },
+            },
+        });
+
+        const wrapper = await mountWith(statusFixture());
+        expect(wrapper.text()).toContain('6 blobs awaiting collection');
+
+        runSweepMock.mockResolvedValue({
+            sweep: 'gc',
+            ranAt: '2026-07-28T11:00:00.000Z',
+            summary: { candidates: 6, deleted: 6, kept: 0, bytesFailed: 0, bytesFreed: 250_000 },
+        });
+        statusMock.mockResolvedValue(swept);
+
+        await wrapper.findAll('.run')[0]?.trigger('click');
+        await flushPromises();
+
+        expect(runSweepMock).toHaveBeenCalledWith('gc');
+        expect(toasts[0]?.description).toBe('250 kB reclaimed, 6 of 6 collected.');
+        expect(wrapper.text()).toContain('0 blobs awaiting collection');
+        expect(wrapper.text()).toContain('6 of 6 collected');
+    });
+
+    it('offers each sweep its own run, naming the sweep it runs', async () =>
+    {
+        const wrapper = await mountWith(statusFixture());
+
+        runSweepMock.mockResolvedValue({
+            sweep: 'trashPurge',
+            ranAt: '2026-07-28T11:00:00.000Z',
+            summary: { candidates: 2, purged: 2, failed: 0 },
+        });
+
+        await wrapper.findAll('.run')[1]?.trigger('click');
+        await flushPromises();
+
+        expect(runSweepMock).toHaveBeenCalledWith('trashPurge');
+        expect(toasts[0]?.description).toBe('2 of 2 purged.');
     });
 
     it('says a sweep has not run yet instead of faking a timestamp', async () =>

@@ -27,6 +27,7 @@ import {
 import type { AdminManager } from '../managers/admin.ts';
 import type { SessionManager } from '../managers/session.ts';
 import type { StatusManager } from '../managers/status.ts';
+import type { SweepManager } from '../managers/sweeps.ts';
 
 // Routes
 import {
@@ -34,6 +35,7 @@ import {
     banUserSpec,
     listUsersSpec,
     revokeSessionsSpec,
+    runSweepSpec,
     setPasswordSpec,
     setQuotaSpec,
     setRoleSpec,
@@ -144,10 +146,15 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// The status readout is admin surface too, but unlike user management it needs the full runtime graph (the blob RA and
-// the sweep tracker), so it composes separately -- mounted only alongside the feature services, never in the auth-only
-// smoke app. Same session gate (401) then admin gate (403), both manager-produced and mapped by onError.
-export function createAdminStatusRoutes(sessions : SessionManager, status : StatusManager) : Hono
+// The status readout and the sweeps it reports on are admin surface too, but unlike user management they need the full
+// runtime graph (the blob RA, the sweep tracker, the sweeps themselves), so they compose separately -- mounted only
+// alongside the feature services, never in the auth-only smoke app. Same session check (401) then admin check (403),
+// both manager-produced and mapped by onError.
+export function createAdminRuntimeRoutes(
+    sessions : SessionManager,
+    status : StatusManager,
+    sweeps : SweepManager
+) : Hono
 {
     const router = new Hono();
 
@@ -156,6 +163,17 @@ export function createAdminStatusRoutes(sessions : SessionManager, status : Stat
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         return ctx.json(await status.status(actor));
+    });
+
+    // The response is deliberately the sweep's own summary rather than 202-and-poll: the sweep is bounded work the
+    // admin just asked for, and an answer they have to go looking for is the thing this endpoint exists to fix. An
+    // unknown sweep name and a sweep already running are both the manager's to judge -- the route only names the
+    // caller and the sweep.
+    router.post('/admin/sweeps/:sweep/run', runSweepSpec, async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+
+        return ctx.json(await sweeps.run(actor, ctx.req.param('sweep')));
     });
 
     return router;

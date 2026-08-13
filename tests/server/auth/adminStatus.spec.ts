@@ -4,7 +4,7 @@
 // The admin diagnostics readout: configured storage backends and the last outcome of each background sweep. Pins the
 // authn (401) / authz (403) / success (200) ladder, that a backend row carries id/kind/default but NEVER its config
 // blob (which can hold credentials), and that the sweep fields read null until a sweep has run -- then reflect it, fed
-// by a real runGcOnce / runTrashPurgeOnce the way the timers feed the tracker in production.
+// by a real runGcOnce / runTrashPurgeOnce rather than a hand-built summary.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -22,11 +22,12 @@ import { LastRunTracker } from '@server/managers/lastRun.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { SessionManager } from '@server/managers/session.ts';
 import { StatusManager } from '@server/managers/status.ts';
+import { SweepManager } from '@server/managers/sweeps.ts';
 import { runGcOnce } from '@server/managers/gc.ts';
 import { runTrashPurgeOnce } from '@server/managers/trashPurge.ts';
 
 // Routes
-import { createAdminStatusRoutes } from '@server/routes/admin.ts';
+import { createAdminRuntimeRoutes } from '@server/routes/admin.ts';
 
 // Support
 import { type BootedBlobApp, ORIGIN, bootBlobApp, cookieFrom, signIn, signUp } from '../blobs/support.ts';
@@ -64,7 +65,19 @@ beforeEach(async () =>
         signUpEnabled: async () => true,
     });
 
-    booted.app.route('/api', createAdminStatusRoutes(sessions, status));
+    const sweeps = new SweepManager({
+        runners: {
+            gc: () => runGcOnce({ blob: booted.blob, graceMs: async () => GRACE_MS }),
+            trashPurge: () => runTrashPurgeOnce({
+                nodes: new NodeRA(booted.handle),
+                purger: new NodeManager(booted.handle, new NodeRA(booted.handle), booted.blob, testNodePolicy()),
+                graceMs: async () => GRACE_MS,
+            }),
+        },
+        tracker,
+    });
+
+    booted.app.route('/api', createAdminRuntimeRoutes(sessions, status, sweeps));
 });
 
 afterEach(async () =>
@@ -92,13 +105,14 @@ async function makeAdminCookie(email : string) : Promise<string>
     return cookieFrom(await signIn(booted.app, email, PASSWORD));
 }
 
-// Record real (empty-database) sweep summaries the way the timers' onComplete callbacks do in production.
+// Record sweep summaries from real (empty-database) runs, so what the readout reports came out of a sweep rather
+// than out of this file.
 async function recordSweeps() : Promise<void>
 {
     const nodeRA = new NodeRA(booted.handle);
     const nodes = new NodeManager(booted.handle, nodeRA, booted.blob, testNodePolicy());
 
-    tracker.recordGc(await runGcOnce({ handle: booted.handle, blob: booted.blob, graceMs: async () => GRACE_MS }));
+    tracker.recordGc(await runGcOnce({ blob: booted.blob, graceMs: async () => GRACE_MS }));
     tracker.recordTrashPurge(await runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: async () => GRACE_MS }));
 }
 
@@ -147,7 +161,7 @@ describe('GET /api/admin/status', () =>
         expect(res.status).toBe(200);
         expect(body.gc).toEqual({
             ranAt: expect.any(String),
-            summary: { candidates: 0, deleted: 0, kept: 0, bytesFailed: 0 },
+            summary: { candidates: 0, deleted: 0, kept: 0, bytesFailed: 0, bytesFreed: 0 },
         });
         expect(body.trashPurge).toEqual({
             ranAt: expect.any(String),

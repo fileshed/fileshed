@@ -2,8 +2,9 @@
   -- Admin Overview Tab
   --
   -- The admin landing page: who is on the instance, what it holds, what it is waiting to reclaim, and what this
-  -- deployment is -- then the storage backends and the latest background sweeps. Read-only by design; this tab
-  -- reports, the others act.
+  -- deployment is -- then the storage backends and the latest background sweeps. The one thing it does rather than
+  -- reports is run a sweep on demand, which reloads the whole readout: the figures a sweep moves (reclaimable bytes,
+  -- trash pending) are already on this page, so the reclaim shows up where the admin is looking.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -84,17 +85,22 @@
                     Background sweeps
                 </h2>
 
-                <SweepSummary title="Garbage collection" :run="status.gc">
-                    {{ status.gc?.summary.candidates }} candidates,
-                    {{ status.gc?.summary.deleted }} deleted,
-                    {{ status.gc?.summary.kept }} kept,
-                    {{ status.gc?.summary.bytesFailed }} failed.
+                <SweepSummary
+                    title="Garbage collection"
+                    sweep="gc"
+                    :run="status.gc"
+                    @ran="load"
+                >
+                    {{ status.gc === null ? '' : describeGcRun(status.gc.summary) }}
                 </SweepSummary>
 
-                <SweepSummary title="Trash purge" :run="status.trashPurge">
-                    {{ status.trashPurge?.summary.candidates }} candidates,
-                    {{ status.trashPurge?.summary.purged }} purged,
-                    {{ status.trashPurge?.summary.failed }} failed.
+                <SweepSummary
+                    title="Trash purge"
+                    sweep="trashPurge"
+                    :run="status.trashPurge"
+                    @ran="load"
+                >
+                    {{ status.trashPurge === null ? '' : describeTrashPurgeRun(status.trashPurge.summary) }}
                 </SweepSummary>
             </section>
         </template>
@@ -113,6 +119,9 @@
 
     // Resource Access
     import { adminStatus } from '../../resource-access/admin.ts';
+
+    // Engines
+    import { describeGcRun, describeTrashPurgeRun } from '../../engines/sweepRun.ts';
 
     // Components
     import BackendList from '../../components/admin/backendList.vue';

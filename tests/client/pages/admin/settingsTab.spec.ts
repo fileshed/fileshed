@@ -108,6 +108,25 @@ describe('Admin SettingsTab', () =>
         expect(labels.get('AVATAR_MAX_BYTES')).toBeUndefined();
     });
 
+    // Lowering a retention is the moment someone wants it applied, so the sweep that applies it is offered on the
+    // card that changed. Only the two retention keys govern a sweep; nothing else claims to.
+    it('attaches each retention setting to the sweep that enforces it, and no other setting', async () =>
+    {
+        fetchMock.mockResolvedValue(fullView());
+        const wrapper = mountTab();
+        await flushPromises();
+
+        const sweeps = new Map(wrapper.findAllComponents(SettingField)
+            .map((field) => [ field.props('entry').key, field.props('sweep')?.kind ]));
+
+        expect(sweeps.get('TRASH_PURGE_DAYS')).toBe('trashPurge');
+        expect(sweeps.get('GC_GRACE_DAYS')).toBe('gc');
+
+        expect(sweeps.get('UPLOAD_MAX_BYTES')).toBeUndefined();
+        expect(sweeps.get('DEFAULT_QUOTA_BYTES')).toBeUndefined();
+        expect(sweeps.get('SIGN_UP_ENABLED')).toBeUndefined();
+    });
+
     it('shows the retry state when the load fails', async () =>
     {
         fetchMock.mockRejectedValue(new Error('offline'));

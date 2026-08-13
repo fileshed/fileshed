@@ -13,6 +13,8 @@ import {
     setPasswordRequestCodec,
     setQuotaRequestCodec,
     setRoleRequestCodec,
+    sweepKinds,
+    sweepRunResponseCodec,
 } from '@fileshed/core';
 
 // Routes
@@ -180,6 +182,25 @@ export const adminStatusSpec = describeRoute({
         200: jsonResponse('Backends and last sweep outcomes.', adminStatusResponseCodec),
         401: errorResponse('No session.'),
         403: errorResponse('The caller is not an admin.'),
+    },
+});
+
+export const runSweepSpec = describeRoute({
+    tags: [ 'Admin' ],
+    summary: 'Run a maintenance sweep now',
+    description: 'Runs one storage-reclaiming sweep immediately instead of waiting for its timer, admin-only, and '
+        + 'answers with that sweep\'s own summary -- the counts and bytes it reclaimed on this run. The response '
+        + 'waits for the sweep to finish. The same run is recorded as the sweep\'s last outcome, so the status '
+        + 'endpoint agrees with what this returned. A sweep already running -- usually the scheduled one -- is not '
+        + 'started a second time; the request is refused instead.',
+    parameters: [ pathParam('sweep', `Which sweep to run: ${ sweepKinds.join(' or ') }.`) ],
+    responses: {
+        200: jsonResponse('What the sweep reclaimed.', sweepRunResponseCodec),
+        401: errorResponse('No session.'),
+        403: errorResponse('The caller is not an admin.'),
+        404: errorResponse('No sweep by that name.'),
+        409: errorResponse('That sweep is already running. The body\'s `code` reads `sweep.alreadyRunning`, and the '
+            + 'same request sent once the run finishes lands.'),
     },
 });
 

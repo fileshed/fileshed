@@ -15,7 +15,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminSettingEntry, AdminSettingsResponse } from '@fileshed/core';
 
 // Resource Access
-import { patchAdminSettings } from '@client/resource-access/admin.ts';
+import { patchAdminSettings, runSweep } from '@client/resource-access/admin.ts';
 
 // Stores
 import { useAdminSettingsStore } from '@client/stores/adminSettings.ts';
@@ -28,10 +28,18 @@ import SettingField from '@client/components/admin/settingField.vue';
 vi.mock('@client/resource-access/admin.ts', () => ({
     fetchAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
+    runSweep: vi.fn(),
 }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const patchMock = patchAdminSettings as unknown as Mock;
+const runSweepMock = runSweep as unknown as Mock;
+
+const SWEPT = {
+    sweep: 'gc' as const,
+    ranAt: '2026-08-12T10:00:00.000Z',
+    summary: { candidates: 0, deleted: 0, kept: 0, bytesFailed: 0, bytesFreed: 0 },
+};
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -110,6 +118,21 @@ function mountField(entry : AdminSettingEntry, unit ?: 'bytes' | 'days', zeroLab
         setup: () => ({ store, unit, zeroLabel }),
         template: '<SettingField v-if="store.entries[0]" :entry="store.entries[0]" '
             + 'label="Test setting" description="What it does." :unit="unit" :zero-label="zeroLabel" />',
+    }, { global: { stubs: { UInput: UInputStub, UButton: UButtonStub, USwitch: USwitchStub, UBadge: UBadgeStub } } });
+}
+
+// The same reactive host as mountField, for a retention key that also names the sweep it governs.
+function mountGoverningField(entry : AdminSettingEntry) : VueWrapper
+{
+    const store = useAdminSettingsStore();
+    store.entries = [ entry ];
+
+    return mount({
+        components: { SettingField },
+        setup: () => ({ store }),
+        template: '<SettingField v-if="store.entries[0]" :entry="store.entries[0]" '
+            + 'label="Deleted file grace period" description="How long the bytes survive." unit="days" '
+            + ':sweep="{ kind: \'gc\', label: \'Garbage collection\' }" />',
     }, { global: { stubs: { UInput: UInputStub, UButton: UButtonStub, USwitch: USwitchStub, UBadge: UBadgeStub } } });
 }
 
@@ -405,6 +428,48 @@ describe('SettingField', () =>
         await wrapper.find('.value-input').setValue('0');
 
         expect(saveButton(wrapper).disabled).toBe(false);
+    });
+
+    // A retention key can say which sweep enforces it, and then the card offers to run that sweep. Most keys enforce
+    // nothing on a schedule and must not grow a button that would have no meaning.
+    it('offers to run the sweep a setting governs, and offers nothing on a setting that governs none', () =>
+    {
+        const governing = mountGoverningField(numberEntry({ key: 'GC_GRACE_DAYS', value: 7 }));
+        const governingNone = mountField(numberEntry({ value: 1000 }));
+
+        expect(governing.find('.btn-run-now').exists()).toBe(true);
+        expect(governingNone.find('.btn-run-now').exists()).toBe(false);
+    });
+
+    // Run now sits on the same card as the retention it enforces. Started while a new window is typed but unsaved,
+    // the sweep would use the old one -- permanently deleting exactly what the admin was raising it to keep.
+    it('will not run the sweep while the card holds a value the admin has not saved', async () =>
+    {
+        const wrapper = mountGoverningField(numberEntry({ key: 'GC_GRACE_DAYS', value: 7 }));
+
+        await wrapper.find('.value-input').setValue('30');
+        await wrapper.find('.btn-run-now').trigger('click');
+        await flushPromises();
+
+        expect(runSweepMock).not.toHaveBeenCalled();
+    });
+
+    it('runs the sweep once the value the admin typed has been saved', async () =>
+    {
+        const entry = numberEntry({ key: 'GC_GRACE_DAYS', value: 7 });
+        const wrapper = mountGoverningField(entry);
+
+        patchMock.mockResolvedValue(response([ { ...entry, value: 30, source: 'override' } ]));
+        runSweepMock.mockResolvedValue(SWEPT);
+
+        await wrapper.find('.value-input').setValue('30');
+        await wrapper.find('.btn-save').trigger('click');
+        await flushPromises();
+
+        await wrapper.find('.btn-run-now').trigger('click');
+        await flushPromises();
+
+        expect(runSweepMock).toHaveBeenCalledWith('gc');
     });
 });
 

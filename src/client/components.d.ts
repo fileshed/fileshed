@@ -73,6 +73,7 @@ declare module 'vue' {
     RevealToken: typeof import('./src/components/account/tokens/modals/revealToken.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    RunSweepButton: typeof import('./src/components/admin/runSweepButton.vue')['default']
     SearchBox: typeof import('./src/components/layout/searchBox.vue')['default']
     SearchSuggestions: typeof import('./src/components/layout/searchSuggestions.vue')['default']
     SearchSurface: typeof import('./src/components/search/searchSurface.vue')['default']

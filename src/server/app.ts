@@ -29,7 +29,7 @@ import {
 // Routes
 import health from './routes/health.ts';
 import { createAccessTokenRoutes } from './routes/accessTokens.ts';
-import { createAdminRoutes, createAdminStatusRoutes } from './routes/admin.ts';
+import { createAdminRoutes, createAdminRuntimeRoutes } from './routes/admin.ts';
 import { createAvatarRoutes } from './routes/avatars.ts';
 import { createBlobRoutes } from './routes/blobs.ts';
 import { createMeRoutes } from './routes/me.ts';
@@ -88,9 +88,10 @@ import { SetupManager } from './managers/setup.ts';
 import { UserManager } from './managers/user.ts';
 import { StatusManager } from './managers/status.ts';
 import { LastRunTracker } from './managers/lastRun.ts';
+import { SweepManager } from './managers/sweeps.ts';
 import { mapManagerError } from './managers/errors.ts';
-import { startGcTimer } from './managers/gc.ts';
-import { startTrashPurgeTimer } from './managers/trashPurge.ts';
+import { runGcOnce } from './managers/gc.ts';
+import { runTrashPurgeOnce } from './managers/trashPurge.ts';
 
 // Utils
 import { type Config, loadConfig } from './utils/config.ts';
@@ -152,6 +153,7 @@ export interface AppServices
     publicLinks : PublicLinkManager;
     deletionOffers : DeletionOfferManager;
     adminStatus : StatusManager;
+    sweeps : SweepManager;
     users : UserManager;
     setup : SetupManager;
     settings : SettingsManager;
@@ -273,7 +275,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             app.route('/api', createAdminSettingsRoutes(sessions, services.settings));
             app.route('/api', createBrandingRoutes(sessions, services.branding));
             app.route('/api', createAdminEmailRoutes(sessions, services.mail));
-            app.route('/api', createAdminStatusRoutes(sessions, services.adminStatus));
+            app.route('/api', createAdminRuntimeRoutes(sessions, services.adminStatus, services.sweeps));
             app.route('/api', createBlobRoutes(sessions, services.blobs, services.mediaTags));
             app.route('/api', createUploadRoutes(sessions, services.blobs, services.mediaTags));
             app.route('/api', createNodeRoutes(sessions, services.nodes));
@@ -451,6 +453,21 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         emailEnabled: () => mail.isConfigured(),
         signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),
     });
+
+    // Both grace windows are resolved per sweep rather than closed over once, so an admin who lowers a retention and
+    // then runs the sweep gets the window they just set, not the one this process booted with.
+    const sweeps = new SweepManager({
+        runners: {
+            gc: () => runGcOnce({ blob, graceMs: gcGraceMs }),
+            trashPurge: () => runTrashPurgeOnce({
+                nodes: nodeRA,
+                purger: nodes,
+                graceMs: async () => await trashPurgeDays() * MS_PER_DAY,
+            }),
+        },
+        tracker,
+    });
+
     const admins = new AdminManager({
         auth,
         users: userRA,
@@ -474,23 +491,13 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     );
 
     const sweepIntervalMs = config.GC_INTERVAL_MINUTES * MS_PER_MINUTE;
-    const stopGc = startGcTimer(
-        { handle, blob, graceMs: gcGraceMs },
-        sweepIntervalMs,
-        (summary) => tracker.recordGc(summary)
-    );
-    const stopTrashPurge = startTrashPurgeTimer(
-        { nodes: nodeRA, purger: nodes, graceMs: async () => await trashPurgeDays() * MS_PER_DAY },
-        sweepIntervalMs,
-        (summary) => tracker.recordTrashPurge(summary)
-    );
+    const stopReclaim = sweeps.startTimers(sweepIntervalMs);
     const stopSweeps = blobs.startSweeps();
     const stopMediaTags = startMediaTagTimer(mediaTags, sweepIntervalMs, MEDIA_TAG_SWEEP_BATCH);
 
     const shutdown = () : void =>
     {
-        stopGc();
-        stopTrashPurge();
+        stopReclaim();
         stopSweeps();
         stopMediaTags();
     };
@@ -504,6 +511,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         publicLinks,
         deletionOffers,
         adminStatus,
+        sweeps,
         users,
         setup,
         settings,

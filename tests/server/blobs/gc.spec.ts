@@ -34,6 +34,10 @@ import { testConfig } from '../auth/support.ts';
 
 const GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Every seeded blob is this size, so the bytes a sweep reports freed are a multiple of it and can be reasoned about
+// by hand rather than read back off the summary.
+const BLOB_BYTES = 256;
+
 let handle : DatabaseHandle;
 let db : Kysely<Database>;
 let blob : BlobRA;
@@ -50,7 +54,7 @@ function sha256Of(data : Buffer) : string
 // Write real bytes through the storage RA and record its blob row with a chosen graveyard marker. Returns the sha256.
 async function seedStoredBlob(deletedAt : string | null) : Promise<string>
 {
-    const bytes = randomBytes(256);
+    const bytes = randomBytes(BLOB_BYTES);
     const sha256 = sha256Of(bytes);
 
     const location = await blob.put(sha256, Readable.from(bytes), bytes.length);
@@ -117,9 +121,9 @@ describe('runGcOnce', () =>
         const inGrace = await seedStoredBlob(new Date(Date.now() - 60_000).toISOString());
         const live = await seedStoredBlob(null);
 
-        const summary = await runGcOnce({ handle, blob, graceMs: async () => GRACE_MS });
+        const summary = await runGcOnce({ blob, graceMs: async () => GRACE_MS });
 
-        expect(summary).toEqual({ candidates: 1, deleted: 1, kept: 0, bytesFailed: 0 });
+        expect(summary).toEqual({ candidates: 1, deleted: 1, kept: 0, bytesFailed: 0, bytesFreed: BLOB_BYTES });
 
         expect(await rowExists(expired)).toBe(false);
         expect(await bytesExist(expired)).toBe(false);
@@ -135,9 +139,9 @@ describe('runGcOnce', () =>
     {
         const live = await seedStoredBlob(null);
 
-        const summary = await runGcOnce({ handle, blob, graceMs: async () => GRACE_MS });
+        const summary = await runGcOnce({ blob, graceMs: async () => GRACE_MS });
 
-        expect(summary).toEqual({ candidates: 0, deleted: 0, kept: 0, bytesFailed: 0 });
+        expect(summary).toEqual({ candidates: 0, deleted: 0, kept: 0, bytesFailed: 0, bytesFreed: 0 });
         expect(await rowExists(live)).toBe(true);
         expect(await bytesExist(live)).toBe(true);
     });
@@ -149,20 +153,22 @@ describe('runGcOnce', () =>
         const graveyarded = await seedStoredBlob(new Date(Date.now() - 60_000).toISOString());
 
         let graceMs = GRACE_MS;
-        const deps = { handle, blob, graceMs: async () => graceMs };
+        const deps = { blob, graceMs: async () => graceMs };
 
-        expect(await runGcOnce(deps)).toEqual({ candidates: 0, deleted: 0, kept: 0, bytesFailed: 0 });
+        expect(await runGcOnce(deps)).toEqual({ candidates: 0, deleted: 0, kept: 0, bytesFailed: 0, bytesFreed: 0 });
         expect(await rowExists(graveyarded)).toBe(true);
 
         graceMs = 0;
 
-        expect(await runGcOnce(deps)).toEqual({ candidates: 1, deleted: 1, kept: 0, bytesFailed: 0 });
+        expect(await runGcOnce(deps))
+            .toEqual({ candidates: 1, deleted: 1, kept: 0, bytesFailed: 0, bytesFreed: BLOB_BYTES });
         expect(await rowExists(graveyarded)).toBe(false);
         expect(await bytesExist(graveyarded)).toBe(false);
     });
 
     // One failing byte delete must not abort the batch: the row is already gone (row-first design), so the other
-    // candidates still sweep and the summary reports the leak honestly instead of the whole run throwing.
+    // candidates still sweep and the summary reports the leak honestly instead of the whole run throwing. The leaked
+    // candidate's size is not in the freed figure either -- its bytes are still sitting on the disk.
     it('sweeps the remaining candidates and reports a byte-delete failure without aborting', async () =>
     {
         const failing = await seedStoredBlob(new Date('2020-01-01T00:00:00.000Z').toISOString());
@@ -176,9 +182,9 @@ describe('runGcOnce', () =>
             await realDelete.delete(location);
         });
 
-        const summary = await runGcOnce({ handle, blob, graceMs: async () => GRACE_MS });
+        const summary = await runGcOnce({ blob, graceMs: async () => GRACE_MS });
 
-        expect(summary).toEqual({ candidates: 2, deleted: 1, kept: 0, bytesFailed: 1 });
+        expect(summary).toEqual({ candidates: 2, deleted: 1, kept: 0, bytesFailed: 1, bytesFreed: BLOB_BYTES });
 
         expect(await rowExists(failing)).toBe(false);
         expect(await bytesExist(failing)).toBe(true);

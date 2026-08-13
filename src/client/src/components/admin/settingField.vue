@@ -40,6 +40,12 @@
             </div>
 
             <div class="flex items-center gap-2 sm:shrink-0">
+                <RunSweepButton
+                    v-if="sweep"
+                    :sweep="sweep.kind"
+                    :label="sweep.label"
+                    :blocked-reason="blockedReason"
+                />
                 <UButton
                     v-if="entry.source === 'override' && entry.hasDefault"
                     label="Reset to default"
@@ -111,13 +117,16 @@
 <script setup lang="ts">
     import { computed, ref, watch } from 'vue';
 
-    import type { AdminSettingEntry } from '@fileshed/core';
+    import type { AdminSettingEntry, SweepKind } from '@fileshed/core';
 
     // Stores
     import { useAdminSettingsStore } from '../../stores/adminSettings.ts';
 
     // Engines
     import { describeByteSize, parseByteSize } from '../../engines/byteSize.ts';
+
+    // Components
+    import RunSweepButton from './runSweepButton.vue';
 
     // Utils
     import { useRunWithToast } from '../../utils/runWithToast.ts';
@@ -134,6 +143,10 @@
         // What zero means on a byte key that spends it as a sentinel ("Unlimited"), where echoing "0 bytes" would
         // contradict the setting.
         zeroLabel ?: string;
+
+        // The sweep this setting governs, on the few keys that govern one. It earns its place on the card because
+        // lowering a retention is the moment the question "so when does that take effect?" gets asked.
+        sweep ?: { kind : SweepKind; label : string };
     }>();
 
     const settings = useAdminSettingsStore();
@@ -273,6 +286,20 @@
 
         void runMutation(() => settings.save(props.entry.key, draft.value.trim()), pending);
     }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Running the sweep this setting governs
+    //------------------------------------------------------------------------------------------------------------------
+
+    // A sweep started from a card holding an unsaved retention would run against the window still in effect, and
+    // permanently delete exactly what the admin was in the middle of protecting. The draft only exists here, so this
+    // is the only place that can refuse.
+    const blockedReason = computed<string | undefined>(() =>
+    {
+        const changed = props.entry.kind === 'string' ? stringDirty.value : dirty.value;
+
+        return changed ? 'Save this value first. The sweep would run against the one still in effect.' : undefined;
+    });
 
     //------------------------------------------------------------------------------------------------------------------
     // Boolean + reset

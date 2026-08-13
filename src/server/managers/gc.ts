@@ -15,11 +15,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import { MS_PER_SECOND } from '@fileshed/core';
+import type { GcRunSummary } from '@fileshed/core';
 
 // Resource Access
 import { BlobRA } from '../resource-access/blob/index.ts';
-import type { DatabaseHandle } from '../resource-access/database/database.ts';
 
 // Utils
 import { getLogger } from '../utils/logger.ts';
@@ -32,24 +31,15 @@ const logger = getLogger('gc');
 
 export interface GcDeps
 {
-    handle : DatabaseHandle;
     blob : BlobRA;
 
     // Read at the start of each sweep, so an admin changing the grace window needs no restart.
     graceMs : () => Promise<number>;
 }
 
-export interface GcSummary
-{
-    candidates : number;
-    deleted : number;
-    kept : number;
-    bytesFailed : number;
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function runGcOnce(deps : GcDeps) : Promise<GcSummary>
+export async function runGcOnce(deps : GcDeps) : Promise<GcRunSummary>
 {
     const cutoff = new Date(Date.now() - await deps.graceMs());
     const candidates = await deps.blob.gcCandidates(cutoff);
@@ -60,61 +50,34 @@ export async function runGcOnce(deps : GcDeps) : Promise<GcSummary>
     // aborting the batch would strand every remaining candidate over one bad file.
     const removals = await Promise.all(candidates.map(async (candidate) =>
     {
-        if(!await deps.blob.hardDeleteRow(candidate.sha256, cutoff)) { return 'kept'; }
+        if(!await deps.blob.hardDeleteRow(candidate.sha256, cutoff)) { return { outcome: 'kept' as const, bytes: 0 }; }
 
         try
         {
             await deps.blob.delete({ backendID: candidate.backendID, storageKey: candidate.storageKey });
-            return 'deleted';
+            return { outcome: 'deleted' as const, bytes: candidate.size };
         }
         catch(error)
         {
             logger.error({ err: error, sha256: candidate.sha256 }, 'GC byte delete failed; bytes leaked');
-            return 'bytesFailed';
+            return { outcome: 'bytesFailed' as const, bytes: 0 };
         }
     }));
 
-    const deleted = removals.filter((removal) => removal === 'deleted').length;
-    const kept = removals.filter((removal) => removal === 'kept').length;
-    const bytesFailed = removals.filter((removal) => removal === 'bytesFailed').length;
+    const deleted = removals.filter((removal) => removal.outcome === 'deleted');
+    const kept = removals.filter((removal) => removal.outcome === 'kept').length;
+    const bytesFailed = removals.filter((removal) => removal.outcome === 'bytesFailed').length;
+
+    // Only bytes that actually left the store count as freed. A leaked candidate's space is still occupied, and
+    // reporting it as reclaimed would tell an admin they got back room they can't use.
+    const bytesFreed = deleted.reduce((total, removal) => total + removal.bytes, 0);
+
+    const summary = { candidates: candidates.length, deleted: deleted.length, kept, bytesFailed, bytesFreed };
 
     const level = bytesFailed > 0 ? 'warn' : (candidates.length > 0 ? 'info' : 'debug');
-    logger[level]({ candidates: candidates.length, deleted, kept, bytesFailed }, 'GC sweep complete');
+    logger[level](summary, 'GC sweep complete');
 
-    return { candidates: candidates.length, deleted, kept, bytesFailed };
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// Runs runGcOnce shortly after boot and then on a fixed interval. The boot pass matters more than it looks: a
-// deployment restarted more often than the interval would otherwise never collect at all, and the admin status
-// page would report an eternal "never". Pure wiring beyond that: swallows a failed sweep with a log so one bad
-// run never kills the timer, unrefs so it does not hold the process open, and reports each completed sweep's
-// summary to `onComplete` (the status tracker). Returns a stop handle.
-export function startGcTimer(
-    deps : GcDeps,
-    intervalMs : number,
-    onComplete ?: (summary : GcSummary) => void
-) : () => void
-{
-    const sweep = () : void =>
-    {
-        runGcOnce(deps)
-            .then((summary) => onComplete?.(summary))
-            .catch((error) => logger.error({ err: error }, 'GC sweep failed'));
-    };
-
-    const kickoff = setTimeout(sweep, MS_PER_SECOND);
-    kickoff.unref?.();
-
-    const timer = setInterval(sweep, intervalMs);
-    timer.unref?.();
-
-    return () =>
-    {
-        clearTimeout(kickoff);
-        clearInterval(timer);
-    };
+    return summary;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
