@@ -55,6 +55,19 @@ function conflictCodeOf(status : number, body : unknown) : ConflictCode | null
     return typeof code === 'string' ? (code as ConflictCode) : null;
 }
 
+// How much of an upload the server holds, off a conflict body. Only an offset conflict carries one, and only a whole,
+// non-negative count is one -- the client cuts its next chunk at exactly this byte, so anything else is not a position
+// and the conflict keeps its original meaning of "these bytes do not belong here".
+function receivedBytesOf(body : unknown) : number | null
+{
+    if(typeof body !== 'object' || body === null || !('receivedBytes' in body)) { return null; }
+
+    const { receivedBytes } = body as { receivedBytes : unknown };
+    if(typeof receivedBytes !== 'number' || !Number.isInteger(receivedBytes) || receivedBytes < 0) { return null; }
+
+    return receivedBytes;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export class ApiError extends Error
@@ -103,12 +116,17 @@ export class ConflictApiError extends ApiError
 {
     readonly code : ConflictCode;
 
-    constructor(message : string, code : ConflictCode, body ?: unknown)
+    // Where the server says the upload stands, on the conflict that carries it -- an offset conflict is the two sides
+    // disagreeing about the position, and this is the server's, which settles it. Null on every other conflict.
+    readonly receivedBytes : number | null;
+
+    constructor(message : string, code : ConflictCode, receivedBytes : number | null = null, body ?: unknown)
     {
         super(409, message, body);
 
         this.name = 'ConflictApiError';
         this.code = code;
+        this.receivedBytes = receivedBytes;
     }
 }
 
@@ -126,7 +144,7 @@ export function apiErrorFromBody(status : number, statusText : string, body : un
     if(violations !== null) { return new RegulationApiError(status, message, violations, body); }
 
     const conflict = conflictCodeOf(status, body);
-    if(conflict !== null) { return new ConflictApiError(message, conflict, body); }
+    if(conflict !== null) { return new ConflictApiError(message, conflict, receivedBytesOf(body), body); }
 
     return new ApiError(status, message, body);
 }

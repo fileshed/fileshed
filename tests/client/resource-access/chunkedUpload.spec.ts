@@ -8,7 +8,11 @@
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { NodeResponse } from '@fileshed/core';
+import {
+    type NodeResponse,
+    UPLOAD_CHUNK_IN_FLIGHT_MAX_ATTEMPTS,
+    UPLOAD_CHUNK_MAX_ATTEMPTS,
+} from '@fileshed/core';
 
 // Resource Access (under test)
 import { ApiError, ConflictApiError } from '@client/resource-access/apiError.ts';
@@ -69,6 +73,11 @@ function commits() : UploadOutcome
     return { committed: true, node: committedNode() };
 }
 
+// Far above what any spec here legitimately sends, and low enough to trip in milliseconds. An upload that keeps
+// resuming forever is the failure this file most needs to catch, and a hang is the one failure a test cannot report:
+// it stops the run instead of failing an assertion, and reads as an environment problem rather than a bug.
+const RUNAWAY_REQUESTS = 64;
+
 // A transport that records every request and answers each the way the spec's script says, taking the bytes and waiting
 // for more unless told otherwise.
 function fakeTransport(script : ChunkScript = accepted) : SentChunk[]
@@ -79,6 +88,12 @@ function fakeTransport(script : ChunkScript = accepted) : SentChunk[]
     uploadMock.mockImplementation(async (options : UploadWithProgressOptions) : Promise<UploadOutcome> =>
     {
         calls += 1;
+
+        if(calls > RUNAWAY_REQUESTS)
+        {
+            throw new Error(`the upload made more than ${ RUNAWAY_REQUESTS } requests; it is not making progress`);
+        }
+
         const chunk : SentChunk = { offset: options.offset ?? 0, text: await options.body.text() };
         sent.push(chunk);
 
@@ -169,7 +184,30 @@ describe('uploadChunked', () =>
         ]);
     });
 
-    it('gives up on a chunk after its attempt budget and surfaces the failure', async () =>
+    // Nothing injected, so what is under test is the budget the client actually ships with rather than a number this
+    // spec chose. Wire the wrong constant here and the shipped upload retries the wrong number of times.
+    it('stops a chunk the transport never carries at the end of the shipped transport budget', async () =>
+    {
+        const sent = fakeTransport(() =>
+        {
+            throw new ApiError(0, 'The upload could not reach the server.');
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefgh'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+            inFlightRetryDelayMs: 0,
+        })).rejects.toBeInstanceOf(ApiError);
+
+        expect(sent).toHaveLength(UPLOAD_CHUNK_MAX_ATTEMPTS);
+    });
+
+    // The transport budget is the transport's. A generous allowance for a busy ticket is not an allowance for a
+    // network that never answers, so the chunk stops after the attempts the transport was given.
+    it('gives up on a chunk after its transport budget and surfaces the failure', async () =>
     {
         const sent = fakeTransport(() =>
         {
@@ -183,6 +221,8 @@ describe('uploadChunked', () =>
             chunkBytes: 4,
             maxAttempts: 3,
             retryDelayMs: 0,
+            inFlightMaxAttempts: 9,
+            inFlightRetryDelayMs: 0,
         })).rejects.toBeInstanceOf(ApiError);
 
         expect(sent).toHaveLength(3);
@@ -230,6 +270,7 @@ describe('uploadChunked', () =>
             commit: COMMIT,
             chunkBytes: 4,
             retryDelayMs: 0,
+            inFlightRetryDelayMs: 0,
         });
 
         expect(node.id).toBe('n1');
@@ -241,7 +282,9 @@ describe('uploadChunked', () =>
         ]);
     });
 
-    it('gives up on a chunk the upload never stops receiving, within the same attempt budget', async () =>
+    // A busy ticket is waited out on its own allowance. Spending the transport's would charge the client twice for
+    // one tear -- once for the request that died, and again for the refusal that death caused.
+    it('waits out a ticket that never stops receiving on its own budget, not the transport\'s', async () =>
     {
         const sent = fakeTransport(() =>
         {
@@ -253,16 +296,63 @@ describe('uploadChunked', () =>
             file: fileOf('abcdefgh'),
             commit: COMMIT,
             chunkBytes: 4,
-            maxAttempts: 3,
+            maxAttempts: 2,
             retryDelayMs: 0,
+            inFlightMaxAttempts: 5,
+            inFlightRetryDelayMs: 0,
         })).rejects.toMatchObject({ status: 409, code: 'upload.chunkInFlight' });
 
-        expect(sent).toHaveLength(3);
+        expect(sent).toHaveLength(5);
     });
 
-    // The other 409: the server and the client disagree about where the upload stands. Sending the same bytes again
-    // asks the same question and gets the same answer, so it surfaces instead.
-    it('does not retry a chunk the server says does not belong where it was sent', async () =>
+    // The budget a real upload runs on, rather than one the spec handed it. The boundary is the point: the last
+    // attempt the budget allows is the last one made, and its refusal is what fails the chunk.
+    it('stops asking a ticket that never frees at the end of the shipped in-flight budget', async () =>
+    {
+        const sent = fakeTransport(() =>
+        {
+            throw new ConflictApiError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefgh'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            inFlightRetryDelayMs: 0,
+        })).rejects.toMatchObject({ status: 409, code: 'upload.chunkInFlight' });
+
+        expect(sent).toHaveLength(UPLOAD_CHUNK_IN_FLIGHT_MAX_ATTEMPTS);
+    });
+
+    // The tear and the refusal it leaves behind are one event on the wire and two budgets here: the dead request is
+    // the transport's to account for, and the ticket it left busy gets its full allowance afterwards.
+    it('does not let the tear that made a ticket busy spend the waiting-it-out budget', async () =>
+    {
+        const sent = fakeTransport((chunk, call) =>
+        {
+            if(call === 1) { throw new ApiError(0, 'The upload could not reach the server.'); }
+
+            throw new ConflictApiError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefgh'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            maxAttempts: 3,
+            retryDelayMs: 0,
+            inFlightMaxAttempts: 4,
+            inFlightRetryDelayMs: 0,
+        })).rejects.toMatchObject({ status: 409, code: 'upload.chunkInFlight' });
+
+        expect(sent).toHaveLength(5);
+    });
+
+    // The other 409: the two sides disagree about where the upload stands. A refusal that does not say where the
+    // server stands leaves the client nowhere to go, so it surfaces rather than guessing at a position.
+    it('fails a chunk refused for its offset when the refusal names no position', async () =>
     {
         const sent = fakeTransport(() =>
         {
@@ -281,6 +371,171 @@ describe('uploadChunked', () =>
         })).rejects.toMatchObject({ status: 409, code: 'upload.offsetConflict' });
 
         expect(sent).toHaveLength(1);
+    });
+
+    // The server holds ground the client thought it still owed. Its count is the one that decides, so the rest of the
+    // file is cut again from there and the bytes it already has are never sent a second time.
+    it('cuts the rest of the file from the position an offset conflict reports', async () =>
+    {
+        const sent = fakeTransport((chunk, call) =>
+        {
+            if(chunk.offset === 4 && call === 2)
+            {
+                throw new ConflictApiError('This chunk was already received.', 'upload.offsetConflict', 8);
+            }
+
+            return chunk.offset === 8 ? commits() : accepted();
+        });
+
+        const node = await uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefghij'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        });
+
+        expect(node.id).toBe('n1');
+        expect(sent).toEqual([
+            { offset: 0, text: 'abcd' },
+            { offset: 4, text: 'efgh' },
+            { offset: 8, text: 'ij' },
+        ]);
+    });
+
+    // The half of the torn-chunk race the client used to die on: the dead request had already delivered its whole
+    // chunk, so the retry is sending bytes the server holds. That is a resume, not a failed upload.
+    it('finishes an upload whose torn chunk the server had already taken in full', async () =>
+    {
+        const sent = fakeTransport((chunk, call) =>
+        {
+            if(chunk.offset === 4 && call === 2) { throw new ApiError(0, 'The upload could not reach the server.'); }
+            if(chunk.offset === 4 && call === 3)
+            {
+                throw new ConflictApiError('This chunk was already received.', 'upload.offsetConflict', 8);
+            }
+
+            return chunk.offset === 8 ? commits() : accepted();
+        });
+
+        const node = await uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefghij'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        });
+
+        expect(node.id).toBe('n1');
+        expect(sent).toEqual([
+            { offset: 0, text: 'abcd' },
+            { offset: 4, text: 'efgh' },
+            { offset: 4, text: 'efgh' },
+            { offset: 8, text: 'ij' },
+        ]);
+    });
+
+    // A position outside the file is not a position in it. Sending a chunk there would only earn a second refusal, so
+    // the conflict the client already has is the one it surfaces.
+    it('does not restart from a position past the end of the file', async () =>
+    {
+        const sent = fakeTransport(() =>
+        {
+            throw new ConflictApiError('The upload holds 99 bytes.', 'upload.offsetConflict', 99);
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefghij'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        })).rejects.toMatchObject({ status: 409, code: 'upload.offsetConflict' });
+
+        expect(sent).toHaveLength(1);
+    });
+
+    // The other end of the same rule, and the one that bites: a position at or behind where this upload has already
+    // sent from is no progress, and acting on it sends the same bytes to the same answer forever. Every one of these
+    // must cost exactly the one request that earned the refusal.
+    it.each([
+        [ 'below the start of the file', -1 ],
+        [ 'at the start, which the upload has already sent from', 0 ],
+        [ 'behind where the upload already stands', 2 ],
+        [ 'between two bytes', 6.5 ],
+    ])('refuses to restart from a position %s', async (_case, position) =>
+    {
+        const sent = fakeTransport((chunk) =>
+        {
+            if(chunk.offset === 0) { return accepted(); }
+
+            throw new ConflictApiError(`The upload holds ${ position } bytes.`, 'upload.offsetConflict', position);
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefghij'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        })).rejects.toMatchObject({ status: 409, code: 'upload.offsetConflict' });
+
+        // The first chunk, then the second that was refused. A restart would show as a third.
+        expect(sent).toHaveLength(2);
+    });
+
+    // A correction to the very end of the file is a resume like any other. What is owed from there is the empty
+    // remainder, and the request carrying it is what commits the upload -- so a server that already holds every byte
+    // is one request from being done, not stuck.
+    it('resumes to the end of the file and lets the final request commit it', async () =>
+    {
+        const sent = fakeTransport((chunk) =>
+        {
+            if(chunk.offset === 10) { return commits(); }
+
+            throw new ConflictApiError('The upload holds 10 bytes.', 'upload.offsetConflict', 10);
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefghij'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        })).resolves.toMatchObject({ id: 'n1' });
+
+        expect(sent).toEqual([
+            { offset: 0, text: 'abcd' },
+            { offset: 10, text: '' },
+        ]);
+    });
+
+    // Restarting where the upload has already stood sends the same bytes to the same answer, and a server that keeps
+    // naming such a position would keep the upload going forever. It only ever restarts somewhere new.
+    it('does not restart at a position the upload has already sent from', async () =>
+    {
+        const sent = fakeTransport((chunk) =>
+        {
+            if(chunk.offset === 4)
+            {
+                throw new ConflictApiError('The upload holds 0 bytes.', 'upload.offsetConflict', 0);
+            }
+
+            return accepted();
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefghij'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        })).rejects.toMatchObject({ status: 409, code: 'upload.offsetConflict' });
+
+        expect(sent).toEqual([
+            { offset: 0, text: 'abcd' },
+            { offset: 4, text: 'efgh' },
+        ]);
     });
 
     it('does not retry a cancelled upload', async () =>

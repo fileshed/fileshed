@@ -61,7 +61,9 @@ export const uploadSpec = describeRoute({
             + '(`upload.offsetConflict`), another chunk of the same upload is still being received '
             + '(`upload.chunkInFlight`), or the replace carried an ifBlobID guard and the target\'s content changed '
             + 'since (`replace.staleBlob`). The body\'s `code` says which; only `upload.chunkInFlight` clears on its '
-            + 'own, so it is the only one worth sending the same chunk again for.'),
+            + 'own, so it is the only one worth sending the same chunk again for. An `upload.offsetConflict` carries '
+            + 'the upload\'s real position in the body\'s `receivedBytes` -- the byte to cut the next chunk at, so a '
+            + 'client that disagreed about where the upload stood resumes there instead of starting over.'),
         413: errorResponse('The upload exceeds the maximum allowed size. The limit is in the body\'s `maxBytes` and '
             + 'in the `Upload-Limit: max-size=<bytes>` response header.'),
         422: errorResponse('The parent placement violates a rule, or the replace target is not a file.'),

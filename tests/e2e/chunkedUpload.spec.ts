@@ -302,7 +302,8 @@ describe('a chunk the upload disagrees with', () =>
 
     // The other conflict, and the one that must never be waited out: the client sent bytes for ground the upload has
     // not reached. It arrives over the same status as a chunk still in flight, so the code is the only thing telling a
-    // client to stop rather than ask again -- and it has to survive the real wire to be worth anything.
+    // client to stop rather than ask again -- and it has to survive the real wire to be worth anything. So does the
+    // position beside it, which is what turns stopping into resuming.
     it('refuses a chunk that skips ahead, naming a conflict that will not clear', async () =>
     {
         const { ticket } = await ticketFor(alice, data);
@@ -312,7 +313,49 @@ describe('a chunk the upload disagrees with', () =>
         const skipped = await putChunk(alice, ticket, 'skip.bin', data, CHUNK, CHUNK);
 
         expect(skipped.status).toBe(409);
-        expect(await skipped.json()).toMatchObject({ code: 'upload.offsetConflict' });
+        expect(await skipped.json()).toMatchObject({ code: 'upload.offsetConflict', receivedBytes: 1024 });
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('a client that has lost track of where its upload stands', () =>
+{
+    const CHUNK = 64 * 1024;
+
+    const data = randomBytes(CHUNK * 3);
+    const sha = sha256Of(data);
+
+    // A chunk the server already holds is the shape a torn request leaves behind when it delivered everything before
+    // the socket died. The refusal names the position, and a client that reads it finishes the file from there --
+    // across a real process, where the number has to travel on the wire or not at all.
+    it('resumes from the position the refusal named and stores the whole file', async () =>
+    {
+        const { ticket } = await ticketFor(alice, data);
+
+        expect((await putChunk(alice, ticket, 'resume.bin', data, 0, CHUNK)).status).toBe(202);
+        expect((await putChunk(alice, ticket, 'resume.bin', data, CHUNK, CHUNK)).status).toBe(202);
+
+        const replayed = await putChunk(alice, ticket, 'resume.bin', data, CHUNK, CHUNK);
+        expect(replayed.status).toBe(409);
+
+        const refusal = await replayed.json() as { code : string; receivedBytes : number };
+        expect(refusal.code).toBe('upload.offsetConflict');
+
+        const resumed = await putChunk(
+            alice,
+            ticket,
+            'resume.bin',
+            data,
+            refusal.receivedBytes,
+            data.length - refusal.receivedBytes
+        );
+        expect(resumed.status).toBe(200);
+
+        const stored = await readBlobFile(server.storageRoot, sha);
+        expect(stored.length).toBe(data.length);
+        expect(sha256Of(stored)).toBe(sha);
+        expect(stored.equals(data)).toBe(true);
     });
 });
 

@@ -277,6 +277,29 @@ describe('chunked upload', () =>
         expect(await storedBytes(booted, sha256)).toEqual(data);
     });
 
+    // The whole point of naming the position: a client that has lost track of the upload -- a torn chunk the server
+    // took in full, a session picking a ticket back up -- reads where to start from the refusal itself and finishes
+    // the file, with no round trip spent on discovering it and no bytes sent twice.
+    it('tells a client that disagreed about the position where to resume, and takes the file from there', async () =>
+    {
+        const user = await makeUser(booted, 'resume@example.com');
+        const data = randomBytes(3000);
+        const sha256 = sha256Of(data);
+        const ticket = await ticketFor(user, data);
+
+        await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1000), 0);
+        await putChunk(booted.app, user.cookie, ticket, data.subarray(1000, 2500), 1000);
+
+        // The client believes it still owes byte 1000 onwards; the server has been past that for a request now.
+        const stale = await putChunk(booted.app, user.cookie, ticket, data.subarray(1000, 2500), 1000);
+        const { receivedBytes } = await stale.json() as { receivedBytes : number };
+
+        const resumed = await putChunk(booted.app, user.cookie, ticket, data.subarray(receivedBytes), receivedBytes);
+
+        expect(resumed.status).toBe(200);
+        expect(await storedBytes(booted, sha256)).toEqual(data);
+    });
+
     // Both refusals are 409, and they ask opposite things of the client. A chunk overlapping one still being received
     // is a torn chunk meeting its own dead request: nothing is wrong with the bytes and the ground is still theirs
     // once it unwinds. A chunk at an offset the upload disagrees with is wrong however many times it is sent. The code

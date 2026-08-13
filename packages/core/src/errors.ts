@@ -104,6 +104,21 @@ export class ConflictError extends Error
     }
 }
 
+// A chunk that claimed ground the upload has already covered, or ground it has not reached yet. The position the
+// upload actually holds travels with the refusal: it is the only thing that tells the client where to start sending
+// instead, and a client that had to read it out of the message would be parsing English to resume an upload.
+export class OffsetConflictError extends ConflictError
+{
+    readonly receivedBytes : number;
+
+    constructor(message : string, receivedBytes : number)
+    {
+        super('upload.offsetConflict', message);
+        this.name = 'OffsetConflictError';
+        this.receivedBytes = receivedBytes;
+    }
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Regulation
 //

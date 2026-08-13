@@ -23,7 +23,8 @@ import { conflictCodes } from '@fileshed/core';
 //----------------------------------------------------------------------------------------------------------------------
 
 // The wire error shape mapManagerError emits: a message, plus the regulation violations present on 403/422 rejections,
-// the byte ceiling present on a 413, and the conflict code present on a 409.
+// the byte ceiling present on a 413, the conflict code present on a 409, and the upload's position present on the one
+// conflict a client resumes from rather than gives up on.
 export const errorResponseCodec = z.object({
     error: z.string(),
     violations: z.array(z.object({ code: z.string() }).loose()).optional(),
@@ -32,6 +33,10 @@ export const errorResponseCodec = z.object({
         .positive()
         .optional(),
     code: z.enum(conflictCodes).optional(),
+    receivedBytes: z.number()
+        .int()
+        .nonnegative()
+        .optional(),
 });
 
 export const ERROR_SCHEMA_NAME = 'ErrorResponse';

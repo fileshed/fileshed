@@ -14,6 +14,7 @@ import {
     ConflictError,
     ForbiddenError,
     NotFoundError,
+    OffsetConflictError,
     PayloadTooLargeError,
     type RegulationCode,
     RegulationError,
@@ -60,8 +61,14 @@ export interface MappedError
     status : ErrorStatus;
 
     // The `error` message every rejection carries, plus whatever machine-readable detail the specific rejection has:
-    // a 403/422's regulation violations, a 413's ceiling, a 409's conflict code.
-    body : { error : string; violations ?: RegulationViolation[]; maxBytes ?: number; code ?: ConflictCode };
+    // a 403/422's regulation violations, a 413's ceiling, a 409's conflict code, and an offset conflict's position.
+    body : {
+        error : string;
+        violations ?: RegulationViolation[];
+        maxBytes ?: number;
+        code ?: ConflictCode;
+        receivedBytes ?: number;
+    };
 
     // Response headers the rejection carries, for the errors that answer in a header as well as a body.
     headers ?: Record<string, string>;
@@ -80,6 +87,18 @@ function payloadTooLarge(error : PayloadTooLargeError) : MappedError
     };
 }
 
+// Every conflict answers with the code a caller branches on. An offset conflict answers with one thing more: where the
+// upload actually stands, which is what turns "those bytes do not belong there" into somewhere to resume from.
+function conflict(error : ConflictError) : MappedError
+{
+    if(error instanceof OffsetConflictError)
+    {
+        return { status: 409, body: { error: error.message, code: error.code, receivedBytes: error.receivedBytes } };
+    }
+
+    return { status: 409, body: { error: error.message, code: error.code } };
+}
+
 // The single translation from a manager error to its wire status + body. app.ts's onError and the specs' composed apps
 // both route through here so the mapping lives in exactly one place; an unrecognized error returns undefined and the
 // caller falls back to a logged 500.
@@ -88,7 +107,7 @@ export function mapManagerError(error : unknown) : MappedError | undefined
     if(error instanceof UnauthorizedError) { return { status: 401, body: { error: error.message } }; }
     if(error instanceof ForbiddenError) { return { status: 403, body: { error: error.message } }; }
     if(error instanceof NotFoundError) { return { status: 404, body: { error: error.message } }; }
-    if(error instanceof ConflictError) { return { status: 409, body: { error: error.message, code: error.code } }; }
+    if(error instanceof ConflictError) { return conflict(error); }
     if(error instanceof BadRequestError) { return { status: 400, body: { error: error.message } }; }
     if(error instanceof PayloadTooLargeError) { return payloadTooLarge(error); }
     if(error instanceof TooManyRequestsError) { return { status: 429, body: { error: error.message } }; }

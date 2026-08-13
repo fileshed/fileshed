@@ -295,6 +295,71 @@ describe('uploadWithProgress', () =>
         expect((error as ConflictApiError).code).toBe('upload.chunkInFlight');
     });
 
+    // An offset conflict carries where the upload actually stands, which is the byte a client cuts its next chunk at.
+    // Reading it off the body is what makes the refusal recoverable instead of a sentence to parse.
+    it('carries the upload\'s position off an offset conflict', async () =>
+    {
+        const promise = uploadWithProgress({
+            ticket: 'TKT',
+            body: new Blob([ 'x' ]),
+            commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
+        });
+
+        lastRequest().complete(
+            409,
+            JSON.stringify({
+                error: 'This chunk was already received.',
+                code: 'upload.offsetConflict',
+                receivedBytes: 8192,
+            })
+        );
+
+        const error = await promise.catch((caught : unknown) => caught);
+        expect(error).toBeInstanceOf(ConflictApiError);
+        expect((error as ConflictApiError).receivedBytes).toBe(8192);
+    });
+
+    // A conflict that names no position leaves one absent rather than invented -- a client must be able to tell "the
+    // server told me where it stands" from "it did not".
+    it('leaves the position absent on a conflict that carries none', async () =>
+    {
+        const promise = uploadWithProgress({
+            ticket: 'TKT',
+            body: new Blob([ 'x' ]),
+            commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
+        });
+
+        lastRequest().complete(409, JSON.stringify({ error: 'Still receiving.', code: 'upload.chunkInFlight' }));
+
+        const error = await promise.catch((caught : unknown) => caught);
+        expect((error as ConflictApiError).receivedBytes).toBeNull();
+    });
+
+    // The next chunk is cut at exactly this byte, so a fractional or negative count is not a position at all. Taking
+    // one would send a chunk to an offset the server can only refuse again.
+    // Both ends of "a whole, non-negative byte count", because a resume from either would be nonsense: bytes are
+    // counted from zero and they do not come in halves.
+    it.each([
+        [ 'a negative count', -1 ],
+        [ 'a fractional count', 8.5 ],
+        [ 'not a number at all', 'eight' ],
+    ])('rejects %s as a position', async (_case, receivedBytes) =>
+    {
+        const promise = uploadWithProgress({
+            ticket: 'TKT',
+            body: new Blob([ 'x' ]),
+            commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
+        });
+
+        lastRequest().complete(
+            409,
+            JSON.stringify({ error: 'Already received.', code: 'upload.offsetConflict', receivedBytes })
+        );
+
+        const error = await promise.catch((caught : unknown) => caught);
+        expect((error as ConflictApiError).receivedBytes).toBeNull();
+    });
+
     // Other surfaces put a `code` in their error bodies too (better-auth names its failures that way), so the upgrade
     // is a conflict's alone -- a caller must not be handed a conflict code by a status that never meant one.
     it('leaves a code on a status that is not a conflict as a plain ApiError', async () =>

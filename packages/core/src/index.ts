@@ -347,6 +347,7 @@ export {
     TooManyRequestsError,
     type ConflictCode,
     ConflictError,
+    OffsetConflictError,
     conflictCodes,
     type RegulationCode,
     RegulationCodeDisplay,

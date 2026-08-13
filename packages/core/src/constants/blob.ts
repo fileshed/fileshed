@@ -42,12 +42,25 @@ export const PARTIALS_SWEEP_INTERVAL_MS = 60 * MS_PER_SECOND;
 // Chunk retry budget
 //----------------------------------------------------------------------------------------------------------------------
 
-// Attempts per chunk, the first included. Transport failures and server faults are retried, and so is the one refusal
-// that clears on its own -- a chunk the server is still receiving, which a torn request leaves behind for as long as
-// its teardown takes. A refusal that means the client is wrong (an offset conflict, a rejected placement) is final.
+// Attempts per chunk against the transport, the first included: the request that never reached the server, and the
+// server that broke while answering. Neither says anything about the bytes, and neither is promised to clear, so the
+// budget is small and the backoff long.
 export const UPLOAD_CHUNK_MAX_ATTEMPTS = 3;
 
-// Backoff before re-sending a failed chunk, multiplied by the attempt number.
+// Backoff before re-sending a chunk the transport lost, multiplied by the attempt number.
 export const UPLOAD_CHUNK_RETRY_DELAY_MS = 500;
+
+// Attempts per chunk against the ticket being busy, the first included, on a budget of its own: a chunk the server is
+// still receiving is the torn attempt's own dead request, so the tear has already spent one of the transport's
+// attempts and the refusal that follows would be paying for it twice.
+//
+// This wait ends by itself, which is what buys it the wider budget and the closer first look. It runs to single-digit
+// milliseconds against an idle host and into the hundreds against a saturated one moving multi-megabyte chunks; eight
+// attempts spread over the delay below stay several times clear of the worst of that, and cost nothing when the
+// window has already closed -- which it usually has by the time the torn request's own failure reaches the client.
+export const UPLOAD_CHUNK_IN_FLIGHT_MAX_ATTEMPTS = 8;
+
+// Backoff before looking again at a ticket still receiving a chunk, multiplied by the attempt number.
+export const UPLOAD_CHUNK_IN_FLIGHT_RETRY_DELAY_MS = 100;
 
 //----------------------------------------------------------------------------------------------------------------------

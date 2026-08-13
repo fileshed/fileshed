@@ -41,6 +41,7 @@ import {
     NONCE_BYTES,
     type Node,
     NotFoundError,
+    OffsetConflictError,
     PayloadTooLargeError,
     RegulationError,
     type Role,
@@ -652,17 +653,18 @@ export class BlobManager
 
         if(offset < ticket.receivedBytes)
         {
-            throw new ConflictError(
-                'upload.offsetConflict',
-                `This chunk was already received; the upload holds ${ ticket.receivedBytes } of ${ ticket.size } bytes.`
+            throw new OffsetConflictError(
+                `This chunk was already received; the upload holds ${ ticket.receivedBytes } of ${ ticket.size }`
+                    + ' bytes.',
+                ticket.receivedBytes
             );
         }
 
         if(offset > ticket.receivedBytes)
         {
-            throw new ConflictError(
-                'upload.offsetConflict',
-                `The chunk starts at ${ offset }, but the upload holds ${ ticket.receivedBytes } bytes.`
+            throw new OffsetConflictError(
+                `The chunk starts at ${ offset }, but the upload holds ${ ticket.receivedBytes } bytes.`,
+                ticket.receivedBytes
             );
         }
 
