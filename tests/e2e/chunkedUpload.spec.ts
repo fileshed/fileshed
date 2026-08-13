@@ -7,7 +7,9 @@
 //
 // The second half of the story is the one that matters when a network misbehaves: a chunk cut off mid-flight, then
 // sent again. The bytes the torn attempt managed to deliver must leave no trace, or the file would come out longer
-// than it went in and fail its own hash.
+// than it went in and fail its own hash. The retry may also land while the dead request is still unwinding, so the
+// refusal it meets there has to be told apart from the one meaning the client sent the wrong bytes: the first clears
+// on its own, the second never will.
 //
 // The server runs with a chunk size its environment chose rather than the compiled default, so the size a client
 // plans against is proven to be the deployment's own -- across a real process, where nothing but the claim response
@@ -117,8 +119,10 @@ function hangingBody(bytes : Buffer) : { body : ReadableStream<Uint8Array>; onWi
 
 // Send a chunk, waiting out the window in which the server is still unwinding the request that just died. A chunk
 // overlapping one still being received is refused by design -- that refusal is the server working, not the retry
-// failing -- so the spec polls against a wall-clock deadline instead of assuming the socket died fast enough. A
-// refusal that never clears fails loudly, carrying the server's own words.
+// failing -- so the spec polls against a wall-clock deadline instead of assuming the socket died fast enough. Only
+// that refusal is worth waiting out, and the code on the body is what says so: any other conflict means these bytes do
+// not belong where they were sent, which no amount of waiting repairs. Either way the failure carries the server's own
+// words.
 async function putChunkOnceReceiving(
     client : ApiClient,
     ticket : string,
@@ -136,11 +140,16 @@ async function putChunkOnceReceiving(
         const res = await putChunk(client, ticket, name, data, offset, length);
         if(res.status !== 409) { return res; }
 
-        // eslint-disable-next-line no-await-in-loop -- read the refusal so it can be reported if it never clears
-        const refusal = await res.text();
+        // eslint-disable-next-line no-await-in-loop -- read the refusal to decide whether it can ever clear
+        const refusal = await res.json() as { error : string; code ?: string };
+        if(refusal.code !== 'upload.chunkInFlight')
+        {
+            throw new Error(`chunk at ${ offset } refused as ${ refusal.code }: ${ refusal.error }`);
+        }
+
         if(Date.now() > deadline)
         {
-            throw new Error(`chunk at ${ offset } still refused after ${ TEARDOWN_BUDGET_MS }ms: ${ refusal }`);
+            throw new Error(`chunk at ${ offset } still refused after ${ TEARDOWN_BUDGET_MS }ms: ${ refusal.error }`);
         }
 
         // eslint-disable-next-line no-await-in-loop -- give the server a moment before asking again
@@ -280,6 +289,30 @@ describe('a chunk cut off mid-flight', () =>
         const stored = await readBlobFile(server.storageRoot, sha);
         expect(stored.length).toBe(data.length);
         expect(sha256Of(stored)).toBe(sha);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('a chunk the upload disagrees with', () =>
+{
+    const CHUNK = 64 * 1024;
+
+    const data = randomBytes(CHUNK * 2);
+
+    // The other conflict, and the one that must never be waited out: the client sent bytes for ground the upload has
+    // not reached. It arrives over the same status as a chunk still in flight, so the code is the only thing telling a
+    // client to stop rather than ask again -- and it has to survive the real wire to be worth anything.
+    it('refuses a chunk that skips ahead, naming a conflict that will not clear', async () =>
+    {
+        const { ticket } = await ticketFor(alice, data);
+
+        expect((await putChunk(alice, ticket, 'skip.bin', data, 0, 1024)).status).toBe(202);
+
+        const skipped = await putChunk(alice, ticket, 'skip.bin', data, CHUNK, CHUNK);
+
+        expect(skipped.status).toBe(409);
+        expect(await skipped.json()).toMatchObject({ code: 'upload.offsetConflict' });
     });
 });
 

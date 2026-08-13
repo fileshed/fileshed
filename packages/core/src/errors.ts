@@ -78,15 +78,29 @@ export class TooManyRequestsError extends Error
     }
 }
 
-// An optimistic-concurrency precondition failed: the caller pinned the state it meant to change (an ifBlobID guard on a
-// content replace) and that state no longer holds, because another write landed first. The caller must reload the
-// current content and decide whether to retry.
+// Which collision a conflict reports. Two of them pass on their own: `upload.chunkInFlight` while the server unwinds
+// the request that held the ticket, and `sweep.alreadyRunning` until the sweep in progress finishes -- in both cases
+// the same request sent again later lands. The rest are settled, and repeating the request repeats the refusal until
+// the caller changes what it sends.
+export const conflictCodes = [
+    'upload.chunkInFlight',
+    'upload.offsetConflict',
+    'replace.staleBlob',
+    'sweep.alreadyRunning',
+] as const;
+
+export type ConflictCode = typeof conflictCodes[number];
+
+// Two writes to the same thing collided. The code, not the message, is what a caller branches on.
 export class ConflictError extends Error
 {
-    constructor(message : string)
+    readonly code : ConflictCode;
+
+    constructor(code : ConflictCode, message : string)
     {
         super(message);
         this.name = 'ConflictError';
+        this.code = code;
     }
 }
 

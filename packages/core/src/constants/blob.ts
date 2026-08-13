@@ -35,8 +35,9 @@ export const SWEEP_INTERVAL_MS = 60 * MS_PER_SECOND;
 // Chunk retry budget
 //----------------------------------------------------------------------------------------------------------------------
 
-// Attempts per chunk, the first included. Only transport failures and server faults are retried; a refusal the server
-// meant (an offset conflict, a rejected placement) is final.
+// Attempts per chunk, the first included. Transport failures and server faults are retried, and so is the one refusal
+// that clears on its own -- a chunk the server is still receiving, which a torn request leaves behind for as long as
+// its teardown takes. A refusal that means the client is wrong (an offset conflict, a rejected placement) is final.
 export const UPLOAD_CHUNK_MAX_ATTEMPTS = 3;
 
 // Backoff before re-sending a failed chunk, multiplied by the attempt number.

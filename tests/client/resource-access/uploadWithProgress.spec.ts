@@ -3,14 +3,14 @@
 //
 // Drives the XHR upload against a fake XMLHttpRequest the test controls: it asserts the request the uploader builds
 // (method, url, credentials, headers, the commit-mode query, the chunk offset) and then simulates the outcomes the
-// uploader must map -- a committed node, an accepted chunk, a plain error, a regulation rejection, upload progress,
-// and an abort.
+// uploader must map -- a committed node, an accepted chunk, a plain error, a regulation rejection, a conflict, upload
+// progress, and an abort.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Resource Access
-import { ApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
+import { ApiError, ConflictApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
 import { uploadWithProgress } from '@client/resource-access/uploadWithProgress.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -274,6 +274,42 @@ describe('uploadWithProgress', () =>
         const error = await promise.catch((caught : unknown) => caught);
         expect(error).toBeInstanceOf(RegulationApiError);
         expect((error as RegulationApiError).codes()).toEqual([ 'quota.exceeded' ]);
+    });
+
+    // A 409 says two writes collided; only its code says which collision, and the caller's next move differs by it.
+    it('maps a conflict to a ConflictApiError carrying the code', async () =>
+    {
+        const promise = uploadWithProgress({
+            ticket: 'TKT',
+            body: new Blob([ 'x' ]),
+            commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
+        });
+
+        lastRequest().complete(
+            409,
+            JSON.stringify({ error: 'Another chunk is still being received.', code: 'upload.chunkInFlight' })
+        );
+
+        const error = await promise.catch((caught : unknown) => caught);
+        expect(error).toBeInstanceOf(ConflictApiError);
+        expect((error as ConflictApiError).code).toBe('upload.chunkInFlight');
+    });
+
+    // Other surfaces put a `code` in their error bodies too (better-auth names its failures that way), so the upgrade
+    // is a conflict's alone -- a caller must not be handed a conflict code by a status that never meant one.
+    it('leaves a code on a status that is not a conflict as a plain ApiError', async () =>
+    {
+        const promise = uploadWithProgress({
+            ticket: 'TKT',
+            body: new Blob([ 'x' ]),
+            commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
+        });
+
+        lastRequest().complete(401, JSON.stringify({ error: 'No session.', code: 'SESSION_EXPIRED' }));
+
+        const error = await promise.catch((caught : unknown) => caught);
+        expect(error).toBeInstanceOf(ApiError);
+        expect(error).not.toBeInstanceOf(ConflictApiError);
     });
 
     it('reports upload progress as bytes sent of total', async () =>

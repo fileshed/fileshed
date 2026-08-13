@@ -5,7 +5,8 @@
 // fronting proxy's request-body cap stops deciding how large a file the deployment accepts. Chunks go in order and one
 // at a time -- the server appends each to the ticket's staging area and only the last one commits -- so a chunk that
 // fails is retried on its own and the upload never restarts from zero within a session. Only failures worth another
-// attempt are retried: the transport dropping and the server faulting. A refusal the server meant is final.
+// attempt are retried: the transport dropping, the server faulting, and a chunk overlapping its own torn attempt. A
+// refusal of the bytes themselves is final.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
@@ -16,7 +17,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from './apiError.ts';
+import { ApiError, ConflictApiError } from './apiError.ts';
 import { type UploadOutcome, type UploadProgress, uploadWithProgress } from './uploadWithProgress.ts';
 
 // Engines
@@ -49,11 +50,14 @@ function delay(ms : number) : Promise<void>
     return new Promise((resolve) => { setTimeout(resolve, ms); });
 }
 
-// Worth another attempt when nothing about the request itself was refused: the transport never reached the server
-// (status 0), or the server broke while answering. Everything else -- a rejected placement, an offset the server
-// disagrees with, a quota refusal -- says the same thing however many times it is asked.
+// Worth another attempt when nothing about these bytes was refused: the transport never reached the server (status 0),
+// the server broke while answering, or the ticket was still busy with this chunk's own torn attempt. That last is a
+// 409 and the only 409 worth repeating -- every other conflict says these bytes do not belong where they were sent,
+// which is as true the second time as the first. A rejected placement or a quota refusal answers the same way.
 function isRetryable(error : unknown) : boolean
 {
+    if(error instanceof ConflictApiError) { return error.code === 'upload.chunkInFlight'; }
+
     return error instanceof ApiError && (error.status === 0 || error.status >= 500);
 }
 

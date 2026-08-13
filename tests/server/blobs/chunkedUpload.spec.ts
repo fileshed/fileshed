@@ -10,6 +10,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -80,6 +81,81 @@ function chunkRanges(totalBytes : number, chunkBytes : number) : [ number, numbe
 async function partials() : Promise<string[]>
 {
     return readdir(join(booted.storageRoot, '.partials')).catch(() => []);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// A chunk that is still arriving
+//----------------------------------------------------------------------------------------------------------------------
+
+interface StallingChunk
+{
+    body : ReadableStream<Uint8Array>;
+    finish : () => void;
+}
+
+// A request body that hands over its bytes and then stays open until it is told to end, so a second request arrives
+// while the upload is genuinely mid-append -- the state a torn chunk's immediate retry meets.
+function stallingChunk(bytes : Buffer) : StallingChunk
+{
+    let release : () => void = () => undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+
+    let handedOver = false;
+
+    const body = new ReadableStream<Uint8Array>({
+        async pull(stream)
+        {
+            if(handedOver)
+            {
+                await held;
+                stream.close();
+
+                return;
+            }
+
+            handedOver = true;
+            stream.enqueue(new Uint8Array(bytes));
+        },
+    });
+
+    return { body, finish: release };
+}
+
+// Wait until the upload is genuinely receiving a chunk, which the staging file appearing is the first outside sign of:
+// the manager marks the ticket as receiving before it ever asks the store to append. The transport is no help here --
+// a request body can be pulled while the request is still on its way to the handler, so a spec that keyed off the wire
+// would race the very state it means to stand inside.
+async function whenReceiving() : Promise<void>
+{
+    const deadline = Date.now() + 5000;
+
+    for(;;)
+    {
+        // eslint-disable-next-line no-await-in-loop -- each look waits on the one before it
+        if((await partials()).length > 0) { return; }
+
+        if(Date.now() > deadline) { throw new Error('the upload never started receiving the stalled chunk'); }
+
+        // eslint-disable-next-line no-await-in-loop -- give the request a moment to reach the handler
+        await delay(10);
+    }
+}
+
+function putChunkStream(cookie : string, ticket : string, body : ReadableStream<Uint8Array>, offset : number)
+: Promise<Response>
+{
+    const params = new URLSearchParams({
+        name: 'file.bin',
+        mimeType: 'application/octet-stream',
+        offset: String(offset),
+    });
+
+    return booted.app.request(`${ ORIGIN }/api/uploads/${ ticket }?${ params.toString() }`, {
+        method: 'PUT',
+        headers: { cookie },
+        body,
+        duplex: 'half',
+    });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -182,8 +258,62 @@ describe('chunked upload', () =>
         const replayed = await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1000), 0);
         expect(replayed.status).toBe(409);
 
+        // Named as the client's mistake, never as the transient one it retries: a replay coded chunkInFlight would
+        // be re-sent three times and then fail the upload over bytes the server already had.
+        expect(await replayed.json()).toMatchObject({ code: 'upload.offsetConflict' });
+
         // The replay changed nothing: the upload finishes with the bytes it was always going to have.
         const last = await putChunk(booted.app, user.cookie, ticket, data.subarray(2500), 2500);
+        expect(last.status).toBe(200);
+        expect(await storedBytes(booted, sha256)).toEqual(data);
+    });
+
+    // Both refusals are 409, and they ask opposite things of the client. A chunk overlapping one still being received
+    // is a torn chunk meeting its own dead request: nothing is wrong with the bytes and the ground is still theirs
+    // once it unwinds. A chunk at an offset the upload disagrees with is wrong however many times it is sent. The code
+    // is the only thing on the wire that separates them.
+    it('refuses an overlapping chunk and a misplaced one under codes that tell the two apart', async () =>
+    {
+        const user = await makeUser(booted, 'inflight@example.com');
+        const data = randomBytes(3000);
+        const ticket = await ticketFor(user, data);
+
+        const stalled = stallingChunk(data.subarray(0, 1500));
+        const receiving = putChunkStream(user.cookie, ticket, stalled.body, 0);
+        await whenReceiving();
+
+        const overlapping = await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1500), 0);
+
+        stalled.finish();
+        await receiving;
+
+        const misplaced = await putChunk(booted.app, user.cookie, ticket, data.subarray(2500), 2500);
+
+        expect([ overlapping.status, misplaced.status ]).toEqual([ 409, 409 ]);
+        expect(await overlapping.json()).toMatchObject({ code: 'upload.chunkInFlight' });
+        expect(await misplaced.json()).toMatchObject({ code: 'upload.offsetConflict' });
+    });
+
+    it('stores the file byte-for-byte after a chunk was refused for overlapping one still in flight', async () =>
+    {
+        const user = await makeUser(booted, 'race-survivor@example.com');
+        const data = randomBytes(3000);
+        const sha256 = sha256Of(data);
+        const ticket = await ticketFor(user, data);
+
+        const stalled = stallingChunk(data.subarray(0, 1500));
+        const receiving = putChunkStream(user.cookie, ticket, stalled.body, 0);
+        await whenReceiving();
+
+        expect((await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1500), 0)).status).toBe(409);
+
+        // The refused chunk read no bytes, so the upload stands exactly where the chunk it overlapped left it.
+        stalled.finish();
+        expect(await (await receiving).json() as UploadChunkAccepted)
+            .toEqual({ receivedBytes: 1500, totalBytes: 3000 });
+
+        const last = await putChunk(booted.app, user.cookie, ticket, data.subarray(1500), 1500);
+
         expect(last.status).toBe(200);
         expect(await storedBytes(booted, sha256)).toEqual(data);
     });

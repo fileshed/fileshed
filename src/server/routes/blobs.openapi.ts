@@ -58,7 +58,7 @@ export const answerChallengeSpec = describeRoute({
         404: errorResponse('The challenge is unknown or expired, the blob vanished before it could be proven, or the '
             + 'replace target is not resolvable by the caller.'),
         409: errorResponse('The replace carried an ifBlobID guard and the target\'s content changed since; reload and '
-            + 'retry.'),
+            + 'retry. The body\'s `code` reads `replace.staleBlob`.'),
         422: errorResponse('The parent placement violates a rule, or the replace target is not a file.'),
         429: errorResponse('Too many failed proofs; try again later.'),
     },

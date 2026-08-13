@@ -57,9 +57,11 @@ export const uploadSpec = describeRoute({
             + 'lacks edit access to the replace target.'),
         404: errorResponse('The ticket is unknown or expired, the parent does not exist, or the replace target is not '
             + 'resolvable by the caller.'),
-        409: errorResponse('The chunk repeats or skips ground the upload has already covered, another chunk of the '
-            + 'same upload is still being received, or the replace carried an ifBlobID guard and the target\'s '
-            + 'content changed since.'),
+        409: errorResponse('The chunk repeats or skips ground the upload has already covered '
+            + '(`upload.offsetConflict`), another chunk of the same upload is still being received '
+            + '(`upload.chunkInFlight`), or the replace carried an ifBlobID guard and the target\'s content changed '
+            + 'since (`replace.staleBlob`). The body\'s `code` says which; only `upload.chunkInFlight` clears on its '
+            + 'own, so it is the only one worth sending the same chunk again for.'),
         413: errorResponse('The upload exceeds the maximum allowed size. The limit is in the body\'s `maxBytes` and '
             + 'in the `Upload-Limit: max-size=<bytes>` response header.'),
         422: errorResponse('The parent placement violates a rule, or the replace target is not a file.'),

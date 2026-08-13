@@ -17,10 +17,13 @@ import { type ResponsesWithResolver, resolver } from 'hono-openapi';
 import type { OpenAPIV3_1 as OpenApiV31 } from 'openapi-types';
 import { type ZodType, z } from 'zod';
 
+// Models
+import { conflictCodes } from '@fileshed/core';
+
 //----------------------------------------------------------------------------------------------------------------------
 
-// The wire error shape mapManagerError emits: a message, plus the regulation violations present on 403/422 rejections
-// and the byte ceiling present on a 413.
+// The wire error shape mapManagerError emits: a message, plus the regulation violations present on 403/422 rejections,
+// the byte ceiling present on a 413, and the conflict code present on a 409.
 export const errorResponseCodec = z.object({
     error: z.string(),
     violations: z.array(z.object({ code: z.string() }).loose()).optional(),
@@ -28,6 +31,7 @@ export const errorResponseCodec = z.object({
         .int()
         .positive()
         .optional(),
+    code: z.enum(conflictCodes).optional(),
 });
 
 export const ERROR_SCHEMA_NAME = 'ErrorResponse';

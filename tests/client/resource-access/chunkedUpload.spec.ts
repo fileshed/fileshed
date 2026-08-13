@@ -11,7 +11,7 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NodeResponse } from '@fileshed/core';
 
 // Resource Access (under test)
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { ApiError, ConflictApiError } from '@client/resource-access/apiError.ts';
 import { uploadChunked } from '@client/resource-access/chunkedUpload.ts';
 import {
     type UploadOutcome,
@@ -202,6 +202,83 @@ describe('uploadChunked', () =>
             chunkBytes: 4,
             retryDelayMs: 0,
         })).rejects.toMatchObject({ status: 403 });
+
+        expect(sent).toHaveLength(1);
+    });
+
+    // The server refuses a chunk overlapping one it is still receiving, which is what a chunk's own torn attempt looks
+    // like while its dead request unwinds. Nothing is wrong with these bytes, and the ground they want is still theirs
+    // once it has -- so the same chunk goes again rather than the upload failing under the user.
+    it('sends a chunk again when the upload was still receiving the attempt it is retrying', async () =>
+    {
+        const sent = fakeTransport((chunk, call) =>
+        {
+            if(chunk.offset === 4 && call === 2)
+            {
+                throw new ConflictApiError(
+                    'Another chunk of this upload is still being received.',
+                    'upload.chunkInFlight'
+                );
+            }
+
+            return chunk.offset === 8 ? commits() : accepted();
+        });
+
+        const node = await uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefghij'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        });
+
+        expect(node.id).toBe('n1');
+        expect(sent).toEqual([
+            { offset: 0, text: 'abcd' },
+            { offset: 4, text: 'efgh' },
+            { offset: 4, text: 'efgh' },
+            { offset: 8, text: 'ij' },
+        ]);
+    });
+
+    it('gives up on a chunk the upload never stops receiving, within the same attempt budget', async () =>
+    {
+        const sent = fakeTransport(() =>
+        {
+            throw new ConflictApiError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefgh'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            maxAttempts: 3,
+            retryDelayMs: 0,
+        })).rejects.toMatchObject({ status: 409, code: 'upload.chunkInFlight' });
+
+        expect(sent).toHaveLength(3);
+    });
+
+    // The other 409: the server and the client disagree about where the upload stands. Sending the same bytes again
+    // asks the same question and gets the same answer, so it surfaces instead.
+    it('does not retry a chunk the server says does not belong where it was sent', async () =>
+    {
+        const sent = fakeTransport(() =>
+        {
+            throw new ConflictApiError(
+                'The chunk starts at 4, but the upload holds 0 bytes.',
+                'upload.offsetConflict'
+            );
+        });
+
+        await expect(uploadChunked({
+            ticket: 'TKT',
+            file: fileOf('abcdefgh'),
+            commit: COMMIT,
+            chunkBytes: 4,
+            retryDelayMs: 0,
+        })).rejects.toMatchObject({ status: 409, code: 'upload.offsetConflict' });
 
         expect(sent).toHaveLength(1);
     });

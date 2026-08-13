@@ -43,6 +43,7 @@ import {
 } from '@client/resource-access/deletionOffers.ts';
 import { createPublicLink, listLinksForNode, revokePublicLink } from '@client/resource-access/publicLinks.ts';
 import { lookupUser } from '@client/resource-access/users.ts';
+import { revokeAllCredentials } from '@client/resource-access/credentials.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
 import {
     adminStatus,
@@ -196,6 +197,12 @@ const rows : EndpointRow[] = [
         method: 'GET',
         path: '/api/users/lookup',
         query: { email: 'grace@example.com' },
+    },
+    {
+        name: 'revokeAllCredentials',
+        call: () => revokeAllCredentials(),
+        method: 'POST',
+        path: '/api/me/revoke-credentials',
     },
     { name: 'sharedWithMe', call: () => sharedWithMe(), method: 'GET', path: '/api/shared-with-me' },
     {

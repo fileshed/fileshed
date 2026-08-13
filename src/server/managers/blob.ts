@@ -600,7 +600,12 @@ export class BlobManager
     {
         this.#assertChunkFits(ticket, contentLength, offset);
 
-        if(ticket.inFlight) { throw new ConflictError('Another chunk of this upload is still being received.'); }
+        // Two appends to one staging file would interleave their bytes. The refusal carries the transient code: the
+        // usual cause is a torn chunk retried before its own dead request finished unwinding, and it clears on its own.
+        if(ticket.inFlight)
+        {
+            throw new ConflictError('upload.chunkInFlight', 'Another chunk of this upload is still being received.');
+        }
 
         ticket.inFlight = true;
         try
@@ -648,6 +653,7 @@ export class BlobManager
         if(offset < ticket.receivedBytes)
         {
             throw new ConflictError(
+                'upload.offsetConflict',
                 `This chunk was already received; the upload holds ${ ticket.receivedBytes } of ${ ticket.size } bytes.`
             );
         }
@@ -655,6 +661,7 @@ export class BlobManager
         if(offset > ticket.receivedBytes)
         {
             throw new ConflictError(
+                'upload.offsetConflict',
                 `The chunk starts at ${ offset }, but the upload holds ${ ticket.receivedBytes } bytes.`
             );
         }
@@ -942,7 +949,10 @@ export class BlobManager
 
         if(current === undefined || current.type !== 'file' || current.blobID !== expectedBlobID)
         {
-            throw new ConflictError('The file changed since you opened it. Reload to see the latest version.');
+            throw new ConflictError(
+                'replace.staleBlob',
+                'The file changed since you opened it. Reload to see the latest version.'
+            );
         }
     }
 

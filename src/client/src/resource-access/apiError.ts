@@ -4,10 +4,11 @@
 // The typed failure the resource-access fetch wrappers throw on any non-2xx response: the HTTP status plus the server's
 // error message (every route answers with a `{ error }` body via the server's error mapping), with the parsed body
 // retained for callers that need the structured detail later. A regulation rejection (403/422) additionally carries
-// the stable `violations` codes as a RegulationApiError, so a store branches on a code, not a human message.
+// the stable `violations` codes as a RegulationApiError, and a conflict (409) its `code` as a ConflictApiError, so a
+// store branches on a code, not a human message.
 //----------------------------------------------------------------------------------------------------------------------
 
-import type { RegulationCode, RegulationViolation } from '@fileshed/core';
+import type { ConflictCode, RegulationCode, RegulationViolation } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -39,6 +40,19 @@ function regulationViolationsOf(body : unknown) : RegulationViolation[] | null
         && typeof (violation as { code : unknown }).code === 'string');
 
     return wellFormed ? (violations as RegulationViolation[]) : null;
+}
+
+// The conflict code off a 409 body. The status is read alongside it: `code` is a common enough field name that another
+// surface's error body could carry an unrelated one. Like the violation codes, the value is taken as given rather than
+// checked against the union, so a code the server adds later still reaches a caller -- one it does not know matches
+// none of its branches.
+function conflictCodeOf(status : number, body : unknown) : ConflictCode | null
+{
+    if(status !== 409 || typeof body !== 'object' || body === null || !('code' in body)) { return null; }
+
+    const { code } = body as { code : unknown };
+
+    return typeof code === 'string' ? (code as ConflictCode) : null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -83,18 +97,36 @@ export class RegulationApiError extends ApiError
     }
 }
 
+// A conflict: two writes to the same thing collided. Always a 409, so the status is not the caller's to supply, and
+// the code is what separates a caller that must change what it sends from one that need only ask again.
+export class ConflictApiError extends ApiError
+{
+    readonly code : ConflictCode;
+
+    constructor(message : string, code : ConflictCode, body ?: unknown)
+    {
+        super(409, message, body);
+
+        this.name = 'ConflictApiError';
+        this.code = code;
+    }
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // The typed error from an already-parsed error body: the server's `{ error }` message with the HTTP status, upgraded to
-// a RegulationApiError when the body carries regulation violation codes. The transport that read the body is irrelevant
-// -- fetch hands it a parsed Response body, the XHR upload hands it a parsed responseText -- so both funnel here rather
-// than each re-deriving the message and violation mapping.
+// a RegulationApiError when the body carries regulation violation codes and to a ConflictApiError when it carries a
+// conflict code. The transport that read the body is irrelevant -- fetch hands it a parsed Response body, the XHR
+// upload hands it a parsed responseText -- so both funnel here rather than each re-deriving the message and the codes.
 export function apiErrorFromBody(status : number, statusText : string, body : unknown) : ApiError
 {
     const message = errorMessageOf(body) ?? (statusText || `Request failed with status ${ status }`);
 
     const violations = regulationViolationsOf(body);
     if(violations !== null) { return new RegulationApiError(status, message, violations, body); }
+
+    const conflict = conflictCodeOf(status, body);
+    if(conflict !== null) { return new ConflictApiError(message, conflict, body); }
 
     return new ApiError(status, message, body);
 }
