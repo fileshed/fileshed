@@ -17,6 +17,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 
 import {
     DEFAULT_UPLOAD_CHUNK_BYTES,
+    EXPIRY_PRUNE_INTERVAL_MS,
     type InstanceLimits,
     MEDIA_TAG_SWEEP_BATCH,
     MS_PER_DAY,
@@ -81,7 +82,7 @@ import { BlobManager } from './managers/blob.ts';
 import { CredentialManager } from './managers/credentials.ts';
 import { DeletionOfferManager } from './managers/deletionOffer.ts';
 import { MailManager } from './managers/mail.ts';
-import { MediaTagManager, startMediaTagTimer } from './managers/mediaTags.ts';
+import { MediaTagManager } from './managers/mediaTags.ts';
 import { NodeManager } from './managers/node.ts';
 import { PublicLinkManager } from './managers/publicLink.ts';
 import { ShareManager } from './managers/share.ts';
@@ -93,6 +94,7 @@ import { UserManager } from './managers/user.ts';
 import { StatusManager } from './managers/status.ts';
 import { LastRunTracker } from './managers/lastRun.ts';
 import { SweepManager } from './managers/sweeps.ts';
+import { TimerManager } from './managers/timers.ts';
 import { mapManagerError } from './managers/errors.ts';
 import { runGcOnce } from './managers/gc.ts';
 import { runPartialsOnce } from './managers/partials.ts';
@@ -366,7 +368,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
 //----------------------------------------------------------------------------------------------------------------------
 
 // The one composition path from empty process to serving app: config, database, auth, migrations + bootstrap, blob
-// storage, managers, timers, then the wired app. Both entries (server.ts and the Vite dev entry) consume this.
+// storage, managers, recurring jobs, then the wired app. Both entries (server.ts and the Vite dev entry) consume this.
 // shutdown() stops the background timers -- anything booting more than once (specs, a future graceful-shutdown path)
 // must call it, or sweeps keep firing against a torn-down database. Known dev-only wart: the Vite runtime
 // re-imports the entry on server-file changes without disposing the old module, so sweep timers stack across
@@ -513,23 +515,55 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         (userID, nodeID) => shareRA.effectiveRole(userID, nodeID)
     );
 
-    // The two sweeps that read the database run on the configured interval. The partials reaper runs far more often
-    // on a cadence of its own: it only reads the staging directory, and what it reclaims is disk rather than rows.
-    const sweepIntervalMs = config.GC_INTERVAL_MINUTES * MS_PER_MINUTE;
-    const stopReclaim = sweeps.startTimers({
-        gc: sweepIntervalMs,
-        trashPurge: sweepIntervalMs,
-        partials: PARTIALS_SWEEP_INTERVAL_MS,
-    });
-    const stopPruning = blobs.startExpiryPruning();
-    const stopMediaTags = startMediaTagTimer(mediaTags, sweepIntervalMs, MEDIA_TAG_SWEEP_BATCH);
+    //------------------------------------------------------------------------------------------------------------------
+    // Recurring work
+    //------------------------------------------------------------------------------------------------------------------
 
-    const shutdown = () : void =>
-    {
-        stopReclaim();
-        stopPruning();
-        stopMediaTags();
-    };
+    // The two sweeps that read the database run on the configured interval. Every sweep also runs at boot, and that
+    // pass matters more than it looks: a deployment restarted more often than its interval would otherwise never
+    // sweep at all, and the admin status page would report an eternal "never".
+    const sweepIntervalMs = config.GC_INTERVAL_MINUTES * MS_PER_MINUTE;
+    const timers = new TimerManager();
+
+    timers.register({
+        name: 'sweep.gc',
+        intervalMs: sweepIntervalMs,
+        immediate: true,
+        run: () => sweeps.runScheduled('gc'),
+    });
+
+    timers.register({
+        name: 'sweep.trashPurge',
+        intervalMs: sweepIntervalMs,
+        immediate: true,
+        run: () => sweeps.runScheduled('trashPurge'),
+    });
+
+    // The partials reaper comes round far more often, on a cadence of its own: it only reads the staging directory,
+    // and what it reclaims is disk rather than rows.
+    timers.register({
+        name: 'sweep.partials',
+        intervalMs: PARTIALS_SWEEP_INTERVAL_MS,
+        immediate: true,
+        run: () => sweeps.runScheduled('partials'),
+    });
+
+    // A library uploaded before extraction existed should become searchable when the server comes up, not an hour
+    // later. Each pass handles one batch, so a busy one leaves the rest of the worklist for the next tick.
+    timers.register({
+        name: 'mediaTags.backfill',
+        intervalMs: sweepIntervalMs,
+        immediate: true,
+        run: () => mediaTags.sweepOnce(MEDIA_TAG_SWEEP_BATCH),
+    });
+
+    // Nothing has been issued yet at boot, so there is nothing for the first prune to find.
+    timers.register({
+        name: 'blobs.expiryPrune',
+        intervalMs: EXPIRY_PRUNE_INTERVAL_MS,
+        immediate: false,
+        run: () => blobs.pruneExpired(),
+    });
 
     const services = {
         blobs,
@@ -557,7 +591,14 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         providers,
     };
 
-    return { app: createApp(auth, services, { clientDist: config.CLIENT_DIST }), config, shutdown };
+    // The graph is whole; nothing a job reaches for is still being wired.
+    timers.startTimers();
+
+    return {
+        app: createApp(auth, services, { clientDist: config.CLIENT_DIST }),
+        config,
+        shutdown: () => timers.stopTimers(),
+    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

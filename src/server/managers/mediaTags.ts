@@ -9,7 +9,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import { MS_PER_SECOND, PLAYLIST_MIME_TYPES } from '@fileshed/core';
+import { PLAYLIST_MIME_TYPES } from '@fileshed/core';
 
 // Resource Access
 import type { BlobRA } from '../resource-access/blob/index.ts';
@@ -78,33 +78,6 @@ export class MediaTagManager
 
         return candidates.length;
     }
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// Runs the backfill on a fixed cadence until the worklist drains (each pass handles one batch; a busy pass leaves
-// the rest for the next tick), plus one pass shortly after boot -- a library uploaded before extraction existed
-// should become searchable when the server comes up, not an hour later. Same wiring shape as the GC timer:
-// swallow-and-log so one bad pass never kills the timer, unref so the process can exit.
-export function startMediaTagTimer(manager : MediaTagManager, intervalMs : number, batch : number) : () => void
-{
-    const sweep = () : void =>
-    {
-        manager.sweepOnce(batch)
-            .catch((error) => logger.error({ err: error }, 'Media tag sweep failed'));
-    };
-
-    const kickoff = setTimeout(sweep, MS_PER_SECOND);
-    kickoff.unref?.();
-
-    const timer = setInterval(sweep, intervalMs);
-    timer.unref?.();
-
-    return () =>
-    {
-        clearTimeout(kickoff);
-        clearInterval(timer);
-    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

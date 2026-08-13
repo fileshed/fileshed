@@ -29,7 +29,6 @@ import {
     type ClaimRequest,
     type ClaimResponse,
     ConflictError,
-    EXPIRY_PRUNE_INTERVAL_MS,
     FAILED_PROOF_WINDOW_MS,
     type FileNode,
     ForbiddenError,
@@ -701,19 +700,12 @@ export class BlobManager
 
     // Prune expired tickets, challenges, and stale failed-proof counts. Correctness never depends on this -- an expired
     // entry is refused on use whether it has been pruned or not -- it bounds what the process holds in memory. The
-    // staging bytes an expired ticket leaves on disk are the partials sweep's to reclaim, on the sweep manager's timer.
-    // The composition root starts this; it returns a stop handle.
-    startExpiryPruning() : () => void
+    // staging bytes an expired ticket leaves on disk are the partials sweep's to reclaim, on its own registered timer.
+    pruneExpired() : void
     {
-        const timer = setInterval(() =>
-        {
-            this.#tickets.sweep();
-            this.#challenges.sweep();
-            this.#failedProofs.sweep();
-        }, EXPIRY_PRUNE_INTERVAL_MS);
-
-        timer.unref?.();
-        return () => clearInterval(timer);
+        this.#tickets.sweep();
+        this.#challenges.sweep();
+        this.#failedProofs.sweep();
     }
 
     //------------------------------------------------------------------------------------------------------------------

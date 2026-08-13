@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Sweep Manager
 //
-// Within one process, the only way a storage-reclaiming sweep starts, whether its timer asks or an admin does.
+// Within one process, the only way a storage-reclaiming sweep starts, whether a scheduled tick asks or an admin does.
 // That is the whole point of the class: the in-flight latch can only answer "already running" honestly if both callers
 // pass through it, and the run an admin collides with is nearly always the scheduled one rather than a second button
 // press. The latch is per-process; two servers against one store sweep on their own timers, and what keeps that from
@@ -18,7 +18,6 @@ import {
     ConflictError,
     ForbiddenError,
     type GcRunSummary,
-    MS_PER_SECOND,
     NotFoundError,
     type PartialsRunSummary,
     type SweepKind,
@@ -102,50 +101,22 @@ export class SweepManager
         return this.#start(kind);
     }
 
-    // Runs every sweep shortly after boot and then each on its own interval -- what one sweep costs and how fast what
-    // it reclaims piles up are its own, not the set's. The boot pass matters more than it looks: a deployment restarted
-    // more often than the interval would otherwise never sweep at all, and the admin status page would report an
-    // eternal "never". Returns a handle that stops all of them.
-    startTimers(intervals : Record<SweepKind, number>) : () => void
+    // What the registered timer job calls, and the reason this manager needs no timer of its own: a tick is the same
+    // latched start an admin gets, so the two can never double up.
+    async runScheduled(kind : SweepKind) : Promise<void>
     {
-        const stops = sweepKinds.map((kind) => this.#schedule(kind, intervals[kind]));
-
-        return () =>
+        if(this.#inFlight.has(kind))
         {
-            for(const stop of stops) { stop(); }
-        };
+            logger.debug({ sweep: kind }, 'Sweep still running; skipping this tick');
+            return;
+        }
+
+        await this.#start(kind);
     }
 
     //------------------------------------------------------------------------------------------------------------------
     // Internals
     //------------------------------------------------------------------------------------------------------------------
-
-    #schedule(kind : SweepKind, intervalMs : number) : () => void
-    {
-        const tick = () : void =>
-        {
-            if(this.#inFlight.has(kind))
-            {
-                logger.debug({ sweep: kind }, 'Sweep still running; skipping this tick');
-                return;
-            }
-
-            // Swallowed with a log so one bad run never kills the timer that runs it.
-            void this.#start(kind).catch((error) => logger.error({ err: error, sweep: kind }, 'Sweep failed'));
-        };
-
-        const kickoff = setTimeout(tick, MS_PER_SECOND);
-        kickoff.unref?.();
-
-        const timer = setInterval(tick, intervalMs);
-        timer.unref?.();
-
-        return () =>
-        {
-            clearTimeout(kickoff);
-            clearInterval(timer);
-        };
-    }
 
     // Claim the latch and run. Both callers reach here having just tested the set with no await in between, which is
     // what makes the check-and-set atomic -- there is no point at which a second caller can observe an unclaimed slot
