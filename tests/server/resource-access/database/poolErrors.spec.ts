@@ -14,6 +14,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { sql } from 'kysely';
 
 // Test support
 import { testConfig } from '../../auth/support.ts';
@@ -245,7 +246,12 @@ async function terminateBackend(backendPID : number) : Promise<void>
 
 async function probeOnFreshDatabase() : Promise<Probe>
 {
-    const { config } = await openTestDatabase(testConfig());
+    const { config, handle } = await openTestDatabase(testConfig());
+
+    // Kysely opens no connection until something asks it to, and the probe is a whole process away from its first
+    // query -- so without this the database sits with nobody attached for as long as a child takes to boot, which is
+    // exactly the condition the reclamation net drops on. One query holds a backend open across that window.
+    await sql`select 1`.execute(handle.db);
 
     return startProbe(config.DATABASE_URL ?? '');
 }
