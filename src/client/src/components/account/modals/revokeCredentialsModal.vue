@@ -1,8 +1,10 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Revoke Credentials Modal
   --
-  -- The confirm behind "Sign out everywhere". It spells out both halves before the click, because neither is
-  -- recoverable: sessions have to be signed back into, and revoked tokens can only be replaced with new ones. On
+  -- The confirm behind "Sign out everywhere". It spells out every consequence before the click, because none is
+  -- recoverable: sessions have to be signed back into, revoked tokens can only be replaced with new ones, and a
+  -- cancelled reset link has to be requested again. The last one is the one a user can be caught by -- they may be
+  -- waiting on a link they asked for from another device -- so it is named here rather than only on the card. On
   -- success the signed-in state is dropped BEFORE the navigation, so the auth guard sees an anonymous visitor and
   -- lets /signin through, where the reason=revoked notice is what confirms the action landed. A failure leaves the
   -- dialog open to toast under, and the session is still alive to retry with.
@@ -19,6 +21,10 @@
                 <p>
                     Every access token stops working. Scripts, sync tools, and media players using one will fail
                     until you create new tokens.
+                </p>
+                <p>
+                    Any password-reset link you have already been sent stops working. If you are waiting on one,
+                    you will need to request it again.
                 </p>
 
                 <div class="flex justify-end gap-2">

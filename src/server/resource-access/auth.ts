@@ -287,6 +287,21 @@ export async function deleteAccessTokensFor(handle : DatabaseHandle, userID : st
     await sql`delete from apikey where "referenceId" = ${ userID }`.execute(handle.db);
 }
 
+// Pending one-time actions against this account, the password reset already sitting in a mailbox above all. Matched
+// on the user id rather than on token names because that is where better-auth puts it for these: the identifier
+// column carries the token, the value column carries whose account it acts on.
+//
+// That convention is the whole reach of this, and it is narrower than it looks. A flow that keys its row by email
+// address or stores something other than a bare user id in `value` is NOT covered -- magic-link and the email-OTP
+// flows both do exactly that -- so enabling one of those plugins means coming back here, not trusting this to
+// follow. Verification and change-email tokens are signed JWTs holding no row at all and cannot be revoked by
+// deleting anything. Configuring secondaryStorage moves verification values out of the table and this misses all of
+// them.
+export async function deletePendingAccountActionsFor(handle : DatabaseHandle, userID : string) : Promise<void>
+{
+    await sql`delete from verification where value = ${ userID }`.execute(handle.db);
+}
+
 // Access tokens die with their owner's standing. Database hooks fire on the row operation itself, so every path to
 // a ban (admin route, server-side auth.api call, future surfaces) is covered without enumerating endpoints -- and
 // key verification never consults the user row, so revocation here is what makes a ban stick for outstanding keys.

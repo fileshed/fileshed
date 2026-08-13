@@ -211,10 +211,10 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
 }
 
 // The fully-serviced counterpart to bootTestApp, for specs that drive real requests through the whole app.
-export async function bootFullApp(overrides : Partial<Config> = {}) : Promise<BootedApp>
+export async function bootFullApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
 {
     const { config, handle } = await openTestDatabase(testConfig(overrides));
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
 
     await initialize(handle, auth);
 

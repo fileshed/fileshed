@@ -1,11 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Revoke Every Credential — the account's own panic button
 //
-// The contract, against the real stack: one call ends every session the caller holds and revokes every access token
-// they hold, so a credential that worked a moment before the call is refused after it. The caller's own session is
-// not spared -- signing themselves out is the point. It is scoped to the caller and to nobody else, which is what
-// separates a panic button from a way to sign other people out. It is session-only: a stolen token cannot spend
-// itself locking its owner out of the account.
+// The contract, against the real stack: one call ends every session the caller holds, revokes every access token they
+// hold, and cancels every pending one-time action against the account, so anything that worked a moment before the
+// call is refused after it. The caller's own session is not spared -- signing themselves out is the point. It is
+// scoped to the caller and to nobody else, which is what separates a panic button from a way to sign other people
+// out. It is session-only: a stolen token cannot spend itself locking its owner out of the account.
 //
 // The session cookie cache is off, so every request here is answered from the session row: a refusal is the row being
 // gone, never a cache that happened to miss. That is what lets the last test below assert the thing the button is
@@ -17,6 +17,9 @@ import { sql } from 'kysely';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { CreateAccessTokenResponse } from '@fileshed/core';
+
+// Resource Access
+import type { AuthMailHooks } from '@server/resource-access/auth.ts';
 
 // Support
 import {
@@ -34,6 +37,25 @@ import {
 const PASSWORD = 'correct-horse-battery';
 
 let booted : BootedApp;
+
+// The mail seam as a recorder: better-auth's reset callback lands its link here instead of an SMTP server.
+class RecordingHooks implements AuthMailHooks
+{
+    readonly resets : { to : string; url : string }[] = [];
+
+    sendPasswordReset(to : string, url : string) : void { this.resets.push({ to, url }); }
+    sendVerification() : void { /* not exercised here */ }
+}
+
+// The reset link carries its token in the path or the query depending on how it was built; the endpoint wants the
+// raw token either way.
+function resetTokenFrom(url : string) : string
+{
+    const match = /token=([^&]+)/.exec(url) ?? /reset-password\/([^?]+)/.exec(url);
+    if(!match?.[1]) { throw new Error(`no token in reset url: ${ url }`); }
+
+    return decodeURIComponent(match[1]);
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 // Helpers
@@ -264,6 +286,39 @@ describe('POST /api/me/revoke-credentials', () =>
 
         expect(minted.status).toBe(401);
         expect(await tokenCountOf(row.id)).toBe(0);
+    });
+
+    // A reset link already sitting in a mailbox is a full takeover, and no amount of session or token revocation
+    // reaches it -- which is the whole reason someone presses this button. Driven through the real request-and-reset
+    // flow rather than against the row, so what is proved is that the link stops working.
+    it('cancels a password-reset link that was already on its way', async () =>
+    {
+        const hooks = new RecordingHooks();
+        booted = await bootFullApp({}, { mail: hooks });
+
+        const caller = await makeAccount('panic@example.com');
+
+        const requested = await booted.app.request(`${ ORIGIN }/api/auth/request-password-reset`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'origin': ORIGIN },
+            body: JSON.stringify({ email: 'panic@example.com', redirectTo: `${ ORIGIN }/reset-password` }),
+        });
+        expect(requested.status).toBe(200);
+
+        const token = resetTokenFrom(hooks.resets[0]?.url ?? '');
+
+        expect((await panic(caller.cookie)).status).toBe(204);
+
+        const reset = await booted.app.request(`${ ORIGIN }/api/auth/reset-password`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'origin': ORIGIN },
+            body: JSON.stringify({ newPassword: 'the-attackers-password', token }),
+        });
+
+        // 400 rather than merely "not 200": a renamed route would answer 404 and leave a not-200 assertion green
+        // while proving nothing about the token.
+        expect(reset.status).toBe(400);
+        expect((await signIn(booted.app, 'panic@example.com', 'the-attackers-password')).status).not.toBe(200);
     });
 
     it('refuses a caller with no session at all', async () =>

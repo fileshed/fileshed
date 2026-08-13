@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Credential Manager
 //
-// Sessions go last, because the caller's own session is what authorizes this call: a token delete that fails leaves
-// them still signed in and able to retry. Neither half can enlist the other in a transaction -- session rows go
-// through better-auth's own adapter -- so what stands in for atomicity is that each half is a single statement, a
+// Sessions go last, because the caller's own session is what authorizes this call: a step that fails before them
+// leaves the caller still signed in and able to retry. The steps cannot share a transaction -- session rows go
+// through better-auth's own adapter -- so what stands in for atomicity is that each is a single statement, a
 // failure propagates instead of reporting success, and running the whole thing twice costs nothing.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -13,7 +13,12 @@ import { isAPIError } from 'better-auth/api';
 import { UnauthorizedError } from '@fileshed/core';
 
 // Resource Access
-import { type Auth, type SessionUser, deleteAccessTokensFor } from '../resource-access/auth.ts';
+import {
+    type Auth,
+    type SessionUser,
+    deleteAccessTokensFor,
+    deletePendingAccountActionsFor,
+} from '../resource-access/auth.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -35,13 +40,18 @@ export class CredentialManager
         this.#handle = deps.handle;
     }
 
-    // Every credential the account can authenticate with, gone at once: all its access tokens (both configs -- a
-    // playback key downloads files just as a PAT does) and then all its sessions, the caller's included. A signed
-    // session cookie can still answer for up to the cookie-cache window after its row is gone, the same residual an
-    // admin revocation carries.
+    // Every way into the account that does not require the password, gone at once: all its access tokens (both
+    // configs -- a playback key downloads files just as a PAT does), every pending one-time action, and then all its
+    // sessions, the caller's included.
+    //
+    // The pending actions matter as much as the tokens. A password-reset link already in a mailbox is a full
+    // takeover that no amount of session revocation touches, and someone reaching for this button is trying to stop
+    // exactly that. Linked OAuth accounts are deliberately left: unlinking would lock out an account whose only
+    // credential is the provider.
     async revokeAll(actor : SessionUser, headers : Headers) : Promise<void>
     {
         await deleteAccessTokensFor(this.#handle, actor.id);
+        await deletePendingAccountActionsFor(this.#handle, actor.id);
 
         try
         {
