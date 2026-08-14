@@ -330,8 +330,8 @@ export class AdminManager
         }
     }
 
-    // "Sign out everywhere": every session row dies now; the signed session cookie can outlive them by up to the
-    // cookie-cache window (60s), which is the accepted residual.
+    // "Sign out everywhere": every session row dies, and the next request from any of them is refused. There is no
+    // residual to accept -- the session cookie cache is off precisely so a revocation means something immediately.
     async revokeSessions(actor : SessionUser, headers : Headers, userID : string) : Promise<void>
     {
         this.#requireAdmin(actor);

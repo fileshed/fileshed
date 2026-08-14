@@ -224,6 +224,7 @@ const authOptionsShape = {
         requireEmailVerification: false as boolean,
         revokeSessionsOnPasswordReset: true,
         sendResetPassword: undefined as NonNullable<BetterAuthOptions['emailAndPassword']>['sendResetPassword'],
+        onPasswordReset: undefined as NonNullable<BetterAuthOptions['emailAndPassword']>['onPasswordReset'],
         customSyntheticUser: undefined as NonNullable<BetterAuthOptions['emailAndPassword']>['customSyntheticUser'],
     },
     emailVerification: {
@@ -357,6 +358,7 @@ export interface AuthExtras
 // The live email options, annotated with the shape's own types so the betterAuth generic stays pinned to the
 // shape (the same trick socialProviders and databaseHooks use).
 function emailAndPasswordOptions(
+    handle : DatabaseHandle,
     mail : AuthMailHooks | undefined,
     requireEmailVerification : boolean
 ) : typeof authOptionsShape['emailAndPassword']
@@ -366,6 +368,9 @@ function emailAndPasswordOptions(
         requireEmailVerification,
         // A reset means the credential may have been compromised; every other session dies with it.
         revokeSessionsOnPasswordReset: true,
+        // And so does every access token. better-auth ends the sessions itself but knows nothing about our tokens,
+        // and a reset that leaves a stolen PAT answering is a reset that changed nothing for whoever holds it.
+        onPasswordReset: async ({ user }) => { await deleteAccessTokensFor(handle, user.id); },
         sendResetPassword: mail === undefined
             ? undefined
             : async ({ user, url }) => { mail.sendPasswordReset(user.email, url); },
@@ -404,7 +409,7 @@ export function createAuth(handle : DatabaseHandle, config : Config, secret : st
         baseURL: resolveBaseURL(config),
         trustedOrigins: resolveTrustedOrigins(),
         socialProviders: socialProvidersFromValues(extras.providerValues ?? providerValuesFromConfig(config)),
-        emailAndPassword: emailAndPasswordOptions(extras.mail, extras.requireEmailVerification ?? false),
+        emailAndPassword: emailAndPasswordOptions(handle, extras.mail, extras.requireEmailVerification ?? false),
         emailVerification: emailVerificationOptions(extras.mail),
         // Fresh plugin instances per auth instance; the shape above supplies only their type.
         plugins: [ admin(), apiKey(apiKeyConfigurations) ],

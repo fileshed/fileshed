@@ -353,6 +353,25 @@ describe('tokens die with their owner\'s standing', () =>
         expect(res.status).toBe(401);
     });
 
+    // The test above proves the hook that deletes keys on a ban. This one proves the backstop behind it: key
+    // verification never reads the user row, so a ban written by anything other than better-auth's own update --
+    // an ops fix at the database, a migration, an admin route added later -- leaves every key valid as far as the
+    // plugin is concerned. The only thing that refuses them is our own re-check of the owner's standing.
+    it('rejects a key whose owner was banned without the hook ever running', async () =>
+    {
+        const minted = await mintPat(owner, [ 'files:download' ]);
+
+        await sql`update "user" set banned = true where id = ${ owner.id }`.execute(booted.handle.db);
+
+        const rows = await sql<{ count : number }>`
+            select count(*) as count from apikey where "referenceId" = ${ owner.id }
+        `.execute(booted.handle.db);
+        expect(rows.rows[0]?.count).toBeGreaterThan(0);
+
+        const res = await bearerRequest(`/api/nodes/${ uploaded.node.id }/download`, minted.token);
+        expect(res.status).toBe(401);
+    });
+
     it('rejects a key whose owner row is gone, even when the key row survived', async () =>
     {
         const minted = await mintPat(owner, [ 'files:download' ]);

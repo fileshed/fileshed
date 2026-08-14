@@ -12,6 +12,9 @@ import { describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 import { sql } from 'kysely';
 
+// Models
+import { ACCESS_TOKEN_CONFIG_PAT } from '@fileshed/core';
+
 // Resource Access
 import type { AuthMailHooks } from '@server/resource-access/auth.ts';
 
@@ -47,6 +50,15 @@ async function sessionCountOf(booted : BootedApp, email : string) : Promise<numb
         select count(*) as total from session
         where "userId" = (select id from "user" where email = ${ email })
     `.execute(booted.handle.db);
+    const row = result.rows[0] as { total : string | number };
+
+    return Number(row.total);
+}
+
+async function tokenCountOf(booted : BootedApp, userID : string) : Promise<number>
+{
+    const result = await sql`select count(*) as total from apikey where "referenceId" = ${ userID }`
+        .execute(booted.handle.db);
     const row = result.rows[0] as { total : string | number };
 
     return Number(row.total);
@@ -106,6 +118,35 @@ describe('password reset over email', () =>
         });
 
         expect(await sessionCountOf(booted, 'member@example.com')).toBe(0);
+    });
+
+    // Sessions are better-auth's to end and it does. Access tokens are ours, and a reset that leaves one answering
+    // has changed nothing for whoever took the password -- they hold a credential the reset never reached.
+    it('revokes the access tokens that existed before the reset', async () =>
+    {
+        const hooks = new RecordingHooks();
+        const booted = await bootTestApp({}, { mail: hooks });
+        await signUp(booted.app, 'member@example.com', PASSWORD);
+
+        const row = await booted.handle.db
+            .selectFrom('user')
+            .select('id')
+            .where('email', '=', 'member@example.com')
+            .executeTakeFirstOrThrow();
+
+        await booted.auth.api.createApiKey({
+            body: { configId: ACCESS_TOKEN_CONFIG_PAT, userId: row.id, name: 'backup script' },
+        });
+
+        expect(await tokenCountOf(booted, row.id)).toBe(1);
+
+        await post(booted.app, '/api/auth/request-password-reset', { email: 'member@example.com' });
+        await post(booted.app, '/api/auth/reset-password', {
+            newPassword: 'a-brand-new-password',
+            token: tokenFrom(hooks.resets[0]?.url ?? ''),
+        });
+
+        expect(await tokenCountOf(booted, row.id)).toBe(0);
     });
 
     it('answers an unknown address exactly like a known one, sending nothing', async () =>
