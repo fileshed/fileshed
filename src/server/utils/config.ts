@@ -23,6 +23,10 @@ import {
     DEFAULT_GC_INTERVAL_MINUTES,
     DEFAULT_HOST,
     DEFAULT_PORT,
+    DEFAULT_RATE_LIMIT_ANONYMOUS_MAX,
+    DEFAULT_RATE_LIMIT_CREDENTIALS_MAX,
+    DEFAULT_RATE_LIMIT_MAX,
+    DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
     DEFAULT_SMTP_PORT,
     DEFAULT_STORAGE_ROOT,
     DEFAULT_TRASH_PURGE_DAYS,
@@ -33,6 +37,10 @@ import {
     databaseKinds,
     providerSettingKeys,
 } from '@fileshed/core';
+
+// Utils
+import { parseProxyEntry } from './ip.ts';
+import { logSecurityPolicy } from './securityPolicy.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -149,6 +157,69 @@ const configSchema = z.object({
             return origins;
         })
         .default([]),
+
+    // The reverse proxies whose X-Forwarded-For this instance believes, as IP addresses or CIDR ranges. Unset is
+    // undecided and says so at boot; the literal `none` is the decision that nothing fronts this instance. Either
+    // way an unlisted peer's forwarded header is ignored and the socket it connected on is the client -- an address
+    // the client cannot choose, which is the whole point. Name the proxies, not a private range that also covers
+    // your users; a range covering a client lets that client forge its own address again.
+    TRUSTED_PROXIES: z.string()
+        .optional()
+        .transform((value, ctx) : string[] | null =>
+        {
+            if(value === undefined) { return null; }
+            if(value.trim().toLowerCase() === 'none') { return []; }
+
+            const entries = value.split(',')
+                .map((entry) => entry.trim())
+                .filter((entry) => entry !== '');
+
+            const proxies : string[] = [];
+            for(const entry of entries)
+            {
+                if(parseProxyEntry(entry) === null)
+                {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: `TRUSTED_PROXIES entry '${ entry }' is not an IP address or CIDR range. Write each `
+                            + 'as an address or a range, like 10.0.0.7 or 10.0.0.0/24, or set it to `none` if no '
+                            + 'proxy fronts this instance.',
+                    });
+                }
+                else
+                {
+                    proxies.push(entry);
+                }
+            }
+
+            return proxies;
+        }),
+
+    // Request budgets, per client per window. RATE_LIMIT_MAX covers /api at large; the credential endpoints
+    // (sign-in, sign-up, reset, verification, first-run setup) and the anonymous /d links carry their own, because
+    // what they cost an instance is nothing like a page load.
+    RATE_LIMIT_ENABLED: booleanish.default(true),
+    RATE_LIMIT_WINDOW_SECONDS: z.coerce.number()
+        .int()
+        .positive()
+        .default(DEFAULT_RATE_LIMIT_WINDOW_SECONDS),
+    RATE_LIMIT_MAX: z.coerce.number()
+        .int()
+        .positive()
+        .default(DEFAULT_RATE_LIMIT_MAX),
+    RATE_LIMIT_CREDENTIALS_MAX: z.coerce.number()
+        .int()
+        .positive()
+        .default(DEFAULT_RATE_LIMIT_CREDENTIALS_MAX),
+    RATE_LIMIT_ANONYMOUS_MAX: z.coerce.number()
+        .int()
+        .positive()
+        .default(DEFAULT_RATE_LIMIT_ANONYMOUS_MAX),
+
+    // Acknowledges that this instance is genuinely served over plain http, which is the one case where a session
+    // cookie without Secure is not a mistake. It changes no behaviour -- the cookie flag follows BASE_URL's scheme
+    // either way -- it only settles whether the boot warning is telling an operator something they do not know.
+    ALLOW_INSECURE_COOKIES: booleanish.default(false),
 
     // Blob storage + GC. STORAGE_ROOT is both the fs backend's root and the config the default storage_backend row is
     // seeded with. GC_GRACE_DAYS is the graveyard window before a dereferenced blob is hard-deleted; 0 collects
@@ -337,6 +408,10 @@ export function loadConfig(env : Record<string, string | undefined> = process.en
     {
         throw new Error(`Invalid configuration:\n${ z.prettifyError(result.error) }`);
     }
+
+    // Every deployment passes through here exactly once, which is what makes it the place to say out loud what the
+    // loaded values leave open.
+    logSecurityPolicy(result.data, env);
 
     return result.data;
 }

@@ -240,6 +240,12 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
             // Errors only by default, so a crashed boot still says why in the captured stderr; raise it with
             // E2E_LOG_LEVEL=debug when a spec needs the server's side of the story.
             LOG_LEVEL: process.env['E2E_LOG_LEVEL'] ?? 'error',
+            // Every child sees one client, so a spec that signs in a dozen times would spend a real deployment's
+            // credential budget on setup. Raised rather than disabled, and set before the spread so a spec proving
+            // the limiter can still tighten them back down.
+            RATE_LIMIT_CREDENTIALS_MAX: '1000',
+            RATE_LIMIT_MAX: '100000',
+            RATE_LIMIT_ANONYMOUS_MAX: '100000',
             ...options.env,
         },
     });

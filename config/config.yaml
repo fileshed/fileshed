@@ -43,6 +43,24 @@ BASE_URL: ${BASE_URL:-http://localhost:5173}
 # scheme. docs/deployment.md covers the provider callbacks each origin needs.
 TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
 
+# The reverse proxies whose X-Forwarded-For header this instance believes, as addresses or CIDR ranges
+# (10.0.0.7, 10.0.0.0/24, comma-separated). Anything else connecting is treated as the client itself and its
+# forwarded header ignored, so leaving this unset behind a proxy puts every user in one rate-limit bucket. Set it
+# to `none` when nothing fronts this instance; unset warns at boot in production.
+TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+
+# Requests one client may spend per window. The credential endpoints (sign-in, sign-up, password reset,
+# verification, first-run setup) and the anonymous /d links each carry their own budget.
+RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
+RATE_LIMIT_CREDENTIALS_MAX: ${RATE_LIMIT_CREDENTIALS_MAX:-10}
+RATE_LIMIT_ANONYMOUS_MAX: ${RATE_LIMIT_ANONYMOUS_MAX:-120}
+
+# Set this when the instance really is served over plain http and the session cookie shipping without Secure is the
+# intended arrangement. It silences the boot warning and changes nothing else.
+ALLOW_INSECURE_COOKIES: ${ALLOW_INSECURE_COOKIES:-false}
+
 # Blob storage and maintenance.
 STORAGE_ROOT: ${STORAGE_ROOT:-./data/blobs}
 GC_GRACE_DAYS: ${GC_GRACE_DAYS:-7}

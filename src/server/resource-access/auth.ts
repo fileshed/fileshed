@@ -73,6 +73,20 @@ export function resolveBaseURL(config : Config) : DynamicBaseURL
     };
 }
 
+// What better-auth may believe about where a request came from. It resolves an address from headers alone -- it never
+// sees the socket -- so an unlisted proxy means no header is believed at all and the address goes unrecorded, which is
+// the honest answer for a value that would otherwise be whatever the client typed. The middleware does see the socket,
+// and it is what the rate limiting is keyed on.
+export function resolveIpAddressPolicy(config : Config) : { ipAddressHeaders : string[]; trustedProxies : string[] }
+{
+    const proxies = config.TRUSTED_PROXIES ?? [];
+
+    return {
+        ipAddressHeaders: proxies.length > 0 ? [ 'x-forwarded-for' ] : [],
+        trustedProxies: proxies,
+    };
+}
+
 // Origins allowed to hit the auth endpoints. Same-origin requests (client served by the server) never need this; it
 // exists for the cross-origin flows. Production adds nothing: better-auth joins every allowedHosts entry and the
 // fallback's origin into the trust list itself, under the same protocol, so listing them again would only duplicate
@@ -250,9 +264,28 @@ const authOptionsShape = {
     // Placeholder for the type only, like socialProviders: createAuth supplies the live hooks, which need the
     // database handle this shape cannot carry.
     databaseHooks: undefined as BetterAuthOptions['databaseHooks'],
+
+    // An OAuth identity never merges itself into an existing password account. Enabled is better-auth's default, and
+    // what makes that dangerous here is that nothing in FileShed was holding it back on purpose: implicit linking is
+    // gated on the local account being email-verified, and EMAIL_VERIFICATION_REQUIRED ships off, so most accounts
+    // are unverified and the merge quietly never happens. Turn verification on -- a reasonable thing for an instance
+    // to want -- and every configured provider that asserts a verified address starts merging. Off is the decision;
+    // an account holder who wants a provider on their login links it while signed in.
+    account: { accountLinking: { enabled: false } },
+
+    // better-auth's own limiter, off, because the middleware covers the same routes and can key them correctly.
+    // This one resolves a client from headers alone: with no trusted proxy configured it believes a forged
+    // X-Forwarded-For, and with a proxy that appends (nginx's stock config produces `client, proxy`) it resolves
+    // nothing and drops the entire instance into one shared bucket. Two limiters answering 429 on one route, one of
+    // them wrong in both deployment shapes, is worse than one that is right.
+    rateLimit: { enabled: false },
+
     advanced: {
         // cuid2 everywhere, matching the app's own ids.
         database: { generateId: () => createId() },
+
+        // Placeholder for the type only: createAuth supplies the config-derived policy.
+        ipAddress: { ipAddressHeaders: [] as string[], trustedProxies: [] as string[] },
     },
     user: {
         additionalFields: {
@@ -414,6 +447,7 @@ export function createAuth(handle : DatabaseHandle, config : Config, secret : st
         // Fresh plugin instances per auth instance; the shape above supplies only their type.
         plugins: [ admin(), apiKey(apiKeyConfigurations) ],
         databaseHooks: accessTokenCleanupHooks(handle),
+        advanced: { ...authOptionsShape.advanced, ipAddress: resolveIpAddressPolicy(config) },
     });
 }
 

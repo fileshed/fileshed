@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
-import { DEFAULT_UPLOAD_CHUNK_BYTES, MIN_UPLOAD_CHUNK_BYTES } from '@fileshed/core';
+import { DEFAULT_RATE_LIMIT_CREDENTIALS_MAX, DEFAULT_UPLOAD_CHUNK_BYTES, MIN_UPLOAD_CHUNK_BYTES } from '@fileshed/core';
 
 // Utils
 import { loadConfig, substituteEnv } from '@server/utils/config.ts';
@@ -23,6 +23,9 @@ const MANAGED_KEYS = [
     'AUTH_SECRET',
     'BASE_URL',
     'TRUSTED_ORIGINS',
+    'TRUSTED_PROXIES',
+    'RATE_LIMIT_ENABLED',
+    'RATE_LIMIT_CREDENTIALS_MAX',
     'UPLOAD_CHUNK_BYTES',
     'GITHUB_CLIENT_ID',
     'GITHUB_CLIENT_SECRET',
@@ -190,6 +193,88 @@ describe('loadConfig TRUSTED_ORIGINS', () =>
         process.env['TRUSTED_ORIGINS'] = 'http://192.168.1.20:3950';
 
         expect(loadConfig().TRUSTED_ORIGINS).toEqual([ 'http://192.168.1.20:3950' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('loadConfig TRUSTED_PROXIES', () =>
+{
+    // Unset and "none" both trust no forwarded header. They are kept apart because only one of them is a decision,
+    // and the boot warning is what tells them apart.
+    it('is undecided when the variable is unset', () =>
+    {
+        expect(loadConfig().TRUSTED_PROXIES).toBeNull();
+    });
+
+    it('reads `none` as the decision that nothing fronts this instance', () =>
+    {
+        process.env['TRUSTED_PROXIES'] = 'none';
+
+        expect(loadConfig().TRUSTED_PROXIES).toEqual([]);
+    });
+
+    it('reads a comma-separated list of addresses and ranges, ignoring the spacing', () =>
+    {
+        process.env['TRUSTED_PROXIES'] = ' 10.0.0.7 , 10.1.0.0/16 ,2001:db8::/32 ';
+
+        expect(loadConfig().TRUSTED_PROXIES).toEqual([ '10.0.0.7', '10.1.0.0/16', '2001:db8::/32' ]);
+    });
+
+    // A hostname is the likely mistake and it can never match a peer address, so it fails the boot rather than
+    // loading into a list that silently trusts nothing.
+    it('refuses an entry that is not an address or a range, naming the entry', () =>
+    {
+        process.env['TRUSTED_PROXIES'] = 'proxy.example.com';
+
+        expect(() => loadConfig()).toThrow(/proxy\.example\.com/);
+    });
+
+    it('refuses a prefix wider than the address family allows', () =>
+    {
+        process.env['TRUSTED_PROXIES'] = '10.0.0.0/48';
+
+        expect(() => loadConfig()).toThrow(/10\.0\.0\.0\/48/);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('loadConfig rate limits', () =>
+{
+    // On by default, in every NODE_ENV: an instance that never heard of these variables is throttled.
+    it('is enabled with nothing set', () =>
+    {
+        const config = loadConfig();
+
+        expect(config.RATE_LIMIT_ENABLED).toBe(true);
+        expect(config.RATE_LIMIT_CREDENTIALS_MAX).toBe(DEFAULT_RATE_LIMIT_CREDENTIALS_MAX);
+    });
+
+    it('takes budgets from the environment', () =>
+    {
+        process.env['RATE_LIMIT_CREDENTIALS_MAX'] = '3';
+
+        expect(loadConfig().RATE_LIMIT_CREDENTIALS_MAX).toBe(3);
+    });
+
+    // The negative spellings, because `RATE_LIMIT_ENABLED=no` reading as true would silently leave an operator who
+    // meant to switch it off with limits they think are gone.
+    it('reads the negative spellings as off', () =>
+    {
+        for(const value of [ 'false', 'no', 'off', '0' ])
+        {
+            process.env['RATE_LIMIT_ENABLED'] = value;
+
+            expect(loadConfig().RATE_LIMIT_ENABLED).toBe(false);
+        }
+    });
+
+    it('refuses a budget of zero, which would refuse every request', () =>
+    {
+        process.env['RATE_LIMIT_CREDENTIALS_MAX'] = '0';
+
+        expect(() => loadConfig()).toThrow(/RATE_LIMIT_CREDENTIALS_MAX/);
     });
 });
 

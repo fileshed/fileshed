@@ -12,7 +12,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { serveStatic } from '@hono/node-server/serve-static';
 
 import {
@@ -53,6 +53,9 @@ import { createSetupRoutes } from './routes/setup.ts';
 import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
 import { createUserRoutes } from './routes/users.ts';
+
+// Middleware
+import { securityMiddleware } from './middleware/index.ts';
 
 // Resource Access
 import {
@@ -186,6 +189,10 @@ export interface AppOptions
     // The database an auth-only composition assembles its admin manager over -- the same handle the auth instance was
     // built from. A full composition brings its own managers and never reaches for this.
     handle ?: DatabaseHandle;
+
+    // Request throttling and the origin check, built from config by the caller. Absent leaves both off, which is what
+    // the no-arg and auth-only compositions want.
+    security ?: MiddlewareHandler[];
 }
 
 function requireHandle(handle ?: DatabaseHandle) : DatabaseHandle
@@ -223,6 +230,11 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             ctx.header('content-security-policy', APP_CONTENT_SECURITY_POLICY);
         }
     });
+
+    // After the hardening wrapper so a refusal still carries those headers, and before the auth gate because the
+    // credential budget exists to protect exactly what the gate handles. Hono only runs middleware registered ahead
+    // of the route it matches, so this ordering is the whole of whether any of it runs at all.
+    for(const middleware of options.security ?? []) { app.use('*', middleware); }
 
     //------------------------------------------------------------------------------------------------------------------
     // Gate (before the auth mount)
@@ -603,7 +615,10 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
     timers.startTimers();
 
     return {
-        app: createApp(auth, services, { clientDist: config.CLIENT_DIST }),
+        app: createApp(auth, services, {
+            clientDist: config.CLIENT_DIST,
+            security: securityMiddleware(config),
+        }),
         config,
         shutdown: () => timers.stopTimers(),
     };
