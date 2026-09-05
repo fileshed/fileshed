@@ -58,6 +58,9 @@ import { fetchNodeBlob } from '../resource-access/content.ts';
 import { type MediaTags, readMediaTags, releaseMediaTags } from '../resource-access/mediaTags.ts';
 import { getChildren, getNode } from '../resource-access/nodes.ts';
 
+// Stores
+import { useSessionStore } from './session.ts';
+
 // Engines
 import { computeProofAnswer } from '../engines/claim.ts';
 import {
@@ -114,6 +117,16 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // track keeps its entry: the tags are facts about the file, and the file may still sit elsewhere in the queue.
     const tags = ref(new Map<string, MediaTags | null>());
     const tagReadsInFlight = new Set<string>();
+
+    const session = useSessionStore();
+
+    // A playlist entry pointing off this instance, while the reader has said their browser should not answer one.
+    // Derived rather than stored: the preference can change under an open playlist, and every surface asking the
+    // question gets the same answer at the moment it asks.
+    function blocksRemote(entry : MediaTrack) : boolean
+    {
+        return entry.remoteUrl !== null && !session.allowRemoteMedia;
+    }
 
     const track = computed(() => queue.value?.current ?? null);
     const tracks = computed(() => { return queue.value === null ? [] : tracksOf(queue.value); });
@@ -816,6 +829,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         hasPrevious,
         hasNext,
         tagsFor,
+        blocksRemote,
         open,
         add,
         addFolder,

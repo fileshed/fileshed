@@ -21,6 +21,10 @@ import type { MediaTags } from '@client/resource-access/mediaTags.ts';
 
 // Stores
 import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
+import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { meFixture } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -527,6 +531,28 @@ describe('MediaPlayerStore playlist files', () =>
         });
     }
 
+    // The reader's own preference, asked at the moment a surface needs the answer rather than baked into the entry:
+    // flipping it under an open playlist has to take effect without rebuilding the queue.
+    it('blocks a remote entry only while the reader refuses remote media', async () =>
+    {
+        mockPlaylistWorld();
+        const session = useSessionStore();
+        session.me = meFixture({ preferences: {} });
+        const store = useMediaPlayerStore();
+        await store.openPlaylistNode(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }), 'replace');
+
+        const remote = store.tracks[2];
+        const drive = store.tracks[0];
+        if(remote === undefined || drive === undefined) { throw new Error('playlist did not resolve'); }
+
+        expect(store.blocksRemote(remote)).toBe(false);
+
+        session.me = meFixture({ preferences: { allowRemoteMedia: false } });
+
+        expect(store.blocksRemote(remote)).toBe(true);
+        expect(store.blocksRemote(drive)).toBe(false);
+    });
+
     it('resolves entries node-id first, then by relative path, streams URLs, and keeps broken rows', async () =>
     {
         mockPlaylistWorld();
@@ -805,7 +831,7 @@ describe('MediaPlayerStore tags', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-// The playback token: minted when a session opens so cast receivers can fetch tokened src URLs cookie-less,
+// The playback token: minted when a CAST SESSION starts, since only a receiver fetches a URL without a cookie jar,
 // refreshed on a track change near expiry (retiring the predecessor), and treated as the suspect on a track error
 // once it is dead -- a credential loss re-mints and remounts, it never skips the queue.
 //----------------------------------------------------------------------------------------------------------------------

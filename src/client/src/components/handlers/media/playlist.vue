@@ -95,7 +95,7 @@
                     class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm
                         enabled:hover:bg-elevated/50 disabled:opacity-40"
                     :aria-current="index === store.currentIndex ? 'true' : undefined"
-                    :disabled="entry.broken"
+                    :disabled="entry.broken || store.blocksRemote(entry)"
                     @click="store.select(index)"
                 >
                     <UIcon
@@ -176,6 +176,7 @@
 
     function rowIcon(entry : MediaTrack) : string
     {
+        if(store.blocksRemote(entry)) { return 'i-lucide-shield-off'; }
         if(entry.broken) { return 'i-lucide-file-question'; }
         if(entry.failed) { return 'i-lucide-triangle-alert'; }
 

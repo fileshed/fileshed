@@ -12,6 +12,7 @@ import { defineStore } from 'pinia';
 
 import {
     type ColorMode,
+    DEFAULT_ALLOW_REMOTE_MEDIA,
     DEFAULT_EDITOR_GUTTER,
     DEFAULT_EDITOR_THEME,
     DEFAULT_ROOT_LABEL,
@@ -62,6 +63,12 @@ export const useSessionStore = defineStore('session', () =>
     // The drive's grid-vs-list choice, defaulting until the user picks one. The single place that fallback lives; the
     // drive page reads it here.
     const viewMode = computed(() => me.value?.preferences.viewMode ?? DEFAULT_VIEW_MODE);
+
+    // Whether a playlist entry pointing off this instance may be played. The media player reads it here; a playlist is
+    // something one user hands another, and this is the reader deciding whether their own browser answers it.
+    const allowRemoteMedia = computed(
+        () => me.value?.preferences.allowRemoteMedia ?? DEFAULT_ALLOW_REMOTE_MEDIA
+    );
 
     // The user's light/dark/system choice, deliberately WITHOUT a fallback: undefined means "never chose", which
     // the color-mode resolver treats differently from any choice (the instance default applies instead).
@@ -225,6 +232,7 @@ export const useSessionStore = defineStore('session', () =>
         editorGutter,
         viewMode,
         colorMode,
+        allowRemoteMedia,
         trashRetentionDays,
         initialize,
         signIn,

@@ -57,6 +57,7 @@ export interface UpdatePreferencesRequest
     editorGutter ?: boolean | null;
     viewMode ?: ViewMode | null;
     colorMode ?: ColorMode | null;
+    allowRemoteMedia ?: boolean | null;
     [key : string] : unknown;
 }
 

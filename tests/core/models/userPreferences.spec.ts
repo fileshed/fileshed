@@ -145,6 +145,20 @@ describe('toUserPreferences', () =>
         expect(toUserPreferences({ editorGutter: 'yes' })).toEqual({});
     });
 
+    // A stored preference the read codec does not model is dropped from the view, so a key added to the write side
+    // and forgotten here is written and never read back. The type assert beside the codec does not catch that: every
+    // field is optional, and it only refuses a MISSING REQUIRED one.
+    it('carries the remote-media choice into the view', () =>
+    {
+        expect(toUserPreferences({ allowRemoteMedia: false })).toEqual({ allowRemoteMedia: false });
+        expect(toUserPreferences({ allowRemoteMedia: true })).toEqual({ allowRemoteMedia: true });
+    });
+
+    it('collapses a malformed remote-media choice to the empty view instead of throwing', () =>
+    {
+        expect(toUserPreferences({ allowRemoteMedia: 'no' })).toEqual({});
+    });
+
     it('carries a valid view mode into the view', () =>
     {
         expect(toUserPreferences({ viewMode: 'list' })).toEqual({ viewMode: 'list' });

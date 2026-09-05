@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Settings Tab — preferences composition
 //
-// The tab re-parents the existing preference controls under two headings. What this guards: the Preferences group
-// (files-root name, time format) and the Editor group (colorscheme, line numbers) are all present, in order, so the
-// move never silently drops one.
+// The tab re-parents the existing preference controls under headings. What this guards: the Preferences group
+// (files-root name, time format, colour mode), the Media group, and the Editor group (colorscheme, line numbers) are
+// all present, in order, so the move never silently drops one.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it, vi } from 'vitest';
@@ -20,6 +20,7 @@ import SettingsTab from '@client/pages/account/settingsTab.vue';
 import FilesRootName from '@client/components/account/filesRootName.vue';
 import TimeFormat from '@client/components/account/timeFormat.vue';
 import ColorModePreference from '@client/components/account/colorModePreference.vue';
+import RemoteMedia from '@client/components/account/remoteMedia.vue';
 import EditorColorScheme from '@client/components/account/editorColorScheme.vue';
 import EditorGutter from '@client/components/account/editorGutter.vue';
 
@@ -33,6 +34,7 @@ function mountTab() : VueWrapper
                 FilesRootName: true,
                 TimeFormat: true,
                 ColorModePreference: true,
+                RemoteMedia: true,
                 EditorColorScheme: true,
                 EditorGutter: true,
             },
@@ -48,7 +50,8 @@ describe('SettingsTab', () =>
     {
         const wrapper = mountTab();
 
-        expect(wrapper.findAll('h2').map((heading) => heading.text())).toEqual([ 'Preferences', 'Editor' ]);
+        expect(wrapper.findAll('h2').map((heading) => heading.text()))
+            .toEqual([ 'Preferences', 'Media', 'Editor' ]);
     });
 
     it('keeps the general and editor preference controls', () =>
@@ -58,6 +61,7 @@ describe('SettingsTab', () =>
         expect(wrapper.findComponent(FilesRootName).exists()).toBe(true);
         expect(wrapper.findComponent(TimeFormat).exists()).toBe(true);
         expect(wrapper.findComponent(ColorModePreference).exists()).toBe(true);
+        expect(wrapper.findComponent(RemoteMedia).exists()).toBe(true);
         expect(wrapper.findComponent(EditorColorScheme).exists()).toBe(true);
         expect(wrapper.findComponent(EditorGutter).exists()).toBe(true);
     });

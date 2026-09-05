@@ -87,6 +87,9 @@ export const updatePreferencesRequestCodec = z.looseObject({
     colorMode: z.enum(colorModes)
         .nullable()
         .optional(),
+    allowRemoteMedia: z.boolean()
+        .nullable()
+        .optional(),
 });
 
 typeAssert<Equals<z.output<typeof updatePreferencesRequestCodec>, UpdatePreferencesRequest>>();

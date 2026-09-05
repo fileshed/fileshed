@@ -190,6 +190,10 @@
     // no credential in a link someone might copy.
     function srcFor(entry : MediaTrack) : string
     {
+        // Nothing to load rather than a URL off this instance: the element never makes the request, which is the
+        // whole of what the preference buys.
+        if(store.blocksRemote(entry)) { return ''; }
+
         if(entry.remoteUrl !== null) { return entry.remoteUrl; }
 
         const src = downloadUrl(entry.nodeID, 'inline');

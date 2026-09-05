@@ -66,6 +66,7 @@ declare module 'vue' {
     ProviderFields: typeof import('./src/components/admin/providers/providerFields.vue')['default']
     QuotaMeter: typeof import('./src/components/quotaMeter.vue')['default']
     RadiusField: typeof import('./src/components/admin/branding/radiusField.vue')['default']
+    RemoteMedia: typeof import('./src/components/account/remoteMedia.vue')['default']
     RemoveProviderModal: typeof import('./src/components/admin/modals/removeProviderModal.vue')['default']
     RenameNode: typeof import('./src/components/drive/modals/renameNode.vue')['default']
     RequestAccess: typeof import('./src/components/share/requestAccess.vue')['default']

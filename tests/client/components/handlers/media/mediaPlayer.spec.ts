@@ -15,8 +15,15 @@ import { createPinia, setActivePinia } from 'pinia';
 
 import type { NodeResponse } from '@fileshed/core';
 
+// Engines
+import { queueFromTrack, trackFromUrl } from '@client/engines/media/queue.ts';
+
 // Stores
 import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
+import { useSessionStore } from '@client/stores/session.ts';
+
+// Support
+import { meFixture } from '../../../support.ts';
 
 // Under test
 import MediaPlayer from '@client/components/handlers/media/mediaPlayer.vue';
@@ -130,6 +137,34 @@ describe('MediaPlayer surfaces', () =>
 
         expect(src).toContain('disposition=inline');
         expect(src).toContain('token=fsplay_sessionkey');
+    });
+
+    // The preference exists so the element never makes the request. Asserting on the src is asserting on exactly
+    // that: an empty one is a fetch that does not happen.
+    it('hands the element no src at all for a remote entry the reader has refused', async () =>
+    {
+        const session = useSessionStore();
+        session.me = meFixture({ preferences: { allowRemoteMedia: false } });
+        const store = useMediaPlayerStore();
+        const wrapper = mountPlayer(fileNode());
+
+        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3'));
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.get('audio').attributes('src')).toBe('');
+    });
+
+    it('plays a remote entry while the reader allows remote media', async () =>
+    {
+        const session = useSessionStore();
+        session.me = meFixture({ preferences: {} });
+        const store = useMediaPlayerStore();
+        const wrapper = mountPlayer(fileNode());
+
+        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3'));
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.get('audio').attributes('src')).toBe('https://radio.example/live.mp3');
     });
 
     it('opens the routed audio file as the session and mounts the audio card, not the video canvas', () =>

@@ -31,6 +31,7 @@ export const userPreferencesCodec = z.object({
     editorGutter: z.boolean().optional(),
     viewMode: z.enum(viewModes).optional(),
     colorMode: z.enum(colorModes).optional(),
+    allowRemoteMedia: z.boolean().optional(),
 });
 
 typeAssert<Equals<z.output<typeof userPreferencesCodec>, UserPreferences>>();
