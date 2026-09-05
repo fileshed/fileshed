@@ -12,6 +12,6 @@
         "lint:types": "tsc --noEmit"
     },
     "dependencies": {
-        "zod": "^4.4.3"
+        "zod": "^4.5.4"
     }
 }
