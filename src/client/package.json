@@ -42,15 +42,15 @@
   },
   "devDependencies": {
     "@hono/vite-dev-server": "^0.26.1",
-    "@iconify-json/lucide": "^1.2.118",
-    "@iconify-json/simple-icons": "^1.2.92",
-    "@scalar/api-reference": "^1.65.1",
+    "@iconify-json/lucide": "^1.2.128",
+    "@iconify-json/simple-icons": "^1.2.94",
+    "@scalar/api-reference": "^1.67.0",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vue/test-utils": "^2.4.11",
+    "@vue/test-utils": "^2.5.0",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.1.5",
-    "vite-plugin-checker": "^0.14.4",
-    "vite-plugin-vue-devtools": "^8.1.5",
-    "vue-tsc": "^3.3.7"
+    "vite": "^8.2.2",
+    "vite-plugin-checker": "^0.14.5",
+    "vite-plugin-vue-devtools": "^8.2.1",
+    "vue-tsc": "^3.3.11"
   }
 }
