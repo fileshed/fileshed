@@ -48,9 +48,11 @@ function instanceFixture(providers : InstanceResponse['providers']) : InstanceRe
     };
 }
 
-function accountsFixture(providerIDs : string[]) : { data : { providerId : string }[]; error : null }
+// listAccounts hands back rows, and a row's own id is what unlinking names -- so the fixture carries one, the way
+// the real response does.
+function accountsFixture(providerIDs : string[]) : { data : { id : string; providerId : string }[]; error : null }
 {
-    return { data: providerIDs.map((providerId) => ({ providerId })), error: null };
+    return { data: providerIDs.map((providerId) => ({ id: `acct-${ providerId }`, providerId })), error: null };
 }
 
 function mountAccounts() : VueWrapper
@@ -119,7 +121,7 @@ describe('ConnectedAccounts', () =>
         await wrapper.find('.btn-disconnect').trigger('click');
         await flushPromises();
 
-        expect(unlinkMock).toHaveBeenCalledWith({ providerId: 'github' });
+        expect(unlinkMock).toHaveBeenCalledWith({ accountId: 'acct-github' });
         expect(wrapper.find('.btn-disconnect').exists()).toBe(false);
     });
 

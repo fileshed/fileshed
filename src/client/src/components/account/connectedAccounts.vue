@@ -90,7 +90,8 @@
 
     const { runMutation } = useRunWithToast();
 
-    const linkedProviders = ref<string[]>([]);
+    // The rows themselves, not just which providers appear in them: unlinking names an account by its own id.
+    const linkedAccounts = ref<{ id : string; providerId : string }[]>([]);
     const offeredProviders = ref<SocialProviderID[]>([]);
     const error = ref<Error | null>(null);
     const busyProvider = ref<string | null>(null);
@@ -104,7 +105,8 @@
             const [ accounts, instance ] = await Promise.all([ authClient.listAccounts(), fetchInstance() ]);
             if(accounts.error) { throw new Error(accounts.error.message ?? 'Unable to list sign-in methods.'); }
 
-            linkedProviders.value = (accounts.data ?? []).map((account) => account.providerId);
+            linkedAccounts.value = (accounts.data ?? [])
+                .map((account) => ({ id: account.id, providerId: account.providerId }));
             offeredProviders.value = instance.providers;
         }
         catch(caught)
@@ -120,8 +122,9 @@
     const methods = computed<SignInMethod[]>(() =>
     {
         const rows : SignInMethod[] = [];
+        const linkedProviders = linkedAccounts.value.map((account) => account.providerId);
 
-        if(linkedProviders.value.includes('credential'))
+        if(linkedProviders.includes('credential'))
         {
             rows.push({
                 providerID: 'credential',
@@ -133,7 +136,7 @@
 
         for(const provider of socialProviderIDs)
         {
-            const linked = linkedProviders.value.includes(provider);
+            const linked = linkedProviders.includes(provider);
             if(linked || offeredProviders.value.includes(provider))
             {
                 rows.push({
@@ -169,7 +172,12 @@
         busyProvider.value = provider;
         void runMutation(async () =>
         {
-            const { error: unlinkError } = await authClient.unlinkAccount({ providerId: provider });
+            // One row, the way disconnecting one method always worked -- an account holding two identities with the
+            // same provider keeps the rest, and the list redraws around what is left.
+            const account = linkedAccounts.value.find((linked) => linked.providerId === provider);
+            if(account === undefined) { throw new Error('That sign-in method is no longer connected.'); }
+
+            const { error: unlinkError } = await authClient.unlinkAccount({ accountId: account.id });
             if(unlinkError) { throw new Error(unlinkError.message ?? 'Unable to disconnect.'); }
 
             await load();
