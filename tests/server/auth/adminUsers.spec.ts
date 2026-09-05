@@ -13,7 +13,7 @@ import { ORIGIN, bootTestApp, cookieFrom, makeAdmin, signUp } from './support.ts
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function listUsers(app : Hono, cookie ?: string, query : Record<string, string> = {}) : Promise<Response>
+async function listUsers(app : Hono, cookie ?: string, query : Record<string, string> = {}) : Promise<Response>
 {
     const search = new URLSearchParams(query).toString();
     const url = `${ ORIGIN }/api/admin/users${ search ? `?${ search }` : '' }`;

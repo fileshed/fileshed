@@ -42,6 +42,7 @@ function emptyPage() : NodeListResponse
 function fileNode(id : string, name : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: 'u1',
@@ -69,11 +70,11 @@ function mountModal() : VueWrapper
     return mount(RenameNode, { global: { stubs: { NameDialog: NameDialogStub } } });
 }
 
-function open(wrapper : VueWrapper, node : NodeResponse) : Promise<void>
+async function open(wrapper : VueWrapper, node : NodeResponse) : Promise<void>
 {
     (wrapper.vm as unknown as Openable).open(node);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 function field(wrapper : VueWrapper, name : string) : string | undefined
@@ -81,11 +82,11 @@ function field(wrapper : VueWrapper, name : string) : string | undefined
     return wrapper.find('.name-dialog').attributes(name);
 }
 
-function submit(wrapper : VueWrapper, name : string) : Promise<void>
+async function submit(wrapper : VueWrapper, name : string) : Promise<void>
 {
     wrapper.findComponent({ name: 'NameDialog' }).vm.$emit('submit', name);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

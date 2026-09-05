@@ -63,6 +63,7 @@ function fileNode(overrides : Partial<{
 }> = {}) : NodeResponse
 {
     return {
+        sharing: null,
         id: overrides.id ?? 'f1',
         name: overrides.name ?? 'notes.txt',
         ownerID: 'u1',
@@ -268,7 +269,7 @@ describe('useEditorStore.save', () =>
         store.setBuffer('new content');
         await store.save();
 
-        const commit = uploadTicketMock.mock.calls[0][2];
+        const commit = uploadTicketMock.mock.calls[0]?.[2];
         expect(commit).toEqual({ replaceNodeID: 'f1', ifBlobID: 'b1' });
         expect(store.dirty).toBe(false);
     });
@@ -289,8 +290,8 @@ describe('useEditorStore.save', () =>
         await store.save();
 
         // The first save pinned the loaded blob; the second pinned what the first save wrote.
-        expect(uploadTicketMock.mock.calls[0][2].ifBlobID).toBe('b1');
-        expect(uploadTicketMock.mock.calls[1][2].ifBlobID).toBe('b2');
+        expect(uploadTicketMock.mock.calls[0]?.[2].ifBlobID).toBe('b1');
+        expect(uploadTicketMock.mock.calls[1]?.[2].ifBlobID).toBe('b2');
     });
 
     it('saves a known blob through the proof-of-possession path, carrying the guard', async () =>
@@ -343,7 +344,7 @@ describe('useEditorStore conflict', () =>
         await store.overwrite();
 
         // The retry drops the ifBlobID guard entirely -- last-write-wins.
-        expect(uploadTicketMock.mock.calls[1][2]).toEqual({ replaceNodeID: 'f1' });
+        expect(uploadTicketMock.mock.calls[1]?.[2]).toEqual({ replaceNodeID: 'f1' });
         expect(store.conflict).toBe(false);
         expect(store.dirty).toBe(false);
     });

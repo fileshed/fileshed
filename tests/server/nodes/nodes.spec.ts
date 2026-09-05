@@ -9,6 +9,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 
+// Models
+import type { NodeResponse } from '@fileshed/core';
+
 // Support
 import { ORIGIN, bootTestApp, cookieFrom, signUp } from '../auth/support.ts';
 import { composeNodeApp, seedLinkRow, seedShareRow, userIDByEmail } from './support.ts';
@@ -17,7 +20,7 @@ import { composeNodeApp, seedLinkRow, seedShareRow, userIDByEmail } from './supp
 
 type Json = Record<string, unknown>;
 
-function request(
+async function request(
     app : Hono,
     method : string,
     path : string,
@@ -46,10 +49,16 @@ function postNode(app : Hono, cookie : string, body : unknown) : Promise<Respons
     return request(app, 'POST', '/api/nodes', cookie, body);
 }
 
-async function createFolder(app : Hono, cookie : string, name : string, parentID : string | null = null) : Promise<Json>
+async function createFolder(
+    app : Hono,
+    cookie : string,
+    name : string,
+    parentID : string | null = null
+) : Promise<NodeResponse>
 {
     const res = await postNode(app, cookie, { type: 'folder', name, parentID });
-    return await res.json() as Json;
+
+    return await res.json() as NodeResponse;
 }
 
 async function createLink(
@@ -235,7 +244,7 @@ describe('GET /api/nodes children listing', () =>
         const body = await res.json() as { nodes : Json[]; total : number };
 
         expect(body.total).toBe(1);
-        expect(body.nodes[0].id).toBe(child.id);
+        expect(body.nodes[0]?.id).toBe(child.id);
     });
 
     it('excludes trashed nodes from the listing', async () =>

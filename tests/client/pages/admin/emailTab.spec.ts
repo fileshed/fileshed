@@ -43,13 +43,20 @@ function mailView() : AdminSettingsResponse
     const base = { secret: false, requiresRestart: false, source: 'default' as const };
 
     const settings : AdminSettingEntry[] = [
-        { key: 'SMTP_HOST', kind: 'string', value: null, ...base },
-        { key: 'SMTP_PORT', kind: 'number', value: 587, ...base },
-        { key: 'SMTP_SECURE', kind: 'boolean', value: false, ...base },
-        { key: 'SMTP_USER', kind: 'string', value: null, ...base },
-        { key: 'SMTP_PASSWORD', kind: 'string', value: null, ...base, secret: true },
-        { key: 'SMTP_FROM', kind: 'string', value: null, ...base },
-        { key: 'EMAIL_VERIFICATION_REQUIRED', kind: 'boolean', value: false, ...base, requiresRestart: true },
+        { hasDefault: true, key: 'SMTP_HOST', kind: 'string', value: null, ...base },
+        { hasDefault: true, key: 'SMTP_PORT', kind: 'number', value: 587, ...base },
+        { hasDefault: true, key: 'SMTP_SECURE', kind: 'boolean', value: false, ...base },
+        { hasDefault: true, key: 'SMTP_USER', kind: 'string', value: null, ...base },
+        { hasDefault: true, key: 'SMTP_PASSWORD', kind: 'string', value: null, ...base, secret: true },
+        { hasDefault: true, key: 'SMTP_FROM', kind: 'string', value: null, ...base },
+        {
+            key: 'EMAIL_VERIFICATION_REQUIRED',
+            kind: 'boolean',
+            value: false,
+            ...base,
+            requiresRestart: true,
+            hasDefault: true,
+        },
     ];
 
     return { settings, restartRequired: false };

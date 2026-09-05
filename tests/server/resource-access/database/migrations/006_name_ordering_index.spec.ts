@@ -93,7 +93,7 @@ async function seedNamedRows(db : Kysely<Database>) : Promise<void>
     /* eslint-disable camelcase -- snake_case DB columns (house convention for Kysely inserts) */
     const rows = Array.from({ length: ROW_COUNT }, (_, index) =>
     {
-        const letter = alphabet[index % alphabet.length];
+        const letter = alphabet[index % alphabet.length] ?? 'a';
         const name = index % 2 === 0 ? letter.toUpperCase() : letter;
 
         return {

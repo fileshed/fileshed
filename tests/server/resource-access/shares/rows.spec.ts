@@ -250,6 +250,7 @@ describe('ShareRA.sharedWithMe', () =>
         await shares.upsertShare(shareOf('s1', 'doc', 'grantee', 'viewer'));
 
         const [ entry ] = await shares.sharedWithMe('grantee');
+        if(entry === undefined) { throw new Error('the share was never listed'); }
 
         expect(entry.share.id).toBe('s1');
         expect(entry.target).toEqual({
@@ -272,6 +273,7 @@ describe('ShareRA.sharedWithMe', () =>
         await shares.upsertShare(shareOf('s1', 'doc', 'grantee', 'viewer'));
 
         const [ entry ] = await shares.sharedWithMe('grantee');
+        if(entry === undefined) { throw new Error('the share was never listed'); }
 
         expect(entry.updatedAt).toEqual(updatedAt);
     });
@@ -283,6 +285,7 @@ describe('ShareRA.sharedWithMe', () =>
         await nodes.insert(linkNode({ id: 'lk', ownerID: 'grantee', targetNodeID: 'doc' }));
 
         const [ entry ] = await shares.sharedWithMe('grantee');
+        if(entry === undefined) { throw new Error('the share was never listed'); }
 
         expect(entry.placed).toBe(true);
     });

@@ -527,6 +527,7 @@ describe('graveyard resurrection', () =>
 
         // Drop the only reference and graveyard the now-unreferenced blob, as the node purge path would.
         const [ node ] = await fileNodesForBlob(booted.handle, sha256);
+        if(node === undefined) { throw new Error('the upload seated no file node'); }
         await booted.handle.db.deleteFrom('node').where('id', '=', node.id)
             .execute();
         const blob = new BlobRA(booted.handle);

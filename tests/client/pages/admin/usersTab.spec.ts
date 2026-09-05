@@ -76,6 +76,7 @@ function settingsView(defaultQuota : number) : AdminSettingsResponse
     return {
         settings: [
             {
+                hasDefault: true,
                 key: 'DEFAULT_QUOTA_BYTES',
                 kind: 'number',
                 secret: false,

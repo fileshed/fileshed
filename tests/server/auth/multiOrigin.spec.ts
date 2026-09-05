@@ -150,7 +150,7 @@ async function bootPoster(overrides : Partial<Config>) : Promise<Post>
     const booted = await bootTestApp(overrides);
     const address = `10.0.0.${ ++clients }`;
 
-    return (from, endpoint, body, extra = {}) => booted.app.request(`${ from }${ endpoint }`, {
+    return async (from, endpoint, body, extra = {}) => booted.app.request(`${ from }${ endpoint }`, {
         method: 'POST',
         headers: {
             'content-type': 'application/json',

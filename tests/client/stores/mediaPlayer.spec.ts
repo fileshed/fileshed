@@ -85,6 +85,7 @@ function fileNode(
 ) : NodeResponse
 {
     return {
+        sharing: null,
         id: overrides.id ?? 'f1',
         name: overrides.name ?? 'song.mp3',
         ownerID: 'u1',
@@ -103,6 +104,7 @@ function fileNode(
 function folderNode(overrides : Partial<{ id : string; name : string; parentID : string | null }> = {}) : NodeResponse
 {
     return {
+        sharing: null,
         id: overrides.id ?? 'd1',
         name: overrides.name ?? 'Music',
         ownerID: 'u1',

@@ -145,7 +145,7 @@ async function whenReceiving() : Promise<void>
     }
 }
 
-function putChunkStream(cookie : string, ticket : string, body : ReadableStream<Uint8Array>, offset : number)
+async function putChunkStream(cookie : string, ticket : string, body : ReadableStream<Uint8Array>, offset : number)
 : Promise<Response>
 {
     const params = new URLSearchParams({

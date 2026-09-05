@@ -33,6 +33,7 @@ const getChildrenMock = getChildren as unknown as Mock;
 function folderNode(id : string, name : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: 'user_1',
@@ -48,6 +49,7 @@ function folderNode(id : string, name : string) : NodeResponse
 function fileNode(id : string, name : string, mimeType : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: 'user_1',

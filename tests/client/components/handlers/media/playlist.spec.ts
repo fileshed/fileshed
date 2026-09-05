@@ -49,6 +49,7 @@ const ISO = '2026-07-01T00:00:00.000Z';
 function fileNode(overrides : Partial<{ id : string; name : string; mimeType : string }> = {}) : NodeResponse
 {
     return {
+        sharing: null,
         id: overrides.id ?? 'f1',
         name: overrides.name ?? 'song.mp3',
         ownerID: 'u1',
@@ -67,6 +68,7 @@ function fileNode(overrides : Partial<{ id : string; name : string; mimeType : s
 function folderNode(overrides : Partial<{ id : string; name : string }> = {}) : NodeResponse
 {
     return {
+        sharing: null,
         id: overrides.id ?? 'd1',
         name: overrides.name ?? 'Music',
         ownerID: 'u1',

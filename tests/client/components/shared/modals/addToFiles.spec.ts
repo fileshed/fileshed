@@ -56,11 +56,11 @@ function mountModal() : VueWrapper
     return mount(AddToFiles, { global: { stubs: { UModal: UModalStub, FolderPicker: FolderPickerStub } } });
 }
 
-function open(wrapper : VueWrapper, target : SharedTarget) : Promise<void>
+async function open(wrapper : VueWrapper, target : SharedTarget) : Promise<void>
 {
     (wrapper.vm as unknown as Openable).open(target);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 function attr(wrapper : VueWrapper, selector : string, name : string) : string | undefined
@@ -68,11 +68,11 @@ function attr(wrapper : VueWrapper, selector : string, name : string) : string |
     return wrapper.find(selector).attributes(name);
 }
 
-function confirm(wrapper : VueWrapper, destination : string | null) : Promise<void>
+async function confirm(wrapper : VueWrapper, destination : string | null) : Promise<void>
 {
     wrapper.findComponent({ name: 'FolderPicker' }).vm.$emit('confirm', destination);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

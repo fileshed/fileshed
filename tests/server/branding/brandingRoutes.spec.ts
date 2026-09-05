@@ -20,12 +20,12 @@ import { type BootedApp, ORIGIN, bootFullApp, cookieFrom, makeAdmin, signIn, sig
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function getBranding(app : Hono, cookie ?: string) : Promise<Response>
+async function getBranding(app : Hono, cookie ?: string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/admin/branding`, { headers: cookie ? { cookie } : {} });
 }
 
-function patchBranding(app : Hono, cookie : string, patch : Record<string, unknown>) : Promise<Response>
+async function patchBranding(app : Hono, cookie : string, patch : Record<string, unknown>) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/admin/branding`, {
         method: 'PATCH',
@@ -34,7 +34,7 @@ function patchBranding(app : Hono, cookie : string, patch : Record<string, unkno
     });
 }
 
-function getCss(app : Hono, etag ?: string) : Promise<Response>
+async function getCss(app : Hono, etag ?: string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/branding.css`, { headers: etag ? { 'if-none-match': etag } : {} });
 }

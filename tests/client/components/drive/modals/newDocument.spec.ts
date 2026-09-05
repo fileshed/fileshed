@@ -56,6 +56,7 @@ function emptyPage() : NodeListResponse
 function fileNode(id : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name: id,
         ownerID: 'u1',
@@ -74,6 +75,7 @@ function fileNode(id : string) : NodeResponse
 function folderNode(id : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name: id,
         ownerID: 'u1',
@@ -105,11 +107,11 @@ function field(wrapper : VueWrapper, name : string) : string | undefined
     return wrapper.find('.name-dialog').attributes(name);
 }
 
-function submit(wrapper : VueWrapper, name : string) : Promise<void>
+async function submit(wrapper : VueWrapper, name : string) : Promise<void>
 {
     wrapper.findComponent({ name: 'NameDialog' }).vm.$emit('submit', name);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

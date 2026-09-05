@@ -60,12 +60,12 @@ async function harness(options : Partial<RateLimitOptions> & { peer : string }) 
     await signUp(booted.app, EMAIL, PASSWORD);
 
     return {
-        signInWrongly: (headers = {}) => app.request(`${ ORIGIN }/api/auth/sign-in/email`, {
+        signInWrongly: async (headers = {}) => app.request(`${ ORIGIN }/api/auth/sign-in/email`, {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'origin': ORIGIN, ...headers },
             body: JSON.stringify({ email: EMAIL, password: 'not-the-password' }),
         }),
-        readSession: (headers = {}) => app.request(`${ ORIGIN }/api/auth/get-session`, {
+        readSession: async (headers = {}) => app.request(`${ ORIGIN }/api/auth/get-session`, {
             headers: { origin: ORIGIN, ...headers },
         }),
     };

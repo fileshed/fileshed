@@ -38,6 +38,7 @@ const COMMIT = { name: 'f.bin', parentID: null, mimeType: 'application/octet-str
 function committedNode() : NodeResponse
 {
     return {
+        sharing: null,
         id: 'n1',
         name: 'f.bin',
         ownerID: 'u1',

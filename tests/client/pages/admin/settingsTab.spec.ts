@@ -38,12 +38,12 @@ function fullView() : AdminSettingsResponse
     const base = { secret: false, requiresRestart: false, source: 'default' as const };
 
     const settings : AdminSettingEntry[] = [
-        { key: 'UPLOAD_MAX_BYTES', kind: 'number', value: 5_000_000_000, ...base },
-        { key: 'AVATAR_MAX_BYTES', kind: 'number', value: 2_000_000, ...base },
-        { key: 'DEFAULT_QUOTA_BYTES', kind: 'number', value: 0, ...base },
-        { key: 'TRASH_PURGE_DAYS', kind: 'number', value: 30, ...base },
-        { key: 'GC_GRACE_DAYS', kind: 'number', value: 7, ...base },
-        { key: 'SIGN_UP_ENABLED', kind: 'boolean', value: true, ...base },
+        { hasDefault: true, key: 'UPLOAD_MAX_BYTES', kind: 'number', value: 5_000_000_000, ...base },
+        { hasDefault: true, key: 'AVATAR_MAX_BYTES', kind: 'number', value: 2_000_000, ...base },
+        { hasDefault: true, key: 'DEFAULT_QUOTA_BYTES', kind: 'number', value: 0, ...base },
+        { hasDefault: true, key: 'TRASH_PURGE_DAYS', kind: 'number', value: 30, ...base },
+        { hasDefault: true, key: 'GC_GRACE_DAYS', kind: 'number', value: 7, ...base },
+        { hasDefault: true, key: 'SIGN_UP_ENABLED', kind: 'boolean', value: true, ...base },
     ];
 
     return { settings, restartRequired: false };

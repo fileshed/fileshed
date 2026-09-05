@@ -248,17 +248,28 @@ type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role'>>;
 
 function file(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, type: 'file', blobID: 'b1', size: 10, mimeType: 'text/plain', trashedAt: null, ...overrides };
+    return {
+        ...BASE,
+        id,
+        type: 'file',
+        blobID: 'b1',
+        size: 10,
+        mimeType: 'text/plain',
+        trashedAt: null,
+        ...overrides,
+        sharing: null,
+    };
 }
 
 function folder(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, type: 'folder', trashedAt: null, ...overrides };
+    return { sharing: null, ...BASE, id, type: 'folder', trashedAt: null, ...overrides };
 }
 
 function link(id : string, overrides : Overrides = {}) : NodeResponse
 {
     return {
+        sharing: null,
         ...BASE,
         id,
         type: 'link',

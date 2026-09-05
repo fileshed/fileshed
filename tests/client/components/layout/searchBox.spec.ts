@@ -31,12 +31,22 @@ const BASE = { ownerID: 'owner1', parentID: null, createdAt: ISO, updatedAt: ISO
 
 function folderNode(id : string, name : string) : NodeResponse
 {
-    return { ...BASE, id, name, type: 'folder', trashedAt: null };
+    return { sharing: null, ...BASE, id, name, type: 'folder', trashedAt: null };
 }
 
 function textFileNode(id : string, name : string) : NodeResponse
 {
-    return { ...BASE, id, name, type: 'file', blobID: 'b1', size: 100, mimeType: 'text/plain', trashedAt: null };
+    return {
+        ...BASE,
+        id,
+        name,
+        type: 'file',
+        blobID: 'b1',
+        size: 100,
+        mimeType: 'text/plain',
+        trashedAt: null,
+        sharing: null,
+    };
 }
 
 function envelope(nodes : NodeResponse[], locations : Record<string, NodeLocation> = {}) : SearchResponse

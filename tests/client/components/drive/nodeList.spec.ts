@@ -18,6 +18,7 @@ import NodeList from '@client/components/drive/nodeList.vue';
 function folderNode(id : string, ownerID : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name: id,
         ownerID,

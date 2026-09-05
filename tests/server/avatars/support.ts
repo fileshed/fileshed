@@ -137,7 +137,7 @@ export async function makeUser(booted : BootedAvatarApp, email : string) : Promi
 // HTTP helpers
 //----------------------------------------------------------------------------------------------------------------------
 
-export function postAvatar(app : Hono, cookie : string, bytes : Buffer, contentType : string) : Promise<Response>
+export async function postAvatar(app : Hono, cookie : string, bytes : Buffer, contentType : string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/me/avatar`, {
         method: 'POST',
@@ -146,17 +146,17 @@ export function postAvatar(app : Hono, cookie : string, bytes : Buffer, contentT
     });
 }
 
-export function deleteAvatar(app : Hono, cookie : string) : Promise<Response>
+export async function deleteAvatar(app : Hono, cookie : string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/me/avatar`, { method: 'DELETE', headers: { cookie } });
 }
 
-export function getAvatar(app : Hono, cookie : string, sha256 : string) : Promise<Response>
+export async function getAvatar(app : Hono, cookie : string, sha256 : string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/avatars/${ sha256 }`, { headers: { cookie } });
 }
 
-export function getMe(app : Hono, cookie : string) : Promise<Response>
+export async function getMe(app : Hono, cookie : string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/me`, { headers: { cookie } });
 }

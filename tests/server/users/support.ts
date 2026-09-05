@@ -100,7 +100,7 @@ export async function makeUser(booted : BootedUserApp, email : string, name : st
 // HTTP
 //----------------------------------------------------------------------------------------------------------------------
 
-export function request(app : Hono, method : string, path : string, cookie ?: string) : Promise<Response>
+export async function request(app : Hono, method : string, path : string, cookie ?: string) : Promise<Response>
 {
     const headers : Record<string, string> = {};
     if(cookie) { headers['cookie'] = cookie; }

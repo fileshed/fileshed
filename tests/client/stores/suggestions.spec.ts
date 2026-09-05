@@ -29,6 +29,7 @@ const ISO = '2026-07-01T00:00:00.000Z';
 function node(id : string, name : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: 'owner1',

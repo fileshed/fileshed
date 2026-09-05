@@ -211,7 +211,7 @@ function lastEmit(wrapper : VueWrapper) : string | undefined
     const events = wrapper.emitted('update:modelValue');
     if(events === undefined) { return undefined; }
 
-    return events[events.length - 1][0] as string;
+    return events[events.length - 1]?.[0] as string;
 }
 
 // Fire UEditor's update:modelValue, the signal the component treats as a genuine edit.

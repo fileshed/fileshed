@@ -84,12 +84,12 @@ async function listTrash(user : TestUser) : Promise<NodeListResponse>
     return res.json() as Promise<NodeListResponse>;
 }
 
-function getNode(user : TestUser, nodeID : string) : Promise<Response>
+async function getNode(user : TestUser, nodeID : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/nodes/${ nodeID }`, { headers: { cookie: user.cookie } });
 }
 
-function renameNode(user : TestUser, nodeID : string, name : string) : Promise<Response>
+async function renameNode(user : TestUser, nodeID : string, name : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/nodes/${ nodeID }`, {
         method: 'PATCH',
@@ -129,7 +129,7 @@ async function mintToken(user : TestUser, scopes : AccessTokenScope[]) : Promise
     return ((await res.json()) as CreateAccessTokenResponse).token;
 }
 
-function requestAs(token : string, path : string) : Promise<Response>
+async function requestAs(token : string, path : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }${ path }`, { headers: { authorization: `Bearer ${ token }` } });
 }

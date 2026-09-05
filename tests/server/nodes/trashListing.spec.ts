@@ -19,7 +19,13 @@ import { composeNodeApp } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function request(app : Hono, method : string, path : string, cookie ?: string, body ?: unknown) : Promise<Response>
+async function request(
+    app : Hono,
+    method : string,
+    path : string,
+    cookie ?: string,
+    body ?: unknown
+) : Promise<Response>
 {
     const headers : Record<string, string> = {};
     if(cookie) { headers['cookie'] = cookie; }

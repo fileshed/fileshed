@@ -197,7 +197,7 @@ export interface CommitMetadata
 
 const defaultMetadata : CommitMetadata = { name: 'file.bin', parentID: null, mimeType: 'application/octet-stream' };
 
-export function claim(app : Hono, cookie : string, sha256 : string, size : number) : Promise<Response>
+export async function claim(app : Hono, cookie : string, sha256 : string, size : number) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/blobs/claim`, {
         method: 'POST',
@@ -206,7 +206,7 @@ export function claim(app : Hono, cookie : string, sha256 : string, size : numbe
     });
 }
 
-export function answerChallenge(
+export async function answerChallenge(
     app : Hono,
     cookie : string,
     challengeID : string,
@@ -221,7 +221,7 @@ export function answerChallenge(
     });
 }
 
-export function putUpload(
+export async function putUpload(
     app : Hono,
     cookie : string,
     ticket : string,
@@ -241,7 +241,7 @@ export function putUpload(
 
 // One chunk of an upload: the same PUT, with the offset saying where these bytes belong in the claimed file. The
 // commit metadata rides every chunk, exactly as the client sends it, though only the chunk completing the file uses it.
-export function putChunk(
+export async function putChunk(
     app : Hono,
     cookie : string,
     ticket : string,
@@ -265,7 +265,7 @@ export function putChunk(
 }
 
 // The replace variant of a chunk: the final chunk of a replace names the target instead of a placement.
-export function putChunkReplace(
+export async function putChunkReplace(
     app : Hono,
     cookie : string,
     ticket : string,
@@ -286,7 +286,7 @@ export function putChunkReplace(
 // The replace variant of the upload commit: replaceNodeID (and an optional overriding mimeType, and an optional
 // ifBlobID concurrency guard) ride the query string instead of the create metadata, so a completed upload overwrites
 // an existing file's content in place.
-export function putReplace(
+export async function putReplace(
     app : Hono,
     cookie : string,
     ticket : string,
@@ -310,7 +310,7 @@ export function putReplace(
 // The replace variant of the proof-of-possession answer: the body carries replaceNodeID (and an optional mimeType, and
 // an optional ifBlobID concurrency guard) instead of the create metadata, so a proven dedup overwrites an existing
 // file's content with zero bytes moved.
-export function answerReplace(
+export async function answerReplace(
     app : Hono,
     cookie : string,
     challengeID : string,

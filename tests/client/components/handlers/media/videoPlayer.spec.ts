@@ -384,7 +384,7 @@ describe('VideoPlayer casting', () =>
         monitoringSupported ?: boolean;
         promptError ?: DOMException;
         state ?: string;
-    } = {}) : { prompt : ReturnType<typeof vi.fn> }
+    } = {}) : { prompt : ReturnType<typeof vi.fn>; fire : (event : string) => void }
     {
         const prompt = vi.fn(() =>
         {

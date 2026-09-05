@@ -15,7 +15,11 @@ import { composeNodeApp, userIDByEmail } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function patchPreferences(app : ReturnType<typeof composeNodeApp>, cookie : string, body : unknown) : Promise<Response>
+async function patchPreferences(
+    app : ReturnType<typeof composeNodeApp>,
+    cookie : string,
+    body : unknown
+) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/me/preferences`, {
         method: 'PATCH',

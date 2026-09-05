@@ -36,12 +36,13 @@ const BASE = {
 
 function file(id : string, mimeType : string) : NodeResponse
 {
-    return { ...BASE, id, type: 'file', blobID: 'b1', size: 10, mimeType, trashedAt: null };
+    return { sharing: null, ...BASE, id, type: 'file', blobID: 'b1', size: 10, mimeType, trashedAt: null };
 }
 
 function fileOf(fields : { mimeType : string; name ?: string; size ?: number; role ?: Role }) : NodeResponse
 {
     return {
+        sharing: null,
         ...BASE,
         id: 'f1',
         name: fields.name ?? 'thing',
@@ -56,12 +57,12 @@ function fileOf(fields : { mimeType : string; name ?: string; size ?: number; ro
 
 function folder(id : string) : NodeResponse
 {
-    return { ...BASE, id, type: 'folder', trashedAt: null };
+    return { sharing: null, ...BASE, id, type: 'folder', trashedAt: null };
 }
 
 function link(target : LinkTarget | null) : NodeResponse
 {
-    return { ...BASE, id: 'link1', type: 'link', targetNodeID: 't1', target };
+    return { sharing: null, ...BASE, id: 'link1', type: 'link', targetNodeID: 't1', target };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -111,28 +112,30 @@ describe('resolveOpen', () =>
     // walks the link's placement rather than the target's (possibly unreachable) ancestry.
     it('navigates a link whose target is a folder to the LINK\'s own id', () =>
     {
-        const node = link({ id: 'link1', type: 'folder', name: 'shared' });
+        const node = link({ ownerID: 'u1', id: 'link1', type: 'folder', name: 'shared' });
 
         expect(resolveOpen(node)).toEqual({ kind: 'navigate', folderID: 'link1' });
     });
 
     it('views a link to a renderable file inline via the target', () =>
     {
-        const node = link({ id: 't1', type: 'file', name: 'pic.png', mimeType: 'image/png', size: 4 });
+        const node = link({ ownerID: 'u1', id: 't1', type: 'file', name: 'pic.png', mimeType: 'image/png', size: 4 });
 
         expect(resolveOpen(node)).toEqual({ kind: 'view', nodeID: 't1' });
     });
 
     it('downloads a link to a non-renderable file via the target', () =>
     {
-        const node = link({ id: 't1', type: 'file', name: 'a.zip', mimeType: 'application/zip', size: 4 });
+        const node = link({
+            ownerID: 'u1', id: 't1', type: 'file', name: 'a.zip', mimeType: 'application/zip', size: 4,
+        });
 
         expect(resolveOpen(node)).toEqual({ kind: 'download', nodeID: 't1' });
     });
 
     it('downloads a link target that carries no mime type', () =>
     {
-        const node = link({ id: 't1', type: 'file', name: 'blob' });
+        const node = link({ ownerID: 'u1', id: 't1', type: 'file', name: 'blob' });
 
         expect(resolveOpen(node)).toEqual({ kind: 'download', nodeID: 't1' });
     });
@@ -203,7 +206,9 @@ describe('resolveOpen — editor intent', () =>
 
     it('edits through a link to a small text target, using the target id', () =>
     {
-        const node = link({ id: 't1', type: 'file', name: 'shared.txt', mimeType: 'text/plain', size: 20 });
+        const node = link({
+            ownerID: 'u1', id: 't1', type: 'file', name: 'shared.txt', mimeType: 'text/plain', size: 20,
+        });
 
         expect(resolveOpen(node)).toEqual({ kind: 'edit', nodeID: 't1' });
     });
@@ -211,7 +216,12 @@ describe('resolveOpen — editor intent', () =>
     it('falls back to native for a link whose text target is over the cap', () =>
     {
         const node = link({
-            id: 't1', type: 'file', name: 'big.txt', mimeType: 'text/plain', size: EDITOR_MAX_BYTES + 1,
+            ownerID: 'u1',
+            id: 't1',
+            type: 'file',
+            name: 'big.txt',
+            mimeType: 'text/plain',
+            size: EDITOR_MAX_BYTES + 1,
         });
 
         expect(resolveOpen(node)).toEqual({ kind: 'view', nodeID: 't1' });

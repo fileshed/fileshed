@@ -20,12 +20,12 @@ import { type BootedApp, ORIGIN, bootFullApp, cookieFrom, makeAdmin, signIn, sig
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function getSettings(app : Hono, cookie ?: string) : Promise<Response>
+async function getSettings(app : Hono, cookie ?: string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/admin/settings`, { headers: cookie ? { cookie } : {} });
 }
 
-function patchSettings(app : Hono, cookie : string, changes : Record<string, unknown>) : Promise<Response>
+async function patchSettings(app : Hono, cookie : string, changes : Record<string, unknown>) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/admin/settings`, {
         method: 'PATCH',

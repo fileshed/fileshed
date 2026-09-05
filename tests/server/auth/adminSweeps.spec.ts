@@ -124,7 +124,7 @@ async function makeMember(email : string) : Promise<string>
     return cookieFrom(await signUp(booted.app, email, PASSWORD));
 }
 
-function runSweep(sweep : string, cookie ?: string) : Promise<Response>
+async function runSweep(sweep : string, cookie ?: string) : Promise<Response>
 {
     const headers : Record<string, string> = { origin: ORIGIN };
     if(cookie !== undefined) { headers['cookie'] = cookie; }

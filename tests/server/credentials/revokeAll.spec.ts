@@ -114,17 +114,17 @@ async function mintPlaybackToken(session : string) : Promise<void>
     expect(res.status).toBe(200);
 }
 
-function withCookie(cookie : string) : Promise<Response>
+async function withCookie(cookie : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/me`, { headers: { cookie } });
 }
 
-function withToken(token : string) : Promise<Response>
+async function withToken(token : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/me`, { headers: { authorization: `Bearer ${ token }` } });
 }
 
-function panic(cookie : string) : Promise<Response>
+async function panic(cookie : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/me/revoke-credentials`, {
         method: 'POST',

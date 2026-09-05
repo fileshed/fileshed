@@ -84,6 +84,7 @@ const CHUNK_BYTES = 2 * 1024 * 1024;
 function fileNode(id : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name: id,
         ownerID: 'u1',
@@ -114,6 +115,7 @@ function uploadFile(name : string, size = 3, type = 'text/plain') : File
 function folderNode(id : string, name : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: 'u1',

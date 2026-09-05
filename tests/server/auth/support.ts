@@ -245,7 +245,7 @@ export async function bootFullApp(overrides : Partial<Config> = {}, extras : Aut
 // HTTP helpers
 //----------------------------------------------------------------------------------------------------------------------
 
-export function signUp(app : Hono, email : string, password : string, name = 'Test User') : Promise<Response>
+export async function signUp(app : Hono, email : string, password : string, name = 'Test User') : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/auth/sign-up/email`, {
         method: 'POST',
@@ -254,7 +254,7 @@ export function signUp(app : Hono, email : string, password : string, name = 'Te
     });
 }
 
-export function signIn(app : Hono, email : string, password : string) : Promise<Response>
+export async function signIn(app : Hono, email : string, password : string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/auth/sign-in/email`, {
         method: 'POST',

@@ -28,17 +28,17 @@ const BASE = {
 
 function file(mimeType : string, name = 'thing') : NodeResponse
 {
-    return { ...BASE, name, type: 'file', blobID: 'b1', size: 10, mimeType, trashedAt: null };
+    return { sharing: null, ...BASE, name, type: 'file', blobID: 'b1', size: 10, mimeType, trashedAt: null };
 }
 
 function folder() : NodeResponse
 {
-    return { ...BASE, type: 'folder', trashedAt: null };
+    return { sharing: null, ...BASE, type: 'folder', trashedAt: null };
 }
 
 function link(target : LinkTarget | null) : NodeResponse
 {
-    return { ...BASE, type: 'link', targetNodeID: 't1', target };
+    return { sharing: null, ...BASE, type: 'link', targetNodeID: 't1', target };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -86,9 +86,11 @@ describe('nodePresentation', () =>
 
     it('borrows a link target\'s presentation', () =>
     {
-        expect(nodePresentation(link({ id: 't1', type: 'folder', name: 'shared' })))
+        expect(nodePresentation(link({ ownerID: 'u1', id: 't1', type: 'folder', name: 'shared' })))
             .toMatchObject({ icon: 'i-lucide-folder' });
-        expect(nodePresentation(link({ id: 't1', type: 'file', name: 'pic.png', mimeType: 'image/png', size: 4 })))
+        expect(nodePresentation(link({
+            ownerID: 'u1', id: 't1', type: 'file', name: 'pic.png', mimeType: 'image/png', size: 4,
+        })))
             .toMatchObject({ icon: 'i-lucide-image' });
     });
 
@@ -105,7 +107,7 @@ describe('isDeadLink', () =>
     it('is true only for a link with no resolvable target', () =>
     {
         expect(isDeadLink(link(null))).toBe(true);
-        expect(isDeadLink(link({ id: 't1', type: 'folder', name: 'shared' }))).toBe(false);
+        expect(isDeadLink(link({ ownerID: 'u1', id: 't1', type: 'folder', name: 'shared' }))).toBe(false);
         expect(isDeadLink(file('text/plain'))).toBe(false);
         expect(isDeadLink(folder())).toBe(false);
     });
@@ -119,7 +121,7 @@ describe('nodeKindLabel', () =>
     {
         expect(nodeKindLabel(folder())).toBe('Folder');
         expect(nodeKindLabel(file('application/pdf'))).toBe('PDF');
-        expect(nodeKindLabel(link({ id: 't1', type: 'folder', name: 'shared' }))).toBe('Link');
+        expect(nodeKindLabel(link({ ownerID: 'u1', id: 't1', type: 'folder', name: 'shared' }))).toBe('Link');
     });
 
     it('tells a playlist apart from the audio family it hides in — by mime or by name', () =>

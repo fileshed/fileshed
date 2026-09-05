@@ -197,11 +197,11 @@ function routerOf(wrapper : VueWrapper) : Router
     return wrapper.vm.$router;
 }
 
-function select(wrapper : VueWrapper, node : NodeResponse, modifiers = PLAIN_CLICK) : Promise<void>
+async function select(wrapper : VueWrapper, node : NodeResponse, modifiers = PLAIN_CLICK) : Promise<void>
 {
     wrapper.findComponent({ name: 'NodeGrid' }).vm.$emit('select', node, modifiers);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 // The live buildMenu function NodeGrid receives, pulled straight off the stub so a kebab spec can call it exactly as

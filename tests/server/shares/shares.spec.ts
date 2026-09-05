@@ -255,8 +255,8 @@ describe('GET /api/nodes/:id/shares', () =>
 
         expect(res.status).toBe(200);
         expect(body.shares).toHaveLength(1);
-        expect(body.shares[0].share).toMatchObject({ granteeUserID: grantee.id, role: 'viewer' });
-        expect(body.shares[0].grantee).toEqual({
+        expect(body.shares[0]?.share).toMatchObject({ granteeUserID: grantee.id, role: 'viewer' });
+        expect(body.shares[0]?.grantee).toEqual({
             id: grantee.id,
             name: grantee.name,
             email: grantee.email,
@@ -274,7 +274,7 @@ describe('GET /api/nodes/:id/shares', () =>
         const res = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
         const body = await res.json() as { shares : { grantee : { image : string | null } }[] };
 
-        expect(body.shares[0].grantee.image).toBe(`/api/avatars/${ sha256 }`);
+        expect(body.shares[0]?.grantee.image).toBe(`/api/avatars/${ sha256 }`);
     });
 
     it('resolves every grantee\'s summary when a node carries more than one grant', async () =>
@@ -307,8 +307,8 @@ describe('GET /api/shared-with-me', () =>
 
         expect(res.status).toBe(200);
         expect(body.entries).toHaveLength(1);
-        expect(body.entries[0].target).toMatchObject({ id: folder, type: 'folder', ownerID: owner.id });
-        expect(body.entries[0].placed).toBe(false);
+        expect(body.entries[0]?.target).toMatchObject({ id: folder, type: 'folder', ownerID: owner.id });
+        expect(body.entries[0]?.placed).toBe(false);
     });
 
     it('reports placed=true once the grantee places a link to the shared item', async () =>
@@ -326,7 +326,7 @@ describe('GET /api/shared-with-me', () =>
         const res = await request(booted.app, 'GET', '/api/shared-with-me', grantee.cookie);
         const body = await res.json() as { entries : { placed : boolean }[] };
 
-        expect(body.entries[0].placed).toBe(true);
+        expect(body.entries[0]?.placed).toBe(true);
     });
 
     it('pairs each entry with the target owner\'s display summary', async () =>
@@ -339,7 +339,7 @@ describe('GET /api/shared-with-me', () =>
 
         // The recipient sees the sharer's real name, not just the ownerID already riding on the target -- the owner
         // shared WITH them, so disclosing this summary discloses no one who didn't already disclose themselves.
-        expect(body.entries[0].owner).toEqual({ id: owner.id, name: owner.name, email: owner.email, image: null });
+        expect(body.entries[0]?.owner).toEqual({ id: owner.id, name: owner.name, email: owner.email, image: null });
     });
 
     it('derives the owner\'s avatar image URL from their stored avatar hash', async () =>
@@ -352,7 +352,7 @@ describe('GET /api/shared-with-me', () =>
         const res = await request(booted.app, 'GET', '/api/shared-with-me', grantee.cookie);
         const body = await res.json() as { entries : { owner : { image : string | null } }[] };
 
-        expect(body.entries[0].owner.image).toBe(`/api/avatars/${ sha256 }`);
+        expect(body.entries[0]?.owner.image).toBe(`/api/avatars/${ sha256 }`);
     });
 
     // The Type filter rides the query string and narrows against the target's own type. This proves the param travels

@@ -16,6 +16,7 @@ const ISO = '2026-07-01T00:00:00.000Z';
 function linkNode(target : LinkTarget | null) : NodeResponse
 {
     return {
+        sharing: null,
         id: 'lnk',
         name: 'Case Test\'s Docs',
         ownerID: 'recipient',

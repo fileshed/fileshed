@@ -1,0 +1,16 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "noEmit": true,
+        "allowImportingTsExtensions": true,
+        "types": ["vitest/globals", "node", "vite/client"],
+        "paths": {
+            "@server/*": ["../src/server/*"],
+            "@client/*": ["../src/client/src/*"],
+            "@fileshed/core": ["../packages/core/src/index.ts"]
+        }
+    },
+    "include": ["**/*.ts", "../src/client/components.d.ts", "../src/client/auto-imports.d.ts"]
+}

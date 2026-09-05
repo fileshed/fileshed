@@ -42,6 +42,7 @@ function emptyPage() : NodeListResponse
 function fileNode(id : string, name : string = id) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: 'u1',
@@ -76,11 +77,11 @@ function mountModal() : VueWrapper
     return mount(MoveNodes, { global: { stubs: { UModal: UModalStub, FolderPicker: FolderPickerStub } } });
 }
 
-function open(wrapper : VueWrapper, nodes : NodeResponse[]) : Promise<void>
+async function open(wrapper : VueWrapper, nodes : NodeResponse[]) : Promise<void>
 {
     (wrapper.vm as unknown as Openable).open(nodes);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 function attr(wrapper : VueWrapper, selector : string, name : string) : string | undefined
@@ -88,11 +89,11 @@ function attr(wrapper : VueWrapper, selector : string, name : string) : string |
     return wrapper.find(selector).attributes(name);
 }
 
-function confirm(wrapper : VueWrapper, destination : string | null) : Promise<void>
+async function confirm(wrapper : VueWrapper, destination : string | null) : Promise<void>
 {
     wrapper.findComponent({ name: 'FolderPicker' }).vm.$emit('confirm', destination);
 
-    return flushPromises();
+    await flushPromises();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -64,6 +64,7 @@ function fileNode(overrides : Partial<{
 }> = {}) : NodeResponse
 {
     return {
+        sharing: null,
         id: overrides.id ?? 'f1',
         name: overrides.name ?? 'contract.pdf',
         ownerID: 'u1',
@@ -216,7 +217,7 @@ describe('usePdfAnnotatorStore.save', () =>
         store.setDirty(true);
         await store.save();
 
-        const commit = uploadTicketMock.mock.calls[0][2];
+        const commit = uploadTicketMock.mock.calls[0]?.[2];
         expect(commit).toEqual({ replaceNodeID: 'f1', ifBlobID: 'b1' });
         expect(store.dirty).toBe(false);
     });
@@ -263,8 +264,8 @@ describe('usePdfAnnotatorStore.save', () =>
         await store.save();
 
         // The first save pinned the loaded blob; the second pinned what the first save wrote.
-        expect(uploadTicketMock.mock.calls[0][2].ifBlobID).toBe('b1');
-        expect(uploadTicketMock.mock.calls[1][2].ifBlobID).toBe('b2');
+        expect(uploadTicketMock.mock.calls[0]?.[2].ifBlobID).toBe('b1');
+        expect(uploadTicketMock.mock.calls[1]?.[2].ifBlobID).toBe('b2');
     });
 
     it('does not save a read-only session', async () =>
@@ -320,7 +321,7 @@ describe('usePdfAnnotatorStore conflict', () =>
         await store.overwrite();
 
         // The retry drops the ifBlobID guard entirely -- last-write-wins.
-        expect(uploadTicketMock.mock.calls[1][2]).toEqual({ replaceNodeID: 'f1' });
+        expect(uploadTicketMock.mock.calls[1]?.[2]).toEqual({ replaceNodeID: 'f1' });
         expect(store.conflict).toBe(false);
         expect(store.dirty).toBe(false);
     });

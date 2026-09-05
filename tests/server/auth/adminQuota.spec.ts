@@ -31,7 +31,7 @@ import { type BootedBlobApp, bootBlobApp, claim, fileNodesForBlob, makeUser, put
 
 const PASSWORD = 'correct-horse-battery';
 
-function setQuota(app : Hono, id : string, cookie : string | undefined, body : unknown) : Promise<Response>
+async function setQuota(app : Hono, id : string, cookie : string | undefined, body : unknown) : Promise<Response>
 {
     const headers : Record<string, string> = { 'content-type': 'application/json' };
     if(cookie !== undefined) { headers['cookie'] = cookie; }

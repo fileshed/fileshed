@@ -35,7 +35,7 @@ class RecordingHooks implements AuthMailHooks
     sendVerification(to : string, url : string) : void { this.verifications.push({ to, url }); }
 }
 
-function post(app : Hono, path : string, body : unknown) : Promise<Response>
+async function post(app : Hono, path : string, body : unknown) : Promise<Response>
 {
     return app.request(`${ ORIGIN }${ path }`, {
         method: 'POST',

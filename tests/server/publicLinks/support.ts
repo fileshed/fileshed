@@ -257,7 +257,7 @@ export async function createFolder(booted : BootedServeApp, user : TestUser, nam
     return res.json() as Promise<NodeResponse>;
 }
 
-export function trashNode(booted : BootedServeApp, user : TestUser, nodeID : string) : Promise<Response>
+export async function trashNode(booted : BootedServeApp, user : TestUser, nodeID : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/nodes/${ nodeID }/trash`, {
         method: 'POST',
@@ -328,7 +328,7 @@ export async function seedEmptyFile(booted : BootedServeApp, user : TestUser, na
 
 // Minting takes no body: a link has nothing to configure. `body`, when a spec passes one, is what that spec is about --
 // proving the endpoint gives it no meaning.
-export function createLink(
+export async function createLink(
     booted : BootedServeApp,
     user : TestUser,
     nodeID : string,
@@ -345,14 +345,14 @@ export function createLink(
     });
 }
 
-export function listLinks(booted : BootedServeApp, user : TestUser, nodeID : string) : Promise<Response>
+export async function listLinks(booted : BootedServeApp, user : TestUser, nodeID : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/nodes/${ nodeID }/links`, {
         headers: { cookie: user.cookie },
     });
 }
 
-export function revokeLink(booted : BootedServeApp, user : TestUser, linkID : string) : Promise<Response>
+export async function revokeLink(booted : BootedServeApp, user : TestUser, linkID : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/links/${ linkID }`, {
         method: 'DELETE',
@@ -381,7 +381,7 @@ function serveHeaders(extra : ServeHeaders, cookie ?: string) : Record<string, s
 
 // GET /d/:token -- anonymous, no cookie by design. `query` is the raw query string, spelled out at the call site
 // because the exact spelling is what the disposition specs are asserting.
-export function getDirect(
+export async function getDirect(
     booted : BootedServeApp,
     token : string,
     extra : ServeHeaders = {},
@@ -391,7 +391,7 @@ export function getDirect(
     return booted.app.request(`${ ORIGIN }/d/${ token }${ query }`, { headers: serveHeaders(extra) });
 }
 
-export function getDownload(
+export async function getDownload(
     booted : BootedServeApp,
     cookie : string | undefined,
     nodeID : string,

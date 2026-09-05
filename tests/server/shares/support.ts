@@ -167,7 +167,7 @@ export async function makeUser(booted : BootedShareApp, email : string, name = '
 // HTTP
 //----------------------------------------------------------------------------------------------------------------------
 
-export function request(
+export async function request(
     app : Hono,
     method : string,
     path : string,

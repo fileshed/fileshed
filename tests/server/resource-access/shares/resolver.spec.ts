@@ -130,6 +130,7 @@ describe('ShareRA.effectiveRole', () =>
         await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
         await grant('f', 'grantee', 'editor');
         const [ share ] = await shares.listByNode('f');
+        if(share === undefined) { throw new Error('the grant was never created'); }
         await shares.deleteShare(share.id);
 
         expect(await shares.effectiveRole('grantee', 'f')).toBeNull();

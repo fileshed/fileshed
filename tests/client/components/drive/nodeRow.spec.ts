@@ -15,6 +15,7 @@ import NodeRow from '@client/components/drive/nodeRow.vue';
 function fileNode(ownerID = 'u1') : NodeResponse
 {
     return {
+        sharing: null,
         id: 'n1',
         name: 'notes.txt',
         ownerID,
@@ -33,6 +34,7 @@ function fileNode(ownerID = 'u1') : NodeResponse
 function linkNode(ownerID : string, target : LinkTarget | null) : NodeResponse
 {
     return {
+        sharing: null,
         id: 'l1',
         name: 'a link',
         ownerID,

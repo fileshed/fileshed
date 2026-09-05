@@ -42,12 +42,12 @@ function file(id : string, facts : FileFacts = {}) : NodeResponse
 
 function folder(id : string, name : string = id) : NodeResponse
 {
-    return { ...BASE, id, name, type: 'folder', trashedAt: null };
+    return { sharing: null, ...BASE, id, name, type: 'folder', trashedAt: null };
 }
 
 function link(id : string, name : string = id) : NodeResponse
 {
-    return { ...BASE, id, name, type: 'link', targetNodeID: 't1', target: null };
+    return { sharing: null, ...BASE, id, name, type: 'link', targetNodeID: 't1', target: null };
 }
 
 function order(nodes : readonly NodeResponse[]) : string[]

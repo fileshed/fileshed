@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
-import { MAX_PLACEMENT_DEPTH, NotFoundError } from '@fileshed/core';
+import { type ChildrenQuery, MAX_PLACEMENT_DEPTH, NotFoundError } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -219,7 +219,7 @@ describe('NodeManager trashed visibility', () =>
     {
         await seedTrashedSharedFolder();
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const query = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+        const query : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         await expect(manager.children(testSession({ id: 'bob' }), 'dir', query)).rejects.toThrow(NotFoundError);
         await expect(manager.children(testSession({ id: 'alice' }), 'dir', query)).resolves.toBeDefined();
@@ -240,7 +240,7 @@ describe('NodeManager.children owner facet', () =>
         await ra.insert(fileNode({ id: 'theirs', ownerID: 'bob', blobID: 'sha-a', parentID: 'p' }));
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+        const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const unfiltered = await manager.children(testSession({ id: 'alice' }), 'p', base);
         const byBob = await manager.children(testSession({ id: 'alice' }), 'p', { ...base, ownerID: 'bob' });
@@ -278,7 +278,7 @@ describe('NodeManager.children — link row owner attribution', () =>
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+        const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p', base);
         const link = result.nodes.find((node) => node.id === 'lnk');
@@ -298,7 +298,7 @@ describe('NodeManager.children — link row owner attribution', () =>
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', parentID: 'p2', targetNodeID: 'unreachable' }));
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+        const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p2', base);
         const link = result.nodes.find((node) => node.id === 'deadlnk');
@@ -331,7 +331,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+        const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p', base);
 
@@ -348,7 +348,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', parentID: 'p2', targetNodeID: 'unreachable' }));
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+        const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p2', base);
 
@@ -375,7 +375,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         await ra.insert(linkNode({ id: 'lnk2', ownerID: 'alice', parentID: 'p3', targetNodeID: 'bobTarget' }));
 
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+        const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p3', base);
 
@@ -387,7 +387,7 @@ describe('NodeManager.children owner facet — link targets', () =>
 
 describe('NodeManager.children through a folder link', () =>
 {
-    const base = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] } as const;
+    const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
     async function seedShare(
         nodeID : string,
@@ -544,6 +544,7 @@ describe('NodeManager placement depth', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         const created = await manager.createFolder(testActor({ id: 'alice' }), {
+            type: 'folder',
             name: 'deepest',
             parentID: `chain-${ deepestLegalParent }`,
         });
@@ -557,6 +558,7 @@ describe('NodeManager placement depth', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
 
         const attempt = manager.createFolder(testActor({ id: 'alice' }), {
+            type: 'folder',
             name: 'one-too-deep',
             parentID: `chain-${ MAX_PLACEMENT_DEPTH }`,
         });

@@ -19,7 +19,7 @@ import { type BootedApp, ORIGIN, bootTestApp, cookieFrom, makeAdmin, signIn, sig
 
 const PASSWORD = 'correct-horse-battery';
 
-function action(app : Hono, path : string, cookie ?: string, body ?: unknown) : Promise<Response>
+async function action(app : Hono, path : string, cookie ?: string, body ?: unknown) : Promise<Response>
 {
     return app.request(`${ ORIGIN }${ path }`, {
         method: 'POST',

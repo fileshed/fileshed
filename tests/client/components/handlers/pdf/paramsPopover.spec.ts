@@ -135,8 +135,8 @@ describe('PdfParamsPopover ink', () =>
 
         await wrapper.get('[aria-label="Red"]').trigger('click');
         const sliders = wrapper.findAll('.slider');
-        await sliders[0].setValue('10');
-        await sliders[1].setValue('40');
+        await sliders[0]?.setValue('10');
+        await sliders[1]?.setValue('40');
 
         expect(store.editorParams.ink.color).toBe('#E4463F');
         expect(store.editorParams.ink.thickness).toBe(10);

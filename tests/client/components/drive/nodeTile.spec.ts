@@ -38,7 +38,7 @@ function fileNode(sharing : NodeSharing | null = null) : NodeResponse
 
 function linkNode(target : LinkTarget | null) : NodeResponse
 {
-    return { ...BASE, name: 'a link', type: 'link', targetNodeID: 't1', target };
+    return { sharing: null, ...BASE, name: 'a link', type: 'link', targetNodeID: 't1', target };
 }
 
 const STUBS = {

@@ -61,12 +61,22 @@ const BASE = { ownerID: ME_ID, parentID: null, createdAt: ISO, updatedAt: ISO, r
 
 function fileNode(id : string) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'file', blobID: 'b1', size: 100, mimeType: 'text/plain', trashedAt: ISO };
+    return {
+        ...BASE,
+        id,
+        name: id,
+        type: 'file',
+        blobID: 'b1',
+        size: 100,
+        mimeType: 'text/plain',
+        trashedAt: ISO,
+        sharing: null,
+    };
 }
 
 function folderNode(id : string) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'folder', trashedAt: ISO };
+    return { sharing: null, ...BASE, id, name: id, type: 'folder', trashedAt: ISO };
 }
 
 function page(nodes : NodeResponse[]) : NodeListResponse

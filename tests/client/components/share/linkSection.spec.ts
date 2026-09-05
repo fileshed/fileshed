@@ -37,6 +37,7 @@ const ISO = '2026-07-01T00:00:00.000Z';
 function fileNode() : NodeResponse
 {
     return {
+        sharing: null,
         id: 'f1',
         name: 'report.txt',
         ownerID: 'owner1',

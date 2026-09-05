@@ -37,7 +37,18 @@ const BASE = { parentID: null, createdAt: ISO, updatedAt: ISO, role: 'viewer' as
 
 function fileNode(id : string, name : string, ownerID : string, mimeType = 'application/octet-stream') : NodeResponse
 {
-    return { ...BASE, id, name, ownerID, type: 'file', blobID: 'b1', size: 100, mimeType, trashedAt: null };
+    return {
+        ...BASE,
+        id,
+        name,
+        ownerID,
+        type: 'file',
+        blobID: 'b1',
+        size: 100,
+        mimeType,
+        trashedAt: null,
+        sharing: null,
+    };
 }
 
 function textFileNode(id : string, name : string, ownerID = 'owner1') : NodeResponse
@@ -47,7 +58,7 @@ function textFileNode(id : string, name : string, ownerID = 'owner1') : NodeResp
 
 function folderNode(id : string, name : string, ownerID = 'owner1') : NodeResponse
 {
-    return { ...BASE, id, name, ownerID, type: 'folder', trashedAt: null };
+    return { sharing: null, ...BASE, id, name, ownerID, type: 'folder', trashedAt: null };
 }
 
 // Every hit needs a location, so the default is the plainest one: the caller's own files root, no folders between.

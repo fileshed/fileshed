@@ -178,7 +178,7 @@ describe('GET /api/access-requests', () =>
         const res = await request(booted.app, 'GET', '/api/access-requests', owner.cookie);
         const body = await res.json() as { incoming : { requester : { image : string | null } }[] };
 
-        expect(body.incoming[0].requester.image).toBe(`/api/avatars/${ sha256 }`);
+        expect(body.incoming[0]?.requester.image).toBe(`/api/avatars/${ sha256 }`);
     });
 
     it('carries the requester\'s message through the owner\'s incoming and requester\'s outgoing view', async () =>

@@ -41,6 +41,7 @@ const HEADER_ID = 'editor-header-center';
 function fileNode(role : Role = 'owner') : NodeResponse
 {
     return {
+        sharing: null,
         id: 'f1',
         name: 'contract.pdf',
         ownerID: 'u1',

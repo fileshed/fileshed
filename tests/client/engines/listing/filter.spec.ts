@@ -34,12 +34,12 @@ function file(id : string, mimeType : string, name : string = id, updatedAt : st
 
 function folder(id : string) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'folder', trashedAt: null };
+    return { sharing: null, ...BASE, id, name: id, type: 'folder', trashedAt: null };
 }
 
 function link(id : string) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'link', targetNodeID: 't1', target: null };
+    return { sharing: null, ...BASE, id, name: id, type: 'link', targetNodeID: 't1', target: null };
 }
 
 function ids(nodes : readonly NodeResponse[]) : string[]

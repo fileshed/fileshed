@@ -156,6 +156,7 @@ describe('Admin AuthenticationTab', () =>
         await flushPromises();
 
         const [ gitlabCard, polarCard ] = wrapper.findAll('.provider-card');
+        if(gitlabCard === undefined || polarCard === undefined) { throw new Error('no provider cards'); }
 
         const link = gitlabCard.find('a');
         expect(link.exists()).toBe(true);

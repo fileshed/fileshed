@@ -87,7 +87,7 @@ afterEach(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function getStatus(cookie ?: string) : Promise<Response>
+async function getStatus(cookie ?: string) : Promise<Response>
 {
     const headers : Record<string, string> = {};
     if(cookie !== undefined) { headers['cookie'] = cookie; }

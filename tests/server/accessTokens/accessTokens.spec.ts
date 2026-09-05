@@ -100,7 +100,7 @@ async function listTokens(user : TestUser) : Promise<AccessTokenResponse[]>
     return (await res.json() as AccessTokenListResponse).accessTokens;
 }
 
-function bearerRequest(path : string, token : string, init : RequestInit = {}) : Promise<Response>
+async function bearerRequest(path : string, token : string, init : RequestInit = {}) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }${ path }`, {
         ...init,

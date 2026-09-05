@@ -38,6 +38,7 @@ const HEADER_ID = 'editor-header-center';
 function fileNode(overrides : Partial<{ id : string; name : string; mimeType : string }> = {}) : NodeResponse
 {
     return {
+        sharing: null,
         id: overrides.id ?? 'f1',
         name: overrides.name ?? 'song.mp3',
         ownerID: 'u1',

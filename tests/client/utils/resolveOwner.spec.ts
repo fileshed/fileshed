@@ -27,13 +27,20 @@ const BASE = {
 function fileNode(ownerID : string) : NodeResponse
 {
     return {
-        ...BASE, ownerID, type: 'file', blobID: 'b1', size: 10, mimeType: 'text/plain', trashedAt: null,
+        sharing: null,
+        ...BASE,
+        ownerID,
+        type: 'file',
+        blobID: 'b1',
+        size: 10,
+        mimeType: 'text/plain',
+        trashedAt: null,
     };
 }
 
 function linkNode(ownerID : string, target : LinkTarget | null) : NodeResponse
 {
-    return { ...BASE, ownerID, type: 'link', targetNodeID: 't1', target };
+    return { sharing: null, ...BASE, ownerID, type: 'link', targetNodeID: 't1', target };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -88,6 +88,7 @@ function incomingRequest(
 function fileNode() : NodeResponse
 {
     return {
+        sharing: null,
         id: 'f1',
         name: 'report.txt',
         ownerID: 'owner1',

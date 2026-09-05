@@ -80,6 +80,7 @@ const ISO = '2026-07-01T00:00:00.000Z';
 function folderNode(id : string, parentID : string | null = null, name : string = id) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: ME_ID,
@@ -119,6 +120,7 @@ function fileNode(
 function linkNode(id : string, parentID : string | null, name : string, targetNodeID : string) : NodeResponse
 {
     return {
+        sharing: null,
         id,
         name,
         ownerID: ME_ID,
