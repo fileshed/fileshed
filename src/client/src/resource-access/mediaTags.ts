@@ -11,6 +11,9 @@
 
 import { parseWebStream, selectCover } from 'music-metadata';
 
+// Models
+import { ARTWORK_MIME_TYPES } from '@fileshed/core';
+
 // Resource Access
 import { downloadUrl } from './downloads.ts';
 
@@ -22,6 +25,19 @@ export interface MediaTags
     artist : string | null;
     album : string | null;
     artworkUrl : string | null;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// An object URL takes its type from whatever is handed to it, and the cover's format comes off the tag frame verbatim.
+// A blob: URL has no HTTP response, so no header can ever say what it is -- the allowlist is the only thing that can.
+// A cover claiming anything else is dropped rather than coerced: it would not render under a corrected type anyway.
+function artworkUrlOf(data : Uint8Array<ArrayBuffer>, format : string) : string | null
+{
+    const [ media ] = format.toLowerCase().split(';');
+    if(media === undefined || !(ARTWORK_MIME_TYPES as readonly string[]).includes(media.trim())) { return null; }
+
+    return URL.createObjectURL(new Blob([ data ], { type: media.trim() }));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -52,9 +68,7 @@ export async function readMediaTags(nodeID : string) : Promise<MediaTags | null>
             title: common.title?.trim() || null,
             artist: (common.artist ?? common.artists?.[0])?.trim() || null,
             album: common.album?.trim() || null,
-            artworkUrl: cover === null
-                ? null
-                : URL.createObjectURL(new Blob([ new Uint8Array(cover.data) ], { type: cover.format })),
+            artworkUrl: cover === null ? null : artworkUrlOf(new Uint8Array(cover.data), cover.format),
         };
 
         const empty = tags.title === null && tags.artist === null && tags.album === null && tags.artworkUrl === null;

@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Support
 import { ApiClient, type ServerHandle, sha256Of, spawnServer } from './support.ts';
+import { pngBytes } from '../server/support/imageBytes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -90,7 +91,7 @@ describe('branding lifecycle', () =>
 
     it('serves an uploaded logo to anonymous visitors and advertises its hash', async () =>
     {
-        const bytes = Buffer.from('pretend-this-is-a-png');
+        const bytes = pngBytes('fileshed-e2e-logo');
         const uploaded = await admin.postBytes('/api/admin/branding/logo', bytes, 'image/png');
         expect(uploaded.status).toBe(200);
 

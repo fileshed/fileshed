@@ -162,6 +162,27 @@ describe('anonymous /d/:token', () =>
         expect(bytes.equals(await readBlobFile(server.storageRoot, sha))).toBe(true);
     });
 
+    // The rule that keeps this a file store rather than somewhere to host a site. A public link is a URL anyone can
+    // be sent, answering from the same origin the signed-in app lives on, so an uploaded page rendered there would
+    // run on that origin with the session of whoever opened it. It is handed over as text instead -- and the
+    // download still carries the type it was stored under, because a saved file is not a rendered one.
+    it('hands an uploaded page over as text rather than rendering it', async () =>
+    {
+        const page = Buffer.from('<h1>not a website</h1><script>alert(1)</script>');
+        const node = await upload(owner, 'page.html', page, 'text/html');
+
+        const minted = await owner.post(`/api/nodes/${ node.id }/links`);
+        const token = ((await minted.json()) as { token : string }).token;
+
+        const rendered = await direct(token);
+        await rendered.arrayBuffer();
+        expect(rendered.headers.get('content-type') ?? '').toMatch(/^text\/plain/);
+
+        const saved = await direct(token, {}, '?download');
+        await saved.arrayBuffer();
+        expect(saved.headers.get('content-type')).toBe('text/html');
+    });
+
     // A public link is a URL anyone can be sent, and it answers from the same origin the signed-in app lives on. An
     // uploaded page rendered there without these would be running on that origin, able to spend the session of
     // whoever opened it -- so the headers that stop it are asserted on the wire, not assumed from the code.

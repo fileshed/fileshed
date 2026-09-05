@@ -81,6 +81,41 @@ describe('readMediaTags', () =>
         });
     });
 
+    // The cover's format comes off the tag frame verbatim and becomes the type of a blob: URL. That URL has no HTTP
+    // response behind it, so no response header can ever say what the browser should treat it as -- the allowlist is
+    // the only thing that can, and a type outside it means no artwork rather than an object URL of unknown kind.
+    it('drops artwork whose declared format is outside the allowlist', async () =>
+    {
+        parseWebStreamMock.mockResolvedValue(metadataWith({ title: 'Neon Skyline', picture: [ {} ] }));
+        selectCoverMock.mockReturnValue({ format: 'text/html', data: new Uint8Array([ 1, 2 ]) });
+
+        const tags = await readMediaTags('n1');
+
+        expect(tags?.artworkUrl).toBeNull();
+        expect(createObjectURLMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps artwork whose format carries a parameter, on the media type alone', async () =>
+    {
+        parseWebStreamMock.mockResolvedValue(metadataWith({ title: 'Neon Skyline', picture: [ {} ] }));
+        selectCoverMock.mockReturnValue({ format: 'IMAGE/JPEG; charset=binary', data: new Uint8Array([ 1, 2 ]) });
+
+        const tags = await readMediaTags('n1');
+
+        expect(tags?.artworkUrl).toBe('blob:fake-cover');
+        expect(createObjectURLMock.mock.calls[0]?.[0]).toMatchObject({ type: 'image/jpeg' });
+    });
+
+    // A file whose only tag was an artwork the allowlist refused carries nothing renderable, which is the same
+    // answer as a file with no tags at all.
+    it('resolves null when refused artwork was the only tag', async () =>
+    {
+        parseWebStreamMock.mockResolvedValue(metadataWith({ picture: [ {} ] }));
+        selectCoverMock.mockReturnValue({ format: 'text/html', data: new Uint8Array([ 1, 2 ]) });
+
+        expect(await readMediaTags('n1')).toBeNull();
+    });
+
     it('falls back to the first of the artists list when no single artist is tagged', async () =>
     {
         parseWebStreamMock.mockResolvedValue(metadataWith({

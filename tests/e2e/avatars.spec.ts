@@ -20,6 +20,7 @@ import {
     spawnServer,
     withDb,
 } from './support.ts';
+import { jpegBytes, pngBytes } from '../server/support/imageBytes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -39,9 +40,11 @@ afterAll(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// The upload path checks the leading bytes against the declared type, so a fixture has to open like the image it
+// claims to be; the seed rides behind the header so two fixtures of one format still hash differently.
 function avatarBytes(seed : string) : Uint8Array
 {
-    return new TextEncoder().encode(`fileshed-e2e-avatar-${ seed }`);
+    return new Uint8Array(pngBytes(`fileshed-e2e-avatar-${ seed }`));
 }
 
 async function signedIn(email : string) : Promise<ApiClient>
@@ -105,7 +108,7 @@ describe('avatar upload and serve', () =>
     {
         const client = await signedIn('avatar-replace@example.com');
         const first = avatarBytes('replace-first');
-        const second = avatarBytes('replace-second');
+        const second = new Uint8Array(jpegBytes('fileshed-e2e-avatar-replace-second'));
         const firstSha = sha256Of(first);
         const secondSha = sha256Of(second);
 

@@ -25,6 +25,7 @@ import { BrandingManager } from '@server/managers/branding.ts';
 
 // Support
 import { type BootedApp, bootTestApp } from '../auth/support.ts';
+import { icoBytes, pngBytes, svgBytes } from '../support/imageBytes.ts';
 import { testActor } from '../nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -107,8 +108,8 @@ describe('BrandingManager', () =>
     it('stores a logo content-addressed, replaces it with graveyarding, and deletes it clean', async () =>
     {
         const blob = new BlobRA(booted.handle);
-        const first = Buffer.from('first-logo-bytes');
-        const second = Buffer.from('second-logo-bytes');
+        const first = pngBytes('first-logo');
+        const second = svgBytes('second-logo');
 
         await manager.setLogo(admin, Readable.from(first), 'image/png', first.length);
         const firstSha = await manager.logoSha();
@@ -130,7 +131,7 @@ describe('BrandingManager', () =>
     it('never graveyards the logo blob from another reference dropping -- the pin holds', async () =>
     {
         const blob = new BlobRA(booted.handle);
-        const bytes = Buffer.from('shared-logo-bytes');
+        const bytes = pngBytes('shared-logo');
 
         await manager.setLogo(admin, Readable.from(bytes), 'image/png', bytes.length);
         const sha = await manager.logoSha() ?? '';
@@ -154,9 +155,36 @@ describe('BrandingManager', () =>
         expect(await manager.logoSha()).toBeNull();
     });
 
+    // The logo lands in the same content-addressed store as file content and is served back under the type the upload
+    // declared, so an unchecked declaration means the store quietly holds attacker HTML addressed by hash.
+    it('refuses bytes that are not the image they claim to be, storing nothing', async () =>
+    {
+        const html = Buffer.from('<!DOCTYPE html><html><body><script>alert(1)</script></body></html>');
+
+        await expect(manager.setLogo(admin, Readable.from(html), 'image/png', html.length))
+            .rejects.toThrow(BadRequestError);
+        await expect(manager.setLogo(admin, Readable.from(html), 'image/svg+xml', html.length))
+            .rejects.toThrow(BadRequestError);
+
+        expect(await manager.logoSha()).toBeNull();
+    });
+
+    // ICO is one container under two registered mime types, and the favicon path wants it -- refusing either spelling
+    // would refuse a legitimate upload.
+    it('accepts an ICO under both of its registered mime types', async () =>
+    {
+        const bytes = icoBytes('favicon');
+
+        await manager.setLogo(admin, Readable.from(bytes), 'image/x-icon', bytes.length);
+        expect((await manager.serveLogo())?.mime).toBe('image/x-icon');
+
+        await manager.setLogo(admin, Readable.from(bytes), 'image/vnd.microsoft.icon', bytes.length);
+        expect((await manager.serveLogo())?.mime).toBe('image/vnd.microsoft.icon');
+    });
+
     it('guards the logo writes behind the admin gate', async () =>
     {
-        await expect(manager.setLogo(civilian, Readable.from(Buffer.from('x')), 'image/png', 1))
+        await expect(manager.setLogo(civilian, Readable.from(pngBytes()), 'image/png', pngBytes().length))
             .rejects.toThrow(ForbiddenError);
         await expect(manager.deleteLogo(civilian)).rejects.toThrow(ForbiddenError);
     });

@@ -29,6 +29,7 @@ import {
 
 // Engines
 import { renderBrandingCSS } from '../engines/branding.ts';
+import { mimeMatchesBytes } from '../engines/imageFormat.ts';
 
 // Resource Access
 import { BlobRA } from '../resource-access/blob/index.ts';
@@ -161,6 +162,15 @@ export class BrandingManager
         }
 
         const bytes = await collectCapped(source, maxBytes, 'The logo exceeds the maximum size.');
+
+        // Same reasoning as the avatar: the bytes go into the shared content-addressed store and come back out under
+        // the declared type, so the declaration has to be true. SVG passes as a container check only -- what an SVG may
+        // contain is why this format is admin-only.
+        if(!mimeMatchesBytes(media, bytes))
+        {
+            throw new BadRequestError(`Those bytes are not a ${ media } image.`);
+        }
+
         const sha256 = createHash('sha256')
             .update(bytes)
             .digest('hex');

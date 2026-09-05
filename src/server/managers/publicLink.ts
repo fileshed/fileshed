@@ -10,8 +10,8 @@
 //   2. Byte serving -- the two consumers that stream a file node's bytes: the anonymous /d/:token direct link, and the
 //      authed /api/nodes/:id/download endpoint. Both funnel through streamFileNode, which does the whole HTTP/1.1
 //      byte-serving contract: 200 or 206, ETag = the blob sha256 (strong), If-None-Match -> 304, Accept-Ranges
-//      bytes, correct Content-Length, Content-Range on partials, 416 on an unsatisfiable range, Content-Type from the
-//      node, and Content-Disposition per the caller's inline/attachment choice.
+//      bytes, correct Content-Length, Content-Range on partials, 416 on an unsatisfiable range, Content-Type decided
+//      by servedContentType, and Content-Disposition per the caller's inline/attachment choice.
 //
 // The download endpoint's authorization is an injected role resolver, so this manager never hard-codes an owner check
 // for reads: viewer suffices to download. The resolver is required -- there is deliberately no ownership-only
@@ -40,6 +40,9 @@ import {
     isDirectOwner,
     isValidMimeType,
 } from '@fileshed/core';
+
+// Engines
+import { servedContentType } from '../engines/servedContentType.ts';
 
 // Resource Access
 import type { SessionUser } from '../resource-access/auth.ts';
@@ -148,10 +151,10 @@ const NON_ASCII_GLOBAL = /[^\x20-\x7e]/g;
 // Content-Disposition per RFC 6266: an inline hotlink or a forced download, always with a filename. A non-ASCII
 // name can't ride the quoted `filename` param, so a sanitized ASCII fallback is paired with an RFC 5987 `filename*`
 // carrying the real UTF-8 name percent-encoded. Quotes and backslashes are stripped from the fallback so they cannot
-// break out of the quoted-string.
+// break out of the quoted-string, and forward slashes with them so the fallback names a file rather than a path.
 function contentDisposition(disposition : ContentDisposition, filename : string) : string
 {
-    const asciiFallback = filename.replace(NON_ASCII_GLOBAL, '_').replace(/["\\]/g, '_');
+    const asciiFallback = filename.replace(NON_ASCII_GLOBAL, '_').replace(/["\\/]/g, '_');
 
     if(NON_ASCII.test(filename))
     {
@@ -350,6 +353,7 @@ export class PublicLinkManager
         }
 
         const disposition = contentDisposition(options.disposition, node.name);
+        const contentType = servedContentType(servableMimeType(node.mimeType), options.disposition);
         const location : BlobLocation = { backendID: blob.backendID, storageKey: blob.storageKey };
 
         if(plan.kind === 'full')
@@ -360,7 +364,7 @@ export class PublicLinkManager
                     'accept-ranges': 'bytes',
                     'content-disposition': disposition,
                     'content-length': String(blob.size),
-                    'content-type': node.mimeType,
+                    'content-type': contentType,
                     etag,
                 },
                 stream: await this.#open(location),
@@ -375,7 +379,7 @@ export class PublicLinkManager
                 'content-disposition': disposition,
                 'content-length': String(length),
                 'content-range': `bytes ${ offset }-${ (offset + length) - 1 }/${ blob.size }`,
-                'content-type': node.mimeType,
+                'content-type': contentType,
                 etag,
             },
             stream: await this.#open(location, { offset, length }),

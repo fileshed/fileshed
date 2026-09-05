@@ -11,6 +11,8 @@ import { Readable } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MEDIA_TAG_MAX_LENGTH } from '@fileshed/core';
+
 // Managers
 import { MediaTagManager } from '@server/managers/mediaTags.ts';
 
@@ -39,6 +41,24 @@ describe('extractTags', () =>
         const tags = await extractTags(Readable.from(Buffer.from('not audio at all')));
 
         expect(tags).toEqual({ title: null, artist: null, album: null });
+    });
+
+    // A tag frame carries whatever the tagger wrote, and what lands here is stored and returned in search responses.
+    // Storing the front of a tag is enough to name a track; storing all of a megabyte-long one is the uploader
+    // choosing how much of everyone's listing they occupy.
+    it('stores the front of an outsized tag rather than all of it', async () =>
+    {
+        const bytes = taggedMp3({
+            title: 'T'.repeat(MEDIA_TAG_MAX_LENGTH * 2),
+            artist: 'A'.repeat(MEDIA_TAG_MAX_LENGTH + 1),
+            album: 'Fixtures',
+        });
+
+        const tags = await extractTags(Readable.from(bytes));
+
+        expect(tags.title).toBe('T'.repeat(MEDIA_TAG_MAX_LENGTH));
+        expect(tags.artist).toBe('A'.repeat(MEDIA_TAG_MAX_LENGTH));
+        expect(tags.album).toBe('Fixtures');
     });
 });
 

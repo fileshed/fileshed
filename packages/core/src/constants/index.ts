@@ -21,6 +21,7 @@ export * from './publicLink.ts';
 export * from './quota.ts';
 export * from './rateLimit.ts';
 export * from './request.ts';
+export * from './servedContent.ts';
 export * from './search.ts';
 export * from './time.ts';
 export * from './tree.ts';

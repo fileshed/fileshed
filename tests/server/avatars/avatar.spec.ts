@@ -31,6 +31,7 @@ import {
     seedUnreferencedBlob,
     sha256Of,
 } from './support.ts';
+import { REAL_PNG, gifBytes, jpegBytes, pngBytes, svgBytes, webpBytes } from '../support/imageBytes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -57,7 +58,7 @@ describe('POST /api/me/avatar', () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        const bytes = Buffer.from('an avatar image, pretend it is a PNG');
+        const bytes = pngBytes('the first upload');
         const sha256 = sha256Of(bytes);
 
         const res = await postAvatar(booted.app, user.cookie, bytes, 'image/png');
@@ -85,18 +86,58 @@ describe('POST /api/me/avatar', () =>
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
 
-        const res = await postAvatar(booted.app, user.cookie, Buffer.from('<svg/>'), 'image/svg+xml');
+        const res = await postAvatar(booted.app, user.cookie, svgBytes('a logo'), 'image/svg+xml');
 
         expect(res.status).toBe(400);
         expect(await avatarRow(booted, user.id)).toEqual({ avatar_sha256: null, avatar_mime: null });
+    });
+
+    // The declared type is what the store serves these bytes back under, and the store they land in is the same
+    // content-addressed one that holds file content -- so a declaration nothing checks means holding whatever the
+    // uploader sent, addressed by hash and labelled an image.
+    it('rejects bytes that are not the image they claim to be, and stores nothing', async () =>
+    {
+        const booted = await boot();
+        const user = await makeUser(booted, 'a@example.com');
+        const html = Buffer.from('<!DOCTYPE html><html><body><script>alert(1)</script></body></html>');
+
+        const res = await postAvatar(booted.app, user.cookie, html, 'image/png');
+
+        expect(res.status).toBe(400);
+        expect(await avatarRow(booted, user.id)).toEqual({ avatar_sha256: null, avatar_mime: null });
+        expect(await bytesExist(booted, sha256Of(html))).toBe(false);
+    });
+
+    // Both are whitelisted images, so the whitelist alone says yes -- what makes this wrong is that the store would
+    // then serve a GIF as a PNG.
+    it('rejects one whitelisted image declared as another', async () =>
+    {
+        const booted = await boot();
+        const user = await makeUser(booted, 'a@example.com');
+
+        const res = await postAvatar(booted.app, user.cookie, gifBytes('a gif'), 'image/png');
+
+        expect(res.status).toBe(400);
+        expect(await avatarRow(booted, user.id)).toEqual({ avatar_sha256: null, avatar_mime: null });
+    });
+
+    it('accepts a complete real image', async () =>
+    {
+        const booted = await boot();
+        const user = await makeUser(booted, 'a@example.com');
+
+        const res = await postAvatar(booted.app, user.cookie, REAL_PNG, 'image/png');
+
+        expect(res.status).toBe(200);
+        expect((await avatarRow(booted, user.id)).avatar_sha256).toBe(sha256Of(REAL_PNG));
     });
 
     it('graveyards the previous avatar blob when a replacement leaves it unreferenced', async () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        const first = Buffer.from('first avatar');
-        const second = Buffer.from('second avatar');
+        const first = pngBytes('first avatar');
+        const second = jpegBytes('second avatar');
         const firstSha = sha256Of(first);
         const secondSha = sha256Of(second);
 
@@ -113,13 +154,13 @@ describe('POST /api/me/avatar', () =>
         const booted = await boot();
         const one = await makeUser(booted, 'one@example.com');
         const two = await makeUser(booted, 'two@example.com');
-        const shared = Buffer.from('the same avatar image');
+        const shared = pngBytes('the same avatar image');
         const sharedSha = sha256Of(shared);
 
         // Both users adopt the identical image (one blob, deduped), then user one moves on.
         await postAvatar(booted.app, one.cookie, shared, 'image/png');
         await postAvatar(booted.app, two.cookie, shared, 'image/png');
-        await postAvatar(booted.app, one.cookie, Buffer.from('a different image'), 'image/png');
+        await postAvatar(booted.app, one.cookie, pngBytes('a different image'), 'image/png');
 
         expect(await blobDeletedAt(booted, sharedSha)).toBeNull();
         expect(await bytesExist(booted, sharedSha)).toBe(true);
@@ -134,7 +175,7 @@ describe('DELETE /api/me/avatar', () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        const bytes = Buffer.from('an avatar to remove');
+        const bytes = pngBytes('an avatar to remove');
         const sha256 = sha256Of(bytes);
         await postAvatar(booted.app, user.cookie, bytes, 'image/png');
 
@@ -149,7 +190,7 @@ describe('DELETE /api/me/avatar', () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        await postAvatar(booted.app, user.cookie, Buffer.from('an avatar'), 'image/png');
+        await postAvatar(booted.app, user.cookie, pngBytes('an avatar'), 'image/png');
 
         await deleteAvatar(booted.app, user.cookie);
         const me = await (await getMe(booted.app, user.cookie)).json();
@@ -166,7 +207,7 @@ describe('GET /api/avatars/:sha256', () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        const bytes = Buffer.from('the avatar bytes to serve back');
+        const bytes = webpBytes('serve back');
         const sha256 = sha256Of(bytes);
         await postAvatar(booted.app, user.cookie, bytes, 'image/webp');
 
@@ -196,7 +237,7 @@ describe('GET /api/avatars/:sha256', () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        const bytes = Buffer.from('an avatar');
+        const bytes = pngBytes('an avatar');
         const sha256 = sha256Of(bytes);
         await postAvatar(booted.app, user.cookie, bytes, 'image/png');
 
@@ -214,7 +255,7 @@ describe('avatar GC interaction', () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        const bytes = Buffer.from('an avatar GC must not touch');
+        const bytes = pngBytes('an avatar GC must not touch');
         const sha256 = sha256Of(bytes);
         await postAvatar(booted.app, user.cookie, bytes, 'image/png');
 
@@ -229,7 +270,7 @@ describe('avatar GC interaction', () =>
     {
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
-        const bytes = Buffer.from('an avatar to reap after removal');
+        const bytes = pngBytes('an avatar to reap after removal');
         const sha256 = sha256Of(bytes);
         await postAvatar(booted.app, user.cookie, bytes, 'image/png');
         await deleteAvatar(booted.app, user.cookie);

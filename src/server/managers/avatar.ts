@@ -17,6 +17,9 @@ import { Readable } from 'node:stream';
 // Models
 import { type AvatarMimeType, BadRequestError, PayloadTooLargeError, avatarMimeTypes } from '@fileshed/core';
 
+// Engines
+import { mimeMatchesBytes } from '../engines/imageFormat.ts';
+
 // Resource Access
 import { BlobRA } from '../resource-access/blob/index.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
@@ -94,12 +97,22 @@ export class AvatarManager
         }
 
         const bytes = await collectCapped(source, maxBytes, 'Avatar exceeds the maximum size.');
+
+        // The header is a claim; the bytes are the fact. They are served back under the declared type, and the store
+        // they land in is content-addressed and shared with file content, so a claim nothing checks means holding
+        // whatever the uploader sent under a name that says otherwise.
+        if(!mimeMatchesBytes(media, bytes))
+        {
+            throw new BadRequestError(`Those bytes are not a ${ media } image.`);
+        }
+
         const sha256 = createHash('sha256')
             .update(bytes)
             .digest('hex');
 
         // Bytes first, outside the transaction (the store verifies them against the hash while writing); the record and
-        // the reference move commit together below. GC never touches a live record, so this ordering strands nothing.
+        // the reference move commit together below. A transaction that refuses therefore leaves the bytes behind with
+        // no record naming them -- which is what the GC sweep's reconciling pass exists to find and reclaim.
         const location = await this.#blob.put(sha256, Readable.from(bytes), bytes.length);
 
         await this.#handle.db.transaction().execute(async (trx) =>

@@ -14,6 +14,9 @@ import type { Readable } from 'node:stream';
 import { sql } from 'kysely';
 import { parseStream } from 'music-metadata';
 
+// Models
+import { MEDIA_TAG_MAX_LENGTH } from '@fileshed/core';
+
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
 
@@ -34,6 +37,15 @@ export interface UntaggedBlob
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// A tag frame carries whatever the tagger wrote, and these rows ride into search responses, so what is stored is the
+// front of a tag rather than all of one.
+function capped(value : string | undefined) : string | null
+{
+    if(value === undefined) { return null; }
+
+    return value.slice(0, MEDIA_TAG_MAX_LENGTH);
+}
+
 // Pull the three searchable tags out of an audio stream. The parser SNIFFS the container rather than trusting a
 // declared mime -- stored mimes lie (the playlists lesson), and music-metadata's mime-hinted stream path also
 // trips over inputs its sniffer handles fine. Any parse failure -- truncated file, exotic container -- reads as no
@@ -47,9 +59,9 @@ export async function extractTags(stream : Readable) : Promise<ExtractedTags>
         const parsed = await parseStream(stream, {}, { duration: false, skipCovers: true });
 
         return {
-            title: parsed.common.title ?? null,
-            artist: parsed.common.artist ?? null,
-            album: parsed.common.album ?? null,
+            title: capped(parsed.common.title),
+            artist: capped(parsed.common.artist),
+            album: capped(parsed.common.album),
         };
     }
     catch
