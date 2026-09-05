@@ -43,6 +43,11 @@ RUN npm ci --omit=dev \
     --workspace @fileshed/core \
     --include-workspace-root
 
+# npm hoists a workspace's dependency to the root tree when it can and leaves it in the workspace when it cannot, and
+# which one it does is not a decision the manifest expresses -- @better-auth/api-key moved from one to the other on a
+# version bump alone. The runtime stage copies both, so these exist even when npm hoisted everything.
+RUN mkdir -p src/server/node_modules packages/core/node_modules
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 FROM node:26-alpine
@@ -62,6 +67,11 @@ COPY package.json ./package.json
 COPY config ./config
 COPY packages ./packages
 COPY src/server ./src/server
+
+# After the sources, so a workspace's own node_modules is not overwritten by the copy that brings its code in.
+COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
+COPY --from=deps /app/src/server/node_modules ./src/server/node_modules
+
 COPY --from=build /app/src/client/dist ./client-dist
 
 VOLUME /data
