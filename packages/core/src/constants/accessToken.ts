@@ -19,6 +19,11 @@ export const PLAYBACK_TOKEN_PREFIX = 'fsplay_';
 
 export const ACCESS_TOKEN_NAME_MAX_LENGTH = 100;
 
+// How many PATs one account may hold at once. A credential per integration is the shape this serves, and nobody runs
+// fifty integrations; past that it is a script minting rows. Playback keys are a separate config and never counted --
+// the player mints its own and they expire on their own.
+export const MAX_ACCESS_TOKENS_PER_USER = 50;
+
 // A PAT's user-chosen expiry, in whole days. The request codec validates against these and the api-key plugin is
 // configured to clamp to the same pair, so the two cannot disagree.
 export const ACCESS_TOKEN_MIN_EXPIRES_DAYS = 1;

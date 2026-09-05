@@ -12,11 +12,16 @@ export const LISTING_CHUNK_SIZE = 1000;
 export const MAX_COMPLETE_LISTING = 50_000;
 
 // Where SQLite stops ordering names naturally. Natural ordering happens in Node on that dialect -- SQLite has no ICU
-// collation to sort by -- so the whole folder's names must be in memory at once, which costs about 0.3KB per row:
-// 31MB and 86ms at 100,000 rows, 380MB and 1.0s at a million. Past this many children the listing falls back to the
-// indexed lexical ordering it had before, so a folder that large degrades to alphabetical rather than loading whole.
-// Postgres has no such limit: its collation orders inside the index.
+// collation to sort by -- so the whole folder's names must be in memory at once. Past this many children the listing
+// falls back to the indexed lexical ordering it had before, so a folder that large degrades to alphabetical rather
+// than loading whole. Postgres has no such limit: its collation orders inside the index.
 export const SQLITE_MAX_SORTED_IN_MEMORY = 100_000;
+
+// The other half of that bound, and the binding one when names are long: how many characters of name the selection
+// may add up to. Roughly 32MB of UTF-16, which is what the row count alone was worth back when every name was short.
+// A row count says nothing about size on its own -- a stored name is only bounded for rows written since the API
+// capped one, and a listing that reads its way through the ones written before would be the operation that dies.
+export const SQLITE_MAX_SORTED_NAME_CHARS = 16_000_000;
 
 // How many rows ahead of the loaded edge the viewport may come before the next chunk is asked for. A listing past the
 // ceiling rides on this, and so does one whose background fill stopped on a failed chunk.

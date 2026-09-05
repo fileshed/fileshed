@@ -10,7 +10,12 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { LISTING_CHUNK_SIZE, type NodeListResponse, SQLITE_MAX_SORTED_IN_MEMORY } from '@fileshed/core';
+import {
+    LISTING_CHUNK_SIZE,
+    type NodeListResponse,
+    SQLITE_MAX_SORTED_IN_MEMORY,
+    SQLITE_MAX_SORTED_NAME_CHARS,
+} from '@fileshed/core';
 
 // Support
 import { testDatabaseKind } from '../support/database.ts';
@@ -88,10 +93,42 @@ async function seedFolder(total : number) : Promise<void>
     }
 }
 
-async function probeOrder() : Promise<string[]>
+// Rows carrying names far longer than anything the API would accept today -- what an instance that was attacked
+// before the name cap landed still has on disk. They sort after the probes under either ordering.
+async function seedOverlongNames(count : number, length : number) : Promise<void>
+{
+    const now = new Date().toISOString();
+
+    // Files, like the probes: a folder would outrank them and take the page the probes are read from.
+    const rows = Array.from({ length: count }, (_unused, index) => ({
+        id: `overlong-${ String(index).padStart(4, '0') }`,
+        name: `zz-overlong-${ String(index).padStart(4, '0') }-${ 'x'.repeat(length) }`,
+        type: 'file' as const,
+        owner_id: owner.id,
+        parent_id: null,
+        blob_id: SHA256,
+        size: 10,
+        mime_type: 'application/octet-stream',
+        created_at: now,
+        updated_at: now,
+        trashed_at: null,
+        target_node_id: null,
+    }));
+
+    for(const row of rows)
+    {
+        // eslint-disable-next-line no-await-in-loop -- a name this long is megabytes; batching them multiplies that
+        await booted.handle.db
+            .insertInto('node')
+            .values(row as never)
+            .execute();
+    }
+}
+
+async function probeOrder(limit : number = LISTING_CHUNK_SIZE) : Promise<string[]>
 {
     const res = await booted.app.request(
-        `${ ORIGIN }/api/nodes/children?limit=${ LISTING_CHUNK_SIZE }&sortKey=name&sortDirection=asc`,
+        `${ ORIGIN }/api/nodes/children?limit=${ limit }&sortKey=name&sortDirection=asc`,
         { headers: { cookie: owner.cookie } }
     );
     const body = await res.json() as NodeListResponse;
@@ -128,6 +165,38 @@ describe.runIf(testDatabaseKind() === 'sqlite')('SQLite in-memory sort guard', (
         await seedFolder(SQLITE_MAX_SORTED_IN_MEMORY + 1);
 
         expect(await probeOrder()).toEqual([ 'track-10.mp3', 'track-9.mp3' ]);
+    }, 120_000);
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// The same guard, counted in characters rather than rows
+//----------------------------------------------------------------------------------------------------------------------
+
+// Long enough that a handful of rows reach the character budget, so the guard is exercised at its real constant.
+const OVERLONG_NAME_CHARS = 250_000;
+
+describe.runIf(testDatabaseKind() === 'sqlite')('SQLite in-memory sort guard — name characters', () =>
+{
+    // A row count nowhere near the guard can still be far too much to hold, because nothing bounded a stored name
+    // before the API capped one. The listing must answer either way -- an owner whose folder was filled with these
+    // has to be able to list it to clean it up -- so it hands the ordering back to SQL rather than reading them all.
+    it('falls back to the lexical ordering when the names outweigh the budget, whatever the row count', async () =>
+    {
+        const overBudget = Math.ceil(SQLITE_MAX_SORTED_NAME_CHARS / OVERLONG_NAME_CHARS) + 1;
+
+        await seedFolder(PROBES.length);
+        await seedOverlongNames(overBudget, OVERLONG_NAME_CHARS);
+
+        expect(await probeOrder(2)).toEqual([ 'track-10.mp3', 'track-9.mp3' ]);
+    }, 120_000);
+
+    // The budget is the selection's total, not a verdict on any one name: a few long names still sort in Node.
+    it('orders names naturally when long names do not add up to the budget', async () =>
+    {
+        await seedFolder(PROBES.length);
+        await seedOverlongNames(4, OVERLONG_NAME_CHARS);
+
+        expect(await probeOrder(2)).toEqual([ 'track-9.mp3', 'track-10.mp3' ]);
     }, 120_000);
 });
 

@@ -6,8 +6,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
     MAX_CHILDREN_LIMIT,
+    NODE_NAME_MAX_LENGTH,
     type Node,
     childrenQueryCodec,
+    copyNodeRequestCodec,
     createNodeRequestCodec,
     linkTargetCodec,
     nodeListResponseCodec,
@@ -270,6 +272,50 @@ describe('createNodeRequestCodec', () =>
 
         expect(result.success).toBe(false);
     });
+
+    // A stored name is returned on every listing of its parent and is what a name-ordered listing sorts by, so an
+    // unbounded one is a cost every reader of that folder pays -- including the owner, who cannot delete what they
+    // cannot list. An editor on a shared folder may create inside it, so the payer need not be the author.
+    it('rejects a folder name past the length ceiling', () =>
+    {
+        const result = createNodeRequestCodec.safeParse({
+            type: 'folder',
+            name: 'a'.repeat(NODE_NAME_MAX_LENGTH + 1),
+        });
+
+        expect(result.success).toBe(false);
+    });
+
+    it('accepts a folder name exactly at the ceiling', () =>
+    {
+        const result = createNodeRequestCodec.safeParse({
+            type: 'folder',
+            name: 'a'.repeat(NODE_NAME_MAX_LENGTH),
+        });
+
+        expect(result.success).toBe(true);
+    });
+
+    it('rejects a link name past the length ceiling', () =>
+    {
+        const result = createNodeRequestCodec.safeParse({
+            type: 'link',
+            name: 'a'.repeat(NODE_NAME_MAX_LENGTH + 1),
+            targetNodeID: 'node_1',
+        });
+
+        expect(result.success).toBe(false);
+    });
+});
+
+describe('copyNodeRequestCodec', () =>
+{
+    it('rejects a copy name past the length ceiling', () =>
+    {
+        const result = copyNodeRequestCodec.safeParse({ name: 'a'.repeat(NODE_NAME_MAX_LENGTH + 1) });
+
+        expect(result.success).toBe(false);
+    });
 });
 
 describe('patchNodeRequestCodec', () =>
@@ -289,6 +335,14 @@ describe('patchNodeRequestCodec', () =>
 
         expect(move.success).toBe(true);
         expect(rename.success).toBe(true);
+    });
+
+    // Rename is the other way an unbounded name reaches storage; capping create alone would leave it wide open.
+    it('rejects a rename past the length ceiling', () =>
+    {
+        const result = patchNodeRequestCodec.safeParse({ name: 'a'.repeat(NODE_NAME_MAX_LENGTH + 1) });
+
+        expect(result.success).toBe(false);
     });
 });
 

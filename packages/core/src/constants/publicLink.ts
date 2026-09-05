@@ -7,4 +7,9 @@
 
 export const PUBLIC_LINK_TOKEN_BYTES = 32;
 
+// How many live links one node may carry. Several is the point -- separately revocable tokens for separate audiences
+// -- but a node accumulating dozens is a script, and every one of them is a row and a line in the owner's own listing.
+// Revoked links do not count: a token that serves nothing costs the owner nothing.
+export const MAX_LINKS_PER_NODE = 20;
+
 //----------------------------------------------------------------------------------------------------------------------

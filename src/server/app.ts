@@ -13,9 +13,11 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { Hono, type MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { serveStatic } from '@hono/node-server/serve-static';
 
 import {
+    API_BODY_MAX_BYTES,
     DEFAULT_UPLOAD_CHUNK_BYTES,
     EXPIRY_PRUNE_INTERVAL_MS,
     type InstanceLimits,
@@ -23,6 +25,7 @@ import {
     MS_PER_DAY,
     MS_PER_MINUTE,
     PARTIALS_SWEEP_INTERVAL_MS,
+    PayloadTooLargeError,
     type SocialProviderID,
     TICKET_TTL_MS,
     UNLIMITED_QUOTA,
@@ -128,6 +131,10 @@ const logger = getLogger('server');
 const gatedAuthPrefixes = [ '/api/auth/admin', '/api/auth/api-key' ];
 
 const signUpPrefix = '/api/auth/sign-up';
+
+// The routes that carry bytes rather than a DTO. Each has a ceiling of its own -- an upload is bounded by its
+// ticket's claimed size and the instance cap, an avatar and a logo by AVATAR_MAX_BYTES as they stream.
+const BYTE_ROUTE_PREFIXES = [ '/api/uploads/', '/api/me/avatar', '/api/admin/branding/logo' ];
 
 function normalizeAuthPath(pathname : string) : string
 {
@@ -235,6 +242,22 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
     // credential budget exists to protect exactly what the gate handles. Hono only runs middleware registered ahead
     // of the route it matches, so this ordering is the whole of whether any of it runs at all.
     for(const middleware of options.security ?? []) { app.use('*', middleware); }
+
+    // Every JSON body, refused by length before anything reads it. The byte routes are exempt: their bodies are the
+    // product rather than a description of it.
+    app.use('/api/*', async (ctx, next) =>
+    {
+        const path = new URL(ctx.req.url).pathname;
+        if(BYTE_ROUTE_PREFIXES.some((prefix) => path.startsWith(prefix))) { return next(); }
+
+        return bodyLimit({
+            maxSize: API_BODY_MAX_BYTES,
+            onError: () =>
+            {
+                throw new PayloadTooLargeError('The request body is too large.', API_BODY_MAX_BYTES);
+            },
+        })(ctx, next);
+    });
 
     //------------------------------------------------------------------------------------------------------------------
     // Gate (before the auth mount)

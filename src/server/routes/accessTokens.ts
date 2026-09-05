@@ -36,7 +36,7 @@ export function createAccessTokenRoutes(sessions : SessionManager, tokens : Acce
         const actor = await sessions.requireUser(ctx.req.raw.headers);
         const request = await readJsonBody(ctx, createAccessTokenRequestCodec);
 
-        const minted = await tokens.create(actor, request);
+        const minted = await tokens.create(actor, ctx.req.raw.headers, request);
 
         return ctx.json({ token: minted.token, accessToken: toAccessTokenResponse(minted.accessToken) });
     });

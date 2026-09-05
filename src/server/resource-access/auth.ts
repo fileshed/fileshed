@@ -27,6 +27,7 @@ import {
     ACCESS_TOKEN_MAX_EXPIRES_DAYS,
     ACCESS_TOKEN_MIN_EXPIRES_DAYS,
     ACCESS_TOKEN_PREFIX,
+    DISPLAY_NAME_MAX_LENGTH,
     MS_PER_SECOND,
     PLAYBACK_TOKEN_PREFIX,
     PLAYBACK_TOKEN_TTL_MS,
@@ -336,15 +337,27 @@ export async function deletePendingAccountActionsFor(handle : DatabaseHandle, us
     await sql`delete from verification where value = ${ userID }`.execute(handle.db);
 }
 
-// Access tokens die with their owner's standing. Database hooks fire on the row operation itself, so every path to
-// a ban (admin route, server-side auth.api call, future surfaces) is covered without enumerating endpoints -- and
-// key verification never consults the user row, so revocation here is what makes a ban stick for outstanding keys.
-// Ban deletion is permanent: unbanning does not resurrect keys. Typed against BetterAuthOptions so the live options
-// object matches the shape's placeholder exactly.
+// Access tokens die with their owner's standing, and a display name is bounded before it is stored. Database hooks
+// fire on the row operation itself, so every path to a ban (admin route, server-side auth.api call, future surfaces)
+// and every path to a new account (email sign-up, a provider's first login) is covered without enumerating endpoints
+// -- and key verification never consults the user row, so revocation here is what makes a ban stick for outstanding
+// keys. Ban deletion is permanent: unbanning does not resurrect keys. Typed against BetterAuthOptions so the live
+// options object matches the shape's placeholder exactly.
 function accessTokenCleanupHooks(handle : DatabaseHandle) : BetterAuthOptions['databaseHooks']
 {
     return {
         user: {
+            // `name` is better-auth's own field, not one of ours, so no codec of this project ever sees it and the
+            // length our own surfaces enforce never reaches sign-up. A megabyte of display name would otherwise ride
+            // into every listing that names its owner.
+            create: {
+                before: async (user : User) =>
+                {
+                    const name = user.name.trim();
+
+                    return { data: { ...user, name: name.slice(0, DISPLAY_NAME_MAX_LENGTH) } };
+                },
+            },
             update: {
                 after: async (user : User) =>
                 {

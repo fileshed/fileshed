@@ -20,6 +20,9 @@ import type {
     UploadCommitReplace,
 } from '../blobs.ts';
 
+// Request Schemas
+import { mimeTypeCodec, nodeNameCodec } from './common.ts';
+
 // Utils
 import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
@@ -85,21 +88,19 @@ typeAssert<Equals<z.output<typeof claimResponseCodec>, ClaimResponse>>();
 // required fields matches neither -- both collapse to a 400. No literal discriminant exists, so the modes are told
 // apart by which fields are present, exactly as the domain union is.
 export const uploadCommitCreateCodec = z.strictObject({
-    name: z.string().min(1),
+    name: nodeNameCodec,
     parentID: z.string()
         .nullable()
         .optional()
         .default(null),
-    mimeType: z.string().min(1),
+    mimeType: mimeTypeCodec,
 });
 
 typeAssert<Equals<z.output<typeof uploadCommitCreateCodec>, UploadCommitCreate>>();
 
 export const uploadCommitReplaceCodec = z.strictObject({
     replaceNodeID: z.string().min(1),
-    mimeType: z.string()
-        .min(1)
-        .optional(),
+    mimeType: mimeTypeCodec.optional(),
     ifBlobID: z.string()
         .min(1)
         .optional(),

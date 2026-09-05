@@ -20,7 +20,9 @@ import {
     ACCESS_TOKEN_CONFIG_PAT,
     ACCESS_TOKEN_CONFIG_PLAYBACK,
     type AccessToken,
+    BadRequestError,
     type CreateAccessTokenRequest,
+    MAX_ACCESS_TOKENS_PER_USER,
     NotFoundError,
     type PermissionStatement,
     scopeStatements,
@@ -81,8 +83,21 @@ export class AccessTokenManager
         this.#auth = auth;
     }
 
-    async create(actor : SessionUser, request : CreateAccessTokenRequest) : Promise<MintedAccessToken>
+    // The cap counts what the caller's own listing shows -- their live PATs -- so "you hold the maximum" and "your list
+    // is full" are the same statement, and revoking one always makes room. The count comes from the session-shaped
+    // list, which is why the route's headers ride here as well as the actor the session gate already vouched for.
+    async create(actor : SessionUser, headers : Headers, request : CreateAccessTokenRequest)
+    : Promise<MintedAccessToken>
     {
+        const held = await this.list(headers);
+        if(held.length >= MAX_ACCESS_TOKENS_PER_USER)
+        {
+            throw new BadRequestError(
+                `You already hold the maximum of ${ MAX_ACCESS_TOKENS_PER_USER } access tokens. `
+                + 'Revoke one to mint another.'
+            );
+        }
+
         const created = await this.#auth.api.createApiKey({
             body: {
                 configId: ACCESS_TOKEN_CONFIG_PAT,

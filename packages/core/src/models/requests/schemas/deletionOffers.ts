@@ -13,7 +13,7 @@ import type {
 } from '../deletionOffers.ts';
 
 // Schemas
-import { isoDateTimeCodec } from './common.ts';
+import { isoDateTimeCodec, nodeNameCodec } from './common.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
@@ -25,9 +25,7 @@ export const acceptDeletionOfferRequestCodec = z.strictObject({
         .nullable()
         .optional()
         .default(null),
-    name: z.string()
-        .min(1)
-        .optional(),
+    name: nodeNameCodec.optional(),
 });
 
 typeAssert<Equals<z.output<typeof acceptDeletionOfferRequestCodec>, AcceptDeletionOfferRequest>>();

@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    NODE_NAME_MAX_LENGTH,
     challengeAnswerRequestCodec,
     claimRequestCodec,
     claimResponseCodec,
@@ -156,6 +157,60 @@ describe('uploadCommitMetadataCodec', () =>
         expect(result.success).toBe(true);
     });
 
+    // The commit metadata is where a mime type enters the system, and it leaves again as a Content-Type header on
+    // every download of that node. A value a header cannot carry makes the node's own bytes un-servable to its owner
+    // and to every public link on it, permanently -- and a replace is an EDITOR's authority, so this is a stranger
+    // bricking someone else's file. The commit is the last place it can be refused.
+    it('rejects a create mime type a response header could not carry', () =>
+    {
+        const crlf = uploadCommitMetadataCodec.safeParse({
+            name: 'report.pdf',
+            mimeType: 'application/pdf\r\nX-Injected: 1',
+        });
+        const emoji = uploadCommitMetadataCodec.safeParse({ name: 'song.mp3', mimeType: 'audio/mpeg🎵' });
+        const del = uploadCommitMetadataCodec.safeParse({ name: 'a.txt', mimeType: 'text/plain\x7f' });
+
+        expect(crlf.success).toBe(false);
+        expect(emoji.success).toBe(false);
+        expect(del.success).toBe(false);
+    });
+
+    it('rejects a replace mime type a response header could not carry', () =>
+    {
+        const result = uploadCommitMetadataCodec.safeParse({ replaceNodeID: 'node_1', mimeType: 'text/plain🎵' });
+
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects a mime type that is not type/subtype', () =>
+    {
+        const result = uploadCommitMetadataCodec.safeParse({ name: 'report.pdf', mimeType: 'pdf' });
+
+        expect(result.success).toBe(false);
+    });
+
+    // An uploaded name is stored and comes back on every listing of its parent, so an unbounded one is a cost the
+    // folder's owner pays on every read -- and an editor on a shared folder may upload into it.
+    it('rejects an uploaded name past the length ceiling', () =>
+    {
+        const result = uploadCommitMetadataCodec.safeParse({
+            name: 'a'.repeat(NODE_NAME_MAX_LENGTH + 1),
+            mimeType: 'application/pdf',
+        });
+
+        expect(result.success).toBe(false);
+    });
+
+    it('accepts a name exactly at the ceiling', () =>
+    {
+        const result = uploadCommitMetadataCodec.safeParse({
+            name: 'a'.repeat(NODE_NAME_MAX_LENGTH),
+            mimeType: 'application/pdf',
+        });
+
+        expect(result.success).toBe(true);
+    });
+
     // ifBlobID is the optional optimistic-concurrency guard: the blob the caller edited from. It rides replace metadata
     // and is preserved through the codec so the manager can compare it against the target's current blob at commit.
     it('accepts replace metadata carrying an ifBlobID concurrency guard', () =>
@@ -250,6 +305,25 @@ describe('challengeAnswerRequestCodec', () =>
         expect(result.success).toBe(true);
         if(!result.success) { throw new Error('expected a guarded replace answer to parse'); }
         expect(result.data).toEqual({ answer: 'deadbeef', replaceNodeID: 'node_1', ifBlobID: 'a'.repeat(64) });
+    });
+
+    // A proven blob commits its node without moving a byte, so this is a second door onto the same stored mime type.
+    // Closing only the upload door would leave the dedup path open.
+    it('rejects an answer whose mime type a response header could not carry', () =>
+    {
+        const create = challengeAnswerRequestCodec.safeParse({
+            answer: 'deadbeef',
+            name: 'report.pdf',
+            mimeType: 'application/pdf\r\n',
+        });
+        const replace = challengeAnswerRequestCodec.safeParse({
+            answer: 'deadbeef',
+            replaceNodeID: 'node_1',
+            mimeType: 'application/pdf🎵',
+        });
+
+        expect(create.success).toBe(false);
+        expect(replace.success).toBe(false);
     });
 
     it('rejects an answer carrying both modes, or neither', () =>

@@ -15,8 +15,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
     ACCESS_TOKEN_PREFIX,
+    type AccessTokenListResponse,
+    type AccessTokenResponse,
     type AccessTokenScope,
     type CreateAccessTokenResponse,
+    MAX_ACCESS_TOKENS_PER_USER,
     MS_PER_HOUR,
     PLAYBACK_TOKEN_PREFIX,
     type PlaybackTokenResponse,
@@ -85,6 +88,16 @@ async function mintPlayback(user : TestUser, previousID : string | null = null) 
 
     expect(res.status).toBe(200);
     return await res.json() as PlaybackTokenResponse;
+}
+
+async function listTokens(user : TestUser) : Promise<AccessTokenResponse[]>
+{
+    const res = await booted.app.request(`${ ORIGIN }/api/me/access-tokens`, {
+        headers: { cookie: user.cookie },
+    });
+
+    expect(res.status).toBe(200);
+    return (await res.json() as AccessTokenListResponse).accessTokens;
 }
 
 function bearerRequest(path : string, token : string, init : RequestInit = {}) : Promise<Response>
@@ -168,6 +181,43 @@ describe('PAT minting and management', () =>
 
         const after = await bearerRequest(`/api/nodes/${ uploaded.node.id }/download`, minted.token);
         expect(after.status).toBe(401);
+    });
+
+    // A credential per integration is the shape this serves. Nothing charges for a row, so without a ceiling one
+    // session can mint them until the table is the product.
+    it('refuses a mint past the per-user maximum', async () =>
+    {
+        for(let minted = 0; minted < MAX_ACCESS_TOKENS_PER_USER; minted++)
+        {
+            // eslint-disable-next-line no-await-in-loop -- filling the cap concurrently would race the check under test
+            await mintPat(owner, [ 'files:read' ], `token ${ minted }`);
+        }
+
+        const overflow = await booted.app.request(`${ ORIGIN }/api/me/access-tokens`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'cookie': owner.cookie, 'origin': ORIGIN },
+            body: JSON.stringify({ name: 'one too many', scopes: [ 'files:read' ] }),
+        });
+
+        expect(overflow.status).toBe(400);
+
+        const list = await listTokens(owner);
+        expect(list).toHaveLength(MAX_ACCESS_TOKENS_PER_USER);
+    });
+
+    // The cap counts the caller's own tokens, so a full account must not stop anyone else from minting theirs.
+    it('caps each account separately', async () =>
+    {
+        const other = await makeUser(booted, 'other-minter@example.com');
+        for(let minted = 0; minted < MAX_ACCESS_TOKENS_PER_USER; minted++)
+        {
+            // eslint-disable-next-line no-await-in-loop -- filling the cap concurrently would race the check under test
+            await mintPat(owner, [ 'files:read' ], `token ${ minted }`);
+        }
+
+        const theirs = await mintPat(other, [ 'files:read' ]);
+
+        expect(theirs.token.startsWith(ACCESS_TOKEN_PREFIX)).toBe(true);
     });
 });
 

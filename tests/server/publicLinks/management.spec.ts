@@ -10,7 +10,12 @@ import { randomBytes } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { PUBLIC_LINK_TOKEN_BYTES, type PublicLinkListResponse, type PublicLinkResponse } from '@fileshed/core';
+import {
+    MAX_LINKS_PER_NODE,
+    PUBLIC_LINK_TOKEN_BYTES,
+    type PublicLinkListResponse,
+    type PublicLinkResponse,
+} from '@fileshed/core';
 
 // Support
 import {
@@ -90,6 +95,35 @@ describe('POST /api/nodes/:id/links', () =>
 
         const list = await (await listLinks(booted, owner, uploaded.node.id)).json() as PublicLinkListResponse;
         expect(list.links.map((entry) => entry.id).sort()).toEqual([ first.id, second.id ].sort());
+    });
+
+    // Several per node is the point -- separately revocable tokens for separate audiences -- but every one is a row
+    // and a line in the owner's own link listing, and nothing charged for them.
+    it('refuses a link past the per-node maximum', async () =>
+    {
+        // eslint-disable-next-line no-await-in-loop -- filling the cap concurrently would race the check under test
+        for(let minted = 0; minted < MAX_LINKS_PER_NODE; minted++) { await mintLink(); }
+
+        const overflow = await createLink(booted, owner, uploaded.node.id);
+
+        expect(overflow.status).toBe(400);
+
+        const list = await (await listLinks(booted, owner, uploaded.node.id)).json() as PublicLinkListResponse;
+        expect(list.links).toHaveLength(MAX_LINKS_PER_NODE);
+    });
+
+    // A revoked token serves nothing, so it costs the owner nothing and must not hold a slot hostage.
+    it('lets a revoked link make room for a new one', async () =>
+    {
+        const first = await mintLink();
+        // eslint-disable-next-line no-await-in-loop -- filling the cap concurrently would race the check under test
+        for(let minted = 1; minted < MAX_LINKS_PER_NODE; minted++) { await mintLink(); }
+
+        expect((await createLink(booted, owner, uploaded.node.id)).status).toBe(400);
+
+        await revokeLink(booted, owner, first.id);
+
+        expect((await createLink(booted, owner, uploaded.node.id)).status).toBe(201);
     });
 
     it('refuses a link on a folder node (public links reference file nodes)', async () =>

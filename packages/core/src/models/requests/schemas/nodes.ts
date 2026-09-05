@@ -36,7 +36,7 @@ import {
 } from '../nodes.ts';
 
 // Request Schemas
-import { isoDateTimeCodec } from './common.ts';
+import { isoDateTimeCodec, nodeNameCodec } from './common.ts';
 
 // Utils
 import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
@@ -45,7 +45,7 @@ import { type Equals, typeAssert } from '../../../utils/typeAssert.ts';
 
 export const createFolderRequestCodec = z.strictObject({
     type: z.literal('folder'),
-    name: z.string().min(1),
+    name: nodeNameCodec,
     parentID: z.string()
         .nullable()
         .optional()
@@ -56,9 +56,7 @@ typeAssert<Equals<z.output<typeof createFolderRequestCodec>, CreateFolderRequest
 
 export const createLinkRequestCodec = z.strictObject({
     type: z.literal('link'),
-    name: z.string()
-        .min(1)
-        .optional(),
+    name: nodeNameCodec.optional(),
     parentID: z.string()
         .nullable()
         .optional()
@@ -78,7 +76,7 @@ typeAssert<Equals<z.output<typeof createNodeRequestCodec>, CreateNodeRequest>>()
 //----------------------------------------------------------------------------------------------------------------------
 
 export const renameRequestCodec = z.strictObject({
-    name: z.string().min(1),
+    name: nodeNameCodec,
 });
 
 typeAssert<Equals<z.output<typeof renameRequestCodec>, RenameRequest>>();
@@ -107,9 +105,7 @@ export const copyNodeRequestCodec = z.strictObject({
         .nullable()
         .optional()
         .default(null),
-    name: z.string()
-        .min(1)
-        .optional(),
+    name: nodeNameCodec.optional(),
 });
 
 typeAssert<Equals<z.output<typeof copyNodeRequestCodec>, CopyNodeRequest>>();
@@ -167,9 +163,7 @@ export const childrenQueryCodec = z.strictObject({
     sortDirection: z.enum(sortDirections).default('asc'),
     types: typeFamiliesParam,
     ownerID: z.string().optional(),
-    name: z.string()
-        .min(1)
-        .optional(),
+    name: nodeNameCodec.optional(),
     updatedAfter: z.iso.datetime().optional(),
     updatedBefore: z.iso.datetime().optional(),
 });

@@ -28,14 +28,17 @@ import {
     BadRequestError,
     BlobNotFoundError,
     type ContentDisposition,
+    FALLBACK_MIME_TYPE,
     type FileNode,
     ForbiddenError,
+    MAX_LINKS_PER_NODE,
     type Node,
     NotFoundError,
     PUBLIC_LINK_TOKEN_BYTES,
     type PublicLink,
     type Role,
     isDirectOwner,
+    isValidMimeType,
 } from '@fileshed/core';
 
 // Resource Access
@@ -158,6 +161,14 @@ function contentDisposition(disposition : ContentDisposition, filename : string)
     return `${ disposition }; filename="${ asciiFallback }"`;
 }
 
+// The node's mime type if a header can carry it, the generic binary type if it cannot. The codec refuses an unwritable
+// mime on the way in, so this is for rows stored before it did: without it those bytes are unreachable to the owner and
+// to every public link, and nothing but replacing the content can repair them.
+function servableMimeType(mimeType : string) : string
+{
+    return isValidMimeType(mimeType) ? mimeType : FALLBACK_MIME_TYPE;
+}
+
 // Whether If-None-Match matches the current representation. `*` matches anything; otherwise each listed entry
 // is compared to the sha256 after stripping an optional weak (`W/`) marker and the surrounding quotes.
 function ifNoneMatchHits(header : string | undefined, sha256 : string) : boolean
@@ -207,6 +218,14 @@ export class PublicLinkManager
         if(node.type !== 'file')
         {
             throw new BadRequestError('A public link can only target a file node.');
+        }
+
+        const live = (await this.#links.listByNode(nodeID)).filter((existing) => existing.revokedAt === null);
+        if(live.length >= MAX_LINKS_PER_NODE)
+        {
+            throw new BadRequestError(
+                `This file already has the maximum of ${ MAX_LINKS_PER_NODE } links. Revoke one to mint another.`
+            );
         }
 
         const link : PublicLink = {

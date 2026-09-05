@@ -27,6 +27,7 @@ import {
     PLAYLIST_EXTENSIONS,
     PLAYLIST_MIME_LIST,
     SQLITE_MAX_SORTED_IN_MEMORY,
+    SQLITE_MAX_SORTED_NAME_CHARS,
     type UserSummary,
     compareNames,
 } from '@fileshed/core';
@@ -406,9 +407,28 @@ export class NodeRA
         return rows.map(nodeFromRow);
     }
 
+    // Whether the whole selection's names can be held at once: how many rows it spans AND how many characters their
+    // names come to, both asked in one aggregate BEFORE a single name crosses into Node. The size question has to be
+    // answered in SQL, where a name costs one row's worth of memory at a time -- counting the characters as they
+    // arrive would mean they had already arrived.
+    async #fitsInMemorySort(conditions : NodeConditions) : Promise<boolean>
+    {
+        const row = await this.#db
+            .selectFrom('node')
+            .where((eb) => eb.and(conditions(eb)))
+            .select((eb) => [
+                eb.fn.countAll().as('rows'),
+                sql<string | number>`coalesce(sum(length(name)), 0)`.as('chars'),
+            ])
+            .executeTakeFirstOrThrow();
+
+        return Number(row.rows) <= SQLITE_MAX_SORTED_IN_MEMORY
+            && Number(row.chars) <= SQLITE_MAX_SORTED_NAME_CHARS;
+    }
+
     // The SQLite name ordering: pull the selection's sort keys, order them through the shared comparator, then fetch
-    // only the page's rows. Undefined when the selection is over the in-memory guard, which sends the caller back to
-    // the SQL ordering -- the fetch stops one row past the guard rather than reading a folder it has already refused.
+    // only the page's rows. Undefined when the selection is too big to hold, which sends the caller back to the SQL
+    // ordering rather than reading a folder it has already refused.
     //
     // Takes the direction rather than the whole sort, because this orders by name and nothing else. A folder sitting
     // exactly on the guard that grows mid-pagination switches orderings between one chunk and the next, which shifts
@@ -419,6 +439,8 @@ export class NodeRA
         direction : SortDirection
     ) : Promise<Node[] | undefined>
     {
+        if(!await this.#fitsInMemorySort(conditions)) { return undefined; }
+
         const keys = await this.#db
             .selectFrom('node')
             .where((eb) => eb.and(conditions(eb)))
@@ -426,6 +448,7 @@ export class NodeRA
             .limit(SQLITE_MAX_SORTED_IN_MEMORY + 1)
             .execute();
 
+        // The row count was measured a query ago; this catches a folder that grew past the guard in between.
         if(keys.length > SQLITE_MAX_SORTED_IN_MEMORY) { return undefined; }
 
         keys.sort((left, right) => compareSortKeys(left, right, direction));

@@ -235,6 +235,18 @@ export async function uploadFile(
     return { node, sha256 };
 }
 
+// Write a mime type straight onto a stored node, bypassing every codec. What a row stored before the mime type was
+// validated looks like -- there is no API left that can produce one, which is exactly why serving must survive it.
+export async function forceMimeType(booted : BootedServeApp, nodeID : string, mimeType : string) : Promise<void>
+{
+    await booted.handle.db
+        .updateTable('node')
+        // eslint-disable-next-line camelcase -- a snake_case DB column (house convention)
+        .set({ mime_type: mimeType })
+        .where('id', '=', nodeID)
+        .execute();
+}
+
 export async function createFolder(booted : BootedServeApp, user : TestUser, name = 'folder') : Promise<NodeResponse>
 {
     const res = await booted.app.request(`${ ORIGIN }/api/nodes`, {
