@@ -24,6 +24,7 @@ const MANAGED_KEYS = [
     'BASE_URL',
     'TRUSTED_ORIGINS',
     'ALLOWED_HOSTS',
+    'SMTP_PASSWORD',
     'TRUSTED_PROXIES',
     'RATE_LIMIT_ENABLED',
     'RATE_LIMIT_CREDENTIALS_MAX',
@@ -67,7 +68,7 @@ describe('substituteEnv', () =>
 {
     // The contract: a set, non-empty environment variable wins; the ${VAR:-fallback} fallback covers unset AND
     // empty (matching shell semantics); ${VAR} with nothing behind it substitutes to empty, which the loader then
-    // reads as unset. Substitution happens on raw text, so numeric fallbacks become real yaml numbers downstream.
+    // reads as unset.
     it('prefers the environment, falls back per-variable, and empties bare misses', () =>
     {
         const text = 'a: ${ALPHA:-default-a}\nb: ${BRAVO:-3000}\nc: ${CHARLIE}';
@@ -75,6 +76,13 @@ describe('substituteEnv', () =>
         expect(substituteEnv(text, { ALPHA: 'from-env' })).toBe('a: from-env\nb: 3000\nc: ');
         expect(substituteEnv(text, { ALPHA: '', BRAVO: '4000', CHARLIE: 'set' }))
             .toBe('a: default-a\nb: 4000\nc: set');
+    });
+
+    // The value lands inside a single-quoted yaml scalar, where a quote is the one character that can end it early
+    // and turn the rest of a password into yaml.
+    it('doubles a quote in the value, so it cannot close the scalar it lands in', () =>
+    {
+        expect(substituteEnv("a: '${ALPHA}'", { ALPHA: "it's" })).toBe("a: 'it''s'");
     });
 });
 
@@ -211,6 +219,48 @@ describe('loadConfig TRUSTED_ORIGINS', () =>
         process.env['TRUSTED_ORIGINS'] = '*,https://files.example.com';
 
         expect(() => loadConfig()).toThrow(/TRUSTED_ORIGINS/);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// Values reach the yaml as raw text, so anything yaml gives a meaning to is a value that could rewrite the document
+// rather than fill a field. These are the characters that do it.
+describe('loadConfig with yaml metacharacters in a value', () =>
+{
+    it('keeps a comment marker inside the value instead of truncating there', () =>
+    {
+        process.env['SMTP_PASSWORD'] = 'hunter2 #1';
+
+        expect(loadConfig().SMTP_PASSWORD).toBe('hunter2 #1');
+    });
+
+    it('keeps a value that would otherwise read as a yaml boolean', () =>
+    {
+        process.env['SMTP_PASSWORD'] = 'no';
+
+        expect(loadConfig().SMTP_PASSWORD).toBe('no');
+    });
+
+    it('keeps a quote in a value rather than letting it end the value', () =>
+    {
+        process.env['SMTP_PASSWORD'] = "don't:  #stop";
+
+        expect(loadConfig().SMTP_PASSWORD).toBe("don't:  #stop");
+    });
+
+    it('keeps a backslash rather than reading it as an escape', () =>
+    {
+        process.env['SMTP_PASSWORD'] = 'domain\\user\\nope';
+
+        expect(loadConfig().SMTP_PASSWORD).toBe('domain\\user\\nope');
+    });
+
+    it('takes a leading indicator character, which would otherwise start an alias or an anchor', () =>
+    {
+        process.env['SMTP_PASSWORD'] = '&anchor*alias!tag';
+
+        expect(loadConfig().SMTP_PASSWORD).toBe('&anchor*alias!tag');
     });
 });
 

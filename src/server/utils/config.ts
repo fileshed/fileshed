@@ -429,16 +429,21 @@ function findDefaultConfigFile() : string
     }
 }
 
-// ${VAR} substitutes the environment variable, ${VAR:-fallback} falls back when it is unset or empty. Substitution
-// runs over the raw text BEFORE the yaml parse, so a numeric fallback lands as a real yaml number.
+// ${VAR} substitutes the environment variable, ${VAR:-fallback} falls back when it is unset or empty.
+//
+// Substitution runs over the raw text BEFORE the yaml parse, which means a value carries whatever meaning yaml gives
+// its characters: `*` opens an alias, a spaced `#` starts a comment, a bare `yes` is a boolean. Every value in the
+// template is therefore written inside a single-quoted scalar, where the only character with meaning left is the
+// quote itself -- doubled here, so a password with one in it cannot close the scalar and become yaml. Numbers and
+// booleans arrive as strings and the schema coerces them, which it has to do for the environment anyway.
 export function substituteEnv(text : string, env : Record<string, string | undefined>) : string
 {
     return text.replace(/\$\{([A-Z0-9_]+)(?::-([^}]*))?\}/g, (match, name : string, fallback : string | undefined) =>
     {
         const value = env[name];
-        if(value !== undefined && value !== '') { return value; }
+        const resolved = value !== undefined && value !== '' ? value : fallback ?? '';
 
-        return fallback ?? '';
+        return resolved.replaceAll('\'', '\'\'');
     });
 }
 

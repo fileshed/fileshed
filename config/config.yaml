@@ -9,13 +9,13 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 # Bind address and port.
-HOST: ${HOST:-0.0.0.0}
-PORT: ${PORT:-3950}
+HOST: '${HOST:-0.0.0.0}'
+PORT: '${PORT:-3950}'
 
 # Database: sqlite (default) or postgres. DATABASE_URL is required for postgres.
-DATABASE_KIND: ${DATABASE_KIND:-sqlite}
-DATABASE_PATH: ${DATABASE_PATH:-./data/fileshed.db}
-DATABASE_URL: ${DATABASE_URL:-}
+DATABASE_KIND: '${DATABASE_KIND:-sqlite}'
+DATABASE_PATH: '${DATABASE_PATH:-./data/fileshed.db}'
+DATABASE_URL: '${DATABASE_URL:-}'
 
 # Session signing, in precedence order (docs/secrets.md has the whole story):
 #   AUTH_SECRET_FILE -- a file you point at, anywhere but the managed path below. Read, never written; a missing
@@ -24,70 +24,70 @@ DATABASE_URL: ${DATABASE_URL:-}
 #   the managed file -- beside the database, whether AUTH_SECRET_FILE names it or nothing does. Generated on first
 #                       run. This is what the container image uses.
 # Setting one of the first two migrates the settings sealed under the managed file and then removes it.
-AUTH_SECRET: ${AUTH_SECRET:-}
-AUTH_SECRET_FILE: ${AUTH_SECRET_FILE:-}
+AUTH_SECRET: '${AUTH_SECRET:-}'
+AUTH_SECRET_FILE: '${AUTH_SECRET_FILE:-}'
 
 # The key an earlier AUTH_SECRET used. Set it for the one boot after a rotation and stored secrets move to the new
 # key; remove it afterwards.
-AUTH_SECRET_PREVIOUS: ${AUTH_SECRET_PREVIOUS:-}
+AUTH_SECRET_PREVIOUS: '${AUTH_SECRET_PREVIOUS:-}'
 
 # Clear stored secrets no available key can open, instead of refusing to boot. The only thing that makes FileShed
 # delete one; set it for a single boot and remove it again.
-FILESHED_DISCARD_SEALED_SECRETS: ${FILESHED_DISCARD_SEALED_SECRETS:-false}
+FILESHED_DISCARD_SEALED_SECRETS: '${FILESHED_DISCARD_SEALED_SECRETS:-false}'
 
 # The externally reachable URL (behind a reverse proxy, the public one).
-BASE_URL: ${BASE_URL:-http://localhost:5173}
+BASE_URL: '${BASE_URL:-http://localhost:5173}'
 
 # Further origins the instance answers on, comma-separated, for one reachable at more than one URL. BASE_URL is
 # answered on with or without this; entries are read down to scheme + host + port, and each must use BASE_URL's
 # scheme. docs/deployment.md covers the provider callbacks each origin needs. `*` on its own answers any origin at
 # all and turns off the cross-site request check -- a development setting, warned about at every boot.
-TRUSTED_ORIGINS: "${TRUSTED_ORIGINS:-}"
+TRUSTED_ORIGINS: '${TRUSTED_ORIGINS:-}'
 
 # Hosts this instance may build its own URLs from, comma-separated, as `host` or `host:port`. BASE_URL's host and
 # every TRUSTED_ORIGINS host are included with or without this. A Host header naming anything else gets BASE_URL
 # instead, which is what makes a forged Host (or X-Forwarded-Host) inert. `*` on its own accepts every host, so
 # whoever forges one decides what address goes in an emailed reset link -- a development setting, warned about at
 # every boot.
-ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
+ALLOWED_HOSTS: '${ALLOWED_HOSTS:-}'
 
 # The reverse proxies whose X-Forwarded-For header this instance believes, as addresses or CIDR ranges
 # (10.0.0.7, 10.0.0.0/24, comma-separated). Anything else connecting is treated as the client itself and its
 # forwarded header ignored, so leaving this unset behind a proxy puts every user in one rate-limit bucket. Set it
 # to `none` when nothing fronts this instance; unset warns at boot in production.
-TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+TRUSTED_PROXIES: '${TRUSTED_PROXIES:-}'
 
 # Requests one client may spend per window. The credential endpoints (sign-in, sign-up, password reset,
 # verification, first-run setup) and the anonymous /d links each carry their own budget.
-RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
-RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
-RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
-RATE_LIMIT_CREDENTIALS_MAX: ${RATE_LIMIT_CREDENTIALS_MAX:-10}
-RATE_LIMIT_ANONYMOUS_MAX: ${RATE_LIMIT_ANONYMOUS_MAX:-120}
+RATE_LIMIT_ENABLED: '${RATE_LIMIT_ENABLED:-true}'
+RATE_LIMIT_WINDOW_SECONDS: '${RATE_LIMIT_WINDOW_SECONDS:-60}'
+RATE_LIMIT_MAX: '${RATE_LIMIT_MAX:-600}'
+RATE_LIMIT_CREDENTIALS_MAX: '${RATE_LIMIT_CREDENTIALS_MAX:-10}'
+RATE_LIMIT_ANONYMOUS_MAX: '${RATE_LIMIT_ANONYMOUS_MAX:-120}'
 
 # Set this when the instance really is served over plain http and the session cookie shipping without Secure is the
 # intended arrangement. It silences the boot warning and changes nothing else.
-ALLOW_INSECURE_COOKIES: ${ALLOW_INSECURE_COOKIES:-false}
+ALLOW_INSECURE_COOKIES: '${ALLOW_INSECURE_COOKIES:-false}'
 
 # Blob storage and maintenance.
-STORAGE_ROOT: ${STORAGE_ROOT:-./data/blobs}
-GC_GRACE_DAYS: ${GC_GRACE_DAYS:-7}
-GC_INTERVAL_MINUTES: ${GC_INTERVAL_MINUTES:-60}
-TRASH_PURGE_DAYS: ${TRASH_PURGE_DAYS:-30}
+STORAGE_ROOT: '${STORAGE_ROOT:-./data/blobs}'
+GC_GRACE_DAYS: '${GC_GRACE_DAYS:-7}'
+GC_INTERVAL_MINUTES: '${GC_INTERVAL_MINUTES:-60}'
+TRASH_PURGE_DAYS: '${TRASH_PURGE_DAYS:-30}'
 
 # Size caps.
-UPLOAD_MAX_BYTES: ${UPLOAD_MAX_BYTES:-5368709120}
-AVATAR_MAX_BYTES: ${AVATAR_MAX_BYTES:-2097152}
+UPLOAD_MAX_BYTES: '${UPLOAD_MAX_BYTES:-5368709120}'
+AVATAR_MAX_BYTES: '${AVATAR_MAX_BYTES:-2097152}'
 
 # Bytes per upload chunk: what a fronting proxy's request-body cap actually has to accept, since no single request
 # carries the whole file. Minimum 1 MiB.
-UPLOAD_CHUNK_BYTES: ${UPLOAD_CHUNK_BYTES:-8388608}
+UPLOAD_CHUNK_BYTES: '${UPLOAD_CHUNK_BYTES:-8388608}'
 
 # Production client serving: the built client's directory; empty leaves the server API-only (development).
-CLIENT_DIST: ${CLIENT_DIST:-}
+CLIENT_DIST: '${CLIENT_DIST:-}'
 
 # First-run automation token (see docs/deployment.md); empty uses the boot-printed setup code.
-FILESHED_SETUP_TOKEN: ${FILESHED_SETUP_TOKEN:-}
+FILESHED_SETUP_TOKEN: '${FILESHED_SETUP_TOKEN:-}'
 
 # OAuth social providers need no lines here: any provider credential set in the environment is picked up
 # directly by its setting name -- e.g. GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET enables GitHub, GITLAB_* GitLab,
@@ -96,15 +96,15 @@ FILESHED_SETUP_TOKEN: ${FILESHED_SETUP_TOKEN:-}
 
 # Outgoing email (password reset, verification). Unset SMTP_HOST or SMTP_FROM leaves mail off; all of these can
 # also be set from the admin Email tab, where values entered there win over these.
-SMTP_HOST: ${SMTP_HOST:-}
-SMTP_PORT: ${SMTP_PORT:-587}
-SMTP_SECURE: ${SMTP_SECURE:-false}
-SMTP_USER: ${SMTP_USER:-}
-SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-SMTP_FROM: ${SMTP_FROM:-}
+SMTP_HOST: '${SMTP_HOST:-}'
+SMTP_PORT: '${SMTP_PORT:-587}'
+SMTP_SECURE: '${SMTP_SECURE:-false}'
+SMTP_USER: '${SMTP_USER:-}'
+SMTP_PASSWORD: '${SMTP_PASSWORD:-}'
+SMTP_FROM: '${SMTP_FROM:-}'
 
 # Require new accounts to verify their email before signing in. Needs working SMTP; applied at boot (a change from
 # the admin UI takes effect after a restart).
-EMAIL_VERIFICATION_REQUIRED: ${EMAIL_VERIFICATION_REQUIRED:-false}
+EMAIL_VERIFICATION_REQUIRED: '${EMAIL_VERIFICATION_REQUIRED:-false}'
 
 # ---------------------------------------------------------------------------------------------------------------------
