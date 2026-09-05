@@ -92,6 +92,16 @@ export interface NodeFilters
     updatedBefore ?: Date;
 }
 
+// Everything one caller may resolve a role on: the nodes they own, the nodes granted to them, and -- by descending
+// parent edges from those -- everything underneath either. The same rule the permission resolver applies node by
+// node, stated from the top down so a query can be scoped by it rather than filtered by it afterwards.
+// `grantedNodeIDs` comes from the share RA, which owns the grant rows.
+export interface AccessScope
+{
+    userID : string;
+    grantedNodeIDs : readonly string[];
+}
+
 // Whitelists the sortable columns so a caller's sort key can never reach orderBy as raw SQL. A key maps to the ordered
 // columns its partition sorts by: 'kind' widens to (type, mime type, name) so the file/link partition groups by type
 // and then by format; every other key is a single column. Folders are pinned above this ordering separately.
@@ -243,6 +253,24 @@ function filterConditions(eb : NodeExpressionBuilder, filters : NodeFilters) : E
     }
 
     return conditions;
+}
+
+// The seed row of an access-scope descent, which joins each node to its parent to ask who owns the rung above.
+type AccessRootExpressionBuilder = ExpressionBuilder<Database & { parent : Database['node'] }, 'node' | 'parent'>;
+
+// Where a caller's reach BEGINS: a node they own whose parent they do not (their own root level included), or a node
+// granted to them. A node under one of their own folders is not a root -- it is already reached by descending from
+// one -- and seeding every owned node instead would walk each subtree once per rung above it.
+function accessRootCondition(eb : AccessRootExpressionBuilder, scope : AccessScope) : Expression<SqlBool>
+{
+    const owned = eb.and([
+        eb('node.owner_id', '=', scope.userID),
+        eb.or([ eb('node.parent_id', 'is', null), eb('parent.owner_id', '<>', scope.userID) ]),
+    ]);
+
+    if(scope.grantedNodeIDs.length === 0) { return owned; }
+
+    return eb.or([ owned, eb('node.id', 'in', [ ...scope.grantedNodeIDs ]) ]);
 }
 
 // The predicate isolating one owner's trashed subtree ROOTS: a trashed node they own whose parent is not itself
@@ -561,6 +589,29 @@ export class NodeRA
         return chains;
     }
 
+    // How far the subtree rooted at `id` reaches below `id` itself: 0 for a file, a link, or a childless folder. A
+    // move carries the whole subtree, so this is what says whether a destination can hold it. Descends parent edges
+    // only, bounded like every other walk -- a subtree already deeper than the bound answers with the bound, which is
+    // over the placement ceiling and refuses the move.
+    async subtreeHeight(id : string) : Promise<number>
+    {
+        const row = await this.#db
+            .withRecursive('subtree(id, depth)', (qc) => qc
+                .selectFrom('node')
+                .select([ 'id', sql<number>`0`.as('depth') ])
+                .where('id', '=', id)
+                .unionAll(qc
+                    .selectFrom('node as child')
+                    .innerJoin('subtree', 'subtree.id', 'child.parent_id')
+                    .select([ 'child.id', sql<number>`subtree.depth + 1`.as('depth') ])
+                    .where('subtree.depth', '<', MAX_TREE_DEPTH)))
+            .selectFrom('subtree')
+            .select(sql<string | number>`coalesce(max(depth), 0)`.as('height'))
+            .executeTakeFirstOrThrow();
+
+        return Number(row.height);
+    }
+
     // The distinct blob shas of every file node in the subtree rooted at `id` (including `id` itself), gathered by
     // descending parent edges -- the set a hard delete might orphan, collected BEFORE the delete removes the rows. The
     // walk follows parent_id only, so links never steer it; links carry no blob and are ignored by the `type = 'file'`
@@ -613,9 +664,12 @@ export class NodeRA
     // A case-insensitive substring match on node name OR the content's embedded tags (title/artist/album, when
     // extraction has run for the blob), capped at `limit`, excluding trashed nodes. The match is dialect-aware:
     // Postgres LIKE is case-sensitive so it needs ILIKE, while SQLite LIKE is already case-insensitive for ASCII;
-    // both take an explicit ESCAPE so the pattern's escaped metacharacters behave identically. This is a
-    // match superset -- the caller resolves and filters these to the nodes it may actually see.
-    async searchByName(term : string, limit : number) : Promise<Node[]>
+    // both take an explicit ESCAPE so the pattern's escaped metacharacters behave identically.
+    //
+    // Every row this returns is one the caller can already resolve: the scope descends from their access roots and
+    // the match runs over that set, so `limit` cuts THEIR matches. Names outside their reach never enter the window,
+    // whatever they are and however early they sort.
+    async searchByName(term : string, scope : AccessScope, limit : number) : Promise<Node[]>
     {
         const pattern = `%${ escapeLikePattern(term) }%`;
         const matches = (column : string) : Expression<SqlBool> =>
@@ -627,6 +681,18 @@ export class NodeRA
         };
 
         const rows = await this.#db
+            .withRecursive('reach(id, depth)', (qc) => qc
+                .selectFrom('node')
+                .leftJoin('node as parent', 'parent.id', 'node.parent_id')
+                .select([ sql<string>`node.id`.as('id'), sql<number>`0`.as('depth') ])
+                .where((eb) => accessRootCondition(eb, scope))
+                .unionAll(qc
+                    .selectFrom('node as child')
+                    .innerJoin('reach', 'reach.id', 'child.parent_id')
+                    .select([ 'child.id', sql<number>`reach.depth + 1`.as('depth') ])
+                    // The same bound the resolver climbs with, so the two agree on what is reachable: a node further
+                    // from its access root than the resolver will walk is out of both.
+                    .where('reach.depth', '<', MAX_TREE_DEPTH)))
             .selectFrom('node')
             .leftJoin('media_tags', 'media_tags.blob_id', 'node.blob_id')
             .selectAll('node')
@@ -637,6 +703,7 @@ export class NodeRA
                 matches('media_tags.artist'),
                 matches('media_tags.album'),
             ]))
+            .where('node.id', 'in', (eb) => eb.selectFrom('reach').select('id'))
             .orderBy(lowerName('node.name'), 'asc')
             .orderBy('node.id', 'asc')
             .limit(limit)

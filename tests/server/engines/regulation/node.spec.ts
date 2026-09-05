@@ -1,11 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Node Regulation -- link, parent-edge, move, and trash legality
+// Node Regulation -- link, parent-edge, depth, move, and trash legality
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
 
 // Models
-import type { FileNode, FolderNode, LinkNode } from '@fileshed/core';
+import { type FileNode, type FolderNode, type LinkNode, MAX_PLACEMENT_DEPTH } from '@fileshed/core';
 
 // Regulation
 import type { RegulationResult } from '@server/engines/regulation/types.ts';
@@ -14,6 +14,7 @@ import {
     judgeLinkCreation,
     judgeMove,
     judgeParentEdge,
+    judgePlacementDepth,
     judgeTrash,
 } from '@server/engines/regulation/node.ts';
 
@@ -239,6 +240,63 @@ describe('judgeParentEdge', () =>
 
         expect(result.ok).toBe(false);
         expect(codes(result)).toContain('parent.crossOwner');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('judgePlacementDepth', () =>
+{
+    // The ceiling is one rung under the walk bound, so that a file landing inside the deepest folder a user may create
+    // still has its whole ancestor chain within reach of the walk.
+    it('admits a placement that lands on the deepest allowed rung', () =>
+    {
+        const result = judgePlacementDepth({
+            parentID: 'folder_deep',
+            placedDepth: MAX_PLACEMENT_DEPTH,
+            placedHeight: 0,
+        });
+
+        expect(result.ok).toBe(true);
+    });
+
+    it('rejects a placement one rung past the ceiling, naming the destination', () =>
+    {
+        const result = judgePlacementDepth({
+            parentID: 'folder_deep',
+            placedDepth: MAX_PLACEMENT_DEPTH + 1,
+            placedHeight: 0,
+        });
+
+        expect(result.ok).toBe(false);
+        expect(codes(result)).toEqual([ 'parent.tooDeep' ]);
+        expect(result.violations[0]?.parentID).toBe('folder_deep');
+    });
+
+    // A move carries a subtree, so the judgement is about its DEEPEST node: the same destination that holds a file
+    // cannot hold a folder with two rungs under it.
+    it('judges the deepest node the placement would land, not its root', () =>
+    {
+        const destination = { parentID: 'folder_deep', placedDepth: MAX_PLACEMENT_DEPTH - 2 };
+
+        expect(judgePlacementDepth({ ...destination, placedHeight: 2 }).ok).toBe(true);
+        expect(judgePlacementDepth({ ...destination, placedHeight: 3 }).ok).toBe(false);
+    });
+
+    // Root placement is depth 0, which nothing of legal height can exceed -- but a subtree that is ALREADY taller than
+    // the tree is allowed to be has nowhere legal to land, and says so without a parent to name.
+    it('admits root placement of an ordinary subtree and refuses an over-tall one', () =>
+    {
+        expect(judgePlacementDepth({ parentID: null, placedDepth: 0, placedHeight: 4 }).ok).toBe(true);
+
+        const overTall = judgePlacementDepth({
+            parentID: null,
+            placedDepth: 0,
+            placedHeight: MAX_PLACEMENT_DEPTH + 1,
+        });
+
+        expect(overTall.ok).toBe(false);
+        expect(overTall.violations[0]?.parentID).toBeUndefined();
     });
 });
 

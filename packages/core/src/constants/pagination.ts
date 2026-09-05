@@ -22,10 +22,9 @@ export const SQLITE_MAX_SORTED_IN_MEMORY = 100_000;
 // ceiling rides on this, and so does one whose background fill stopped on a failed chunk.
 export const LISTING_FETCH_MARGIN = 100;
 
-// Accessibility can't be pushed into the SQL pagination -- the permission resolver is a per-node recursive walk -- so
-// a search over-fetches this many name-matches, scopes them to the caller, then paginates the survivors. Generous
-// enough that real searches page fully, bounded so a common term can't fan one query across every tree into an
-// unbounded resolve.
+// How many matches one search gathers before paginating them. The query is already scoped to what the caller can
+// reach, so this bounds THEIR matches: generous enough that real searches page fully, bounded so a one-letter term
+// against a large tree still answers in one round trip.
 export const SEARCH_CANDIDATE_LIMIT = 1000;
 
 //----------------------------------------------------------------------------------------------------------------------

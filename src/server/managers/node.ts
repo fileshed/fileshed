@@ -68,6 +68,7 @@ import type { SessionUser } from '../resource-access/auth.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { DeletionOfferRA } from '../resource-access/deletionOffers/index.ts';
 import {
+    type AccessScope,
     type ChildrenOptions,
     type ChildrenQuery as ListingRoot,
     type NodeFilters,
@@ -284,21 +285,25 @@ export class NodeManager
         return { nodes, total, limit: query.limit, offset: query.offset, owners };
     }
 
-    // Name search scoped to the nodes the caller can see. A name-match superset comes back from the RA (case-
-    // insensitive on both dialects, trashed excluded, capped); every candidate's effective role resolves in ONE batch,
-    // the ones that resolve to null (a stranger's files) drop out, and the survivors carry the role the caller earned.
-    // Pagination runs over those survivors -- accessibility can't be pushed into the SQL pagination, so `total` is the
-    // count the caller may actually reach, and a page never leaks a node they cannot resolve. Each hit also carries
-    // where it lives, trimmed to the part of its ancestry the caller may see.
+    // Name search over the nodes the caller can see. The candidate query is SCOPED to their reach rather than filtered
+    // down to it: the RA descends from the caller's access roots (what they own, what is granted to them) and matches
+    // names inside that set, so the candidate cap cuts their own matches and a stranger's names can neither surface
+    // nor crowd them out. `total` is therefore the count of everything they may reach, and the page slices it.
+    //
+    // Roles resolve for the PAGE alone. Every candidate is reachable by construction, so a resolve over all of them
+    // would only re-derive what the scope already established -- at one recursive ancestor walk per candidate. Each
+    // hit also carries where it lives, trimmed to the part of its ancestry the caller may see.
     async search(caller : Actor, query : SearchQuery) : Promise<SearchResponse>
     {
         const actor = caller.user;
-        const candidates = await this.#nodes.searchByName(query.q, SEARCH_CANDIDATE_LIMIT);
-
-        const roles = await this.#shares.effectiveRoles(actor.id, candidates.map((node) => node.id));
-        const accessible = candidates.filter((node) => (roles.get(node.id) ?? null) !== null);
+        const scope : AccessScope = {
+            userID: actor.id,
+            grantedNodeIDs: await this.#shares.grantedNodeIDs(actor.id),
+        };
+        const accessible = await this.#nodes.searchByName(query.q, scope, SEARCH_CANDIDATE_LIMIT);
 
         const page = accessible.slice(query.offset, query.offset + query.limit);
+        const roles = await this.#shares.effectiveRoles(actor.id, page.map((node) => node.id));
         const targets = await this.#resolveTargets(actor, page);
         const owners = await this.#ownersOfPage(page, targets);
         const [ locations, sharing ] = await Promise.all([
@@ -310,8 +315,9 @@ export class NodeManager
         {
             const role = roles.get(node.id) ?? null;
 
-            // Unreachable: `accessible` already dropped every null-role node. A null here means the filter and this
-            // map disagree, so refuse loudly rather than stamp a role the resolver never granted.
+            // Unreachable: the scope and the resolver decide reachability by the same rule, bounded by the same walk
+            // depth. A null here means those two disagree, so refuse loudly rather than stamp a role the resolver
+            // never granted.
             if(role === null) { throw new Error(`search returned node ${ node.id } without a resolvable role`); }
 
             const facts = { role, sharing: sharing.get(node.id) ?? null };
@@ -487,7 +493,7 @@ export class NodeManager
     {
         const parent = await this.#gatherParent(request.parentID);
 
-        this.#enforce(await this.#judgeParentEdge(actor, parent));
+        this.#enforce(await this.#judgePlacement(actor, parent));
 
         const now = new Date();
         const node : Node = {
@@ -513,9 +519,9 @@ export class NodeManager
         const parent = await this.#gatherParent(request.parentID);
         const id = createId();
 
-        const [ creatorRoleOnTarget, parentEdge ] = await Promise.all([
+        const [ creatorRoleOnTarget, placement ] = await Promise.all([
             this.#shares.effectiveRole(caller.user.id, target.id),
-            this.#judgeParentEdge(caller.user, parent),
+            this.#judgePlacement(caller.user, parent),
         ]);
 
         this.#enforce(regulation.combine([
@@ -525,7 +531,7 @@ export class NodeManager
                 targetType: target.type,
                 creatorRoleOnTarget,
             }),
-            parentEdge,
+            placement,
         ]));
 
         const now = new Date();
@@ -569,7 +575,7 @@ export class NodeManager
 
         this.#enforce(regulation.combine([
             regulation.node.copy({ source }),
-            await this.#judgeParentEdge(actor, parent),
+            await this.#judgePlacement(actor, parent),
         ]));
 
         // Unreachable: judgeCopy rejects a non-file source above. The guard narrows the union so the snapshot reads the
@@ -781,23 +787,45 @@ export class NodeManager
         return parent;
     }
 
-    async #judgeParentEdge(actor : SessionUser, parent : Node | null) : Promise<RegulationResult>
+    // Both rules a destination must satisfy, for a create (nothing rides along, so `placedHeight` stays 0) and a move
+    // alike: the parent edge is legal for this actor, and the deepest node the placement lands still sits inside the
+    // depth every parent-edge walk climbs. A caller that has already walked the destination's chain -- the move judge
+    // needs it for the cycle check -- passes it in, so a move costs one walk rather than two.
+    async #judgePlacement(
+        actor : SessionUser,
+        parent : Node | null,
+        placedHeight = 0,
+        parentAncestorIDs ?: string[]
+    ) : Promise<RegulationResult>
     {
-        return regulation.node.parentEdge({
-            creatorID: actor.id,
-            parent,
-            creatorRoleOnParent: parent === null ? null : await this.#shares.effectiveRole(actor.id, parent.id),
-        });
+        const [ creatorRoleOnParent, ancestorIDs ] : [ Role | null, string[] ] = parent === null
+            ? [ null, [] ]
+            : await Promise.all([
+                this.#shares.effectiveRole(actor.id, parent.id),
+                parentAncestorIDs ?? this.#nodes.ancestorIDs(parent.id),
+            ]);
+
+        return regulation.combine([
+            regulation.node.parentEdge({ creatorID: actor.id, parent, creatorRoleOnParent }),
+            regulation.node.placementDepth({
+                parentID: parent === null ? null : parent.id,
+                placedDepth: parent === null ? 0 : ancestorIDs.length + 1,
+                placedHeight,
+            }),
+        ]);
     }
 
     async #judgeMove(actor : SessionUser, node : Node, newParentID : string | null) : Promise<void>
     {
         const parent = await this.#gatherParent(newParentID);
-        const parentAncestorIDs = newParentID === null ? [] : await this.#nodes.ancestorIDs(newParentID);
+        const [ parentAncestorIDs, placedHeight ] = await Promise.all([
+            newParentID === null ? Promise.resolve([]) : this.#nodes.ancestorIDs(newParentID),
+            this.#nodes.subtreeHeight(node.id),
+        ]);
 
         this.#enforce(regulation.combine([
             regulation.node.move({ nodeID: node.id, newParentID, parentAncestorIDs }),
-            await this.#judgeParentEdge(actor, parent),
+            await this.#judgePlacement(actor, parent, placedHeight, parentAncestorIDs),
         ]));
     }
 
@@ -852,7 +880,7 @@ export class NodeManager
     ) : Promise<NodeResponse>
     {
         const parent = await this.#gatherParent(parentID);
-        this.#enforce(await this.#judgeParentEdge(actor, parent));
+        this.#enforce(await this.#judgePlacement(actor, parent));
 
         return this.#insertCopy(actor, snapshot, parentID, prepare);
     }

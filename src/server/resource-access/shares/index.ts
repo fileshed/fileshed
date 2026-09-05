@@ -171,6 +171,22 @@ export class ShareRA
         return grants;
     }
 
+    // Every node granted directly to this user -- the roots their inherited access descends from, since a grant on a
+    // folder reaches its whole subtree. One flat lookup over share_grantee_user_id_idx. A query that must be SCOPED to
+    // what the caller can reach starts here and descends parent edges; the resolver above answers the same question
+    // node-first, by climbing.
+    async grantedNodeIDs(userID : string) : Promise<string[]>
+    {
+        const rows = await this.#db
+            .selectFrom('share')
+            .select('node_id')
+            .distinct()
+            .where('grantee_user_id', '=', userID)
+            .execute();
+
+        return rows.map((row) => row.node_id);
+    }
+
     // Every distinct user holding a grant on ANY of the given nodes -- pass a node plus its ancestor chain and this
     // answers "who can currently see this node through a share". One flat lookup, no walk; the caller supplies the
     // chain (NodeRA.ancestorIDs) precisely because grants on ancestors reach everything beneath them.

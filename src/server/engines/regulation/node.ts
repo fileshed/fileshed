@@ -8,6 +8,7 @@
 
 // Models
 import {
+    MAX_PLACEMENT_DEPTH,
     type Node,
     type NodeType,
     type RegulationViolation,
@@ -132,6 +133,38 @@ export function judgeParentEdge(facts : ParentEdgeFacts) : RegulationResult
     }
 
     return resultOf(violations);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Placement Depth
+//----------------------------------------------------------------------------------------------------------------------
+
+// A placement stated as depth: how many ancestors the placed node itself would end up with (0 at a user's root), and
+// how far its own subtree reaches below it -- 0 for a file, a link, or an empty folder. A move carries the subtree, so
+// the pair together name the deepest node the placement would land.
+export interface PlacementDepthFacts
+{
+    parentID : string | null;
+    placedDepth : number;
+    placedHeight : number;
+}
+
+// The depth ceiling, judged over the deepest node a placement would land rather than its root. Every parent-edge walk
+// -- permission resolution above all -- climbs a bounded number of rungs and answers from what it saw, so a chain
+// longer than that bound would be resolved from part of itself. Refusing the placement is what keeps the bound a fact
+// about the tree instead of a hope.
+export function judgePlacementDepth(facts : PlacementDepthFacts) : RegulationResult
+{
+    if(facts.placedDepth + facts.placedHeight <= MAX_PLACEMENT_DEPTH) { return resultOf([]); }
+
+    const violation : RegulationViolation = {
+        code: 'parent.tooDeep',
+        message: `A node may not be nested more than ${ MAX_PLACEMENT_DEPTH } folders deep.`,
+    };
+
+    if(facts.parentID !== null) { violation.parentID = facts.parentID; }
+
+    return resultOf([ violation ]);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

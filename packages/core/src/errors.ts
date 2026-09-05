@@ -133,6 +133,7 @@ export type RegulationCode
     | 'parent.notFolder'
     | 'parent.trashed'
     | 'parent.crossOwner'
+    | 'parent.tooDeep'
     | 'move.intoSelf'
     | 'move.intoDescendant'
     | 'trash.linkNotTrashable'
@@ -157,6 +158,7 @@ export const RegulationCodeDisplay : Record<RegulationCode, string> = {
     'parent.notFolder': 'That destination isn\'t a folder.',
     'parent.trashed': 'That destination is in the trash.',
     'parent.crossOwner': 'You can only move items into a folder you own.',
+    'parent.tooDeep': 'That destination is nested as deep as folders go.',
     'move.intoSelf': 'You can\'t move a folder into itself.',
     'move.intoDescendant': 'You can\'t move a folder into one of its own subfolders.',
     'trash.linkNotTrashable': 'Links are removed, not trashed.',

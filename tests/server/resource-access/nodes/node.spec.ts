@@ -12,7 +12,7 @@ import type { Kysely } from 'kysely';
 
 // Resource Access
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { type AccessScope, NodeRA } from '@server/resource-access/nodes/node.ts';
 
 // Support
 import { createTestDatabase, fileNode, folderNode, linkNode, seedBackend, seedBlob, seedUser } from './support.ts';
@@ -591,6 +591,12 @@ describe('NodeRA.children filters', () =>
 
 describe('NodeRA.searchByName', () =>
 {
+    // Everything u1 can reach and nothing else, stated as the scope the manager hands down.
+    function scopeFor(userID : string, grantedNodeIDs : string[] = []) : AccessScope
+    {
+        return { userID, grantedNodeIDs };
+    }
+
     // A result set orders by the same folded name a folder listing does, rather than gathering the capitalized hits
     // into a run of their own ahead of everything else.
     it('orders matches case-insensitively', async () =>
@@ -599,9 +605,57 @@ describe('NodeRA.searchByName', () =>
         await ra.insert(file('f-cherry', { name: 'cherry pie.txt' }));
         await ra.insert(file('f-apple', { name: 'apple pie.txt' }));
 
-        const matches = await ra.searchByName('pie', 100);
+        const matches = await ra.searchByName('pie', scopeFor('u1'), 100);
 
         expect(matches.map((node) => node.name)).toEqual([ 'apple pie.txt', 'Banana pie.txt', 'cherry pie.txt' ]);
+    });
+
+    // The scope is the caller's reach by the same rule permission resolution applies: their own nodes, whatever is
+    // granted to them, and everything below either -- including a contribution inside their folder that someone else
+    // owns, which an owner-only filter would miss.
+    it('returns matches inside the caller\'s reach and nothing outside it', async () =>
+    {
+        await ra.insert(folderNode({ id: 'mine', ownerID: 'u1', name: 'pie-folder' }));
+        await ra.insert(file('contributed', { parentID: 'mine', ownerID: 'u2', name: 'their pie.txt' }));
+        await ra.insert(folderNode({ id: 'granted', ownerID: 'u2', name: 'granted pie' }));
+        await ra.insert(file('under-granted', { parentID: 'granted', ownerID: 'u2', name: 'inner pie.txt' }));
+        await ra.insert(folderNode({ id: 'stranger', ownerID: 'u2', name: 'stranger pie' }));
+        await ra.insert(file('under-stranger', { parentID: 'stranger', ownerID: 'u2', name: 'hidden pie.txt' }));
+
+        const matches = await ra.searchByName('pie', scopeFor('u1', [ 'granted' ]), 100);
+
+        expect(matches.map((node) => node.id).sort())
+            .toEqual([ 'contributed', 'granted', 'mine', 'under-granted' ]);
+    });
+
+    // What the whole scoping exists for: the cap cuts the CALLER's matches. Matches outside their reach never enter
+    // the window, however many there are and however early they sort.
+    it('spends the cap on the caller\'s own matches, never on someone else\'s', async () =>
+    {
+        await Promise.all(Array.from(
+            { length: 4 },
+            (_unused, index) => ra.insert(folderNode({
+                id: `theirs-${ index }`, ownerID: 'u2', name: `aaa pie ${ index }`,
+            }))
+        ));
+        await ra.insert(folderNode({ id: 'ours-1', ownerID: 'u1', name: 'zzz pie 1' }));
+        await ra.insert(folderNode({ id: 'ours-2', ownerID: 'u1', name: 'zzz pie 2' }));
+
+        const matches = await ra.searchByName('pie', scopeFor('u1'), 2);
+
+        expect(matches.map((node) => node.id)).toEqual([ 'ours-1', 'ours-2' ]);
+    });
+
+    // A grant reaches down, never up: the folders above the granted one belong to its owner alone.
+    it('reaches below a granted folder without exposing the folders above it', async () =>
+    {
+        await ra.insert(folderNode({ id: 'private', ownerID: 'u2', name: 'private pie' }));
+        await ra.insert(folderNode({ id: 'shared', ownerID: 'u2', parentID: 'private', name: 'shared pie' }));
+        await ra.insert(file('inside', { parentID: 'shared', ownerID: 'u2', name: 'deep pie.txt' }));
+
+        const matches = await ra.searchByName('pie', scopeFor('u1', [ 'shared' ]), 100);
+
+        expect(matches.map((node) => node.id).sort()).toEqual([ 'inside', 'shared' ]);
     });
 });
 
@@ -683,6 +737,49 @@ describe('NodeRA.ancestorIDs', () =>
         expect(await ra.ancestorIDs('lk')).toEqual([ 'c', 'b', 'a', 'r' ]);
         // And c's chain is untouched by the link that now sits under it.
         expect(await ra.ancestorIDs('c')).toEqual([ 'b', 'a', 'r' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// subtreeHeight
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeRA.subtreeHeight', () =>
+{
+    it('answers 0 for a node with nothing under it', async () =>
+    {
+        await ra.insert(folderNode({ id: 'empty', ownerID: 'u1' }));
+        await ra.insert(file('lone', {}));
+
+        expect(await ra.subtreeHeight('empty')).toBe(0);
+        expect(await ra.subtreeHeight('lone')).toBe(0);
+    });
+
+    // The height is the DEEPEST rung, not the number of descendants: a wide folder is still one rung tall.
+    it('measures the deepest rung below the node, whatever the subtree\'s width', async () =>
+    {
+        await ra.insert(folderNode({ id: 'root', ownerID: 'u1' }));
+        await ra.insert(file('wide-1', { parentID: 'root' }));
+        await ra.insert(file('wide-2', { parentID: 'root' }));
+        await ra.insert(folderNode({ id: 'mid', ownerID: 'u1', parentID: 'root' }));
+        await ra.insert(folderNode({ id: 'lower', ownerID: 'u1', parentID: 'mid' }));
+        await ra.insert(file('deep', { parentID: 'lower' }));
+
+        expect(await ra.subtreeHeight('root')).toBe(3);
+        expect(await ra.subtreeHeight('mid')).toBe(2);
+    });
+
+    // A link is an inert pointer: it counts as the leaf it is where it sits, and never redirects the descent into
+    // whatever it targets.
+    it('counts a link where it sits and never follows it to its target', async () =>
+    {
+        await ra.insert(folderNode({ id: 'tall', ownerID: 'u1' }));
+        await ra.insert(folderNode({ id: 'tall-mid', ownerID: 'u1', parentID: 'tall' }));
+        await ra.insert(file('tall-leaf', { parentID: 'tall-mid' }));
+        await ra.insert(folderNode({ id: 'shelf', ownerID: 'u1' }));
+        await ra.insert(linkNode({ id: 'lk', ownerID: 'u1', parentID: 'shelf', targetNodeID: 'tall' }));
+
+        expect(await ra.subtreeHeight('shelf')).toBe(1);
     });
 });
 

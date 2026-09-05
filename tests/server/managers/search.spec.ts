@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
-import type { NodeResponse, SearchResponse } from '@fileshed/core';
+import { type NodeResponse, SEARCH_CANDIDATE_LIMIT, type SearchResponse } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -379,6 +379,65 @@ describe('NodeManager.search locations', () =>
         const result = await search('alice', 'linked-report');
 
         expect(crumbNamesOf(result, 'shortcut')).toEqual([ 'Shelf' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+// Isolation — nothing outside the caller's reach may compete for the candidate window
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeManager.search isolation', () =>
+{
+    // Root-level folders owned by one user, named so they sort ahead of anything the victim owns. Folders because they
+    // cost no quota: the cheapest way to occupy a lot of names.
+    async function seedFolders(ownerID : string, count : number, prefix : string) : Promise<void>
+    {
+        const now = new Date().toISOString();
+        const rows = Array.from({ length: count }, (_unused, index) => ({
+            id: `${ prefix }${ index }`,
+            type: 'folder' as const,
+            name: `${ prefix }${ index }`,
+            owner_id: ownerID,
+            parent_id: null,
+            created_at: now,
+            updated_at: now,
+        }));
+
+        await handle.db
+            .insertInto('node')
+            .values(rows)
+            .execute();
+    }
+
+    // The whole point of scoping the query rather than filtering its result: nodes the caller can never see must not
+    // occupy the candidate window, or a stranger's bulk upload silently empties everyone else's search.
+    it('answers a member\'s own matches whatever another member piled up under the same term', async () =>
+    {
+        await seedFolders('bob', SEARCH_CANDIDATE_LIMIT + 200, 'aaa-report-');
+        await ra.insert(fileNode({ id: 'q3', ownerID: 'alice', blobID: 'sha-a', name: 'q3-report.pdf' }));
+        await ra.insert(fileNode({ id: 'q4', ownerID: 'alice', blobID: 'sha-a', name: 'q4-report.pdf' }));
+
+        const result = await search('alice', 'report');
+
+        expect(idsOf(result.nodes)).toEqual([ 'q3', 'q4' ]);
+        expect(result.total).toBe(2);
+    });
+
+    // The same crowding must not reach a share either: a grantee's view of what was shared to them is theirs, and
+    // an unrelated member's tree is not part of the set it pages over.
+    it('answers a grantee\'s shared-in matches whatever another member piled up under the same term', async () =>
+    {
+        await seedFolders('bob', SEARCH_CANDIDATE_LIMIT + 200, 'aaa-report-');
+        await ra.insert(folderNode({ id: 'vault', ownerID: 'alice', name: 'Vault' }));
+        await ra.insert(fileNode({
+            id: 'shared', ownerID: 'alice', parentID: 'vault', blobID: 'sha-a', name: 'q3-report.pdf',
+        }));
+        await seedShare('vault', 'carol', 'viewer');
+
+        const result = await search('carol', 'report');
+
+        expect(idsOf(result.nodes)).toEqual([ 'shared' ]);
+        expect(result.total).toBe(1);
     });
 });
 

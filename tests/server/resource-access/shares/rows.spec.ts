@@ -137,6 +137,37 @@ describe('ShareRA share rows', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+// Granted nodes -- where a caller's inherited reach begins
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('ShareRA.grantedNodeIDs', () =>
+{
+    it('names every node granted to the caller, and none granted to anyone else', async () =>
+    {
+        await nodes.insert(folderNode({ id: 'f1', ownerID: 'owner' }));
+        await nodes.insert(folderNode({ id: 'f2', ownerID: 'owner' }));
+        await nodes.insert(folderNode({ id: 'f3', ownerID: 'owner' }));
+        await shares.upsertShare(shareOf('s1', 'f1', 'grantee', 'viewer'));
+        await shares.upsertShare(shareOf('s2', 'f2', 'grantee', 'editor'));
+        await shares.upsertShare(shareOf('s3', 'f3', 'other', 'viewer'));
+
+        expect((await shares.grantedNodeIDs('grantee')).sort()).toEqual([ 'f1', 'f2' ]);
+        expect(await shares.grantedNodeIDs('requester')).toEqual([]);
+    });
+
+    // Two grants on the same node -- the caller's and someone else's -- name that node once, since the answer feeds a
+    // set of roots to descend from rather than a count of grants.
+    it('names a node once however many grants stand on it', async () =>
+    {
+        await nodes.insert(folderNode({ id: 'f1', ownerID: 'owner' }));
+        await shares.upsertShare(shareOf('s1', 'f1', 'grantee', 'viewer'));
+        await shares.upsertShare(shareOf('s2', 'f1', 'other', 'editor'));
+
+        expect(await shares.grantedNodeIDs('grantee')).toEqual([ 'f1' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
 // Grantee counts -- the batched question a listing asks
 //----------------------------------------------------------------------------------------------------------------------
 

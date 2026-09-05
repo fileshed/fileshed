@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
-import { NotFoundError } from '@fileshed/core';
+import { MAX_PLACEMENT_DEPTH, NotFoundError } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -503,6 +503,90 @@ describe('NodeManager.children through a folder link', () =>
             expect(node.targetNodeID).toBe('docs');
             expect(node.target).toMatchObject({ id: 'docs', type: 'folder', name: 'Documents' });
         }
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+//----------------------------------------------------------------------------------------------------------------------
+// Placement depth — the tree may not be built deeper than permission resolution walks
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('NodeManager placement depth', () =>
+{
+    // A chain of `length` nested folders owned by alice, `chain-0` at her root. `chain-n` therefore has n ancestors.
+    async function seedChain(length : number) : Promise<void>
+    {
+        const now = new Date().toISOString();
+        const rows = Array.from({ length }, (_unused, index) => ({
+            id: `chain-${ index }`,
+            type: 'folder' as const,
+            name: `chain-${ index }`,
+            owner_id: 'alice',
+            parent_id: index === 0 ? null : `chain-${ index - 1 }`,
+            created_at: now,
+            updated_at: now,
+        }));
+
+        await handle.db
+            .insertInto('node')
+            .values(rows)
+            .execute();
+    }
+
+    // Placement stops one rung short of the walk bound, so a file uploaded into the deepest folder a user may create
+    // still resolves through its whole ancestor chain.
+    const deepestLegalParent = MAX_PLACEMENT_DEPTH - 1;
+
+    it('creates a folder at the deepest rung placement allows', async () =>
+    {
+        await seedChain(MAX_PLACEMENT_DEPTH + 1);
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+
+        const created = await manager.createFolder(testActor({ id: 'alice' }), {
+            name: 'deepest',
+            parentID: `chain-${ deepestLegalParent }`,
+        });
+
+        expect(created.id).toBeDefined();
+    });
+
+    it('refuses a create that would place a node past the depth the resolver walks', async () =>
+    {
+        await seedChain(MAX_PLACEMENT_DEPTH + 1);
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+
+        const attempt = manager.createFolder(testActor({ id: 'alice' }), {
+            name: 'one-too-deep',
+            parentID: `chain-${ MAX_PLACEMENT_DEPTH }`,
+        });
+
+        await expect(attempt).rejects.toMatchObject({
+            violations: [ expect.objectContaining({ code: 'parent.tooDeep' }) ],
+        });
+    });
+
+    // A move carries a whole subtree, so the rule judges the DEEPEST node it would land, not just its root: a legal
+    // destination for a leaf is not a legal destination for a tall folder.
+    it('refuses a move that would push the moved subtree past the bound, and allows one that fits', async () =>
+    {
+        await seedChain(MAX_PLACEMENT_DEPTH + 1);
+        await ra.insert(folderNode({ id: 'tall', ownerID: 'alice' }));
+        await ra.insert(folderNode({ id: 'tall-mid', ownerID: 'alice', parentID: 'tall' }));
+        await ra.insert(fileNode({ id: 'tall-leaf', ownerID: 'alice', parentID: 'tall-mid', blobID: 'sha-a' }));
+
+        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const alice = testSession({ id: 'alice' });
+
+        // 'tall' reaches two rungs below itself, so the deepest parent that can hold it is two rungs shallower.
+        const tooDeep = manager.patch(alice, 'tall', { parentID: `chain-${ deepestLegalParent - 1 }` });
+        await expect(tooDeep).rejects.toMatchObject({
+            violations: [ expect.objectContaining({ code: 'parent.tooDeep' }) ],
+        });
+
+        const moved = await manager.patch(alice, 'tall', { parentID: `chain-${ deepestLegalParent - 2 }` });
+
+        expect(moved.parentID).toBe(`chain-${ deepestLegalParent - 2 }`);
     });
 });
 

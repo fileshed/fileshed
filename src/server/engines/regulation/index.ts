@@ -9,7 +9,15 @@
 
 // Regulation
 import { combine } from './types.ts';
-import { judgeCopy, judgeLinkCreation, judgeMove, judgeParentEdge, judgeReplace, judgeTrash } from './node.ts';
+import {
+    judgeCopy,
+    judgeLinkCreation,
+    judgeMove,
+    judgeParentEdge,
+    judgePlacementDepth,
+    judgeReplace,
+    judgeTrash,
+} from './node.ts';
 import { judgeGrant, judgeShareRequestResolution } from './share.ts';
 import { judgeQuotaAdmission } from './quota.ts';
 
@@ -19,6 +27,7 @@ export const regulation = {
     node: {
         link: judgeLinkCreation,
         parentEdge: judgeParentEdge,
+        placementDepth: judgePlacementDepth,
         move: judgeMove,
         trash: judgeTrash,
         copy: judgeCopy,
@@ -41,8 +50,24 @@ export const regulation = {
 export type { RegulationResult } from './types.ts';
 export { combine, resultOf } from './types.ts';
 
-export type { LinkCreationFacts, ParentEdgeFacts, MoveFacts, TrashFacts, CopyFacts, ReplaceFacts } from './node.ts';
-export { judgeLinkCreation, judgeParentEdge, judgeMove, judgeTrash, judgeCopy, judgeReplace } from './node.ts';
+export type {
+    LinkCreationFacts,
+    ParentEdgeFacts,
+    PlacementDepthFacts,
+    MoveFacts,
+    TrashFacts,
+    CopyFacts,
+    ReplaceFacts,
+} from './node.ts';
+export {
+    judgeLinkCreation,
+    judgeParentEdge,
+    judgePlacementDepth,
+    judgeMove,
+    judgeTrash,
+    judgeCopy,
+    judgeReplace,
+} from './node.ts';
 
 export type { GrantFacts, ShareRequestResolutionFacts } from './share.ts';
 export { judgeGrant, judgeShareRequestResolution } from './share.ts';
