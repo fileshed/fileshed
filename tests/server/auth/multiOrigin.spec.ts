@@ -304,12 +304,25 @@ describe('provider sign-in callback', () =>
         expect(await redirectURI(res)).toBe(`${ ORIGIN }/api/auth/callback/github`);
     });
 
-    // Same for the proxy header, which better-auth trusts by default once baseURL is host-derived.
+    // Same for the proxy header, which this instance states outright it does not read.
     it('ignores a forged X-Forwarded-Host header the same way', async () =>
     {
         const post = await socialClient([ ALTERNATE ]);
 
         const res = await startSignIn(post, ORIGIN, { 'x-forwarded-host': 'evil.example' });
+
+        expect(res.status).toBe(200);
+        expect(await redirectURI(res)).toBe(`${ ORIGIN }/api/auth/callback/github`);
+    });
+
+    // The one that tells the two explanations apart. An unlisted forged host proves only that the allowlist did its
+    // job; a forged host that IS listed would be accepted the moment the header were read at all, so answering as
+    // the canonical URL here is the header going unread.
+    it('does not read a forged X-Forwarded-Host even when it names a configured origin', async () =>
+    {
+        const post = await socialClient([ ALTERNATE ]);
+
+        const res = await startSignIn(post, ORIGIN, { 'x-forwarded-host': new URL(ALTERNATE).host });
 
         expect(res.status).toBe(200);
         expect(await redirectURI(res)).toBe(`${ ORIGIN }/api/auth/callback/github`);

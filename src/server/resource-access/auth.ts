@@ -292,6 +292,14 @@ const authOptionsShape = {
 
         // Placeholder for the type only: createAuth supplies the config-derived policy.
         ipAddress: { ipAddressHeaders: [] as string[], trustedProxies: [] as string[] },
+
+        // Whether x-forwarded-host may name the host this instance builds its URLs from. Written down rather than
+        // left to the library's default, which has already moved once. Off, because better-auth resolves it from
+        // headers alone -- it never sees the socket, so it cannot tell a proxy's forwarded host from a value any
+        // client typed, and ALLOWED_HOSTS would be the only thing between a forged one and a password-reset link
+        // pointing at somebody else's address. A deployment whose proxy rewrites Host instead of passing it through
+        // is answered as BASE_URL, which is the right answer rather than a degraded one.
+        trustedProxyHeaders: false,
     },
     user: {
         additionalFields: {

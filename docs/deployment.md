@@ -175,7 +175,12 @@ app degrade on plain HTTP by browser policy:
 - Casting: AirPlay and (future) Cast receivers fetch media URLs **themselves**, so `BASE_URL` must be reachable from
   those devices, and secure contexts unlock the full casting stack.
 
-Set `BASE_URL` to the public HTTPS URL and forward `Host` / `X-Forwarded-*` headers as usual.
+Set `BASE_URL` to the public HTTPS URL, and pass the browser's `Host` through rather than rewriting it to the
+upstream name — nginx sends `$proxy_host` unless you set `proxy_set_header Host $host`. The `Host` a request arrives
+with is what FileShed answers as, checked against `BASE_URL` and the lists below. `X-Forwarded-Host` is deliberately
+not read: FileShed never sees the socket a header arrived over, so it cannot tell a proxy's word from a client's, and
+a request that could name its own host could put that host in a password-reset link. A request whose `Host` is not
+recognised is answered as `BASE_URL`.
 
 **Name the proxy.** Set `TRUSTED_PROXIES` to its address or CIDR range (`10.0.0.7`, `10.0.0.0/24`, comma-separated).
 FileShed identifies a client by the socket it connected on and reads `X-Forwarded-For` only from a peer on that list,

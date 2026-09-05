@@ -46,6 +46,18 @@ describe('createAuth', () =>
 
         await booted.handle.db.destroy();
     });
+
+    // The value this library defaults to has already moved once. What it must be for this instance is that a request
+    // cannot name the host its own password-reset link is built on: better-auth reads the header without ever seeing
+    // the socket it arrived over, so it has no way to tell a proxy's word from a client's.
+    it('builds its URLs from the host a request was addressed to, never from a forwarded one', async () =>
+    {
+        const booted = await bootTestApp({ TRUSTED_PROXIES: [ '10.0.0.0/24' ] });
+
+        expect(booted.auth.options.advanced.trustedProxyHeaders).toBe(false);
+
+        await booted.handle.db.destroy();
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
