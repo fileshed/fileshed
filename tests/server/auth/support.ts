@@ -74,6 +74,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         AUTH_SECRET: TEST_AUTH_SECRET,
         BASE_URL: ORIGIN,
         TRUSTED_ORIGINS: [],
+        ALLOWED_HOSTS: [],
         TRUSTED_PROXIES: null,
         RATE_LIMIT_ENABLED: true,
         RATE_LIMIT_WINDOW_SECONDS: 60,

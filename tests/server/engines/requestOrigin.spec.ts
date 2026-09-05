@@ -86,6 +86,13 @@ describe('originAllowed', () =>
         expect(check({ origin: `https://${ HOST }.evil.example` })).toBe(false);
         expect(check({ origin: `https://evil.example#${ HOST }` })).toBe(false);
     });
+
+    // The development posture, where the box is reached at whatever address is handy and there is no cross-site
+    // request left to refuse. A deployment reaches it only by writing it down.
+    it('allows any origin once the allowlist is the wildcard', () =>
+    {
+        expect(check({ origin: 'https://evil.example', allowedOrigins: [ '*' ] })).toBe(true);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Auth — the origins an instance answers on
 //
-// This file runs as production, set before the imports: the alternate-host wiring is production-only, and
-// better-auth reads NODE_ENV and TEST once as its own module loads, turning its origin check off entirely under a
-// test environment. An instance built any other way accepts every origin and proves nothing. Both variables go back
-// afterwards -- the worker process is shared with the files that run after this one.
+// This file runs as production, set before the imports: better-auth reads NODE_ENV and TEST once as its own module
+// loads, turning its origin check off entirely under a test environment, and an instance built that way accepts every
+// origin and proves nothing. Both variables go back afterwards -- the worker process is shared with the files that
+// run after this one.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
@@ -91,13 +91,30 @@ describe('resolveBaseURL', () =>
         });
     });
 
-    // A dev box gets reached however is handy -- localhost, a LAN address, a .local name -- and answers as whatever
-    // it was reached by.
-    it('answers on any host outside production', () =>
+    it('lists a configured host beside the origins, written as a host rather than a URL', () =>
     {
-        process.env['NODE_ENV'] = 'development';
+        const config = testConfig({ ALLOWED_HOSTS: [ 'files.internal:3950' ] });
 
-        expect(resolveBaseURL(testConfig()).allowedHosts).toEqual([ 'localhost:3000', '*' ]);
+        expect(resolveBaseURL(config).allowedHosts).toEqual([ 'localhost:3000', 'files.internal:3950' ]);
+    });
+
+    // A dev box gets reached however is handy -- localhost, a LAN address, a .local name -- and answers as whatever
+    // it was reached by. Stated in the config rather than inferred, so a deployment cannot fall into it by starting
+    // the process without an environment variable set.
+    it('answers on any host when the config says any host', () =>
+    {
+        const config = testConfig({ ALLOWED_HOSTS: [ '*' ] });
+
+        expect(resolveBaseURL(config).allowedHosts).toEqual([ 'localhost:3000', '*' ]);
+    });
+
+    // The wildcard is an origin list's whole value, and better-auth matches hosts here -- carrying it across would
+    // put a pattern in the host list that the config never asked for.
+    it('does not turn a wide-open origin list into a wide-open host list', () =>
+    {
+        const config = testConfig({ TRUSTED_ORIGINS: [ '*' ] });
+
+        expect(resolveBaseURL(config).allowedHosts).toEqual([ 'localhost:3000' ]);
     });
 });
 
@@ -107,16 +124,14 @@ describe('resolveTrustedOrigins', () =>
 {
     // better-auth derives the trust list from allowedHosts and the fallback on its own; the sign-in cases below are
     // what prove it, and adding the same origins here again would only duplicate the list.
-    it('adds nothing of its own in production', () =>
+    it('adds nothing of its own for a named list', () =>
     {
-        expect(resolveTrustedOrigins()).toEqual([]);
+        expect(resolveTrustedOrigins(testConfig({ TRUSTED_ORIGINS: [ ALTERNATE ] }))).toEqual([]);
     });
 
-    it('matches any origin outside production', () =>
+    it('matches any origin when the config says any origin', () =>
     {
-        process.env['NODE_ENV'] = 'development';
-
-        expect(resolveTrustedOrigins()).toEqual([ '*' ]);
+        expect(resolveTrustedOrigins(testConfig({ TRUSTED_ORIGINS: [ '*' ] }))).toEqual([ '*' ]);
     });
 });
 

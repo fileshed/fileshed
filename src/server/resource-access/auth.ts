@@ -27,6 +27,7 @@ import {
     ACCESS_TOKEN_MAX_EXPIRES_DAYS,
     ACCESS_TOKEN_MIN_EXPIRES_DAYS,
     ACCESS_TOKEN_PREFIX,
+    ANY_HOST,
     DISPLAY_NAME_MAX_LENGTH,
     MS_PER_SECOND,
     PLAYBACK_TOKEN_PREFIX,
@@ -56,8 +57,8 @@ type DynamicBaseURL = Exclude<NonNullable<BetterAuthOptions['baseURL']>, string>
 // of teleporting to the canonical one. A host that is not on the list resolves to the fallback, which is what makes
 // a forged Host (or X-Forwarded-Host) header inert -- it cannot mint a URL, it only ever gets the canonical one.
 //
-// Development adds the bare `*` pattern so a dev box still answers wherever it is reached: localhost, the machine's
-// LAN IP for cast/phone testing, a .local hostname.
+// ALLOWED_HOSTS extends the list, and `*` there accepts every host -- what a development box wants when it is reached
+// at localhost, at its LAN IP for cast and phone testing, and at a .local name in the same sitting.
 //
 // One protocol covers every host, which is why the config refuses a TRUSTED_ORIGINS list that mixes schemes. It is
 // also what sets the session cookie's Secure flag -- https here means Secure cookies, exactly as a plain BASE_URL
@@ -65,10 +66,15 @@ type DynamicBaseURL = Exclude<NonNullable<BetterAuthOptions['baseURL']>, string>
 export function resolveBaseURL(config : Config) : DynamicBaseURL
 {
     const canonical = new URL(config.BASE_URL);
-    const hosts = new Set([ canonical.host, ...config.TRUSTED_ORIGINS.map((origin) => new URL(origin).host) ]);
+    const named = config.TRUSTED_ORIGINS.filter((origin) => origin !== ANY_HOST);
+    const hosts = new Set([
+        canonical.host,
+        ...named.map((origin) => new URL(origin).host),
+        ...config.ALLOWED_HOSTS,
+    ]);
 
     return {
-        allowedHosts: process.env['NODE_ENV'] === 'production' ? [ ...hosts ] : [ ...hosts, '*' ],
+        allowedHosts: [ ...hosts ],
         protocol: canonical.protocol === 'https:' ? 'https' : 'http',
         fallback: config.BASE_URL,
     };
@@ -89,13 +95,12 @@ export function resolveIpAddressPolicy(config : Config) : { ipAddressHeaders : s
 }
 
 // Origins allowed to hit the auth endpoints. Same-origin requests (client served by the server) never need this; it
-// exists for the cross-origin flows. Production adds nothing: better-auth joins every allowedHosts entry and the
+// exists for the cross-origin flows. A named list adds nothing: better-auth joins every allowedHosts entry and the
 // fallback's origin into the trust list itself, under the same protocol, so listing them again would only duplicate
-// it. Development keeps the bare `*` pattern, which matches any host. The rest of the CSRF machinery stays on;
-// only the origin allowlist opens up, and only outside production.
-export function resolveTrustedOrigins() : string[]
+// it. Only `*` has anything to add, and it matches any host at all.
+export function resolveTrustedOrigins(config : Config) : string[]
 {
-    return process.env['NODE_ENV'] === 'production' ? [] : [ '*' ];
+    return config.TRUSTED_ORIGINS.includes(ANY_HOST) ? [ ANY_HOST ] : [];
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -453,7 +458,7 @@ export function createAuth(handle : DatabaseHandle, config : Config, secret : st
         database: { db: handle.db, type: handle.kind },
         secret,
         baseURL: resolveBaseURL(config),
-        trustedOrigins: resolveTrustedOrigins(),
+        trustedOrigins: resolveTrustedOrigins(config),
         socialProviders: socialProvidersFromValues(extras.providerValues ?? providerValuesFromConfig(config)),
         emailAndPassword: emailAndPasswordOptions(handle, extras.mail, extras.requireEmailVerification ?? false),
         emailVerification: emailVerificationOptions(extras.mail),

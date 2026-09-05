@@ -12,8 +12,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "TSC_WATCHFILE=DynamicPriorityPolling npm run dev -w @fileshed/client",
-    "dev:server": "node --env-file=.env --watch src/server/server.ts",
+    "dev": "ALLOWED_HOSTS=* TRUSTED_ORIGINS=* TSC_WATCHFILE=DynamicPriorityPolling npm run dev -w @fileshed/client",
+    "dev:server": "ALLOWED_HOSTS=* TRUSTED_ORIGINS=* node --env-file=.env --watch src/server/server.ts",
     "build": "npm run build --workspaces --if-present",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --max-warnings=0 --fix",

@@ -8,6 +8,9 @@
 // proxy speaks http to us while the browser speaks https, and refusing that would refuse the standard deployment.
 //----------------------------------------------------------------------------------------------------------------------
 
+// Models
+import { ANY_HOST } from '@fileshed/core';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 const mutatingMethods = new Set([ 'POST', 'PUT', 'PATCH', 'DELETE' ]);
@@ -61,6 +64,9 @@ export function originAllowed(input : OriginCheckInput) : boolean
     if(origin === null) { return false; }
 
     if(input.host !== null && origin === input.host) { return true; }
+
+    // The deployment said it answers anywhere, so there is no cross-site request left to refuse.
+    if(input.allowedOrigins.includes(ANY_HOST)) { return true; }
 
     return input.allowedOrigins.some((allowed) => hostOf(allowed) === origin);
 }

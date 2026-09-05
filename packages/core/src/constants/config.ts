@@ -17,6 +17,11 @@ export const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 export const DEFAULT_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_SMTP_PORT = 587;
 
+// The wildcard entry ALLOWED_HOSTS and TRUSTED_ORIGINS both accept: any host may mint this instance's URLs, any origin
+// may write to it. It is the development posture -- a box reached at localhost, at its LAN address, and at a .local
+// name in one sitting -- stated rather than inferred from an ambient variable.
+export const ANY_HOST = '*';
+
 //----------------------------------------------------------------------------------------------------------------------
 // Chunk sizing
 //

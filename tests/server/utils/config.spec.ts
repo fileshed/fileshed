@@ -23,6 +23,7 @@ const MANAGED_KEYS = [
     'AUTH_SECRET',
     'BASE_URL',
     'TRUSTED_ORIGINS',
+    'ALLOWED_HOSTS',
     'TRUSTED_PROXIES',
     'RATE_LIMIT_ENABLED',
     'RATE_LIMIT_CREDENTIALS_MAX',
@@ -193,6 +194,73 @@ describe('loadConfig TRUSTED_ORIGINS', () =>
         process.env['TRUSTED_ORIGINS'] = 'http://192.168.1.20:3950';
 
         expect(loadConfig().TRUSTED_ORIGINS).toEqual([ 'http://192.168.1.20:3950' ]);
+    });
+
+    // The development posture, and the scheme rule cannot apply to it -- the wildcard has no scheme to compare.
+    it('takes the wildcard on its own', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = '*';
+
+        expect(loadConfig().TRUSTED_ORIGINS).toEqual([ '*' ]);
+    });
+
+    // A list that already matches everything cannot also be a list of what is allowed, so the pair is a mistake
+    // rather than a value with a defined meaning.
+    it('refuses the wildcard beside a named origin', () =>
+    {
+        process.env['TRUSTED_ORIGINS'] = '*,https://files.example.com';
+
+        expect(() => loadConfig()).toThrow(/TRUSTED_ORIGINS/);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('loadConfig ALLOWED_HOSTS', () =>
+{
+    beforeEach(() => { process.env['BASE_URL'] = 'https://files.example.com'; });
+
+    // Unset adds nothing: BASE_URL's host and the TRUSTED_ORIGINS hosts stay the whole list.
+    it('is an empty list when the variable is unset', () =>
+    {
+        expect(loadConfig().ALLOWED_HOSTS).toEqual([]);
+    });
+
+    it('reads a comma-separated list of hosts, with and without ports', () =>
+    {
+        process.env['ALLOWED_HOSTS'] = ' files.internal:3950 ,files.example.com';
+
+        expect(loadConfig().ALLOWED_HOSTS).toEqual([ 'files.internal:3950', 'files.example.com' ]);
+    });
+
+    // A Host header carries no scheme, so an entry written as an origin is somebody putting the wrong kind of value
+    // here. Accepting both spellings silently is how a list stops saying what it means.
+    it('refuses an entry written as a URL, naming the entry', () =>
+    {
+        process.env['ALLOWED_HOSTS'] = 'https://files.internal:3950';
+
+        expect(() => loadConfig()).toThrow(/files\.internal/);
+    });
+
+    it('refuses an entry that is not a host at all', () =>
+    {
+        process.env['ALLOWED_HOSTS'] = 'files.internal/app';
+
+        expect(() => loadConfig()).toThrow(/files\.internal/);
+    });
+
+    it('takes the wildcard on its own', () =>
+    {
+        process.env['ALLOWED_HOSTS'] = '*';
+
+        expect(loadConfig().ALLOWED_HOSTS).toEqual([ '*' ]);
+    });
+
+    it('refuses the wildcard beside a named host', () =>
+    {
+        process.env['ALLOWED_HOSTS'] = '*,files.internal:3950';
+
+        expect(() => loadConfig()).toThrow(/ALLOWED_HOSTS/);
     });
 });
 

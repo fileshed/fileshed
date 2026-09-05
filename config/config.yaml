@@ -40,8 +40,16 @@ BASE_URL: ${BASE_URL:-http://localhost:5173}
 
 # Further origins the instance answers on, comma-separated, for one reachable at more than one URL. BASE_URL is
 # answered on with or without this; entries are read down to scheme + host + port, and each must use BASE_URL's
-# scheme. docs/deployment.md covers the provider callbacks each origin needs.
-TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+# scheme. docs/deployment.md covers the provider callbacks each origin needs. `*` on its own answers any origin at
+# all and turns off the cross-site request check -- a development setting, warned about at every boot.
+TRUSTED_ORIGINS: "${TRUSTED_ORIGINS:-}"
+
+# Hosts this instance may build its own URLs from, comma-separated, as `host` or `host:port`. BASE_URL's host and
+# every TRUSTED_ORIGINS host are included with or without this. A Host header naming anything else gets BASE_URL
+# instead, which is what makes a forged Host (or X-Forwarded-Host) inert. `*` on its own accepts every host, so
+# whoever forges one decides what address goes in an emailed reset link -- a development setting, warned about at
+# every boot.
+ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
 
 # The reverse proxies whose X-Forwarded-For header this instance believes, as addresses or CIDR ranges
 # (10.0.0.7, 10.0.0.0/24, comma-separated). Anything else connecting is treated as the client itself and its

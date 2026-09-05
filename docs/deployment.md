@@ -85,6 +85,14 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `FILESHED_DISCARD_SEALED_SECRETS` | no | `false` | `1` clears stored secrets no available key can open — the only circumstance in which FileShed deletes one. Without it, such a boot refuses. |
 | `BASE_URL` | yes | `http://localhost:5173` | The externally reachable URL — behind a proxy, the public one. |
 | `TRUSTED_ORIGINS` | no | — | Further origins the instance answers on, comma-separated. See below. |
+| `ALLOWED_HOSTS` | no | — | Further hosts the instance may build its own URLs from, comma-separated. See below. |
+| `TRUSTED_PROXIES` | no | — | Reverse proxies whose `X-Forwarded-For` is believed, as addresses or CIDR ranges. `none` says nothing fronts this instance. See below. |
+| `ALLOW_INSECURE_COOKIES` | no | `false` | Acknowledges an instance genuinely served over plain http. Silences the boot warning; changes nothing else. |
+| `RATE_LIMIT_ENABLED` | no | `true` | Per-client request budgets. |
+| `RATE_LIMIT_WINDOW_SECONDS` | no | 60 | The window every budget is counted over. |
+| `RATE_LIMIT_MAX` | no | 600 | Requests per window against `/api` at large. |
+| `RATE_LIMIT_CREDENTIALS_MAX` | no | 10 | Requests per window against sign-in, sign-up, password reset, verification, and first-run setup. |
+| `RATE_LIMIT_ANONYMOUS_MAX` | no | 120 | Requests per window against the anonymous `/d` links. |
 | `HOST` / `PORT` | no | `0.0.0.0` / `3000` (image) | Bind address and port. |
 | `DATABASE_KIND` | no | `sqlite` | `sqlite` or `postgres`. |
 | `DATABASE_PATH` | sqlite | `/data/fileshed.db` (image) | SQLite file location. |
@@ -114,7 +122,17 @@ that is not an http(s) URL fails the boot with that entry in the message.
 A request arriving on a listed origin is answered as that origin: sign-in works there, provider sign-in returns
 there, and the links in verification and password-reset email point back at it. A host that is not listed — a stale
 DNS name, a forged `Host` header — is answered as `BASE_URL`, which stays the canonical URL and never needs an entry
-of its own.
+of its own. That is the whole defence against a forged `Host`: whoever sends one cannot make this instance mint a URL
+on it, so they cannot put their own address in an email FileShed sends to somebody else.
+
+`ALLOWED_HOSTS` is the same list from the other end, for a host you answer on but do not want as an origin — it adds
+to what `BASE_URL` and `TRUSTED_ORIGINS` already contribute, written as `host` or `host:port` rather than as a URL.
+
+Both accept `*`, on its own, meaning any origin and any host. That is the development posture: a laptop reached at
+`localhost`, at its LAN address for phone and cast testing, and at a `.local` name in one sitting. `npm run dev` and
+`npm run dev:server` set both, and every boot that has either says so in the log. **Neither belongs on an instance
+serving real users.** `TRUSTED_ORIGINS=*` turns off the cross-site request check; `ALLOWED_HOSTS=*` hands whoever
+forges a `Host` header the address that goes in a password-reset link.
 
 Two things to know:
 
@@ -158,6 +176,13 @@ app degrade on plain HTTP by browser policy:
   those devices, and secure contexts unlock the full casting stack.
 
 Set `BASE_URL` to the public HTTPS URL and forward `Host` / `X-Forwarded-*` headers as usual.
+
+**Name the proxy.** Set `TRUSTED_PROXIES` to its address or CIDR range (`10.0.0.7`, `10.0.0.0/24`, comma-separated).
+FileShed identifies a client by the socket it connected on and reads `X-Forwarded-For` only from a peer on that list,
+so an unlisted proxy makes every request look like the proxy and puts the whole instance in one rate-limit bucket.
+Name the proxies rather than a private range that also covers your users — a range covering a client lets that client
+forge its own address again. If nothing fronts this instance, set `TRUSTED_PROXIES=none`; leaving it unset warns at
+every boot.
 
 **Proxy logs:** media playback and personal access tokens can ride URLs as `?token=` query parameters. Reverse-proxy
 access logs capture query strings by default — treat those logs as sensitive or configure the proxy to redact them.

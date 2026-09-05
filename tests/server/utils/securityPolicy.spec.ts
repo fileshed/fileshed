@@ -79,12 +79,39 @@ describe('securityWarnings', () =>
         expect(codes(settled({ RATE_LIMIT_ENABLED: false }))).toContain('rate-limiting-off');
     });
 
-    it('stays quiet outside production, where none of these are the deployment being described', () =>
+    it('stays quiet outside production about the settings that only describe a deployment', () =>
     {
         const undecided = settled({ BASE_URL: 'http://localhost:5173', TRUSTED_PROXIES: null });
 
         expect(securityWarnings(undecided, { NODE_ENV: undefined })).toEqual([]);
         expect(securityWarnings(undecided, { NODE_ENV: 'development' })).toEqual([]);
+    });
+
+    it('warns that every Host header is believed, whatever the instance is built for', () =>
+    {
+        const open = settled({ ALLOWED_HOSTS: [ '*' ] });
+
+        expect(codes(open)).toContain('any-host');
+        expect(codes(open, { NODE_ENV: 'development' })).toContain('any-host');
+    });
+
+    it('warns that every origin may write, whatever the instance is built for', () =>
+    {
+        const open = settled({ TRUSTED_ORIGINS: [ '*' ] });
+
+        expect(codes(open)).toContain('any-origin');
+        expect(codes(open, { NODE_ENV: 'development' })).toContain('any-origin');
+    });
+
+    // Naming hosts and origins is the ordinary multi-URL deployment, not a posture to warn about.
+    it('says nothing about a named list of hosts or origins', () =>
+    {
+        const named = settled({
+            ALLOWED_HOSTS: [ 'files.internal:3950' ],
+            TRUSTED_ORIGINS: [ 'https://files.internal:3950' ],
+        });
+
+        expect(codes(named)).toEqual([]);
     });
 });
 

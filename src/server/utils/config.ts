@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 // Models
 import {
+    ANY_HOST,
     DEFAULT_AVATAR_MAX_BYTES,
     DEFAULT_BASE_URL,
     DEFAULT_DATABASE_PATH,
@@ -59,6 +60,25 @@ const booleanish = z.preprocess((value) =>
 
     return Boolean(value);
 }, z.boolean());
+
+// One ALLOWED_HOSTS entry reduced to the host a request's Host header carries, or null when the entry is not one. A
+// full URL is refused rather than trimmed down to its host: an entry with a scheme on it is somebody writing an origin
+// where a host goes, and silently accepting both spellings is how a list stops saying what it means.
+function normalizeHost(entry : string) : string | null
+{
+    if(entry.includes('/') || entry.includes('@')) { return null; }
+
+    try
+    {
+        const url = new URL(`http://${ entry }`);
+
+        return url.host === entry.toLowerCase() && url.hostname !== '' ? url.host : null;
+    }
+    catch
+    {
+        return null;
+    }
+}
 
 // One TRUSTED_ORIGINS entry reduced to what a browser's Origin header carries, or null when the entry cannot be
 // one. The host half becomes better-auth's allowedHosts and the whole origin its trust list (see
@@ -129,12 +149,29 @@ const configSchema = z.object({
     // Further origins the instance answers on, comma-separated, for a deployment reachable at more than one URL.
     // Each entry is normalized to its origin; one that has none fails the boot and is named in the message, rather
     // than loading into a list where it can never match. Empty leaves BASE_URL the only URL answered on.
+    //
+    // `*` on its own answers any origin at all, which is what a development box wants and what nothing serving real
+    // users should have. It is refused alongside named origins: a list that already matches everything cannot also
+    // be a list of what is allowed.
     TRUSTED_ORIGINS: z.string()
         .transform((value, ctx) =>
         {
             const entries = value.split(',')
                 .map((entry) => entry.trim())
                 .filter((entry) => entry !== '');
+
+            if(entries.includes(ANY_HOST))
+            {
+                if(entries.length > 1)
+                {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: `TRUSTED_ORIGINS is either ${ ANY_HOST } or a list of origins, not both.`,
+                    });
+                }
+
+                return [ ANY_HOST ];
+            }
 
             const origins : string[] = [];
             for(const entry of entries)
@@ -155,6 +192,53 @@ const configSchema = z.object({
             }
 
             return origins;
+        })
+        .default([]),
+
+    // Hosts this instance will build its own URLs from, beyond BASE_URL's and TRUSTED_ORIGINS'. better-auth reads the
+    // request's Host header and mints verification links, reset links and OAuth callbacks against it when the host is
+    // on this list; anything else gets BASE_URL. That is what makes a forged Host (or X-Forwarded-Host) inert, so `*`
+    // -- which accepts every host, and which a development box wants -- hands whoever sends one the ability to put
+    // their own address in a password-reset email. Entries are `host` or `host:port`, never a full URL.
+    ALLOWED_HOSTS: z.string()
+        .transform((value, ctx) : string[] =>
+        {
+            const entries = value.split(',')
+                .map((entry) => entry.trim())
+                .filter((entry) => entry !== '');
+
+            if(entries.includes(ANY_HOST))
+            {
+                if(entries.length > 1)
+                {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: `ALLOWED_HOSTS is either ${ ANY_HOST } or a list of hosts, not both.`,
+                    });
+                }
+
+                return [ ANY_HOST ];
+            }
+
+            const hosts : string[] = [];
+            for(const entry of entries)
+            {
+                const host = normalizeHost(entry);
+                if(host === null)
+                {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: `ALLOWED_HOSTS entry '${ entry }' is not a host. Write each as a hostname with an `
+                            + 'optional port, like files.example.com or 192.168.1.50:3950.',
+                    });
+                }
+                else
+                {
+                    hosts.push(host);
+                }
+            }
+
+            return hosts;
         })
         .default([]),
 
@@ -306,7 +390,9 @@ const configSchema = z.object({
     // resource-access/auth.ts), and that same value decides whether session cookies are Secure. A list mixing
     // schemes therefore cannot be served: half of it would be built, and cookied, wrong.
     const scheme = new URL(config.BASE_URL).protocol;
-    const mismatched = config.TRUSTED_ORIGINS.filter((origin) => new URL(origin).protocol !== scheme);
+    const mismatched = config.TRUSTED_ORIGINS
+        .filter((origin) => origin !== ANY_HOST)
+        .filter((origin) => new URL(origin).protocol !== scheme);
 
     if(mismatched.length > 0)
     {

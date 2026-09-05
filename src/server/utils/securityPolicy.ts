@@ -6,6 +6,9 @@
 // it went rather than picking silently.
 //----------------------------------------------------------------------------------------------------------------------
 
+// Models
+import { ANY_HOST } from '@fileshed/core';
+
 // Utils
 import type { Config } from './config.ts';
 import { getLogger } from './logger.ts';
@@ -17,20 +20,43 @@ const logger = getLogger('config');
 export interface SecurityWarning
 {
     // A stable handle for the finding, so a spec names the case rather than matching prose.
-    code : 'insecure-cookies' | 'undecided-proxy-trust' | 'rate-limiting-off';
+    code : 'any-host' | 'any-origin' | 'insecure-cookies' | 'undecided-proxy-trust' | 'rate-limiting-off';
 
     message : string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// Production only, all of them: a development box is reached over http on a laptop, fronts no proxy, and gets hammered
-// by nobody. Warning there would train an operator to scroll past the boot log.
+// The wide-open settings are said wherever they are on, development included. They are the ones a development box
+// carries deliberately and a deployment must not, and a process started the wrong way is exactly the case that has to
+// announce itself. The rest are production only: a development box is reached over http on a laptop, fronts no proxy,
+// and gets hammered by nobody, so warning there would train an operator to scroll past the boot log.
 export function securityWarnings(config : Config, env : Record<string, string | undefined>) : SecurityWarning[]
 {
-    if(env['NODE_ENV'] !== 'production') { return []; }
-
     const warnings : SecurityWarning[] = [];
+
+    if(config.ALLOWED_HOSTS.includes(ANY_HOST))
+    {
+        warnings.push({
+            code: 'any-host',
+            message: `ALLOWED_HOSTS is ${ ANY_HOST }, so this instance builds its own URLs from whatever Host header `
+                + 'a request carries. Anyone who sends a forged one puts their address in the verification and '
+                + 'password-reset links this instance emails. List the hosts you answer on, or leave it empty to '
+                + 'answer only on BASE_URL\'s.',
+        });
+    }
+
+    if(config.TRUSTED_ORIGINS.includes(ANY_HOST))
+    {
+        warnings.push({
+            code: 'any-origin',
+            message: `TRUSTED_ORIGINS is ${ ANY_HOST }, so a write is accepted from any origin and the cross-site `
+                + 'request check refuses nothing. List the origins you answer on, or leave it empty to answer only '
+                + 'on BASE_URL.',
+        });
+    }
+
+    if(env['NODE_ENV'] !== 'production') { return warnings; }
 
     if(new URL(config.BASE_URL).protocol === 'http:' && !config.ALLOW_INSECURE_COOKIES)
     {
