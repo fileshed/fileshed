@@ -32,6 +32,7 @@ import {
     fileNodesForBlob,
     makeUser,
     putUpload,
+    setQuotaLimit,
     storedBytes,
 } from './support.ts';
 import { folderNode } from '../resource-access/nodes/support.ts';
@@ -416,43 +417,24 @@ describe('quota admission', () =>
         expect(body.error.toLowerCase()).toContain('quota');
     });
 
-    // A content-addressed store admits no size disagreement: same sha means same bytes means same size, so a claim
-    // for a known blob at any other size is a lying client -- and admitting the lie would let a small claimed size
-    // pass quota admission for a large real blob.
-    it('rejects a known-blob claim whose size disagrees with the stored blob', async () =>
+    // A ticket is not a promise: the cap it was admitted under can move while the bytes are still travelling, and the
+    // limit in force when the write lands is the one that decides it. The re-check inside the commit transaction is
+    // what makes that true, and it is the last gate a write passes -- so nothing may be recorded when it refuses.
+    it('refuses an upload whose owner quota was lowered after the ticket was issued', async () =>
     {
-        const owner = await makeUser(booted, 'owner-of-known@example.com', null);
+        const user = await makeUser(booted, 'lowered@example.com', 8192);
         const data = randomBytes(4096);
-        const sha = sha256Of(data);
+        const sha256 = sha256Of(data);
 
-        const claimed = await claim(booted.app, owner.cookie, sha, 4096);
-        const claimBody = await claimed.json() as { ticket : string };
-        await putUpload(booted.app, owner.cookie, claimBody.ticket, data);
+        const admitted = await (await claim(booted.app, user.cookie, sha256, data.length)).json() as ClaimResponse;
+        if(admitted.upload !== true) { throw new Error('expected an upload ticket under the roomier limit'); }
 
-        const liar = await makeUser(booted, 'liar@example.com', null);
-        const lie = await claim(booted.app, liar.cookie, sha, 16);
+        await setQuotaLimit(booted, user.id, 1024);
+        const upload = await putUpload(booted.app, user.cookie, admitted.ticket, data);
 
-        expect(lie.status).toBe(400);
-    });
-
-    // The claim-time gate admits each claim in isolation, so a batch of claims can jointly overshoot -- the
-    // authoritative re-check inside the commit transaction is what actually holds the quota line.
-    it('rejects the second commit of a batch whose claims jointly overshoot the quota', async () =>
-    {
-        const user = await makeUser(booted, 'batcher@example.com', 4096);
-        const first = randomBytes(4096);
-        const second = randomBytes(4096);
-
-        const claimOne = await (await claim(booted.app, user.cookie, sha256Of(first), 4096)).json() as
-            { ticket : string };
-        const claimTwo = await (await claim(booted.app, user.cookie, sha256Of(second), 4096)).json() as
-            { ticket : string };
-
-        const uploadOne = await putUpload(booted.app, user.cookie, claimOne.ticket, first);
-        const uploadTwo = await putUpload(booted.app, user.cookie, claimTwo.ticket, second);
-
-        expect(uploadOne.status).toBe(200);
-        expect(uploadTwo.status).toBe(403);
+        expect(upload.status).toBe(403);
+        expect(await fileNodesForBlob(booted.handle, sha256)).toHaveLength(0);
+        expect(await blobRowCount(booted.handle, sha256)).toBe(0);
     });
 
     it('admits a claim exactly at the quota limit', async () =>
@@ -467,6 +449,65 @@ describe('quota admission', () =>
         expect(body.upload).toBe(true);
     });
 });
+
+//----------------------------------------------------------------------------------------------------------------------
+// A claim naming a hash the instance holds, at a size it does not.
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('claims at a size the stored blob disagrees with', () =>
+{
+    const known = randomBytes(4096);
+    const knownSha = sha256Of(known);
+
+    // Somebody else's file, already on the instance -- what a stranger naming its hash is fishing for.
+    async function seedKnownBlob() : Promise<void>
+    {
+        const owner = await makeUser(booted, 'owner-of-known@example.com', null);
+        const claimed = await (await claim(booted.app, owner.cookie, knownSha, known.length)).json() as ClaimResponse;
+        if(claimed.upload !== true) { throw new Error('expected an upload ticket for new content'); }
+
+        await putUpload(booted.app, owner.cookie, claimed.ticket, known);
+    }
+
+    // A content-addressed store admits no size disagreement: same sha means same bytes means same size. But a claim
+    // at the wrong size does not describe what this instance holds, and answering it any differently from content the
+    // instance does not hold would confirm the hash to anyone who names one -- in a single request, without having to
+    // know the size. So the two are answered alike, and the lie is left to die at the bytes.
+    it('answers a known-blob claim at the wrong size exactly as it answers content it does not hold', async () =>
+    {
+        await seedKnownBlob();
+
+        const stranger = await makeUser(booted, 'stranger@example.com', null);
+        const guess = await claim(booted.app, stranger.cookie, knownSha, 16);
+        const unknown = await claim(booted.app, stranger.cookie, sha256Of(randomBytes(16)), 16);
+
+        expect(guess.status).toBe(200);
+        expect(guess.status).toBe(unknown.status);
+        expect((await guess.json() as ClaimResponse).upload)
+            .toBe((await unknown.json() as ClaimResponse).upload);
+    });
+
+    // Where the lie is caught: the ticket admits only the size that was claimed, and the store checks the bytes
+    // against the address they claim to be. So a caller who does not possess the content gets an upload that cannot
+    // commit -- and the blob everyone else is using is not touched on the way past.
+    it('commits nothing for a claim at the wrong size, leaving the stored blob whole', async () =>
+    {
+        await seedKnownBlob();
+
+        const liar = await makeUser(booted, 'liar@example.com', null);
+        const lie = await (await claim(booted.app, liar.cookie, knownSha, 16)).json() as ClaimResponse;
+        if(lie.upload !== true) { throw new Error('expected an upload ticket'); }
+
+        const delivered = await putUpload(booted.app, liar.cookie, lie.ticket, randomBytes(16));
+
+        expect(delivered.status).toBe(400);
+        expect(await blobRowCount(booted.handle, knownSha)).toBe(1);
+        expect(await storedBytes(booted, knownSha)).toEqual(known);
+        expect(await fileNodesForBlob(booted.handle, knownSha)).toHaveLength(1);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------------------
 // Graveyard resurrection through the claim path.

@@ -173,6 +173,17 @@ export async function makeUser(
     return { id: row.id, cookie: cookieFrom(signInRes), jar: cookieJarFrom(signInRes), email };
 }
 
+// Move a user's cap after they are signed in, the way an admin patching the row does -- their session still carries
+// whatever it was minted with, so a spec can drive a write judged by a limit the caller has never seen.
+export async function setQuotaLimit(booted : BootedBlobApp, userID : string, quotaLimit : number) : Promise<void>
+{
+    await booted.handle.db
+        .updateTable('user')
+        .set({ quota_limit: quotaLimit })
+        .where('id', '=', userID)
+        .execute();
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Flow HTTP helpers
 //----------------------------------------------------------------------------------------------------------------------

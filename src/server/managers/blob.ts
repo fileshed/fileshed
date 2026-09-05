@@ -1,11 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob Manager
 //
-// The claim / proof-of-possession / upload flow. A claim is admitted against the owner's quota first, then routed: an
-// unknown blob gets a single-use upload ticket; a known blob (graveyarded or not) that is worth the round trip gets a
-// proof-of-possession challenge instead of re-uploading the bytes. Answering a challenge or completing an upload
-// creates the caller's file node -- for a known blob, resurrecting the record if it was graveyarded -- in one
-// transaction.
+// The claim / proof-of-possession / upload flow. A claim is admitted against the owner's quota -- what their files
+// already hold plus what their outstanding claims have yet to deliver -- and then routed: an unknown blob gets a
+// single-use upload ticket; a known blob (graveyarded or not) that is worth the round trip gets a proof-of-possession
+// challenge instead of re-uploading the bytes. Answering a challenge or completing an upload creates the caller's file
+// node -- for a known blob, resurrecting the record if it was graveyarded -- in one transaction.
 //
 // Upload bytes travel as one stream or as a sequence of chunks against the same ticket, which carries how far the
 // upload has got between requests -- the chunk holding the last byte is the one that verifies and commits.
@@ -36,6 +36,7 @@ import {
     MAX_CHALLENGE_RANGES,
     MAX_CHALLENGE_RANGE_BYTES,
     MAX_FAILED_PROOFS,
+    MAX_OUTSTANDING_TICKETS,
     MIN_CHALLENGE_RANGES,
     NONCE_BYTES,
     type Node,
@@ -88,14 +89,24 @@ interface Ticket
     // A chunk is being written right now. Chunks are sequential by contract, so a second one arriving mid-write is
     // refused rather than interleaved into the staging file.
     inFlight : boolean;
+
+    // The ticket has been handed to a commit and no request will be honoured against it again, but its bytes are
+    // still landing. It stays in the store, and stays counted against its owner, until that commit settles.
+    spent : boolean;
 }
 
 // Upload tickets, and the position of any chunked upload running against them. A ticket is retired by the request that
 // completes the file (or by the whole-file PUT, which is single-use as ever); the chunks before that leave it standing.
 // An expired ticket is never honoured and is dropped on the way past.
+//
+// A ticket is also a hold on its owner's storage: it entitles the client to put its claimed size into staging, and
+// nothing has charged the account for those bytes yet. So the store indexes tickets by owner, and `outstanding` is
+// what the claim gate judges against alongside committed usage -- otherwise every concurrent claim is admitted in
+// isolation against the same zero, and N of them each get the whole quota.
 class TicketStore
 {
     readonly #tickets = new Map<string, Ticket>();
+    readonly #byOwner = new Map<string, Set<Ticket>>();
 
     issue(sha256 : string, size : number, ownerID : string) : Ticket
     {
@@ -107,9 +118,12 @@ class TicketStore
             expiresAt: Date.now() + TICKET_TTL_MS,
             receivedBytes: 0,
             inFlight: false,
+            spent: false,
         };
 
         this.#tickets.set(ticket.id, ticket);
+        this.#owned(ownerID).add(ticket);
+
         return ticket;
     }
 
@@ -120,16 +134,49 @@ class TicketStore
 
         if(ticket.expiresAt <= Date.now())
         {
-            this.#tickets.delete(id);
+            this.#drop(ticket);
             return undefined;
         }
 
-        return ticket;
+        return ticket.spent ? undefined : ticket;
+    }
+
+    // What this owner is holding right now: the uploads they have going, and the bytes those uploads claimed. Lapsed
+    // entries are dropped on the way past, so an expired hold never counts against the next claim.
+    outstanding(ownerID : string) : { count : number; bytes : number }
+    {
+        const now = Date.now();
+        let count = 0;
+        let bytes = 0;
+
+        for(const ticket of this.#byOwner.get(ownerID) ?? [])
+        {
+            if(ticket.expiresAt <= now)
+            {
+                this.#drop(ticket);
+            }
+            else
+            {
+                count += 1;
+                bytes += ticket.size;
+            }
+        }
+
+        return { count, bytes };
+    }
+
+    // Hand the ticket to a commit. Single-use is enforced from here on -- a second request reads it as gone, exactly
+    // as it would have read a closed one -- while the hold on the owner survives until the commit settles, so a client
+    // cannot free its own claim by starting the upload and claiming again while the bytes are in flight.
+    spend(ticket : Ticket) : void
+    {
+        ticket.spent = true;
     }
 
     close(id : string) : void
     {
-        this.#tickets.delete(id);
+        const ticket = this.#tickets.get(id);
+        if(ticket !== undefined) { this.#drop(ticket); }
     }
 
     // Move the upload forward and push the expiry out: an upload still delivering bytes is alive, however long the
@@ -143,10 +190,34 @@ class TicketStore
     sweep() : void
     {
         const now = Date.now();
-        for(const [ id, ticket ] of this.#tickets)
+        for(const ticket of this.#tickets.values())
         {
-            if(ticket.expiresAt <= now) { this.#tickets.delete(id); }
+            if(ticket.expiresAt <= now) { this.#drop(ticket); }
         }
+    }
+
+    #owned(ownerID : string) : Set<Ticket>
+    {
+        const owned = this.#byOwner.get(ownerID);
+        if(owned !== undefined) { return owned; }
+
+        const created = new Set<Ticket>();
+        this.#byOwner.set(ownerID, created);
+
+        return created;
+    }
+
+    // Both indexes, always together: an owner whose last ticket goes leaves no entry behind, so the index costs
+    // nothing for the accounts that are not uploading right now.
+    #drop(ticket : Ticket) : void
+    {
+        this.#tickets.delete(ticket.id);
+
+        const owned = this.#byOwner.get(ticket.ownerID);
+        if(owned === undefined) { return; }
+
+        owned.delete(ticket);
+        if(owned.size === 0) { this.#byOwner.delete(ticket.ownerID); }
     }
 }
 
@@ -300,6 +371,16 @@ function asIntegrityRejection(error : unknown) : unknown
     return error;
 }
 
+// What both ifBlobID gates raise: the caller pinned the version they edited from and it is no longer the one on the
+// node, so somebody else saved first and the caller must reload rather than clobber them.
+function staleBlobConflict() : ConflictError
+{
+    return new ConflictError(
+        'replace.staleBlob',
+        'The file changed since you opened it. Reload to see the latest version.'
+    );
+}
+
 function byteLimiter(maxBytes : number) : Transform
 {
     let seen = 0;
@@ -413,32 +494,46 @@ export class BlobManager
     // proof-of-possession challenge; known but small -> ticket (round trips cost more than the bytes).
     async claim(caller : SessionUser, request : ClaimRequest) : Promise<ClaimResponse>
     {
-        const existing = await this.#blob.get(request.sha256);
+        const stored = await this.#blob.get(request.sha256);
 
-        // Content-addressed: a known sha256 has exactly one size, so a claim that disagrees is a lying client -- reject
-        // it rather than admit quota or pick the ticket/challenge branch against a fabricated size (which would let a
-        // caller under-report to slip past quota, or under-report a large blob into the ticket path to skip the proof).
-        if(existing !== undefined && request.size !== existing.size)
+        // Content-addressed: a known sha256 has exactly one size, so a claim naming another one is not describing what
+        // this instance holds and is answered as if the content were new. Refusing it distinctly would tell anyone who
+        // names a hash whether the instance holds that content, in one request and without knowing its size -- and the
+        // answer is worth nothing to a caller who does possess the bytes, since they know the size.
+        //
+        // Routing the lie as new content costs nothing: the claimed size is what quota admits and what the ticket
+        // allows into staging, and the store verifies both hash and size against the bytes. So under-reporting to slip
+        // past quota, or to route a large blob into the ticket path and skip the proof, buys an upload that cannot
+        // commit -- the bytes never hash to the claimed address at the claimed length.
+        const known = stored !== undefined && stored.size === request.size ? stored : undefined;
+
+        const size = known?.size ?? request.size;
+
+        // Everything the admission decision needs is resolved before it starts, because from the judgement to the
+        // ticket that records the hold there must be no await: two claims arriving together would otherwise be judged
+        // against the same outstanding total and both admitted, and one quota would have covered them twice.
+        const [ limitBytes, usedBytes, maxBytes ] = await Promise.all([
+            this.#resolveLimit(caller.id),
+            this.#nodes.ownedBytes(caller.id),
+            this.#uploadMaxBytes(),
+        ]);
+
+        const outstanding = this.#tickets.outstanding(caller.id);
+
+        this.#enforceQuota(caller.id, usedBytes + outstanding.bytes, size, limitBytes);
+
+        if(known === undefined)
         {
-            throw new BadRequestError('Claimed size does not match the known blob.');
-        }
-
-        const size = existing?.size ?? request.size;
-        await this.#admitQuota(caller, size);
-
-        if(existing === undefined)
-        {
-            const maxBytes = await this.#uploadMaxBytes();
             if(size > maxBytes)
             {
                 throw new PayloadTooLargeError('File exceeds the maximum upload size.', maxBytes);
             }
-            return this.#ticketFor(request.sha256, size, caller.id);
+            return this.#ticketFor(request.sha256, size, caller.id, outstanding.count);
         }
 
         if(size < SMALL_FILE_THRESHOLD_BYTES)
         {
-            return this.#ticketFor(request.sha256, size, caller.id);
+            return this.#ticketFor(request.sha256, size, caller.id, outstanding.count);
         }
 
         const nonce = randomBytes(NONCE_BYTES).toString('hex');
@@ -449,7 +544,7 @@ export class BlobManager
             ownerID: caller.id,
             nonce,
             ranges,
-            location: { backendID: existing.backendID, storageKey: existing.storageKey },
+            location: { backendID: known.backendID, storageKey: known.storageKey },
         });
 
         return { upload: false, challengeID: challenge.id, nonce, ranges };
@@ -457,8 +552,19 @@ export class BlobManager
 
     // A fresh ticket and the chunk size to deliver against it. Both halves of what a client needs to start moving
     // bytes, so neither branch of the claim can hand back one without the other.
-    #ticketFor(sha256 : string, size : number, ownerID : string) : ClaimResponse
+    //
+    // An account already holding the maximum is refused here rather than at the bytes: a claim costs the client one
+    // cheap request and costs the server a live entry for the ticket's whole lifetime, so the count is capped
+    // independently of the quota that bounds what those tickets may write.
+    #ticketFor(sha256 : string, size : number, ownerID : string, outstandingCount : number) : ClaimResponse
     {
+        if(outstandingCount >= MAX_OUTSTANDING_TICKETS)
+        {
+            throw new TooManyRequestsError(
+                'Too many uploads in progress; finish or abandon one before starting another.'
+            );
+        }
+
         return {
             upload: true,
             ticket: this.#tickets.issue(sha256, size, ownerID).id,
@@ -570,12 +676,19 @@ export class BlobManager
 
         if(offset === 0 && contentLength === ticket.size)
         {
-            this.#tickets.close(ticketID);
+            this.#tickets.spend(ticket);
 
-            const committed = await this.#commitContent(caller, ticket, metadata, () =>
-                this.#putBytes(ticket.sha256, ticket.size, body));
+            try
+            {
+                const committed = await this.#commitContent(caller, ticket, metadata, () =>
+                    this.#putBytes(ticket.sha256, ticket.size, body));
 
-            return { committed: true, ...committed };
+                return { committed: true, ...committed };
+            }
+            finally
+            {
+                this.#tickets.close(ticketID);
+            }
         }
 
         return this.#acceptChunk(caller, ticket, body, metadata, contentLength, offset);
@@ -620,8 +733,8 @@ export class BlobManager
 
             // The file is whole. Its ticket and its staging are spent either way -- a rejected commit leaves no bytes
             // to resume from, and the claim that would restart the upload is a round trip the client already knows how
-            // to make.
-            this.#tickets.close(ticket.id);
+            // to make. The ticket's hold on the owner outlives the ticket itself, right up to the commit settling.
+            this.#tickets.spend(ticket);
 
             try
             {
@@ -632,6 +745,7 @@ export class BlobManager
             }
             finally
             {
+                this.#tickets.close(ticket.id);
                 await this.#blob.discardChunked(ticket.id);
             }
         }
@@ -724,14 +838,6 @@ export class BlobManager
         });
     }
 
-    async #admitQuota(caller : SessionUser, incomingBytes : number) : Promise<void>
-    {
-        const limitBytes = await this.#resolveLimit(caller.id);
-        const usedBytes = await this.#nodes.ownedBytes(caller.id);
-
-        this.#enforceQuota(caller.id, usedBytes, incomingBytes, limitBytes);
-    }
-
     // The cap an owner is held to right now: their quota_limit read from their user row, with the instance default
     // folded in. Both halves are read live, never taken from the caller's session -- the session cookie cache carries
     // a snapshot of the user row for its whole window, so enforcing against it would judge a write by a limit an
@@ -765,9 +871,10 @@ export class BlobManager
         }
     }
 
-    // Commit an upload's bytes as the caller's file node, or onto an existing one. The target facts are gathered
-    // BEFORE `putBytes` publishes anything -- a bad target or parent must store nothing -- and the record write that
-    // follows is an insert-or-resurrect pinned to the backend the bytes landed on.
+    // Commit an upload's bytes as the caller's file node, or onto an existing one. Every refusal that can be reached
+    // without the bytes is reached BEFORE `putBytes` publishes anything -- a bad target, an illegal parent, a target
+    // another writer has already moved on -- and the record write that follows is an insert-or-resurrect pinned to the
+    // backend the bytes landed on.
     async #commitContent(
         caller : SessionUser,
         ticket : Ticket,
@@ -780,6 +887,12 @@ export class BlobManager
         if('replaceNodeID' in metadata)
         {
             const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
+
+            // The stale-edit refusal, judged twice: here against the target as it was resolved, so a caller editing
+            // from a version somebody else has already replaced never publishes bytes at all, and again inside the
+            // commit transaction, where it is authoritative against a row that may have moved while these streamed.
+            if(metadata.ifBlobID !== undefined && target.blobID !== metadata.ifBlobID) { throw staleBlobConflict(); }
+
             const persist = this.#insertOrResurrect(sha256, size, await putBytes());
 
             return this.#commitReplace(target, role, sha256, size, metadata.mimeType, metadata.ifBlobID, persist);
@@ -921,10 +1034,7 @@ export class BlobManager
 
         if(current === undefined || current.type !== 'file' || current.blobID !== expectedBlobID)
         {
-            throw new ConflictError(
-                'replace.staleBlob',
-                'The file changed since you opened it. Reload to see the latest version.'
-            );
+            throw staleBlobConflict();
         }
     }
 

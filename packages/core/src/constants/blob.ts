@@ -15,6 +15,12 @@ export const SMALL_FILE_THRESHOLD_BYTES = 1024 * 1024;
 
 export const TICKET_TTL_MS = 30 * MS_PER_MINUTE;
 
+// The most uploads one account may have outstanding at once. What bounds the disk is that a ticket's claimed bytes are
+// held against its owner's quota from the moment it is issued; this bounds the bookkeeping, so an account that claims
+// and never uploads cannot grow the server's heap. Generous against real use: a client moves a handful of files at a
+// time, and a ticket an abandoned upload left behind stands until its TTL rather than being handed back.
+export const MAX_OUTSTANDING_TICKETS = 64;
+
 export const CHALLENGE_TTL_MS = 60 * MS_PER_SECOND;
 
 export const MIN_CHALLENGE_RANGES = 2;

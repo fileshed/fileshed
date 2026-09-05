@@ -203,7 +203,8 @@ Copies & deletion offers:
 - Optional per-user byte limit (null = unlimited). Admin-settable default + per-user override.
 - Charged usage = Σ logical `size` of file nodes **owned** by the user, excluding purged, **including trashed**.
 - Dedup is invisible to quotas: if two users own nodes referencing the same 4 GB blob, each is charged 4 GB. One user deleting their node stops their charge; the other's is unaffected.
-- Enforcement at claim/upload time: reject if `used + size > limit` with a clear error. Usage is a cheap aggregate query; cache per-user with invalidation on node create/delete/purge if it shows up in profiles.
+- Enforcement at claim/upload time: reject if `used + outstanding + size > limit` with a clear error, where `outstanding` is the claimed size of the uploads this account has in flight. Counting only committed bytes would admit every concurrent claim against the same figure, so a caller could hold several times their quota in staging at once. Usage is a cheap aggregate query; cache per-user with invalidation on node create/delete/purge if it shows up in profiles.
+- The claim is admission, not a charge. What an account is billed remains the logical size of the file nodes it owns, so a claim that is never delivered costs nothing once its ticket lapses.
 
 ---
 
