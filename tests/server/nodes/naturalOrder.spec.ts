@@ -11,7 +11,13 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { LISTING_CHUNK_SIZE, type NodeListResponse, type NodeResponse } from '@fileshed/core';
+import {
+    LISTING_CHUNK_SIZE,
+    type NodeListResponse,
+    type NodeResponse,
+    type NodeSortKey,
+    nodeSortKeys,
+} from '@fileshed/core';
 
 // Client
 import { sortNodes } from '@client/engines/listing/order.ts';
@@ -74,6 +80,66 @@ const FOLDERS : readonly { id : string; name : string }[] = [
     { id: 'd-02', name: 'aaa-folder' },
 ];
 
+// Every file above carries the same size, timestamps and format, which makes them one enormous tie group under the
+// other four keys -- good for proving the tiebreak, useless for proving the key. These vary on each in turn, and the
+// link carries none of them: a pointer has no size and no format, which is the case the two tiers used to disagree
+// about most.
+const VARIED : readonly {
+    id : string;
+    name : string;
+    size : number | null;
+    mimeType : string | null;
+    createdAt : string;
+    updatedAt : string;
+    type : 'file' | 'link';
+}[] = [
+    {
+        id: 'v-01',
+        name: 'v-huge.bin',
+        size: 900_000,
+        mimeType: 'application/octet-stream',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+        type: 'file',
+    },
+    {
+        id: 'v-02',
+        name: 'v-tiny.txt',
+        size: 1,
+        mimeType: 'text/plain',
+        createdAt: '2026-06-01T00:00:00.000Z',
+        updatedAt: '2026-02-01T00:00:00.000Z',
+        type: 'file',
+    },
+    {
+        id: 'v-03',
+        name: 'v-empty.txt',
+        size: 0,
+        mimeType: 'text/plain',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-05-01T00:00:00.000Z',
+        type: 'file',
+    },
+    {
+        id: 'v-04',
+        name: 'v-clip.mp4',
+        size: 5000,
+        mimeType: 'video/mp4',
+        createdAt: '2026-04-01T00:00:00.000Z',
+        updatedAt: '2026-04-01T00:00:00.000Z',
+        type: 'file',
+    },
+    {
+        id: 'v-05',
+        name: 'v-pointer',
+        size: null,
+        mimeType: null,
+        createdAt: '2026-05-01T00:00:00.000Z',
+        updatedAt: '2026-03-01T00:00:00.000Z',
+        type: 'link',
+    },
+];
+
 const SHA256 = 'c'.repeat(64);
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -116,6 +182,20 @@ async function seed() : Promise<void>
             trashed_at: null,
             target_node_id: null,
         })),
+        ...VARIED.map((row) => ({
+            id: row.id,
+            name: row.name,
+            type: row.type,
+            owner_id: owner.id,
+            parent_id: null,
+            blob_id: row.type === 'file' ? SHA256 : null,
+            size: row.size,
+            mime_type: row.mimeType,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            trashed_at: null,
+            target_node_id: row.type === 'link' ? 'k-01' : null,
+        })),
         ...FOLDERS.map((folder) => ({
             id: folder.id,
             name: folder.name,
@@ -138,10 +218,14 @@ async function seed() : Promise<void>
         .execute();
 }
 
-async function listing(direction : 'asc' | 'desc' = 'asc') : Promise<NodeResponse[]>
+async function listing(
+    direction : 'asc' | 'desc' = 'asc',
+    sortKey : NodeSortKey = 'name'
+) : Promise<NodeResponse[]>
 {
     const res = await booted.app.request(
-        `${ ORIGIN }/api/nodes/children?limit=${ LISTING_CHUNK_SIZE }&sortKey=name&sortDirection=${ direction }`,
+        `${ ORIGIN }/api/nodes/children?limit=${ LISTING_CHUNK_SIZE }&sortKey=${ sortKey }`
+            + `&sortDirection=${ direction }`,
         { headers: { cookie: owner.cookie } }
     );
     const body = await res.json() as NodeListResponse;
@@ -265,25 +349,30 @@ describe('natural name ordering', () =>
 //----------------------------------------------------------------------------------------------------------------------
 
 // The drift test. The client sorts a folder it holds whole, the database sorts one it does not, and a user scrolling
-// past the ceiling sees both -- so the two orders have to be the same order, name for name and tie for tie.
-describe('natural name ordering — server and client', () =>
+// past the ceiling sees both -- so the two orders have to be the same order, row for row and tie for tie. Every key
+// in both directions, because the four that are not `name` order in SQL on one side and in JavaScript on the other,
+// and nothing but this holds the two spellings together.
+describe('listing order — server and client', () =>
 {
-    for(const direction of [ 'asc', 'desc' ] as const)
+    for(const sortKey of nodeSortKeys)
     {
-        it(`serves a folder in the ${ direction } order the client's own sort produces`, async () =>
+        for(const direction of [ 'asc', 'desc' ] as const)
         {
-            const served = await listing(direction);
-
-            // Shuffled first, so a client sort that quietly preserved the input order could not pass by accident.
-            const shuffled = [ ...served ].sort((left, right) =>
+            it(`serves ${ sortKey } ${ direction } in the order the client's own sort produces`, async () =>
             {
-                return left.id < right.id ? 1 : -1;
+                const served = await listing(direction, sortKey);
+
+                // Shuffled first, so a client sort that quietly preserved the input order could not pass by accident.
+                const shuffled = [ ...served ].sort((left, right) =>
+                {
+                    return left.id < right.id ? 1 : -1;
+                });
+
+                const sorted = sortNodes(shuffled, sortKey, direction);
+
+                expect(sorted.map((node) => node.id)).toEqual(served.map((node) => node.id));
             });
-
-            const sorted = sortNodes(shuffled, 'name', direction);
-
-            expect(sorted.map((node) => node.id)).toEqual(served.map((node) => node.id));
-        });
+        }
     }
 });
 

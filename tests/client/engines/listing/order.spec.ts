@@ -89,11 +89,35 @@ describe('sortNodes', () =>
         expect(order(sortNodes(nodes, 'name', 'desc'))).toEqual([ 'c', 'b', 'a' ]);
     });
 
-    it('orders by size, counting a link as carrying no bytes of its own', () =>
+    // A link is a pointer, so it has no size at all -- which is not a size of zero. Nothing sorts after every
+    // something, and the direction flips that along with everything else.
+    it('orders by size, putting a link with no size of its own after every measured file', () =>
     {
         const nodes = [ file('big', { size: 900 }), link('pointer'), file('small', { size: 10 }) ];
 
-        expect(order(sortNodes(nodes, 'size', 'asc'))).toEqual([ 'pointer', 'small', 'big' ]);
+        expect(order(sortNodes(nodes, 'size', 'asc'))).toEqual([ 'small', 'big', 'pointer' ]);
+        expect(order(sortNodes(nodes, 'size', 'desc'))).toEqual([ 'pointer', 'big', 'small' ]);
+    });
+
+    // The tiebreak a reader can predict. Ids are assigned against the answer, so an implementation that reached for
+    // them first would have to produce the reverse.
+    it('breaks a tie on the name, and only then on the id', () =>
+    {
+        const nodes = [
+            file('cherry', { id: 'z-1', size: 5 }),
+            file('apple', { id: 'z-2', size: 5 }),
+            file('banana', { id: 'z-3', size: 5 }),
+        ];
+
+        expect(order(sortNodes(nodes, 'size', 'asc'))).toEqual([ 'apple', 'banana', 'cherry' ]);
+    });
+
+    // The tiebreak never reverses: someone who only flipped the direction should not see equal rows shuffle.
+    it('keeps tied rows in the same order when the direction flips', () =>
+    {
+        const nodes = [ file('cherry', { size: 5 }), file('apple', { size: 5 }), file('banana', { size: 5 }) ];
+
+        expect(order(sortNodes(nodes, 'size', 'desc'))).toEqual([ 'apple', 'banana', 'cherry' ]);
     });
 
     it('orders by modified time, newest last ascending', () =>

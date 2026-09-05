@@ -18,7 +18,10 @@ import { type Expression, type ExpressionBuilder, type SqlBool, sql } from 'kyse
 
 // Models
 import {
+    LISTING_SORT_FIELDS,
     type LinkNode,
+    type ListingOrderRow,
+    type ListingSortField,
     MAX_TREE_DEPTH,
     MIME_FAMILY_SPECS,
     NATURAL_ORDER_COLLATION,
@@ -29,7 +32,7 @@ import {
     SQLITE_MAX_SORTED_IN_MEMORY,
     SQLITE_MAX_SORTED_NAME_CHARS,
     type UserSummary,
-    compareNames,
+    compareListingNodes,
 } from '@fileshed/core';
 
 // Resource Access
@@ -103,22 +106,28 @@ export interface AccessScope
     grantedNodeIDs : readonly string[];
 }
 
-// Whitelists the sortable columns so a caller's sort key can never reach orderBy as raw SQL. A key maps to the ordered
-// columns its partition sorts by: 'kind' widens to (type, mime type, name) so the file/link partition groups by type
-// and then by format; every other key is a single column. Folders are pinned above this ordering separately.
+// The column holding each field the listing order names. Which fields a key sorts by, in what order, is core's to
+// say -- this is only where those fields live, and the mapping is what keeps a caller's sort key from ever reaching
+// orderBy as raw SQL.
 type SortColumn = 'name' | 'size' | 'created_at' | 'updated_at' | 'type' | 'mime_type';
+
+const sortColumnOf : Record<ListingSortField, SortColumn> = {
+    name: 'name',
+    size: 'size',
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    type: 'type',
+    mimeType: 'mime_type',
+};
 
 // Several of these are nullable -- size on links, mime_type on anything that is not a file -- and the two dialects
 // disagree about where an absent value belongs: Postgres sorts nulls high, SQLite sorts them low. Every listing that
-// orders by one of these states the placement explicitly, in Postgres's terms, so a page does not depend on which
-// database is underneath it.
-const sortColumns : Record<NodeSortKey, readonly SortColumn[]> = {
-    name: [ 'name' ],
-    size: [ 'size' ],
-    createdAt: [ 'created_at' ],
-    updatedAt: [ 'updated_at' ],
-    kind: [ 'type', 'mime_type', 'name' ],
-};
+// orders by one of these states the placement explicitly, so a page does not depend on which database is underneath
+// it, and it states the one core states: absent after present, which the direction then flips.
+function sortColumns(key : NodeSortKey) : readonly SortColumn[]
+{
+    return LISTING_SORT_FIELDS[key].map((field) => sortColumnOf[field]);
+}
 
 // The folded form every name-ordered listing sorts by, so `apple` sits beside `Apple` instead of behind a run of
 // capitals. It also settles a dialect split: raw text orders by byte on SQLite and by locale on Postgres, and only one
@@ -155,32 +164,33 @@ type NodeExpressionBuilder = ExpressionBuilder<Database, 'node'>;
 // selection to either ordering.
 type NodeConditions = (eb : NodeExpressionBuilder) => Expression<SqlBool>[];
 
-// Everything the SQLite name sort reads and nothing more: the whole selection crosses the wire to be ordered, and the
-// page's rows are fetched by id once the order is known.
-interface NameSortRow
+// The columns the in-Node ordering reads and nothing more: the whole selection crosses the wire to be ordered, and
+// the page's rows are fetched by id once the order is known. Timestamps are compared as the fixed-width UTC text
+// SQLite stores them as, which is how the client compares them too.
+const SORT_KEY_COLUMNS = [ 'id', 'name', 'type', 'size', 'mime_type', 'created_at', 'updated_at' ] as const;
+
+interface SortKeyRow
 {
     id : string;
     name : string;
     type : Database['node']['type'];
+    size : number | null;
+    mime_type : string | null;
+    created_at : string | Date;
+    updated_at : string | Date;
 }
 
-function placeRank(row : NameSortRow) : number
+function orderRow(row : SortKeyRow) : ListingOrderRow
 {
-    return row.type === 'folder' ? 0 : 1;
-}
-
-// The SQL ordering, restated for Node: folders above everything, the name within each partition, and an ascending id
-// tiebreak that the sort direction never flips -- exactly what `orderBy(folderRank).orderBy(name, dir).orderBy(id)`
-// spells on the other dialect.
-function compareSortKeys(left : NameSortRow, right : NameSortRow, direction : SortDirection) : number
-{
-    const places = placeRank(left) - placeRank(right);
-    if(places !== 0) { return places; }
-
-    const named = compareNames(left.name, right.name) * (direction === 'asc' ? 1 : -1);
-    if(named !== 0) { return named; }
-
-    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+    return {
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        size: row.size,
+        mimeType: row.mime_type,
+        createdAt: String(row.created_at),
+        updatedAt: String(row.updated_at),
+    };
 }
 
 // Membership in the playlists family goes beyond mime: browsers and servers disagree on m3u mimes often enough
@@ -366,13 +376,15 @@ export class NodeRA
     // Listing order
     //------------------------------------------------------------------------------------------------------------------
 
-    // A page of one selection, ordered the way the whole product orders names. Postgres does it in SQL; SQLite does it
-    // in Node, because it has no collation that orders naturally and JS has no sort key to give it one.
+    // A page of one selection, ordered the way the whole product orders a listing. Postgres does it in SQL, where the
+    // collation states the same rule; SQLite does it in Node, because it has no collation that orders naturally and JS
+    // has no sort key to give it one. That applies to EVERY key, not only name: the tiebreak is a name, so a key
+    // ordered in SQL on this dialect would settle its ties lexically while the client settles them naturally.
     async #page(conditions : NodeConditions, options : ChildrenOptions) : Promise<Node[]>
     {
-        if(this.#kind === 'sqlite' && options.sort.key === 'name')
+        if(this.#kind === 'sqlite')
         {
-            const page = await this.#naturallySortedPage(conditions, options.pagination, options.sort.direction);
+            const page = await this.#naturallySortedPage(conditions, options.pagination, options.sort);
 
             if(page !== undefined) { return page; }
         }
@@ -390,7 +402,7 @@ export class NodeRA
             .selectAll()
             .orderBy(folderRank, 'asc');
 
-        for(const column of sortColumns[sort.key])
+        for(const column of sortColumns(sort.key))
         {
             builder = builder.orderBy(sortTarget(this.#kind, column), (ob) =>
             {
@@ -398,7 +410,10 @@ export class NodeRA
             });
         }
 
+        // The tiebreak, ascending whichever way the key ran: a reader who only reversed the direction should not see
+        // rows the key cannot separate shuffle among themselves.
         const rows = await builder
+            .orderBy(sortTarget(this.#kind, 'name'), 'asc')
             .orderBy('id', 'asc')
             .limit(pagination.limit)
             .offset(pagination.offset)
@@ -436,7 +451,7 @@ export class NodeRA
     async #naturallySortedPage(
         conditions : NodeConditions,
         pagination : Pagination,
-        direction : SortDirection
+        sort : ChildrenOptions['sort']
     ) : Promise<Node[] | undefined>
     {
         if(!await this.#fitsInMemorySort(conditions)) { return undefined; }
@@ -444,14 +459,14 @@ export class NodeRA
         const keys = await this.#db
             .selectFrom('node')
             .where((eb) => eb.and(conditions(eb)))
-            .select([ 'id', 'name', 'type' ])
+            .select([ ...SORT_KEY_COLUMNS ])
             .limit(SQLITE_MAX_SORTED_IN_MEMORY + 1)
             .execute();
 
         // The row count was measured a query ago; this catches a folder that grew past the guard in between.
         if(keys.length > SQLITE_MAX_SORTED_IN_MEMORY) { return undefined; }
 
-        keys.sort((left, right) => compareSortKeys(left, right, direction));
+        keys.sort((left, right) => compareListingNodes(sort.key, sort.direction, orderRow(left), orderRow(right)));
 
         const page = keys.slice(pagination.offset, pagination.offset + pagination.limit);
         if(page.length === 0) { return []; }

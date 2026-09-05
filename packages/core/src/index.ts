@@ -322,6 +322,14 @@ export {
 
 // Utils
 export { compareNames } from './utils/naturalOrder.ts';
+export {
+    LISTING_SORT_FIELDS,
+    LISTING_TIEBREAK_FIELDS,
+    type ListingOrderRow,
+    type ListingSortField,
+    compareListingNodes,
+    listingSortFields,
+} from './utils/listingOrder.ts';
 export { type Equals, typeAssert } from './utils/typeAssert.ts';
 export {
     type ColorRamp,
