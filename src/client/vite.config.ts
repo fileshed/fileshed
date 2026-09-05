@@ -42,10 +42,15 @@ export default defineConfig(({ mode }) =>
                 // -- the resolver splits at the first dash and looks up a collection that does not exist. Scanning
                 // bundles every icon named literally in the source; the provider brand icons are built from
                 // dynamic ids a scan cannot see, so they are listed outright. Bundling everything also keeps a
-                // self-hosted deployment from leaking icon lookups to a third-party CDN.
+                // self-hosted deployment from leaking icon lookups to a third-party CDN -- which the app document's
+                // connect-src enforces rather than hopes for.
+                //
+                // The scan's default globs reach templates only, and a good half of this app's icon names live in
+                // .ts lookup tables (a node family's glyph, a handler's). Without .ts in the scan, every one of
+                // those resolves off the CDN at runtime.
                 icon: {
                     clientBundle: {
-                        scan: true,
+                        scan: { globInclude: [ '**/*.{vue,ts}' ] },
                         icons: socialProviderIDs.map((provider) => providerIcon(provider)),
                     },
                 },
