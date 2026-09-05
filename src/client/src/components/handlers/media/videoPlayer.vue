@@ -102,7 +102,7 @@
     import { useToast } from '@nuxt/ui/composables';
 
     // Engines
-    import { bufferedPercent, clampSeekTime } from '../../../engines/media/playback.ts';
+    import { bufferedPercent, clampSeekTime, sameMediaSource } from '../../../engines/media/playback.ts';
     import { resolveMediaShortcut } from '../../../engines/media/keyboard.ts';
     import type { RepeatMode } from '../../../engines/media/queue.ts';
 
@@ -134,6 +134,7 @@
         'next' : [];
         'toggle-shuffle' : [];
         'cycle-repeat' : [];
+        'cast-start' : [];
         'toggle-playlist' : [];
         'volume-change' : [ volume : number, muted : boolean ];
         'rate-change' : [ rate : number ];
@@ -155,6 +156,10 @@
     const playbackRate = ref(1);
     const isFullscreen = ref(false);
     const errored = ref(false);
+
+    // Where a cast handoff has to put the listener back. Taking the playback token rewrites the src of the
+    // track already playing, so the element reloads onto the same media -- and a reload starts at zero.
+    let resumeAt : number | null = null;
 
     //------------------------------------------------------------------------------------------------------------------
     // Native element events -- the source of truth for state a user action doesn't already know synchronously.
@@ -194,6 +199,13 @@
         if(mediaEl.value === null) { return; }
 
         duration.value = mediaEl.value.duration;
+
+        // Applied once the element knows how long the media is; before that a seek has nothing to seek within.
+        if(resumeAt !== null)
+        {
+            mediaEl.value.currentTime = resumeAt;
+            resumeAt = null;
+        }
     }
 
     function onVolumeChange() : void
@@ -300,7 +312,13 @@
         return mediaEl.value?.remote;
     }
 
-    function onRemoteConnect() : void { casting.value = true; }
+    // Both `connecting` and `connect` land here: the sooner the host mints, the sooner the receiver is handed a URL
+    // it can actually fetch, and asking twice costs nothing.
+    function onRemoteConnect() : void
+    {
+        casting.value = true;
+        emit('cast-start');
+    }
     function onRemoteDisconnect() : void { casting.value = false; }
 
     // Closing the picker arrives as NotAllowedError -- a choice, not a failure. Anything else names its reason in
@@ -329,6 +347,7 @@
         if(remote === undefined || typeof remote.watchAvailability !== 'function') { return; }
 
         casting.value = remote.state !== 'disconnected';
+        if(casting.value) { emit('cast-start'); }
         remote.addEventListener('connect', onRemoteConnect);
         remote.addEventListener('connecting', onRemoteConnect);
         remote.addEventListener('disconnect', onRemoteDisconnect);
@@ -423,16 +442,27 @@
     {
         if(mediaEl.value === null) { return; }
 
+        // Same media under a different URL is the playback token arriving for a receiver, not a new track. The
+        // element still has to reload onto it, so the position and whether it was playing ride across -- pressing
+        // the cast button should hand the track over, not start it again.
+        const carried = nextSrc !== previousSrc && sameMediaSource(nextSrc, previousSrc)
+            ? { at: currentTime.value, playing: playing.value }
+            : null;
+
         errored.value = false;
         playing.value = false;
         currentTime.value = 0;
         duration.value = 0;
         bufferedPercentValue.value = 0;
 
-        if(nextSrc !== previousSrc) { mediaEl.value.load(); }
+        if(nextSrc !== previousSrc)
+        {
+            resumeAt = carried === null ? null : carried.at;
+            mediaEl.value.load();
+        }
         else { mediaEl.value.currentTime = 0; }
 
-        if(props.autoplay) { mediaEl.value.play().catch(ignoreBlockedAutoplay); }
+        if(props.autoplay || carried?.playing === true) { mediaEl.value.play().catch(ignoreBlockedAutoplay); }
     }, { flush: 'post' });
 
     // A detached element can hold its network request open in some browsers; stopping playback and reloading an

@@ -12,6 +12,7 @@ import {
     bufferedPercent,
     clampSeekTime,
     formatMediaTime,
+    sameMediaSource,
 } from '@client/engines/media/playback.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -115,5 +116,42 @@ describe('bufferedPercent', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+
+describe('sameMediaSource', () =>
+{
+    const TRACK = '/api/nodes/n1/download?disposition=inline';
+
+    // The case it exists for: a cast session starting adds the playback key to the src of the track already
+    // playing, and the element reloads onto a URL that addresses the very same bytes.
+    it('reads a src that gained a playback token as the same media', () =>
+    {
+        expect(sameMediaSource(`${ TRACK }&token=fsplay_k1`, TRACK)).toBe(true);
+    });
+
+    it('reads a token being replaced as the same media', () =>
+    {
+        expect(sameMediaSource(`${ TRACK }&token=fsplay_k2`, `${ TRACK }&token=fsplay_k1`)).toBe(true);
+    });
+
+    it('reads a different node as different media, however the tokens compare', () =>
+    {
+        const other = '/api/nodes/n2/download?disposition=inline';
+
+        expect(sameMediaSource(other, TRACK)).toBe(false);
+        expect(sameMediaSource(`${ other }&token=fsplay_k1`, `${ TRACK }&token=fsplay_k1`)).toBe(false);
+    });
+
+    // A playlist entry can point anywhere, and two remote streams are only the same one if the whole URL is.
+    it('compares absolute sources whole', () =>
+    {
+        expect(sameMediaSource('https://stream.example/a.mp3', 'https://stream.example/a.mp3')).toBe(true);
+        expect(sameMediaSource('https://stream.example/a.mp3', 'https://stream.example/b.mp3')).toBe(false);
+    });
+
+    it('does not confuse a different disposition for the same request', () =>
+    {
+        expect(sameMediaSource('/api/nodes/n1/download', TRACK)).toBe(false);
+    });
+});
 
 //----------------------------------------------------------------------------------------------------------------------

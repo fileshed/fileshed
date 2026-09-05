@@ -101,10 +101,11 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // list never remounts (and never restarts) the playing track.
     const playToken = ref(0);
 
-    // The session's playback token: a short-lived download-scoped key the host appends to every drive track's src,
-    // so a cast receiver handed the URL fetches bytes without a cookie jar. Minted when a session opens and
-    // refreshed on a track change inside the final window; a failed mint leaves it null and in-page playback rides
-    // the session cookie unbothered.
+    // The cast session's playback token: a short-lived download-scoped key the host appends to every drive track's
+    // src, so a receiver handed the URL fetches bytes without a cookie jar. Minted when a cast session STARTS and
+    // never before -- in-page playback is a same-origin request that carries the session cookie, so a key would only
+    // put a credential in a URL that never needed one, where every proxy log on the way records it. Refreshed on a
+    // track change inside the final window; a failed mint leaves it null and in-page playback is unbothered.
     const playbackToken = ref<{ id : string; token : string; expiresAt : number } | null>(null);
     let tokenMintInFlight = false;
 
@@ -166,26 +167,22 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         }
     }
 
-    async function ensurePlaybackToken() : Promise<void>
+    // A receiver is taking over, and it fetches the URL itself with no cookie jar to carry a session. This is the
+    // only thing that mints a playback key. The token arriving changes the current track's src, so the element
+    // reloads onto it on its own -- landing back where the listener was is the player's business, and it tells the
+    // two apart by seeing a src that changed in nothing but its token.
+    async function beginCasting() : Promise<void>
     {
         if(playbackToken.value !== null) { return; }
 
         await mintToken(null);
-
-        // The first track mounted before the mint settled, so its element src carries no token -- and AirPlay hands
-        // a receiver whatever the element holds. Remount it with the tokened src while nothing queue-driven is
-        // pending; pre-play the remount is invisible.
-        if(playbackToken.value !== null && !autoplay.value) { playToken.value += 1; }
     }
 
+    // A refresh and nothing else: no token means nothing is casting, and a track change is no reason to mint one.
     function refreshPlaybackTokenIfNeeded() : void
     {
         const stamp = playbackToken.value;
-        if(stamp === null)
-        {
-            void ensurePlaybackToken();
-            return;
-        }
+        if(stamp === null) { return; }
 
         if(stamp.expiresAt - Date.now() > PLAYBACK_TOKEN_REFRESH_WINDOW_MS) { return; }
 
@@ -206,7 +203,6 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         playlistBlobID = null;
         hostFolderID.value = node.parentID;
         loadTags(opened);
-        void ensurePlaybackToken();
     }
 
     // Non-media nodes have no seat in the queue and are dropped here rather than surfaced -- the picker only offers
@@ -542,7 +538,6 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     ) : Promise<{ resolved : number; broken : number }>
     {
         playlistBusy.value = true;
-        void ensurePlaybackToken();
 
         try
         {
@@ -829,6 +824,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         next,
         previous,
         advance,
+        beginCasting,
         handleTrackError,
         toggleShuffle,
         cycleRepeat,

@@ -184,8 +184,10 @@ Name the proxies rather than a private range that also covers your users — a r
 forge its own address again. If nothing fronts this instance, set `TRUSTED_PROXIES=none`; leaving it unset warns at
 every boot.
 
-**Proxy logs:** media playback and personal access tokens can ride URLs as `?token=` query parameters. Reverse-proxy
-access logs capture query strings by default — treat those logs as sensitive or configure the proxy to redact them.
+**Proxy logs:** a personal access token can ride a URL as a `?token=` query parameter, and so can the short-lived
+playback key — but only while a cast session is running, since that is the only thing that mints one. In-page
+playback authenticates on the session cookie and its URLs carry no credential. Reverse-proxy access logs capture
+query strings by default; treat those logs as sensitive or configure the proxy to redact them.
 
 ## Backups
 

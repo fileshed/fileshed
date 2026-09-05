@@ -819,27 +819,65 @@ function tokenResponse(id : string, msUntilExpiry : number) : { id : string; tok
 
 describe('MediaPlayerStore playback token', () =>
 {
-    it('mints a session token when a file opens, and remounts the pre-play track to carry it', async () =>
+    // In-page playback is a same-origin request and carries the session cookie, so a key here would only put a
+    // credential in a URL that never needed one -- and a URL is the thing every proxy on the way writes down.
+    it('mints nothing when a file opens', async () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
 
         store.open(fileNode(), 'audio');
-        expect(store.playToken).toBe(1);
-
         await flushPromises();
 
-        expect(store.playbackToken?.token).toBe('fsplay_k1');
-        expect(store.playToken).toBe(2);
-        expect(store.autoplay).toBe(false);
+        expect(mintPlaybackTokenMock).not.toHaveBeenCalled();
+        expect(store.playbackToken).toBeNull();
     });
 
-    it('carries on without a token when the mint fails, so in-page playback is never blocked', async () =>
+    it('does not mint as tracks change while nothing is casting', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ id: 'f1' }), 'audio');
+        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+
+        store.select(1);
+        await flushPromises();
+
+        expect(mintPlaybackTokenMock).not.toHaveBeenCalled();
+    });
+
+    // A receiver fetches the URL itself with no cookie jar of its own, which is the whole reason the key exists.
+    it('mints when a cast session starts', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+        store.open(fileNode(), 'audio');
+
+        await store.beginCasting();
+
+        expect(store.playbackToken?.token).toBe('fsplay_k1');
+    });
+
+    // A remote connection announces itself as `connecting` and again as `connect`, and a player mounted against an
+    // already-connected session says so a third time.
+    it('mints once for a cast session, however often the connection announces itself', async () =>
+    {
+        mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
+        const store = useMediaPlayerStore();
+        store.open(fileNode(), 'audio');
+
+        await store.beginCasting();
+        await store.beginCasting();
+
+        expect(mintPlaybackTokenMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('carries on without a token when the mint fails, so playback is never blocked', async () =>
     {
         const store = useMediaPlayerStore();
 
         store.open(fileNode(), 'audio');
-        await flushPromises();
+        await store.beginCasting();
 
         expect(store.playbackToken).toBeNull();
         expect(store.playToken).toBe(1);
@@ -850,7 +888,7 @@ describe('MediaPlayerStore playback token', () =>
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 10 * 60 * 1000));
         const store = useMediaPlayerStore();
         store.open(fileNode({ id: 'f1' }), 'audio');
-        await flushPromises();
+        await store.beginCasting();
         expect(store.playbackToken?.id).toBe('k1');
 
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k2', 5 * HOUR_MS));
@@ -867,7 +905,7 @@ describe('MediaPlayerStore playback token', () =>
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
         store.open(fileNode({ id: 'f1' }), 'audio');
-        await flushPromises();
+        await store.beginCasting();
 
         store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
         store.select(1);
@@ -882,7 +920,7 @@ describe('MediaPlayerStore playback token', () =>
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', -1000));
         const store = useMediaPlayerStore();
         store.open(fileNode({ id: 'f1' }), 'audio');
-        await flushPromises();
+        await store.beginCasting();
         store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
         const mountsBefore = store.playToken;
 
@@ -901,7 +939,7 @@ describe('MediaPlayerStore playback token', () =>
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
         store.open(fileNode({ id: 'f1' }), 'audio');
-        await flushPromises();
+        await store.beginCasting();
         store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
 
         store.handleTrackError();

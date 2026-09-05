@@ -261,6 +261,49 @@ describe('VideoPlayer unplayable format', () =>
 
 describe('VideoPlayer queue behavior', () =>
 {
+    // A cast session starting rewrites the current track's src with a playback token, and the element has to
+    // reload onto it. Pressing the cast button should hand the track over, not start it again -- so the position
+    // and whether it was playing carry across. jsdom's load() is a stub and cannot reset currentTime itself, so
+    // the reset a real element performs is done here before the metadata event that restores it.
+    it('carries the position and playback across a src that changed only in its token', async () =>
+    {
+        const wrapper = mountPlayer({ src: '/api/nodes/n1/download?disposition=inline' });
+        const media = wrapper.get('video').element as HTMLMediaElement;
+
+        media.currentTime = 42;
+        media.dispatchEvent(new Event('timeupdate'));
+        media.dispatchEvent(new Event('play'));
+        vi.clearAllMocks();
+
+        await wrapper.setProps({ src: '/api/nodes/n1/download?disposition=inline&token=fsplay_k1' });
+        await wrapper.vm.$nextTick();
+
+        expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
+        expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+
+        media.currentTime = 0;
+        media.dispatchEvent(new Event('loadedmetadata'));
+
+        expect(media.currentTime).toBe(42);
+    });
+
+    it('starts a genuinely different track from the beginning, whatever the last one was at', async () =>
+    {
+        const wrapper = mountPlayer({ src: '/api/nodes/n1/download?disposition=inline' });
+        const media = wrapper.get('video').element as HTMLMediaElement;
+
+        media.currentTime = 42;
+        media.dispatchEvent(new Event('timeupdate'));
+
+        await wrapper.setProps({ src: '/api/nodes/n2/download?disposition=inline' });
+        await wrapper.vm.$nextTick();
+
+        media.currentTime = 0;
+        media.dispatchEvent(new Event('loadedmetadata'));
+
+        expect(media.currentTime).toBe(0);
+    });
+
     it('starts playback on mount only when the arriving track was queue-driven', () =>
     {
         mountPlayer({ autoplay: true });
@@ -340,14 +383,16 @@ describe('VideoPlayer casting', () =>
         available ?: boolean;
         monitoringSupported ?: boolean;
         promptError ?: DOMException;
+        state ?: string;
     } = {}) : { prompt : ReturnType<typeof vi.fn> }
     {
         const prompt = vi.fn(() =>
         {
             return options.promptError ? Promise.reject(options.promptError) : Promise.resolve(undefined);
         });
+        const listeners : Record<string, (() => void)[]> = {};
         const remote = {
-            state: 'disconnected',
+            state: options.state ?? 'disconnected',
             prompt,
             watchAvailability: (callback : (available : boolean) => void) =>
             {
@@ -360,15 +405,52 @@ describe('VideoPlayer casting', () =>
                 return Promise.resolve(7);
             },
             cancelWatchAvailability: () => Promise.resolve(),
-            addEventListener: () => { /* connect states exercised through the fake's disconnected default */ },
+            addEventListener: (event : string, listener : () => void) =>
+            {
+                (listeners[event] ??= []).push(listener);
+            },
             removeEventListener: () => { /* torn down with the prototype patch */ },
         };
         Object.defineProperty(HTMLMediaElement.prototype, 'remote', { configurable: true, get: () => remote });
 
-        return { prompt };
+        return { prompt, fire: (event : string) => { for(const listener of listeners[event] ?? []) { listener(); } } };
     }
 
     afterEach(() => { Reflect.deleteProperty(HTMLMediaElement.prototype, 'remote'); });
+
+    // The playback key exists for a receiver, which fetches the URL itself and has no cookie jar. Asking for one
+    // the moment the connection starts -- `connecting`, before it completes -- is what gets the token into the src
+    // in time for the handoff.
+    it('asks the host for a playback key as soon as a connection starts', async () =>
+    {
+        const { fire } = installFakeRemote({ available: true });
+        const wrapper = mountPlayer();
+        await flushPromises();
+
+        fire('connecting');
+
+        expect(wrapper.emitted('cast-start')).toHaveLength(1);
+    });
+
+    // A player mounting against a session that is already casting -- a track change remounts nothing, but a switch
+    // between the audio and video families does.
+    it('asks when it mounts against a session already connected', async () =>
+    {
+        installFakeRemote({ available: true, state: 'connected' });
+        const wrapper = mountPlayer();
+        await flushPromises();
+
+        expect(wrapper.emitted('cast-start')).toHaveLength(1);
+    });
+
+    it('asks for nothing while nothing is casting', async () =>
+    {
+        installFakeRemote({ available: true });
+        const wrapper = mountPlayer();
+        await flushPromises();
+
+        expect(wrapper.emitted('cast-start')).toBeUndefined();
+    });
 
     it('offers Cast only once availability reports a device, prompting the native picker on click', async () =>
     {

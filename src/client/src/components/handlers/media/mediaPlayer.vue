@@ -45,6 +45,7 @@
                     @next="store.next()"
                     @toggle-shuffle="store.toggleShuffle()"
                     @cycle-repeat="store.cycleRepeat()"
+                    @cast-start="store.beginCasting()"
                     @toggle-playlist="playlistHidden = !playlistHidden"
                     @volume-change="onVolumeChange"
                     @rate-change="onRateChange"
@@ -114,6 +115,7 @@
                             @next="store.next()"
                             @toggle-shuffle="store.toggleShuffle()"
                             @cycle-repeat="store.cycleRepeat()"
+                            @cast-start="store.beginCasting()"
                             @volume-change="onVolumeChange"
                             @rate-change="onRateChange"
                         />
@@ -181,9 +183,11 @@
     const store = useMediaPlayerStore();
     const toast = useToast();
 
-    // Drive tracks carry the session's playback token so a cast receiver -- handed this exact URL by the browser --
-    // can fetch bytes without cookies. External stream URLs pass through untouched, and the user-facing download
-    // href stays deliberately tokenless: no credential in a link someone might copy.
+    // Drive tracks carry the playback token once a cast session holds one, so a receiver -- handed this exact URL by
+    // the browser -- can fetch bytes without cookies. There is no token until then: in-page playback is same-origin
+    // and rides the session cookie, so a key would only put a credential in a URL every proxy on the way logs.
+    // External stream URLs pass through untouched, and the user-facing download href stays deliberately tokenless:
+    // no credential in a link someone might copy.
     function srcFor(entry : MediaTrack) : string
     {
         if(entry.remoteUrl !== null) { return entry.remoteUrl; }

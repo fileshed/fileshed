@@ -7,6 +7,14 @@
 // touches the DOM.
 //----------------------------------------------------------------------------------------------------------------------
 
+// The playback key rides the src as a query parameter, so a cast session starting rewrites the URL of the track
+// already playing.
+const PLAYBACK_TOKEN_PARAM = 'token';
+
+// Relative sources are the normal case (`/api/nodes/<id>/download?...`), and a base is only ever needed to parse
+// them. Which one is immaterial: it is the same base on both sides of every comparison.
+const COMPARISON_BASE = 'https://fileshed.invalid';
+
 export interface BufferedRanges
 {
     length : number;
@@ -55,6 +63,29 @@ export function bufferedPercent(buffered : BufferedRanges, duration : number) : 
     for(let index = 0; index < buffered.length; index += 1) { furthest = Math.max(furthest, buffered.end(index)); }
 
     return Math.min(100, Math.max(0, (furthest / duration) * 100));
+}
+
+// Whether two element sources address the same media, ignoring the playback key. A cast session starting adds that
+// key to the current track's src and the element reloads onto the new URL, which is indistinguishable from a track
+// change unless something asks this: the same media under a new credential belongs back at the position it was at,
+// a different track belongs at the start. An unparseable source (nothing the player builds, but the type allows it)
+// falls back to comparing the strings whole.
+export function sameMediaSource(first : string, second : string) : boolean
+{
+    try
+    {
+        const one = new URL(first, COMPARISON_BASE);
+        const other = new URL(second, COMPARISON_BASE);
+
+        one.searchParams.delete(PLAYBACK_TOKEN_PARAM);
+        other.searchParams.delete(PLAYBACK_TOKEN_PARAM);
+
+        return one.href === other.href;
+    }
+    catch
+    {
+        return first === second;
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
