@@ -35,6 +35,8 @@ export class MediaTagManager
     readonly #blob : BlobRA;
     readonly #tags : MediaTagsRA;
 
+    #sweeping = false;
+
     constructor(deps : MediaTagDeps)
     {
         this.#blob = deps.blob;
@@ -77,6 +79,25 @@ export class MediaTagManager
         }
 
         return candidates.length;
+    }
+
+    // What the registered timer job calls. A batch slower than the interval -- a large library, a slow extractor, a
+    // contended host -- would otherwise have the next tick start on top of this one, with both passes walking the same
+    // worklist and extracting the same files. The latch lives here rather than in sweepOnce so a direct run still gets
+    // the pass it asked for; the timer knows nothing about it. Claimed with no await between the test and the set, so
+    // a second tick can never observe an unheld latch on a pass that has already started.
+    async runScheduled(batch : number) : Promise<void>
+    {
+        if(this.#sweeping)
+        {
+            logger.debug('Media tag backfill still running; skipping this tick');
+            return;
+        }
+
+        this.#sweeping = true;
+
+        try { await this.sweepOnce(batch); }
+        finally { this.#sweeping = false; }
     }
 }
 

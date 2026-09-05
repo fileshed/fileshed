@@ -554,7 +554,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         name: 'mediaTags.backfill',
         intervalMs: sweepIntervalMs,
         immediate: true,
-        run: () => mediaTags.sweepOnce(MEDIA_TAG_SWEEP_BATCH),
+        run: () => mediaTags.runScheduled(MEDIA_TAG_SWEEP_BATCH),
     });
 
     // Nothing has been issued yet at boot, so there is nothing for the first prune to find.
