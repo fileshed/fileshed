@@ -14,6 +14,7 @@ import { STOCK_THEME, socialProviderIDs } from '@fileshed/core';
 
 // Utils
 import { loadViteEnv } from './env.ts';
+import { scalarBundle } from './scalarBundle.ts';
 import { providerIcon } from './src/utils/formatters/providerPresentation.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -91,10 +92,13 @@ export default defineConfig(({ mode }) =>
                     globsExclude: [ 'src/components/handlers/**' ],
                 },
             }),
+            scalarBundle(),
             devServer({
                 entry: '../server/server.ts',
+                // /scalar is the API reference's own script, which the server hands out of node_modules while there
+                // is a node_modules to hand it out of. Vite only carries that file in a build.
                 exclude: [
-                    /^(?!\/api\/|\/d\/).*/,
+                    /^(?!\/api\/|\/d\/|\/scalar\/).*/,
                 ],
             }),
         ],

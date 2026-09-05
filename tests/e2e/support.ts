@@ -109,6 +109,10 @@ export interface SpawnOptions
 
     // Boot over an existing server's state instead of fresh temp dirs, for a spec that restarts a server.
     dirs ?: ServerDirs;
+
+    // Command-line arguments for the child. The interactive API reference is reachable only this way, which is what
+    // keeps it out of a deployment, so a spec that wants it has to ask exactly as a developer would.
+    args ?: string[];
 }
 
 export interface StopOptions
@@ -225,7 +229,7 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
     const storageRoot = options.dirs?.storageRoot ?? await mkdtemp(join(tmpdir(), 'fileshed-e2e-blobs-'));
     const databasePath = join(dataDir, DATABASE_FILENAME);
 
-    const child = spawn(process.execPath, [ SERVER_ENTRY ], {
+    const child = spawn(process.execPath, [ SERVER_ENTRY, ...options.args ?? [] ], {
         cwd: REPO_ROOT,
         stdio: [ 'ignore', 'pipe', 'pipe' ],
         env: {

@@ -46,7 +46,7 @@ import { createDeletionOfferRoutes } from './routes/deletionOffers.ts';
 import { createDirectRoutes } from './routes/direct.ts';
 import { createDownloadRoutes } from './routes/downloads.ts';
 import { createNodeRoutes } from './routes/nodes.ts';
-import { mountOpenApiDocs } from './routes/openapi.ts';
+import { mountApiReference, mountOpenApiSpec } from './routes/openapi.ts';
 import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
 import { createAdminEmailRoutes } from './routes/adminEmail.ts';
@@ -200,6 +200,11 @@ export interface AppOptions
     // Request throttling and the origin check, built from config by the caller. Absent leaves both off, which is what
     // the no-arg and auth-only compositions want.
     security ?: MiddlewareHandler[];
+
+    // Whether to mount the interactive API reference. Deliberately not a config key: an environment variable is a line
+    // in a file that gets copied between deployments, and this is a thing you should only ever get by asking for it on
+    // the command line of the process you are standing in front of.
+    apiReference ?: boolean;
 }
 
 function requireHandle(handle ?: DatabaseHandle) : DatabaseHandle
@@ -356,7 +361,11 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             app.route('/d', createDirectRoutes(services.publicLinks));
         }
 
-        mountOpenApiDocs(app);
+        mountOpenApiSpec(app);
+
+        // Never from a deployment. The reference is a page that loads a bundle and offers to call this API from it,
+        // and an instance has no business serving one anonymously; a developer asks for it explicitly at launch.
+        if(options.apiReference === true) { mountApiReference(app); }
     }
 
     app.route('/api', health);
@@ -416,7 +425,14 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
 // must call it, or sweeps keep firing against a torn-down database. Known dev-only wart: the Vite runtime
 // re-imports the entry on server-file changes without disposing the old module, so sweep timers stack across
 // reloads until the dev server is bounced -- harmless (sweeps are idempotent) beyond log noise.
-export async function bootApp() : Promise<{ app : Hono; config : Config; shutdown : () => void }>
+export interface BootOptions
+{
+    // Passed through to createApp. server.ts reads it from the command line.
+    apiReference ?: boolean;
+}
+
+export async function bootApp(options : BootOptions = {})
+: Promise<{ app : Hono; config : Config; shutdown : () => void }>
 {
     const config = loadConfig();
     const handle = createDatabase(config);
@@ -641,6 +657,7 @@ export async function bootApp() : Promise<{ app : Hono; config : Config; shutdow
         app: createApp(auth, services, {
             clientDist: config.CLIENT_DIST,
             security: securityMiddleware(config),
+            apiReference: options.apiReference,
         }),
         config,
         shutdown: () => timers.stopTimers(),

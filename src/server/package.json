@@ -29,6 +29,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@scalar/api-reference": "^1.65.1",
     "@types/node": "^26.1.1",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",

@@ -126,9 +126,9 @@ const EXPECTED_ROUTES = [
     // Direct serving (anonymous, deliberately outside /api)
     'GET /d/:token',
 
-    // OpenAPI documentation
+    // The OpenAPI document. The interactive reference that renders it is deliberately absent: a deployment never
+    // mounts it, and this list is the wire surface a deployment has.
     'GET /api/openapi.json',
-    'GET /api/docs',
 ];
 
 //----------------------------------------------------------------------------------------------------------------------

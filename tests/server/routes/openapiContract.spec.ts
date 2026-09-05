@@ -7,7 +7,8 @@
 // document declares one security scheme (the better-auth session cookie), applies it globally, and the anonymous
 // surfaces override to require none. The shared error shape is hoisted once into components and referenced by $ref, and
 // the POST /api/nodes body round-trips the createNodeRequest discriminated union -- the point of feeding the spec from
-// the same codecs the handlers validate against. GET /api/docs serves the Scalar reference UI. The spec is pure
+// the same codecs the handlers validate against. GET /api/docs serves the Scalar reference UI off this origin's own
+// bundle, under a policy that admits its start-up script by nonce and no other script at all. The spec is pure
 // composition; no request hits the database, so nothing is migrated.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -26,7 +27,9 @@ const config = testConfig();
 const handle = createDatabase(config);
 const auth = createAuth(handle, config, TEST_AUTH_SECRET);
 
-const app = composeFullApp(auth, handle, config);
+// The reference is asked for here because a deployment never mounts it -- these specs are what stands in for the
+// developer who passes --api-reference at the command line.
+const app = composeFullApp(auth, handle, config, { apiReference: true });
 
 afterAll(async () =>
 {
@@ -89,6 +92,14 @@ async function fetchSpec() : Promise<OpenApiSpec>
     expect(res.status).toBe(200);
 
     return await res.json() as OpenApiSpec;
+}
+
+// The nonce off the one script tag that carries no src -- the inline call that starts the reference up.
+function nonceOf(html : string) : string
+{
+    const inline = /<script(?![^>]*\ssrc=)[^>]*\snonce="(?<nonce>[^"]*)"/u.exec(html);
+
+    return inline?.groups?.['nonce'] ?? '';
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -162,6 +173,51 @@ describe('GET /api/docs', () =>
 
         expect(res.status).toBe(200);
         expect(res.headers.get('content-type')).toMatch(/text\/html/);
+    });
+
+    it('loads every script it runs from this origin', async () =>
+    {
+        const html = await (await app.request('/api/docs')).text();
+
+        const sources = [ ...html.matchAll(/<script[^>]*\ssrc="(?<src>[^"]*)"/gu) ]
+            .map((match) => match.groups?.['src'] ?? '');
+
+        expect(sources.length).toBeGreaterThan(0);
+        for(const source of sources)
+        {
+            // A path, so it resolves against this origin. A protocol-relative `//host` would not.
+            expect(source, source).toMatch(/^\/[^/]/u);
+        }
+    });
+
+    it('serves the reference bundle itself', async () =>
+    {
+        const res = await app.request('/scalar/standalone.js');
+
+        expect(res.status).toBe(200);
+        expect(res.headers.get('content-type')).toMatch(/javascript/);
+        expect((await res.text()).length).toBeGreaterThan(0);
+    });
+
+    it('authorizes its inline start-up script with a nonce, and a fresh one each time', async () =>
+    {
+        const first = await app.request('/api/docs');
+        const nonce = nonceOf(await first.text());
+
+        expect(nonce).toBeTruthy();
+        expect(first.headers.get('content-security-policy')).toContain(`'nonce-${ nonce }'`);
+
+        const second = await app.request('/api/docs');
+
+        expect(nonceOf(await second.text())).not.toBe(nonce);
+    });
+
+    it('keeps its own policy rather than the app-wide default', async () =>
+    {
+        const res = await app.request('/api/docs');
+
+        // The reference runs an inline script; the app document policy would refuse it.
+        expect(res.headers.get('content-security-policy')).toMatch(/script-src[^;]*'nonce-/u);
     });
 });
 

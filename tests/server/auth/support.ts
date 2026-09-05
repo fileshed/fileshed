@@ -127,7 +127,19 @@ export async function bootTestApp(overrides : Partial<Config> = {}, extras : Aut
 // bootApp's service composition in miniature: every manager over the one handle, with the settings manager feeding
 // the app's own instance -- so a patch through a route is what the gate middleware reads. Composition alone touches
 // neither the database nor the storage root, which is what lets the route-table and OpenAPI specs use it unmigrated.
-export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Config) : Hono
+export interface ComposeOptions
+{
+    // The interactive reference, which the composition root never mounts. A spec asserting on it has to ask, the
+    // same way a developer does at the command line.
+    apiReference ?: boolean;
+}
+
+export function composeFullApp(
+    auth : Auth,
+    handle : DatabaseHandle,
+    config : Config,
+    options : ComposeOptions = {}
+) : Hono
 {
     const blob = new BlobRA(handle);
     const nodeRA = new NodeRA(handle);
@@ -214,7 +226,7 @@ export function composeFullApp(auth : Auth, handle : DatabaseHandle, config : Co
             return { uploadMaxBytes: upload, avatarMaxBytes: avatar };
         },
         providers: [],
-    });
+    }, { apiReference: options.apiReference });
 }
 
 // The fully-serviced counterpart to bootTestApp, for specs that drive real requests through the whole app.
