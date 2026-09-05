@@ -36,6 +36,3 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
-
-# Local tooling
-.mcp.json
