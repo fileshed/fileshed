@@ -32,6 +32,8 @@ const updatePreferencesMock = updatePreferences as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
+const UBadgeStub = { name: 'UBadge', props: [ 'label' ], template: '<span class="badge">{{ label }}</span>' };
+
 const USwitchStub = {
     name: 'USwitch',
     props: [ 'modelValue', 'disabled' ],
@@ -42,7 +44,7 @@ const USwitchStub = {
 
 function mountToggle() : VueWrapper
 {
-    return mount(RemoteMedia, { global: { stubs: { USwitch: USwitchStub } } });
+    return mount(RemoteMedia, { global: { stubs: { USwitch: USwitchStub, UBadge: UBadgeStub } } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -87,6 +89,18 @@ describe('RemoteMedia', () =>
 
         expect(updatePreferencesMock).toHaveBeenCalledWith({ allowRemoteMedia: false });
         expect(session.allowRemoteMedia).toBe(false);
+    });
+
+    // The setting sits among appearance and editor preferences, where nothing else costs the user anything. The tag
+    // is what marks it as the one that does.
+    it('marks itself as a privacy setting', () =>
+    {
+        const session = useSessionStore();
+        session.me = meFixture({ preferences: {} });
+
+        const badge = mountToggle().find('.badge');
+
+        expect(badge.text()).toBe('Privacy');
     });
 
     // The concern is not something a user would guess at from the label, so the control carries it.

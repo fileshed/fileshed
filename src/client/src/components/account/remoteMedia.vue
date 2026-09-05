@@ -9,8 +9,14 @@
 <template>
     <div class="flex items-center justify-between gap-4 rounded-lg border border-default p-4">
         <div class="min-w-0">
-            <h3 class="font-medium text-default">
+            <h3 class="flex flex-wrap items-center gap-2 font-medium text-default">
                 Media from other sites
+                <UBadge
+                    label="Privacy"
+                    color="neutral"
+                    variant="subtle"
+                    size="sm"
+                />
             </h3>
             <p class="mt-1 text-sm text-muted">
                 A playlist can point at a file hosted somewhere else, including a playlist someone shared with you.
