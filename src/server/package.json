@@ -10,7 +10,7 @@
     "lint:types": "tsc --noEmit"
   },
   "dependencies": {
-    "@better-auth/api-key": "^1.6.25",
+    "@better-auth/api-key": "1.6.25",
     "@fileshed/core": "^0.1.0",
     "@fileshed/kysely-node-sqlite": "^0.1.0",
     "@hono/node-server": "^2.0.10",

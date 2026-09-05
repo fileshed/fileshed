@@ -93,7 +93,17 @@ lineModelMarked.use({
                 const match = /^\n+/u.exec(src);
                 if(!match) { return undefined; }
 
-                return { type: 'blankLines', raw: match[0], leading: tokens.length === 0 };
+                // The run's length rides on a field of our own rather than being read back off `raw`: the token
+                // reaches parseMarkdown with `raw` emptied, and a count taken from there is a count of nothing.
+                // `trailing` marks the run that ends the source, which the parser turns into an empty paragraph by
+                // itself -- so the count below leaves that one to it rather than writing a second.
+                return {
+                    type: 'blankLines',
+                    raw: match[0],
+                    newlines: match[0].length,
+                    leading: tokens.length === 0,
+                    trailing: match[0].length === src.length,
+                };
             },
         },
     ],
@@ -108,9 +118,13 @@ export const BlankLines = Extension.create({
 
     parseMarkdown: (token) : JSONContent[] =>
     {
-        const raw : string = token.raw ?? '';
+        const newlines = 'newlines' in token && typeof token.newlines === 'number' ? token.newlines : 0;
         const leading = 'leading' in token && token.leading === true;
-        const count = leading ? raw.length : raw.length - 1;
+        const trailing = 'trailing' in token && token.trailing === true;
+
+        // One newline is the previous line's terminator, and the run that ends the source already has an empty
+        // paragraph made for it by the parser.
+        const count = (leading ? newlines : newlines - 1) - (trailing ? 1 : 0);
 
         return Array.from({ length: Math.max(count, 0) }, () => ({ type: 'paragraph' }));
     },
