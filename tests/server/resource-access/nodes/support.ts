@@ -23,8 +23,8 @@ import {
     timestampType,
 } from '@server/resource-access/database/migrations/columns.ts';
 
-// Utils
-import type { Config } from '@server/utils/config.ts';
+// Test support
+import { testConfig as sharedTestConfig } from '../../auth/support.ts';
 
 // Test support
 import { openTestDatabase, testDatabaseKind } from '../../support/database.ts';
@@ -33,19 +33,13 @@ import { openTestDatabase, testDatabaseKind } from '../../support/database.ts';
 // Database
 //----------------------------------------------------------------------------------------------------------------------
 
-const testConfig : Config = {
-    HOST: '127.0.0.1',
-    PORT: 3000,
+const testConfig = sharedTestConfig({
     DATABASE_KIND: 'sqlite',
     DATABASE_PATH: ':memory:',
-    AUTH_SECRET: 'test-auth-secret-at-least-32-chars-long',
-    BASE_URL: 'http://localhost:5173',
-    STORAGE_ROOT: './data/blobs',
     GC_GRACE_DAYS: 7,
-    GC_INTERVAL_MINUTES: 60,
     TRASH_PURGE_DAYS: 30,
     UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
-};
+});
 
 // Stands in for BetterAuth's user table (which its migrator owns in production), carrying just the columns FileShed
 // reads, so the app-table FKs to user.id resolve. Mirrors the migration spec's stub.

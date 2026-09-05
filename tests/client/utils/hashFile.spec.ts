@@ -18,7 +18,7 @@ import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
 
 function fileOf(bytes : Uint8Array, name = 'blob.bin') : File
 {
-    return new File([ bytes ], name);
+    return new File([ new Uint8Array(bytes) ], name);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

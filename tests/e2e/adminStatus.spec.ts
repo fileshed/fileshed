@@ -69,12 +69,18 @@ function shippedVersion() : string
     return manifest.version;
 }
 
+interface StatusBody
+{
+    gc : SweepStatus | null;
+    trashPurge : SweepStatus | null;
+}
+
 describe('GET /api/admin/status after boot', () =>
 {
     it('reports a completed GC and trash-purge sweep within moments of startup', async () =>
     {
         // The boot passes fire one second after the timers start; poll briefly rather than trusting one sleep.
-        let body : { gc : SweepStatus | null; trashPurge : SweepStatus | null } | null = null;
+        let body : StatusBody | null = null;
 
         /* eslint-disable no-await-in-loop -- polling is sequential by nature */
         for(let attempt = 0; attempt < 20; attempt++)
@@ -82,7 +88,7 @@ describe('GET /api/admin/status after boot', () =>
             const res = await admin.get('/api/admin/status');
             expect(res.status).toBe(200);
 
-            body = await res.json() as typeof body;
+            body = await res.json() as StatusBody;
             if(body?.gc !== null && body?.trashPurge !== null) { break; }
 
             await sleep(250);

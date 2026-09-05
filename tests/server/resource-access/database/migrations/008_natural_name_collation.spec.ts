@@ -187,12 +187,12 @@ describe.runIf(testDatabaseKind() === 'postgres')('migration 008 — natural nam
     // could be quietly wrong and would then wave every deployment through.
     it('finds the ICU collations the server actually has', async () =>
     {
-        expect(await icuCollationCount(db)).toBeGreaterThan(0);
+        expect(await icuCollationCount(db as unknown as Kysely<unknown>)).toBeGreaterThan(0);
     });
 
     it('takes the index and the collation back out when rolled back, leaving the node table standing', async () =>
     {
-        await down(db, kind);
+        await down(db as unknown as Kysely<unknown>, kind);
 
         expect(await catalogNames(db, kind, 'index')).not.toContain(INDEX_NAME);
         expect(await collationNames(db)).toEqual([]);

@@ -29,6 +29,15 @@ import { TEST_AUTH_SECRET, testConfig } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
+//----------------------------------------------------------------------------------------------------------------------
+
+function clientIdOf(auth : ReturnType<typeof createAuth>) : string | undefined
+{
+    const github = auth.options.socialProviders?.github;
+
+    return typeof github === 'function' ? undefined : github?.clientId;
+}
+
 describe('the provider vocabulary', () =>
 {
     it('mirrors better-auth\'s own provider list exactly -- curation is a non-decision', () =>
@@ -171,7 +180,7 @@ describe('createAuth social providers', () =>
             providerValues: { GITHUB_CLIENT_ID: 'settings-id', GITHUB_CLIENT_SECRET: 'settings-secret' },
         });
 
-        expect(auth.options.socialProviders?.github?.clientId).toBe('settings-id');
+        expect(clientIdOf(auth)).toBe('settings-id');
     });
 
     it('falls back to config-derived values when no boot resolution is supplied', () =>
@@ -181,7 +190,7 @@ describe('createAuth social providers', () =>
 
         const auth = createAuth(handle, config, TEST_AUTH_SECRET);
 
-        expect(auth.options.socialProviders?.github?.clientId).toBe('gh-id');
+        expect(clientIdOf(auth)).toBe('gh-id');
     });
 
     it('leaves the auth instance with no social providers when none are configured', () =>

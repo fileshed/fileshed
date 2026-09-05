@@ -278,7 +278,7 @@ describe('NodeManager.copy', () =>
         const copy = await manager().copy(testActor({ id: 'alice' }), 'src', { parentID: null });
 
         expect(copy).toMatchObject({ type: 'file', ownerID: 'alice', role: 'owner' });
-        expect(copy.trashedAt).toBeNull();
+        expect(copy.type === 'file' ? copy.trashedAt : undefined).toBeNull();
 
         const source = await handle.db.selectFrom('node').select('trashed_at')
             .where('id', '=', 'src')

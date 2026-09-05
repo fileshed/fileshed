@@ -22,25 +22,19 @@ import {
 } from '@server/resource-access/database/database.ts';
 import { migrateDown, migrateToLatest } from '@server/resource-access/database/migrator.ts';
 
-// Utils
-import type { Config } from '@server/utils/config.ts';
+// Test support
+import { testConfig as sharedTestConfig } from '../../../auth/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Fixtures
 //----------------------------------------------------------------------------------------------------------------------
 
-const testConfig : Config = {
-    HOST: '127.0.0.1',
-    PORT: 3000,
+const testConfig = sharedTestConfig({
     DATABASE_KIND: 'sqlite',
     DATABASE_PATH: ':memory:',
-    AUTH_SECRET: 'test-auth-secret-at-least-32-chars-long',
-    BASE_URL: 'http://localhost:5173',
-    STORAGE_ROOT: './data/blobs',
     GC_GRACE_DAYS: 7,
-    GC_INTERVAL_MINUTES: 60,
     UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
-};
+});
 
 const isoNow = () : string => new Date().toISOString();
 

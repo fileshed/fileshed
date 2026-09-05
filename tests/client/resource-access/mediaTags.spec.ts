@@ -25,7 +25,7 @@ vi.mock('music-metadata', () => ({
 }));
 
 const fetchMock = vi.fn();
-const createObjectURLMock = vi.fn(() => 'blob:fake-cover');
+const createObjectURLMock = vi.fn((_blob : Blob) => 'blob:fake-cover');
 const revokeObjectURLMock = vi.fn();
 
 function okResponse() : unknown

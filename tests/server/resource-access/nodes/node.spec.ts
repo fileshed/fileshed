@@ -12,7 +12,7 @@ import type { Kysely } from 'kysely';
 
 // Resource Access
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { type AccessScope, NodeRA } from '@server/resource-access/nodes/node.ts';
+import { type AccessScope, type NodeFilters, NodeRA } from '@server/resource-access/nodes/node.ts';
 
 // Support
 import { createTestDatabase, fileNode, folderNode, linkNode, seedBackend, seedBlob, seedUser } from './support.ts';
@@ -392,7 +392,7 @@ describe('NodeRA.children filters', () =>
 
     const at = { parentID: 'p', ownerID: 'u1' };
 
-    async function filtered(types : string[]) : Promise<string[]>
+    async function filtered(types : NodeFilters['types']) : Promise<string[]>
     {
         const rows = await ra.children(at, byName, { types });
         return rows.map((node) => node.id);

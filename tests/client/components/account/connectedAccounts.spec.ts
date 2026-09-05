@@ -40,6 +40,7 @@ const fetchInstanceMock = fetchInstance as unknown as Mock;
 function instanceFixture(providers : InstanceResponse['providers']) : InstanceResponse
 {
     return {
+        limits: { uploadMaxBytes: 5_368_709_120, avatarMaxBytes: 2_097_152 },
         needsSetup: false,
         signUpEnabled: true,
         emailEnabled: false,

@@ -158,8 +158,9 @@ async function putChunkStream(cookie : string, ticket : string, body : ReadableS
         method: 'PUT',
         headers: { cookie },
         body,
+        // Required whenever the body is a stream. The DOM RequestInit these tests compile against does not model it.
         duplex: 'half',
-    });
+    } as RequestInit);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -193,7 +194,7 @@ describe('chunked upload', () =>
         expect(second.status).toBe(202);
         expect(last.status).toBe(200);
 
-        const node = await last.json() as NodeResponse;
+        const node = await last.json() as Extract<NodeResponse, { type : 'file' }>;
         expect(node.type).toBe('file');
         expect(node.size).toBe(3000);
 

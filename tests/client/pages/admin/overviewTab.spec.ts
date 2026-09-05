@@ -69,7 +69,7 @@ function statusFixture(overrides : Partial<AdminStatusResponse> = {}) : AdminSta
     return {
         overview: overviewFixture(),
         backends: [
-            { id: 'backend_1', kind: 'filesystem', isDefault: true },
+            { id: 'backend_1', kind: 'fs', isDefault: true },
         ],
         gc: {
             ranAt: '2026-07-28T10:00:00.000Z',
@@ -196,7 +196,7 @@ describe('Admin OverviewTab', () =>
     {
         const wrapper = await mountWith(statusFixture());
 
-        expect(wrapper.text()).toContain('filesystem');
+        expect(wrapper.text()).toContain('fs');
         expect(wrapper.find('.badge').text()).toBe('Default');
         expect(wrapper.text()).toContain('250 kB reclaimed');
         expect(wrapper.text()).toContain('3 of 4 collected');

@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
+import { defineComponent } from 'vue';
 
 // Under test
 import SelectionBar from '@client/components/drive/selectionBar.vue';
@@ -23,13 +24,13 @@ const STUBS = {
     UTooltip: { template: '<div><slot /></div>' },
     UButton: { props: [ 'label' ], template: '<button class="ubtn">{{ label }}</button>' },
     UIcon: true,
-    UDropdownMenu: {
-        props: [ 'items' ],
-        computed: { flat() : MenuItem[] { return (this.items ?? []).flat(); } },
+    UDropdownMenu: defineComponent({
+        props: { items: { type: Array as () => MenuItem[][], default: () => [] } },
+        computed: { flat() : MenuItem[] { return this.items.flat(); } },
         template: '<div class="overflow-menu"><button v-for="item in flat" :key="item.label" class="menu-item" '
             + ':disabled="item.disabled" @click="item.onSelect && item.onSelect()">{{ item.label }}</button>'
             + '<slot /></div>',
-    },
+    }),
 };
 
 const FULL_CAPS = {

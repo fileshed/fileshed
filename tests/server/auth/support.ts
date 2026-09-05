@@ -65,12 +65,15 @@ export const TEST_AUTH_SECRET = 'test-auth-secret-test-auth-secret-test';
 
 export function testConfig(overrides : Partial<Config> = {}) : Config
 {
-    return {
+    // Stated whole, then overridden: spreading a Partial into the literal makes the keys it names optional,
+    // and the result stops being a Config.
+    const defaults : Config = {
         HOST: '0.0.0.0',
         PORT: 3000,
         DATABASE_KIND: 'sqlite',
         DATABASE_PATH: ':memory:',
         DATABASE_URL: undefined,
+        FILESHED_DISCARD_SEALED_SECRETS: false,
         AUTH_SECRET: TEST_AUTH_SECRET,
         BASE_URL: ORIGIN,
         TRUSTED_ORIGINS: [],
@@ -97,8 +100,9 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         SMTP_PASSWORD: undefined,
         SMTP_FROM: undefined,
         EMAIL_VERIFICATION_REQUIRED: false,
-        ...overrides,
     };
+
+    return { ...defaults, ...overrides };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -207,6 +211,7 @@ export function composeFullApp(
             runners: {
                 gc: () => runGcOnce({ blob, graceMs: gcGraceMs }),
                 trashPurge: () => runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: trashGraceMs }),
+                partials: async () => ({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 }),
             },
             tracker,
         }),
@@ -282,7 +287,11 @@ export function cookieJarFrom(res : Response) : string
 
 // Sign up, then flip the account to admin at the database. A fresh sign-in afterwards mints a session that reflects the
 // promoted role (the sign-up cookie predates it).
-export async function makeAdmin(booted : BootedApp, email : string, password : string) : Promise<string>
+export async function makeAdmin(
+    booted : Pick<BootedApp, 'app' | 'handle'>,
+    email : string,
+    password : string
+) : Promise<string>
 {
     await signUp(booted.app, email, password);
     await booted.handle.db.updateTable('user').set({ role: 'admin' })

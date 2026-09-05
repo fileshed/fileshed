@@ -41,6 +41,7 @@ function entry(overrides : Partial<AdminSettingEntry> = {}) : AdminSettingEntry
         value: true,
         source: 'default',
         ...overrides,
+        hasDefault: overrides.hasDefault ?? true,
     };
 }
 

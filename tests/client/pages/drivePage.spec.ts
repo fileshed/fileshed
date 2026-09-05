@@ -3,7 +3,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type VNode, h } from 'vue';
+import { type SetupContext, type VNode, h } from 'vue';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { type Router, createMemoryHistory, createRouter } from 'vue-router';
@@ -68,7 +68,7 @@ const BASE = { ownerID: ME_ID, parentID: null, createdAt: ISO, updatedAt: ISO, r
 
 type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role' | 'sharing'>>;
 
-function fileNode(id : string, overrides : Overrides = {}) : NodeResponse
+function fileNode(id : string, overrides : Overrides = {}) : Extract<NodeResponse, { type : 'file' }>
 {
     return {
         ...BASE,
@@ -80,12 +80,13 @@ function fileNode(id : string, overrides : Overrides = {}) : NodeResponse
         mimeType: 'text/plain',
         trashedAt: null,
         ...overrides,
+        sharing: overrides.sharing ?? null,
     };
 }
 
 function folderNode(id : string, overrides : Overrides = {}) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'folder', trashedAt: null, ...overrides };
+    return { ...BASE, id, name: id, type: 'folder', trashedAt: null, ...overrides, sharing: overrides.sharing ?? null };
 }
 
 function linkNode(
@@ -94,7 +95,16 @@ function linkNode(
     overrides : Overrides = {}
 ) : NodeResponse
 {
-    return { ...BASE, id, name: id, type: 'link', targetNodeID: 't1', target, ...overrides };
+    return {
+        ...BASE,
+        id,
+        name: id,
+        type: 'link',
+        targetNodeID: 't1',
+        target,
+        ...overrides,
+        sharing: overrides.sharing ?? null,
+    };
 }
 
 function page(nodes : NodeResponse[]) : NodeListResponse
@@ -116,7 +126,7 @@ const STUBS = {
     UIcon: true,
     RenameNode: {
         name: 'RenameNode',
-        setup(_props : unknown, { expose } : { expose : (api : unknown) => void }) : () => null
+        setup(_props : unknown, { expose } : SetupContext) : () => null
         {
             expose({ open: renameOpen });
 
@@ -125,7 +135,7 @@ const STUBS = {
     },
     MoveNodes: {
         name: 'MoveNodes',
-        setup(_props : unknown, { expose } : { expose : (api : unknown) => void }) : () => null
+        setup(_props : unknown, { expose } : SetupContext) : () => null
         {
             expose({ open: moveOpen });
 
@@ -134,7 +144,7 @@ const STUBS = {
     },
     ShareDialog: {
         name: 'ShareDialog',
-        setup(_props : unknown, { expose } : { expose : (api : unknown) => void }) : () => null
+        setup(_props : unknown, { expose } : SetupContext) : () => null
         {
             expose({ open: shareOpen });
 
@@ -152,7 +162,7 @@ const STUBS = {
     NodeGrid: {
         name: 'NodeGrid',
         props: [ 'buildMenu' ],
-        setup(_props : unknown, { expose } : { expose : (api : unknown) => void }) : () => VNode
+        setup(_props : unknown, { expose } : SetupContext) : () => VNode
         {
             expose({ scrollToIndex });
 
@@ -495,7 +505,7 @@ describe('DrivePage — kebab menu, ownership gating', () =>
 
         const groups = buildMenuOf(wrapper)(node);
         const saveACopy = groups.flat().find((item) => item.label === 'Save a copy');
-        saveACopy?.onSelect?.();
+        saveACopy?.onSelect?.(new Event('click'));
         await flushPromises();
 
         expect(copyNodeMock).toHaveBeenCalledWith('f1', expect.objectContaining({ parentID: null }));

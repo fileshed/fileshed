@@ -103,21 +103,27 @@ describe('sortNodes', () =>
     // them first would have to produce the reverse.
     it('breaks a tie on the name, and only then on the id', () =>
     {
+        // Ids ascend in the order the names do NOT, so a tiebreak that reached for the id first would answer
+        // cherry, apple, banana instead.
         const nodes = [
-            file('cherry', { id: 'z-1', size: 5 }),
-            file('apple', { id: 'z-2', size: 5 }),
-            file('banana', { id: 'z-3', size: 5 }),
+            file('z-1', { name: 'cherry', size: 5 }),
+            file('z-2', { name: 'apple', size: 5 }),
+            file('z-3', { name: 'banana', size: 5 }),
         ];
 
-        expect(order(sortNodes(nodes, 'size', 'asc'))).toEqual([ 'apple', 'banana', 'cherry' ]);
+        expect(order(sortNodes(nodes, 'size', 'asc'))).toEqual([ 'z-2', 'z-3', 'z-1' ]);
     });
 
     // The tiebreak never reverses: someone who only flipped the direction should not see equal rows shuffle.
     it('keeps tied rows in the same order when the direction flips', () =>
     {
-        const nodes = [ file('cherry', { size: 5 }), file('apple', { size: 5 }), file('banana', { size: 5 }) ];
+        const nodes = [
+            file('z-1', { name: 'cherry', size: 5 }),
+            file('z-2', { name: 'apple', size: 5 }),
+            file('z-3', { name: 'banana', size: 5 }),
+        ];
 
-        expect(order(sortNodes(nodes, 'size', 'desc'))).toEqual([ 'apple', 'banana', 'cherry' ]);
+        expect(order(sortNodes(nodes, 'size', 'desc'))).toEqual([ 'z-2', 'z-3', 'z-1' ]);
     });
 
     it('orders by modified time, newest last ascending', () =>

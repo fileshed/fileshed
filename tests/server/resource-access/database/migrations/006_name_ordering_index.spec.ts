@@ -189,7 +189,7 @@ describe('migration 006 — name ordering index', () =>
 
     it('takes only the index back out when rolled back, leaving the node table standing', async () =>
     {
-        await down(db);
+        await down(db as unknown as Kysely<unknown>);
 
         expect(await catalogNames(db, kind, 'index')).not.toContain(INDEX_NAME);
         expect(await catalogNames(db, kind, 'table')).toContain('node');

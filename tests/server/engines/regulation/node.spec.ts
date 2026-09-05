@@ -268,7 +268,8 @@ describe('judgePlacementDepth', () =>
             placedHeight: 0,
         });
 
-        expect(result.ok).toBe(false);
+        if(result.ok) { throw new Error('the placement was allowed'); }
+
         expect(codes(result)).toEqual([ 'parent.tooDeep' ]);
         expect(result.violations[0]?.parentID).toBe('folder_deep');
     });
@@ -295,7 +296,8 @@ describe('judgePlacementDepth', () =>
             placedHeight: MAX_PLACEMENT_DEPTH + 1,
         });
 
-        expect(overTall.ok).toBe(false);
+        if(overTall.ok) { throw new Error('the placement was allowed'); }
+
         expect(overTall.violations[0]?.parentID).toBeUndefined();
     });
 });

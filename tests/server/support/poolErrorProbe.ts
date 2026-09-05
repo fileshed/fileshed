@@ -65,7 +65,7 @@ async function handle(message : unknown) : Promise<void>
     const request = message as ProbeRequest;
 
     if(request === 'query') { reply({ kind: 'answered', ok: await answersQuery() }); }
-    if(request === 'stop') { await db.destroy(); process.disconnect(); }
+    if(request === 'stop') { await db.destroy(); process.disconnect?.(); }
 }
 
 process.on('message', (message : unknown) => { void handle(message); });

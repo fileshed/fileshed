@@ -11,7 +11,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Under test
-import { type KickRoute, type KickSession, createSessionKick, kickDestination } from '@client/router/sessionKick.ts';
+import {
+    type KickRoute,
+    type KickRouter,
+    type KickSession,
+    createSessionKick,
+    kickDestination,
+} from '@client/router/sessionKick.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -35,7 +41,7 @@ function fakeSession(authenticated : boolean) : KickSession & { cleared : boolea
     return session;
 }
 
-function fakeRouter(current : KickRoute) : { currentRoute : { value : KickRoute }; replace : ReturnType<typeof vi.fn> }
+function fakeRouter(current : KickRoute) : KickRouter & { replace : ReturnType<typeof vi.fn> }
 {
     return { currentRoute: { value: current }, replace: vi.fn().mockResolvedValue(undefined) };
 }

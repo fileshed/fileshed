@@ -39,7 +39,7 @@ async function signedIn() : Promise<{ post : (origin : string | null) => Promise
     app.route('/', booted.app);
 
     return {
-        post: (origin : string | null) => app.request(`${ ORIGIN }/api/nodes`, {
+        post: async (origin : string | null) => app.request(`${ ORIGIN }/api/nodes`, {
             method: 'POST',
             headers: {
                 'content-type': 'application/json',

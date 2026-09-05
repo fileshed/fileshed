@@ -77,7 +77,7 @@ const UEditorStub = defineComponent({
     emits: [ 'update:modelValue' ],
     setup(props, { emit, expose, slots })
     {
-        ueditor.emit = emit;
+        ueditor.emit = emit as (event : string, value : string) => void;
         expose({ editor: editorInstance });
 
         return () =>

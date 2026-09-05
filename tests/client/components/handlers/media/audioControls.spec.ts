@@ -8,6 +8,8 @@
 // no visual surface to fill.
 //----------------------------------------------------------------------------------------------------------------------
 
+import { defineComponent } from 'vue';
+
 import { describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 
@@ -25,20 +27,20 @@ const UButtonStub = {
 };
 
 // Renders every menu item as a button, submenu children included, so a test can click what a real menu would show.
-const UDropdownMenuStub = {
+const UDropdownMenuStub = defineComponent({
     name: 'UDropdownMenu',
-    props: [ 'items' ],
+    props: { items: { type: Array as () => { label : string; children ?: unknown[] }[][], default: () => [] } },
     computed: {
         entries()
         {
-            return (this.items as { label : string; children ?: unknown[] }[][]).flat()
+            return this.items.flat()
                 .flatMap((item) => (item.children ?? [ item ]));
         },
     },
     template: '<div><slot />'
         + '<button v-for="item in entries" :key="item.label" :data-menuitem="item.label" '
         + '@click="item.onSelect && item.onSelect()">{{ item.label }}</button></div>',
-};
+});
 
 const stubs = { UButton: UButtonStub, UDropdownMenu: UDropdownMenuStub, UIcon: true };
 
@@ -235,7 +237,7 @@ describe('AudioControls overflow menu', () =>
 
     it('checks the shuffle entry while shuffle is on', () =>
     {
-        const items = menuFor(mountControls({ shuffle: true }), 'More controls').props('items') as
+        const items = menuFor(mountControls({ shuffle: true }), 'More controls').props('items' as never) as
             { label : string; checked ?: boolean }[][];
 
         expect(items.flat().find((item) => item.label === 'Shuffle')?.checked).toBe(true);

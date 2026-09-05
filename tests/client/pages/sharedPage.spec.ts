@@ -9,6 +9,7 @@
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
+import { type SetupContext, defineComponent } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { type Router, createMemoryHistory, createRouter } from 'vue-router';
 
@@ -94,15 +95,15 @@ const STUBS = {
     UIcon: true,
     // The kebab renders its items as buttons so a menu action is clickable in the test, exactly as the real dropdown
     // would invoke each item's onSelect.
-    UDropdownMenu: {
-        props: [ 'items' ],
-        computed: { flat() : { label : string; onSelect ?: () => void }[] { return (this.items ?? []).flat(); } },
+    UDropdownMenu: defineComponent({
+        props: { items: { type: Array as () => { label : string; onSelect ?: () => void }[][], default: () => [] } },
+        computed: { flat() : { label : string; onSelect ?: () => void }[] { return this.items.flat(); } },
         template: '<div class="kebab"><button v-for="item in flat" :key="item.label" class="menu-item" '
             + '@click="item.onSelect && item.onSelect()">{{ item.label }}</button><slot /></div>',
-    },
+    }),
     AddToFilesModal: {
         name: 'AddToFilesModal',
-        setup(_props : unknown, { expose } : { expose : (api : unknown) => void }) : () => null
+        setup(_props : unknown, { expose } : SetupContext) : () => null
         {
             expose({ open: addToFilesOpen });
 

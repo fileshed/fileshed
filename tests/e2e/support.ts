@@ -21,7 +21,8 @@
 // removes them -- the pair outlives any single child, so the spec, not the harness, decides when they go.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { type ChildProcessByStdio, spawn } from 'node:child_process';
+import type { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -69,7 +70,7 @@ const AUTH_SECRET = 'e2e-test-auth-secret-0123456789-abcdef';
 // Orphan guard
 //----------------------------------------------------------------------------------------------------------------------
 
-const activeChildren = new Set<ChildProcessWithoutNullStreams>();
+const activeChildren = new Set<ChildProcessByStdio<null, Readable, Readable>>();
 
 // A last-resort synchronous sweep: if the worker exits with a child still tracked (a spec threw before afterAll, or the
 // worker was torn down), SIGKILL it so no server outlives the run. The happy path empties the set in stop().
@@ -198,7 +199,7 @@ async function waitForHealth(
 }
 
 // SIGTERM, then SIGKILL if the child outlives the grace window. Resolves once the process is gone (or was already).
-function terminate(child : ChildProcessWithoutNullStreams) : Promise<void>
+function terminate(child : ChildProcessByStdio<null, Readable, Readable>) : Promise<void>
 {
     if(child.exitCode !== null || child.signalCode !== null) { return Promise.resolve(); }
 
@@ -356,7 +357,7 @@ export class ApiClient
     {
         return this.#request('PUT', path, {
             headers: { 'content-type': contentType },
-            body: bytes,
+            body: new Uint8Array(bytes),
         });
     }
 
@@ -376,7 +377,7 @@ export class ApiClient
     {
         return this.#request('POST', path, {
             headers: { 'content-type': contentType },
-            body: bytes,
+            body: new Uint8Array(bytes),
         });
     }
 

@@ -17,14 +17,15 @@
     "build": "npm run build --workspaces --if-present",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --max-warnings=0 --fix",
-    "lint:types": "npm run lint:types --workspaces --if-present",
+    "lint:types": "npm run lint:types --workspaces --if-present && npm run lint:types:tests",
     "test": "vitest run",
     "test:server": "vitest run --project server",
     "test:watch": "vitest",
     "test:coverage": "vitest --coverage",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "prepare": "husky || true",
-    "release": "scripts/release.sh"
+    "release": "scripts/release.sh",
+    "lint:types:tests": "vue-tsc --noEmit -p tests/tsconfig.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

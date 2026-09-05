@@ -8,6 +8,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type VueWrapper, mount } from '@vue/test-utils';
+import { defineComponent } from 'vue';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
@@ -48,13 +49,13 @@ const UInputStub = {
         + '@input="$emit(\'update:modelValue\', $event.target.value)" />',
 };
 
-const UDropdownMenuStub = {
+const UDropdownMenuStub = defineComponent({
     name: 'UDropdownMenu',
-    props: [ 'items' ],
+    props: { items: { type: Array as () => { label : string; children ?: unknown[] }[][], default: () => [] } },
     computed: { flat() { return (this.items as unknown[][]).flat(); } },
     template: '<div><slot /><button v-for="item in flat" :key="item.label" :data-menuitem="item.label" '
         + '@click="item.onSelect && item.onSelect($event)">{{ item.label }}</button></div>',
-};
+});
 
 const stubs = {
     UButton: UButtonStub,
@@ -69,7 +70,9 @@ const stubs = {
     PdfParamsPopover: { name: 'PdfParamsPopover', props: [ 'mode' ], template: '<div />' },
 };
 
-function fileNode(overrides : Partial<NodeResponse> = {}) : NodeResponse
+type FileNode = Extract<NodeResponse, { type : 'file' }>;
+
+function fileNode(overrides : Partial<FileNode> = {}) : FileNode
 {
     return {
         id: 'f1',
@@ -85,6 +88,7 @@ function fileNode(overrides : Partial<NodeResponse> = {}) : NodeResponse
         mimeType: 'application/pdf',
         trashedAt: null,
         ...overrides,
+        sharing: overrides.sharing ?? null,
     };
 }
 

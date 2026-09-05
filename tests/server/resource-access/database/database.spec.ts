@@ -20,11 +20,13 @@ import { sql } from 'kysely';
 // Models
 import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_CACHE_SIZE } from '@fileshed/core';
 
+// Test support
+import { testConfig as sharedTestConfig } from '../../auth/support.ts';
+
 // Resource Access
 import { type DatabaseHandle, createDatabase } from '@server/resource-access/database/database.ts';
 
 // Utils
-import type { Config } from '@server/utils/config.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -34,7 +36,7 @@ async function pragma(handle : DatabaseHandle, name : string) : Promise<number |
     const result = await sql.raw(`pragma ${ name }`).execute(handle.db);
     const row = result.rows[0] as Record<string, number | string>;
 
-    return Object.values(row)[0];
+    return Object.values(row)[0] ?? '';
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -48,19 +50,13 @@ beforeEach(async () =>
     directory = await mkdtemp(join(tmpdir(), 'fileshed-db-spec-'));
     databasePath = join(directory, 'fileshed.db');
 
-    const config : Config = {
-        HOST: '127.0.0.1',
-        PORT: 3000,
+    const config = sharedTestConfig({
         DATABASE_KIND: 'sqlite',
         DATABASE_PATH: databasePath,
-        AUTH_SECRET: 'test-auth-secret-at-least-32-chars-long',
-        BASE_URL: 'http://localhost:5173',
-        STORAGE_ROOT: './data/blobs',
         GC_GRACE_DAYS: 7,
-        GC_INTERVAL_MINUTES: 60,
         TRASH_PURGE_DAYS: 30,
         UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
-    };
+    });
 
     handle = createDatabase(config);
 });

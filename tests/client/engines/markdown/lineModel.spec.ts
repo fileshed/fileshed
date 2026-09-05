@@ -102,7 +102,7 @@ function blockShapes(editor : Editor) : string[]
 
 function shapesAt(editor : Editor, ...path : number[]) : string[]
 {
-    let nodes = editor.getJSON().content ?? [];
+    let nodes : JSONContent[] = editor.getJSON().content ?? [];
     for(const index of path) { nodes = nodes[index]?.content ?? []; }
 
     return nodes.map((node) => `${ node.type }|${ flatText(node) }`);

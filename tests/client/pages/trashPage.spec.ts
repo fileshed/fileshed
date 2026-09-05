@@ -10,6 +10,7 @@
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
+import { defineComponent } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
 import type { DeletionOfferResponse, MeResponse, NodeListResponse, NodeResponse } from '@fileshed/core';
@@ -112,12 +113,12 @@ const STUBS = {
     UIcon: true,
     // The kebab renders its items as buttons so a menu action is clickable in the test, exactly as the real dropdown
     // would invoke each item's onSelect.
-    UDropdownMenu: {
-        props: [ 'items' ],
-        computed: { flat() : { label : string; onSelect ?: () => void }[] { return (this.items ?? []).flat(); } },
+    UDropdownMenu: defineComponent({
+        props: { items: { type: Array as () => { label : string; onSelect ?: () => void }[][], default: () => [] } },
+        computed: { flat() : { label : string; onSelect ?: () => void }[] { return this.items.flat(); } },
         template: '<div class="kebab"><button v-for="item in flat" :key="item.label" :aria-label="item.label" '
             + '@click="item.onSelect && item.onSelect()">{{ item.label }}</button><slot /></div>',
-    },
+    }),
     // Renders the body slot only while open, mirroring a real modal -- so the confirm button is absent until the page
     // opens the dialog.
     UModal: {

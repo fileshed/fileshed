@@ -73,6 +73,7 @@ beforeEach(async () =>
                 purger: new NodeManager(booted.handle, new NodeRA(booted.handle), booted.blob, testNodePolicy()),
                 graceMs: async () => GRACE_MS,
             }),
+            partials: async () => ({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 }),
         },
         tracker,
     });
