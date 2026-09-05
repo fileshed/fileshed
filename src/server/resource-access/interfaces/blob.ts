@@ -31,6 +31,14 @@ export interface StagedSweep
     bytesFreed : number;
 }
 
+// One stored blob as the reconciler measures it: enough to date bytes nothing references and to report what dropping
+// them reclaims.
+export interface StoredBlobStat
+{
+    size : number;
+    modifiedAt : Date;
+}
+
 export interface BlobBackend
 {
     /**
@@ -79,6 +87,28 @@ export interface BlobBackend
      * @throws {InvalidSha256Error} when the address is malformed.
      */
     delete(sha256 : string) : Promise<void>;
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Reconciliation
+    //
+    // Bytes are published before the record that references them commits, so a store can hold blobs its records know
+    // nothing about. These two let a caller walk what is actually stored and date anything the records have no answer
+    // for, in bounded memory over a store of any size.
+    //------------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Every address the backend currently holds bytes for, streamed rather than collected. Order is unspecified, and
+     * an address may already be gone by the time the caller acts on it. Anything the backend holds that is not a blob
+     * -- staging areas, a backend's own bookkeeping -- is never yielded.
+     */
+    listStored() : AsyncIterable<string>;
+
+    /**
+     * Size and last-written time for one address, or null when nothing is stored there.
+     *
+     * @throws {InvalidSha256Error} when the address is malformed.
+     */
+    statStored(sha256 : string) : Promise<StoredBlobStat | null>;
 
     //------------------------------------------------------------------------------------------------------------------
     // Chunked uploads

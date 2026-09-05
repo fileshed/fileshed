@@ -161,3 +161,46 @@ describe('BlobRA GC selection', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+
+// Adopting stored bytes nothing accounts for is how they re-enter the graveyard rules instead of getting a second,
+// racier way to delete bytes. The insert is the serialization point against a commit publishing the same content, so
+// what matters is both what it does to an unknown address and what it refuses to do to a known one.
+describe('BlobRA.adoptOrphan', () =>
+{
+    const orphan = { sha256: 'sha-orphan', size: 128, backendID: 'be1', storageKey: 'sha-orphan' };
+
+    it('graveyards an unknown address, dated when its bytes stopped being relied on', async () =>
+    {
+        const stoppedAt = new Date(Date.now() - 3_600_000);
+
+        const adopted = await ra.adoptOrphan(orphan, stoppedAt);
+
+        expect(adopted).toBe(true);
+        expect(await deletedAtOf('sha-orphan')).toEqual(stoppedAt);
+    });
+
+    // The record that beat it is a live blob somebody is using: a commit for the same content got there first, and
+    // the caller must be told it did so rather than going on to collect bytes that are now referenced.
+    it('refuses an address a record already claims, leaving that record untouched', async () =>
+    {
+        await seedBlobRow('sha-taken', null);
+
+        const adopted = await ra.adoptOrphan({ ...orphan, sha256: 'sha-taken', storageKey: 'sha-taken' }, new Date());
+
+        expect(adopted).toBe(false);
+        expect(await deletedAtOf('sha-taken')).toBeNull();
+    });
+
+    // Adoption is what makes a later insertOrResurrect for the same content a resurrection rather than an insert --
+    // which is exactly how a commit that lands after the reconciler keeps its bytes.
+    it('leaves a record a later commit can resurrect', async () =>
+    {
+        await ra.adoptOrphan(orphan, new Date(Date.now() - 3_600_000));
+
+        await ra.insertOrResurrect({ sha256: 'sha-orphan', size: 128, backendID: 'be1', storageKey: 'sha-orphan' });
+
+        expect(await deletedAtOf('sha-orphan')).toBeNull();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------

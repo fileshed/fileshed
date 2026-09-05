@@ -15,6 +15,7 @@ import { sql } from 'kysely';
 import {
     BackendNotFoundError,
     NoDefaultBackendError,
+    ORPHAN_LOOKUP_BATCH,
     type StorageBackendKind,
     UnsupportedBackendError,
     storageBackendKinds,
@@ -95,6 +96,25 @@ export interface BackendListing
 function toNullableDate(value : Date | string | null) : Date | null
 {
     return value === null ? null : new Date(value);
+}
+
+// Cut a stream of addresses into fixed-size groups, so what is walked lazily can still be asked about in one query.
+async function *batched(source : AsyncIterable<string>, size : number) : AsyncIterable<string[]>
+{
+    let batch : string[] = [];
+
+    for await (const item of source)
+    {
+        batch.push(item);
+
+        if(batch.length === size)
+        {
+            yield batch;
+            batch = [];
+        }
+    }
+
+    if(batch.length > 0) { yield batch; }
 }
 
 // Narrows the storage_backend.kind text column to the domain enum. The column is app-written, so an unknown value is
@@ -188,6 +208,77 @@ export class BlobRA
         const backend = await this.#facade(await this.#defaultBackend());
 
         return backend.sweepChunked(cutoff);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Reconciliation
+    //
+    // Bytes are published before the record referencing them commits, so a write refused inside that commit leaves
+    // bytes behind that no record -- and therefore no reference, no GC candidacy, nothing -- will ever account for.
+    // These two hand such bytes back to the ordinary graveyard rules rather than inventing a second way to delete.
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Stored bytes with no record pointing at them, last written before the cutoff. The cutoff is what separates an
+    // orphan from a blob whose record is committing right now, so it must clear a whole commit transaction.
+    //
+    // A stored address IS a sha256 here -- both put and commitChunked key by the hash -- which is what lets a stored
+    // blob be looked up among the records at all. Addresses are checked in batches, so a store of any size costs one
+    // small query at a time, and only the ones the records cannot account for are measured on disk.
+    async *orphans(cutoff : Date) : AsyncIterable<GcCandidate>
+    {
+        const backendID = await this.#defaultBackend();
+        const backend = await this.#facade(backendID);
+
+        for await (const batch of batched(backend.listStored(), ORPHAN_LOOKUP_BATCH))
+        {
+            const known = await this.#knownShas(batch);
+
+            for(const sha256 of batch.filter((address) => !known.has(address)))
+            {
+                // eslint-disable-next-line no-await-in-loop -- one measurement at a time; the batch is normally empty
+                const stat = await backend.statStored(sha256);
+
+                if(stat !== null && stat.modifiedAt.getTime() < cutoff.getTime())
+                {
+                    yield { sha256, size: stat.size, backendID, storageKey: sha256 };
+                }
+            }
+        }
+    }
+
+    // Take a record-less stored blob into the graveyard, dated when it stopped being relied on, and answer whether
+    // this call is the one that did it. The insert is the serialization point against a commit publishing the same
+    // content: a write whose record landed first turns this into a no-op, and one that lands afterwards resurrects
+    // the row created here instead of inserting its own -- so a caller only ever goes on to collect a row nothing has
+    // claimed. That is why orphans re-enter through the graveyard instead of being deleted where they are found; the
+    // conditional delete that follows is the one every other blob's bytes already wait for.
+    async adoptOrphan(orphan : GcCandidate, deletedAt : Date) : Promise<boolean>
+    {
+        const result = await this.#db
+            .insertInto('blob')
+            .values({
+                sha256: orphan.sha256,
+                size: orphan.size,
+                backend_id: orphan.backendID,
+                storage_key: orphan.storageKey,
+                created_at: new Date().toISOString(),
+                deleted_at: deletedAt.toISOString(),
+            })
+            .onConflict((oc) => oc.column('sha256').doNothing())
+            .executeTakeFirst();
+
+        return Number(result?.numInsertedOrUpdatedRows ?? 0) > 0;
+    }
+
+    async #knownShas(shas : string[]) : Promise<Set<string>>
+    {
+        const rows = await this.#db
+            .selectFrom('blob')
+            .select('sha256')
+            .where('sha256', 'in', shas)
+            .execute();
+
+        return new Set(rows.map((row) => row.sha256));
     }
 
     //------------------------------------------------------------------------------------------------------------------

@@ -8,7 +8,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -329,6 +329,65 @@ describe('FsBackend chunked uploads', () =>
 
         expect(await collect(await store.getStream(sha256Of(mine)))).toEqual(mine);
         expect(await collect(await store.getStream(sha256Of(yours)))).toEqual(yours);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+// Reconciling a store against its records means walking what is actually there. What the walk yields decides what
+// something above may collect, so it answers for stored blobs and for nothing else.
+describe('FsBackend reconciliation', () =>
+{
+    async function storedAddresses() : Promise<string[]>
+    {
+        const addresses : string[] = [];
+        for await (const address of store.listStored()) { addresses.push(address); }
+
+        return addresses.sort();
+    }
+
+    it('lists every stored blob', async () =>
+    {
+        const first = Buffer.from('one');
+        const second = Buffer.from('two');
+
+        await store.put(sha256Of(first), streamOf(first), first.length);
+        await store.put(sha256Of(second), streamOf(second), second.length);
+
+        expect(await storedAddresses()).toEqual([ sha256Of(first), sha256Of(second) ].sort());
+    });
+
+    // Staging areas are not blobs and are somebody else's to reclaim; a directory that is not a shard is not part of
+    // the tree at all. Yielding either would hand a caller an address for bytes it has no business collecting.
+    it('lists nothing for staged uploads or files that are not blobs', async () =>
+    {
+        const staged = Buffer.from('half an upload');
+        await store.appendChunk('upload-listed', streamOf(staged), 0);
+
+        await mkdir(join(root, 'zz', 'zz'), { recursive: true });
+        await writeFile(join(root, 'zz', 'zz', 'not-a-blob'), 'text');
+        await writeFile(join(root, 'loose.txt'), 'text');
+
+        expect(await storedAddresses()).toEqual([]);
+    });
+
+    it('measures a stored blob, and answers nothing for an address it does not hold', async () =>
+    {
+        const data = randomBytes(512);
+        const before = Date.now();
+
+        await store.put(sha256Of(data), streamOf(data), data.length);
+        const stored = await store.statStored(sha256Of(data));
+
+        expect(stored?.size).toBe(data.length);
+        expect(stored?.modifiedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+
+        expect(await store.statStored(sha256Of(Buffer.from('never stored')))).toBeNull();
+    });
+
+    it('refuses to measure a malformed address', async () =>
+    {
+        await expect(store.statStored('../../etc/passwd')).rejects.toBeInstanceOf(InvalidSha256Error);
     });
 });
 

@@ -9,7 +9,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { type Dirent, createReadStream, createWriteStream } from 'node:fs';
 import { type FileHandle, access, mkdir, open, readdir, rename, rm, stat, truncate } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { type Readable, Transform, type TransformCallback } from 'node:stream';
@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { BlobNotFoundError, HashMismatchError, InvalidSha256Error, SizeMismatchError } from '@fileshed/core';
 
 // Resource Access
-import type { BlobBackend, BlobRange, StagedSweep } from '../interfaces/blob.ts';
+import type { BlobBackend, BlobRange, StagedSweep, StoredBlobStat } from '../interfaces/blob.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -62,6 +62,9 @@ const logger = getLogger('fs-backend');
 // A canonical, lowercase sha256 hex digest. Enforcing the form keeps the same blob from landing under two shard
 // paths and stops a crafted address from escaping the root via path traversal.
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+// One level of the sharded tree: the first or second byte-pair of a digest, in the same canonical form.
+const SHARD_PATTERN = /^[0-9a-f]{2}$/;
 
 // The staging directory lives under root (not a sibling) so a committed blob is always a rename within one filesystem.
 const STAGING_DIR = '.staging';
@@ -192,6 +195,42 @@ export class FsBackend implements BlobBackend
     }
 
     //------------------------------------------------------------------------------------------------------------------
+    // Reconciliation
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Walk the sharded tree one directory at a time, yielding only files that sit at the address their own name gives
+    // them. The staging and partials directories are not shards and never match; anything else under the root -- an
+    // operator's stray file, a directory a future backend keeps -- is left alone rather than reported as a blob
+    // somebody might collect.
+    async *listStored() : AsyncIterable<string>
+    {
+        for(const shard of await this.#shardNames(this.#root))
+        {
+            // eslint-disable-next-line no-await-in-loop -- a directory at a time is the point: the walk stays bounded
+            for(const sub of await this.#shardNames(join(this.#root, shard)))
+            {
+                // eslint-disable-next-line no-await-in-loop -- likewise
+                const names = await readdir(join(this.#root, shard, sub)).catch(() => [] as string[]);
+
+                yield *names.filter((name) => SHA256_PATTERN.test(name) && name.startsWith(shard + sub));
+            }
+        }
+    }
+
+    async statStored(sha256 : string) : Promise<StoredBlobStat | null>
+    {
+        this.#assertSha256(sha256);
+
+        const stats = await stat(this.#blobPath(sha256)).catch((error : unknown) =>
+        {
+            if(isNotFound(error)) { return null; }
+            throw error;
+        });
+
+        return stats === null ? null : { size: stats.size, modifiedAt: stats.mtime };
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
     // Chunked uploads
     //------------------------------------------------------------------------------------------------------------------
 
@@ -290,6 +329,17 @@ export class FsBackend implements BlobBackend
             failed: candidates.length - reclaimed.length,
             bytesFreed: reclaimed.reduce((total, outcome) => total + outcome.bytes, 0),
         };
+    }
+
+    // The shard directories inside a directory: two lowercase hex characters, nothing else. A root that does not exist
+    // yet has no shards rather than being an error -- a store nobody has written to holds no blobs.
+    async #shardNames(dir : string) : Promise<string[]>
+    {
+        const entries = await readdir(dir, { withFileTypes: true }).catch(() => [] as Dirent[]);
+
+        return entries
+            .filter((entry) => entry.isDirectory() && SHARD_PATTERN.test(entry.name))
+            .map((entry) => entry.name);
     }
 
     #assertSha256(sha256 : string) : void

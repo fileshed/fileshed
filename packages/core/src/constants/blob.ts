@@ -39,6 +39,19 @@ export const EXPIRY_PRUNE_INTERVAL_MS = 60 * MS_PER_SECOND;
 export const PARTIALS_SWEEP_INTERVAL_MS = 60 * MS_PER_SECOND;
 
 //----------------------------------------------------------------------------------------------------------------------
+// Store reconciliation
+//----------------------------------------------------------------------------------------------------------------------
+
+// How long stored bytes no record points at must sit untouched before they count as orphaned. Bytes are published
+// before the record referencing them commits, so this window has to clear the gap between the two -- a whole commit
+// transaction -- by a margin nothing plausible closes.
+export const ORPHAN_GRACE_MS = 60 * MS_PER_MINUTE;
+
+// How many stored addresses are checked against the record table per query. Bounds both one query's parameter list and
+// what the walk holds in memory over a store of any size.
+export const ORPHAN_LOOKUP_BATCH = 500;
+
+//----------------------------------------------------------------------------------------------------------------------
 // Chunk retry budget
 //----------------------------------------------------------------------------------------------------------------------
 

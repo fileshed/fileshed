@@ -3,13 +3,14 @@
 //
 // Drives the GC sweep against a real BlobRA (fs facade under a per-run temp dir) and a real in-memory database, zero
 // mocks. Expectations: a blob graveyarded past the grace window loses both row and bytes; one still inside the window,
-// and one still live, are untouched. Byte deletion is checked through the RA.
+// and one still live, are untouched; and stored bytes no record accounts for are reclaimed once they have sat still
+// long enough to be a leak rather than a commit in progress. Byte deletion is checked through the RA.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- seed helpers build snake_case DB rows (house convention for Kysely inserts) */
 
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -17,6 +18,9 @@ import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Kysely } from 'kysely';
+
+// Models
+import { ORPHAN_GRACE_MS } from '@fileshed/core';
 
 // Resource Access
 import { BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
@@ -51,26 +55,46 @@ function sha256Of(data : Buffer) : string
         .digest('hex');
 }
 
-// Write real bytes through the storage RA and record its blob row with a chosen graveyard marker. Returns the sha256.
-async function seedStoredBlob(deletedAt : string | null) : Promise<string>
+// Real bytes in the store with nothing in the record table naming them -- the state a write refused after its bytes
+// were published leaves behind.
+async function seedStoredBytes() : Promise<string>
 {
     const bytes = randomBytes(BLOB_BYTES);
     const sha256 = sha256Of(bytes);
 
-    const location = await blob.put(sha256, Readable.from(bytes), bytes.length);
+    await blob.put(sha256, Readable.from(bytes), bytes.length);
+
+    return sha256;
+}
+
+// Write real bytes through the storage RA and record its blob row with a chosen graveyard marker. Returns the sha256.
+async function seedStoredBlob(deletedAt : string | null) : Promise<string>
+{
+    const sha256 = await seedStoredBytes();
+
     await db
         .insertInto('blob')
         .values({
             sha256,
-            size: bytes.length,
-            backend_id: location.backendID,
-            storage_key: location.storageKey,
+            size: BLOB_BYTES,
+            backend_id: backendID,
+            storage_key: sha256,
             created_at: new Date().toISOString(),
             deleted_at: deletedAt,
         })
         .execute();
 
     return sha256;
+}
+
+// Bytes just written are inside the reconciler's window on purpose -- a record for them may still be committing. Push
+// them back past it, the way real bytes age while nobody is looking at them.
+async function ageStoredBytes(sha256 : string) : Promise<void>
+{
+    const path = join(storageRoot, sha256.slice(0, 2), sha256.slice(2, 4), sha256);
+    const aged = new Date(Date.now() - ORPHAN_GRACE_MS - 60_000);
+
+    await utimes(path, aged, aged);
 }
 
 async function rowExists(sha256 : string) : Promise<boolean>
@@ -191,6 +215,48 @@ describe('runGcOnce', () =>
 
         expect(await rowExists(succeeding)).toBe(false);
         expect(await bytesExist(succeeding)).toBe(false);
+    });
+
+    // Bytes are published before the record referencing them commits, so a refusal in that commit -- or a crash --
+    // leaves bytes nothing in the database mentions. Candidacy read from the record table cannot see them at all, so
+    // the sweep looks from the other side too and reclaims what it finds.
+    it('reclaims stored bytes that no record accounts for', async () =>
+    {
+        const orphan = await seedStoredBytes();
+        await ageStoredBytes(orphan);
+
+        const summary = await runGcOnce({ blob, graceMs: async () => GRACE_MS });
+
+        expect(summary).toEqual({ candidates: 1, deleted: 1, kept: 0, bytesFailed: 0, bytesFreed: BLOB_BYTES });
+        expect(await bytesExist(orphan)).toBe(false);
+        expect(await rowExists(orphan)).toBe(false);
+    });
+
+    // The window is what separates bytes nothing will ever claim from bytes whose record is committing right now: an
+    // upload that publishes and then commits is momentarily indistinguishable from a leak, and collecting it would
+    // leave a live record pointing at nothing.
+    it('leaves record-less bytes alone until they have sat untouched past the reconciling window', async () =>
+    {
+        const justWritten = await seedStoredBytes();
+
+        const summary = await runGcOnce({ blob, graceMs: async () => GRACE_MS });
+
+        expect(summary).toEqual({ candidates: 0, deleted: 0, kept: 0, bytesFailed: 0, bytesFreed: 0 });
+        expect(await bytesExist(justWritten)).toBe(true);
+    });
+
+    // Age is not evidence. A blob written a year ago and referenced ever since is the ordinary case, and the only
+    // thing that makes stored bytes collectable is that no record names them.
+    it('never touches bytes a live record names, however long ago they were written', async () =>
+    {
+        const live = await seedStoredBlob(null);
+        await ageStoredBytes(live);
+
+        const summary = await runGcOnce({ blob, graceMs: async () => GRACE_MS });
+
+        expect(summary).toEqual({ candidates: 0, deleted: 0, kept: 0, bytesFailed: 0, bytesFreed: 0 });
+        expect(await rowExists(live)).toBe(true);
+        expect(await bytesExist(live)).toBe(true);
     });
 });
 
