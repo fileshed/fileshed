@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
-    "@codemirror/lang-markdown": "^6.5.1",
-    "@codemirror/state": "^6.7.1",
-    "@codemirror/view": "^6.43.6",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/state": "^6.7.2",
+    "@codemirror/view": "^6.43.10",
     "@fileshed/core": "^0.1.0",
     "@floating-ui/dom": "^1.8.0",
     "@fsegurai/codemirror-theme-bundle": "^6.4.2",
@@ -33,12 +33,12 @@
     "codemirror-theme-ayu": "^1.0.7",
     "hash-wasm": "^4.12.0",
     "marked": "^17.0.6",
-    "music-metadata": "^11.14.0",
-    "pdfjs-dist": "^6.2.108",
-    "pinia": "^4.0.2",
-    "vue": "^3.5.40",
+    "music-metadata": "^11.15.0",
+    "pdfjs-dist": "^6.3.289",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.42",
     "vue-advanced-cropper": "^2.8.9",
-    "vue-router": "^5.2.0"
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
     "@hono/vite-dev-server": "^0.26.1",
