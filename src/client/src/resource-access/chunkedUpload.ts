@@ -80,6 +80,20 @@ function correctedPosition(error : unknown) : number | null
     return error.receivedBytes;
 }
 
+// A position the server reported, when it is one this upload can act on: a whole byte strictly nearer the end than
+// anywhere this upload has already sent from, and no further than the end of the file. Null for anything else.
+//
+// Every restart therefore lands strictly nearer the end than the last, of which there are finitely many: that is the
+// termination argument, and every path that moves the upload goes through here. Leave out the floor and a position
+// below zero replans the whole file and looks new each time, so the upload sends byte zero forever; leave out
+// whole-byte and a server answering 6.5, 6.75, 6.875 walks it most of the way there.
+function usablePosition(position : number | null, sentFrom : number, totalBytes : number) : number | null
+{
+    if(position === null || !Number.isInteger(position)) { return null; }
+
+    return position > sentFrom && position <= totalBytes ? position : null;
+}
+
 // The chunks still owed with the upload standing at `position`: the whole file when it is starting, and the remainder
 // when the server has corrected where it stands. The remainder is cut fresh rather than filtered out of the first
 // plan, since a position the client did not choose need not fall on one of its boundaries.
@@ -161,12 +175,8 @@ export async function uploadChunked(options : ChunkedUploadOptions) : Promise<No
     };
 
     // The furthest position a chunk has been sent from. The server's count only ever moves forward -- a chunk is
-    // accepted by advancing it -- so a correction to anywhere at or behind this is one the upload cannot act on.
-    //
-    // Every restart therefore lands on a whole byte strictly nearer the end than the last, of which there are
-    // finitely many: that is the termination argument, and it is stated entirely in this function on purpose. Leave
-    // out the floor and a position below zero replans the whole file and looks new each time, so the upload sends
-    // byte zero forever; leave out whole-byte and a server answering 6.5, 6.75, 6.875 walks it most of the way there.
+    // accepted by advancing it -- so a position at or behind this is one the upload cannot act on, whether it
+    // arrives on an acceptance or on a refusal.
     let sentFrom = 0;
 
     let owed = chunksFrom(0, file.size, chunkBytes);
@@ -182,22 +192,25 @@ export async function uploadChunked(options : ChunkedUploadOptions) : Promise<No
             const outcome = await attempt(chunk);
             if(outcome.committed) { return outcome.node; }
 
-            owed = owed.slice(1);
+            // Where the upload stands is the server's count, not this loop's arithmetic. Reading it here is what
+            // catches a short write where it happens rather than one refusal later, and it is the same count a
+            // conflict would have corrected us with -- so both arrivals are held to the same rule.
+            const accepted = usablePosition(outcome.receivedBytes, sentFrom, file.size);
+            if(accepted === null)
+            {
+                throw new ApiError(0, 'The upload was accepted without moving forward.');
+            }
+
+            owed = chunksFrom(accepted, file.size, chunkBytes);
         }
         catch(error)
         {
-            // The two sides disagree about where the upload stands, and the server's count settles it. Restarting is
-            // only worth it strictly ahead of where this upload has already sent from and no further than the end of
-            // the file; any other answer is one the upload cannot act on, and the conflict belongs to the caller.
-            const position = correctedPosition(error);
-            const usable = position !== null
-                && Number.isInteger(position)
-                && position > sentFrom
-                && position <= file.size;
+            // The two sides disagree about where the upload stands, and the server's count settles it. Any answer
+            // the upload cannot act on leaves the conflict to the caller.
+            const corrected = usablePosition(correctedPosition(error), sentFrom, file.size);
+            if(corrected === null) { throw error; }
 
-            if(!usable) { throw error; }
-
-            owed = chunksFrom(position, file.size, chunkBytes);
+            owed = chunksFrom(corrected, file.size, chunkBytes);
         }
 
         chunk = owed[0];

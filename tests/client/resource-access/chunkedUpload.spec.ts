@@ -64,9 +64,14 @@ interface SentChunk
 // What the server does with a chunk: takes it and waits for more, commits the file, or -- by throwing -- fails.
 type ChunkScript = (sent : SentChunk, callNumber : number) => UploadOutcome;
 
-function accepted() : UploadOutcome
+// What a real 202 carries: the upload's position after these bytes landed, which is the end of the chunk that was
+// just accepted. The client reads it, so a fixture that answered zero would be describing a server that took the
+// bytes and stayed where it was.
+function accepted(chunk : SentChunk, totalBytes ?: number) : UploadOutcome
 {
-    return { committed: false, receivedBytes: 0, totalBytes: 0 };
+    const receivedBytes = chunk.offset + chunk.text.length;
+
+    return { committed: false, receivedBytes, totalBytes: totalBytes ?? receivedBytes };
 }
 
 function commits() : UploadOutcome
@@ -109,7 +114,7 @@ function commitsAt(offset : number) : ChunkScript
 {
     return (chunk) =>
     {
-        return chunk.offset === offset ? commits() : accepted();
+        return chunk.offset === offset ? commits() : accepted(chunk);
     };
 }
 
@@ -160,13 +165,42 @@ describe('uploadChunked', () =>
         expect(sent).toEqual([ { offset: 0, text: 'abc' } ]);
     });
 
+    // Every 202 says where the upload now stands, and that count is the upload's position -- not the client's own
+    // arithmetic about what it just sent. A server that took part of a chunk is answered from where it actually got
+    // to, on the next request rather than after a refusal has been spent finding out.
+    it('continues from the position the server reports, not from the end of the chunk it sent', async () =>
+    {
+        const sent = fakeTransport((chunk) =>
+        {
+            if(chunk.offset === 0) { return { committed: false, receivedBytes: 2, totalBytes: 10 }; }
+
+            return chunk.offset + chunk.text.length >= 10 ? commits() : accepted(chunk);
+        });
+
+        await uploadChunked({ ticket: 'TKT', file: fileOf('abcdefghij'), commit: COMMIT, chunkBytes: 4 });
+
+        expect(sent.map((chunk) => chunk.offset)).toEqual([ 0, 2, 6 ]);
+        expect(sent[1]?.text).toBe('cdef');
+    });
+
+    // A server cannot take bytes and stay where it was. Believing it would replan the same chunk forever, so the
+    // upload stops instead of spinning.
+    it('refuses an acceptance that does not move the upload forward', async () =>
+    {
+        fakeTransport(() => ({ committed: false, receivedBytes: 0, totalBytes: 10 }));
+
+        const upload = uploadChunked({ ticket: 'TKT', file: fileOf('abcdefghij'), commit: COMMIT, chunkBytes: 4 });
+
+        await expect(upload).rejects.toThrow(/without moving forward/u);
+    });
+
     it('re-sends only the failed chunk, leaving the chunks already accepted alone', async () =>
     {
         const sent = fakeTransport((chunk, call) =>
         {
             if(chunk.offset === 4 && call === 2) { throw new ApiError(0, 'The upload could not reach the server.'); }
 
-            return chunk.offset === 8 ? commits() : accepted();
+            return chunk.offset === 8 ? commits() : accepted(chunk);
         });
 
         await uploadChunked({
@@ -262,7 +296,7 @@ describe('uploadChunked', () =>
                 );
             }
 
-            return chunk.offset === 8 ? commits() : accepted();
+            return chunk.offset === 8 ? commits() : accepted(chunk);
         });
 
         const node = await uploadChunked({
@@ -385,7 +419,7 @@ describe('uploadChunked', () =>
                 throw new ConflictApiError('This chunk was already received.', 'upload.offsetConflict', 8);
             }
 
-            return chunk.offset === 8 ? commits() : accepted();
+            return chunk.offset === 8 ? commits() : accepted(chunk);
         });
 
         const node = await uploadChunked({
@@ -416,7 +450,7 @@ describe('uploadChunked', () =>
                 throw new ConflictApiError('This chunk was already received.', 'upload.offsetConflict', 8);
             }
 
-            return chunk.offset === 8 ? commits() : accepted();
+            return chunk.offset === 8 ? commits() : accepted(chunk);
         });
 
         const node = await uploadChunked({
@@ -468,7 +502,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport((chunk) =>
         {
-            if(chunk.offset === 0) { return accepted(); }
+            if(chunk.offset === 0) { return accepted(chunk); }
 
             throw new ConflictApiError(`The upload holds ${ position } bytes.`, 'upload.offsetConflict', position);
         });
@@ -522,7 +556,7 @@ describe('uploadChunked', () =>
                 throw new ConflictApiError('The upload holds 0 bytes.', 'upload.offsetConflict', 0);
             }
 
-            return accepted();
+            return accepted(chunk);
         });
 
         await expect(uploadChunked({
@@ -567,7 +601,9 @@ describe('uploadChunked', () =>
             options.onProgress?.({ sentBytes: length / 2, totalBytes: length });
             options.onProgress?.({ sentBytes: length, totalBytes: length });
 
-            return (options.offset ?? 0) + length >= 10 ? commits() : accepted();
+            const offset = options.offset ?? 0;
+
+            return offset + length >= 10 ? commits() : accepted({ offset, text: 'x'.repeat(length) });
         });
 
         await uploadChunked({
