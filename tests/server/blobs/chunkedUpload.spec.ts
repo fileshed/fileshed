@@ -8,11 +8,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomBytes } from 'node:crypto';
-import { readdir, utimes } from 'node:fs/promises';
+import { readdir, rm, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
     type ClaimResponse,
@@ -527,6 +527,60 @@ describe('chunked upload', () =>
         {
             await custom.cleanup();
         }
+    });
+
+    // The reaper's window rests on a live ticket always having fresh staging, and a chunk that writes nothing is the
+    // one case that could break it: staging keeps the mtime it had, while the ticket's clock would start again.
+    // Repeated every few minutes, that is a ticket outliving the bytes it is a ticket for.
+    //
+    // Read on the clock rather than through the reaper, because the reaper answers to the staging file's mtime and
+    // would reclaim these bytes whether the ticket had been renewed or not.
+    it('does not let an empty chunk renew a ticket past its own staging', async () =>
+    {
+        const user = await makeUser(booted, 'empty@example.com');
+        const data = randomBytes(3000);
+        const ticket = await ticketFor(user, data);
+        const issued = Date.now();
+
+        await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1000), 0);
+
+        try
+        {
+            // Almost the whole window later, a chunk carrying nothing.
+            vi.setSystemTime(issued + TICKET_TTL_MS - 1000);
+            expect((await putChunk(booted.app, user.cookie, ticket, Buffer.alloc(0), 1000)).status).toBe(202);
+
+            // Past where the ticket was always going to lapse. Renewing on the empty chunk would have carried it
+            // most of another window past this.
+            vi.setSystemTime(issued + TICKET_TTL_MS + 1000);
+
+            const res = await putChunk(booted.app, user.cookie, ticket, data.subarray(1000, 2000), 1000);
+
+            expect(res.status).toBe(404);
+        }
+        finally
+        {
+            vi.useRealTimers();
+        }
+    });
+
+    // Whatever took the staging -- this sweep, an operator, a disk -- the upload has to be told where it actually
+    // stands. It used to be told nothing, as a 500.
+    it('refuses a chunk whose staging is gone with a conflict, not an internal error', async () =>
+    {
+        const user = await makeUser(booted, 'gone@example.com');
+        const data = randomBytes(3000);
+        const ticket = await ticketFor(user, data);
+
+        await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1000), 0);
+
+        const staged = await partials();
+        await Promise.all(staged.map((name) => rm(join(booted.storageRoot, '.partials', name))));
+
+        const res = await putChunk(booted.app, user.cookie, ticket, data.subarray(1000, 2000), 1000);
+
+        expect(res.status).toBe(409);
+        expect(await res.json()).toMatchObject({ receivedBytes: 0 });
     });
 
     // Two passes rather than one, because an upload mid-delivery and an abandoned one cannot be staged side by side

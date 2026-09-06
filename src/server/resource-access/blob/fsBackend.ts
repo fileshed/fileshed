@@ -19,7 +19,13 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 // Models
-import { BlobNotFoundError, HashMismatchError, InvalidSha256Error, SizeMismatchError } from '@fileshed/core';
+import {
+    BlobNotFoundError,
+    HashMismatchError,
+    InvalidSha256Error,
+    OffsetConflictError,
+    SizeMismatchError,
+} from '@fileshed/core';
 
 // Resource Access
 import type { BlobBackend, BlobRange, StagedSweep, StoredBlobStat } from '../interfaces/blob.ts';
@@ -383,9 +389,15 @@ export class FsBackend implements BlobBackend
         const staged = await this.#sizeOf(path);
         if(staged === offset) { return; }
 
+        // The bytes this upload counted on are not there -- staging was reclaimed, or never held them. That is a
+        // disagreement about where the upload stands, which is what the offset conflict says, and it travels with the
+        // count staging actually holds rather than the one the caller believed.
         if(staged < offset)
         {
-            throw new Error(`upload staging holds ${ staged } bytes, short of the ${ offset } already accepted`);
+            throw new OffsetConflictError(
+                `The upload holds ${ staged } bytes, short of the ${ offset } this chunk continues from.`,
+                staged
+            );
         }
 
         await truncate(path, offset);

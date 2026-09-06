@@ -181,10 +181,16 @@ class TicketStore
 
     // Move the upload forward and push the expiry out: an upload still delivering bytes is alive, however long the
     // whole file takes, and the partial-staging sweep reads the same window from the other side.
+    // Renewed by bytes landing, never by a request arriving. The partials reaper reclaims staging that has sat
+    // untouched for a whole ticket lifetime, on the rule that a live ticket always has fresh staging -- and a
+    // zero-length append writes nothing, so it leaves the file's mtime where it was. Renewing on one would push the
+    // ticket past its own staging, and a client repeating it every few minutes would outlive the bytes entirely.
     advance(ticket : Ticket, receivedBytes : number) : void
     {
+        const landed = receivedBytes > ticket.receivedBytes;
+
         ticket.receivedBytes = receivedBytes;
-        ticket.expiresAt = Date.now() + TICKET_TTL_MS;
+        if(landed) { ticket.expiresAt = Date.now() + TICKET_TTL_MS; }
     }
 
     sweep() : void
@@ -723,7 +729,18 @@ export class BlobManager
         ticket.inFlight = true;
         try
         {
-            const written = await this.#appendChunk(ticket, body, offset);
+            // A refusal from the store means staging no longer matches what the ticket claims. The ticket is
+            // corrected to what actually survived before the refusal travels, so a retry meets a position the
+            // upload can be resumed from rather than the one that just failed.
+            let written : number;
+            try { written = await this.#appendChunk(ticket, body, offset); }
+            catch(error)
+            {
+                if(error instanceof OffsetConflictError) { this.#tickets.advance(ticket, error.receivedBytes); }
+
+                throw error;
+            }
+
             this.#tickets.advance(ticket, offset + written);
 
             if(ticket.receivedBytes < ticket.size)
