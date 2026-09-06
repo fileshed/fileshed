@@ -462,14 +462,58 @@ describe('chunked upload', () =>
         expect(await storedBytes(booted, replacementSha)).toEqual(replacement);
     });
 
-    it('keeps a whole-file upload single-use: its ticket is spent on the one request', async () =>
+    // Still single-use in the sense that matters: the second request stores nothing and creates nothing. What it
+    // gets is the file the first one made, because a client whose reply died on the way back cannot tell the two
+    // situations apart and the honest answer is the one that is true.
+    it('answers a repeat of a completed upload with the same file, storing nothing twice', async () =>
     {
         const user = await makeUser(booted, 'single-use@example.com');
         const data = randomBytes(2048);
         const ticket = await ticketFor(user, data);
 
-        expect((await putUpload(booted.app, user.cookie, ticket, data)).status).toBe(200);
-        expect((await putUpload(booted.app, user.cookie, ticket, data)).status).toBe(404);
+        const first = await putUpload(booted.app, user.cookie, ticket, data);
+        const second = await putUpload(booted.app, user.cookie, ticket, data);
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        expect(await second.json()).toMatchObject({ id: (await first.json() as { id : string }).id });
+
+        const nodes = await booted.handle.db.selectFrom('node').select('id')
+            .execute();
+        expect(nodes).toHaveLength(1);
+    });
+
+    // The window this exists for: the commit is seconds of hashing on a large file, and a tear anywhere in it used to
+    // leave the retry meeting a ticket that had already been retired -- a 404 carrying no position, about a file that
+    // was very likely stored.
+    it('answers a chunked upload retried after its commit with the node, not a missing ticket', async () =>
+    {
+        const user = await makeUser(booted, 'torn-commit@example.com');
+        const data = randomBytes(3000);
+        const ticket = await ticketFor(user, data);
+
+        await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1000), 0);
+        await putChunk(booted.app, user.cookie, ticket, data.subarray(1000, 2000), 1000);
+        const committing = await putChunk(booted.app, user.cookie, ticket, data.subarray(2000), 2000);
+
+        const retried = await putChunk(booted.app, user.cookie, ticket, data.subarray(2000), 2000);
+
+        expect(committing.status).toBe(200);
+        expect(retried.status).toBe(200);
+        expect(await retried.json()).toMatchObject({ id: (await committing.json() as { id : string }).id });
+    });
+
+    // A settled ticket is still that owner's ticket.
+    it('refuses a settled ticket to anybody but its owner', async () =>
+    {
+        const owner = await makeUser(booted, 'settled-owner@example.com');
+        const stranger = await makeUser(booted, 'settled-stranger@example.com');
+        const data = randomBytes(2048);
+        const ticket = await ticketFor(owner, data);
+
+        await putUpload(booted.app, owner.cookie, ticket, data);
+
+        expect((await putUpload(booted.app, stranger.cookie, ticket, data)).status).toBe(403);
     });
 
     // The size is the deployment's, and the claim is the only place a client is told it -- so what comes back is

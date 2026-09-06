@@ -90,9 +90,15 @@ interface Ticket
     // refused rather than interleaved into the staging file.
     inFlight : boolean;
 
-    // The ticket has been handed to a commit and no request will be honoured against it again, but its bytes are
-    // still landing. It stays in the store, and stays counted against its owner, until that commit settles.
+    // The ticket has been handed to a commit and no more bytes will be taken against it. It stays in the store, and
+    // stays counted against its owner, until that commit settles.
     spent : boolean;
+
+    // What the commit answered, once it did. Verifying and hashing an assembled file is seconds of work on a large
+    // one, and a connection torn anywhere in that window used to leave the retry meeting a ticket that no longer
+    // existed -- a 404 carrying no position, about a file that was very likely stored. A settled ticket answers the
+    // retry with the node instead, for as long as the ticket would have lived anyway.
+    settled ?: CommittedNode;
 }
 
 // Upload tickets, and the position of any chunked upload running against them. A ticket is retired by the request that
@@ -138,7 +144,7 @@ class TicketStore
             return undefined;
         }
 
-        return ticket.spent ? undefined : ticket;
+        return ticket;
     }
 
     // What this owner is holding right now: the uploads they have going, and the bytes those uploads claimed. Lapsed
@@ -155,7 +161,7 @@ class TicketStore
             {
                 this.#drop(ticket);
             }
-            else
+            else if(ticket.settled === undefined)
             {
                 count += 1;
                 bytes += ticket.size;
@@ -173,6 +179,14 @@ class TicketStore
         ticket.spent = true;
     }
 
+    // The commit answered. The ticket stays where it is, carrying that answer, so a retry whose own request died on
+    // the way back is told the file is stored rather than told the ticket never existed. It lapses on the schedule it
+    // always had.
+    settle(ticket : Ticket, committed : CommittedNode) : void
+    {
+        ticket.settled = committed;
+    }
+
     close(id : string) : void
     {
         const ticket = this.#tickets.get(id);
@@ -181,6 +195,7 @@ class TicketStore
 
     // Move the upload forward and push the expiry out: an upload still delivering bytes is alive, however long the
     // whole file takes, and the partial-staging sweep reads the same window from the other side.
+    //
     // Renewed by bytes landing, never by a request arriving. The partials reaper reclaims staging that has sat
     // untouched for a whole ticket lifetime, on the rule that a live ticket always has fresh staging -- and a
     // zero-length append writes nothing, so it leaves the file's mtime where it was. Renewing on one would push the
@@ -673,6 +688,17 @@ export class BlobManager
         if(ticket === undefined) { throw new NotFoundError('Upload ticket not found or expired.'); }
         if(ticket.ownerID !== caller.id) { throw new ForbiddenError('This ticket belongs to another user.'); }
 
+        // The bytes are already stored. Answering with the node rather than reading the body makes the retry of a
+        // request whose reply never arrived land on the same file instead of a refusal.
+        if(ticket.settled !== undefined) { return { committed: true, ...ticket.settled }; }
+
+        // Handed to a commit that has not answered yet. The transient code is the one the client already backs off
+        // and retries on, which is exactly the right thing to do while a large file is being verified.
+        if(ticket.spent)
+        {
+            throw new ConflictError('upload.chunkInFlight', 'This upload is being committed.');
+        }
+
         // Read live, so an admin lowering the cap stops an upload already in flight against the old one.
         const maxBytes = await this.#uploadMaxBytes();
         if(ticket.size > maxBytes)
@@ -689,11 +715,17 @@ export class BlobManager
                 const committed = await this.#commitContent(caller, ticket, metadata, () =>
                     this.#putBytes(ticket.sha256, ticket.size, body));
 
+                this.#tickets.settle(ticket, committed);
+
                 return { committed: true, ...committed };
             }
-            finally
+            catch(error)
             {
+                // Nothing was stored, so there is nothing a retry could be handed and no bytes to resume from. The
+                // claim that restarts the upload is a round trip the client already knows how to make.
                 this.#tickets.close(ticketID);
+
+                throw error;
             }
         }
 
@@ -758,11 +790,18 @@ export class BlobManager
                 const committed = await this.#commitContent(caller, ticket, metadata, () =>
                     this.#publishStaged(ticket));
 
+                this.#tickets.settle(ticket, committed);
+
                 return { committed: true, ...committed };
+            }
+            catch(error)
+            {
+                this.#tickets.close(ticket.id);
+
+                throw error;
             }
             finally
             {
-                this.#tickets.close(ticket.id);
                 await this.#blob.discardChunked(ticket.id);
             }
         }

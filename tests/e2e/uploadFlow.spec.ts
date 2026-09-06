@@ -444,7 +444,10 @@ describe('failed proof-of-possession', () =>
 
 describe('upload ticket and challenge misuse', () =>
 {
-    it('404s a reuse of a consumed upload ticket', async () =>
+    // Reusing a consumed ticket stores nothing a second time; what comes back is the file the first PUT made. A
+    // client whose reply died on the way back cannot tell that from a lost request, and only one of those answers
+    // is true.
+    it('answers a reuse of a consumed upload ticket with the file it already stored', async () =>
     {
         const uploader = new ApiClient(server.baseURL);
         await uploader.signUp('ticket-reuse@example.com', PASSWORD);
@@ -455,10 +458,16 @@ describe('upload ticket and challenge misuse', () =>
         if(claim.upload !== true) { throw new Error('expected an upload ticket'); }
 
         const params = new URLSearchParams({ name: 'once.bin', mimeType: 'application/octet-stream' });
-        expect((await uploader.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, bytes)).status).toBe(200);
+        const first = await uploader.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, bytes);
+        const again = await uploader.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, bytes);
 
-        // The ticket is single-use: a second PUT with it finds nothing to consume.
-        expect((await uploader.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, bytes)).status).toBe(404);
+        expect(first.status).toBe(200);
+        expect(again.status).toBe(200);
+        expect(await again.json()).toMatchObject({ id: (await first.json() as { id : string }).id });
+
+        // And exactly one file exists, whatever the ticket was asked twice.
+        const listing = await (await uploader.get('/api/nodes/children')).json() as { nodes : { name : string }[] };
+        expect(listing.nodes.filter((node) => node.name === 'once.bin')).toHaveLength(1);
     });
 
     it('403s a PUT of a ticket issued to a different user', async () =>
