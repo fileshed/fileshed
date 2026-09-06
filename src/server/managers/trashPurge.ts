@@ -23,16 +23,17 @@ const logger = getLogger('trash-purge');
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// The one node-manager capability the sweep needs: permanently delete one expired trash root, ownerless and offer-free.
-export interface TrashRootPurger
+// The one node-manager capability the sweep needs: permanently delete one subtree by its root, ownerless and
+// offer-free. The sweep only ever hands it an expired trash root.
+export interface SubtreePurger
 {
-    purgeTrashedRoot(rootID : string) : Promise<void>;
+    purgeSubtree(rootID : string) : Promise<void>;
 }
 
 export interface TrashPurgeDeps
 {
     nodes : NodeRA;
-    purger : TrashRootPurger;
+    purger : SubtreePurger;
 
     // Read at the start of each sweep, so an admin changing the retention window needs no restart.
     graceMs : () => Promise<number>;
@@ -52,7 +53,7 @@ export async function runTrashPurgeOnce(deps : TrashPurgeDeps) : Promise<TrashPu
     {
         try
         {
-            await deps.purger.purgeTrashedRoot(rootID);
+            await deps.purger.purgeSubtree(rootID);
             return 'purged';
         }
         catch(error)

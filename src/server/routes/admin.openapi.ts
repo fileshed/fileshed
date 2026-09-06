@@ -173,6 +173,23 @@ export const revokeSessionsSpec = describeRoute({
     },
 });
 
+export const deleteUserSpec = describeRoute({
+    tags: [ 'Admin' ],
+    summary: 'Delete a user',
+    description: 'Deletes an account and everything it holds, admin-only and immediate: their files and folders are '
+        + 'permanently deleted and the storage behind them released, their avatar and access tokens go with them, '
+        + 'and every grant they handed out is revoked. Files another account also holds a copy of are untouched. An '
+        + 'admin cannot delete their own account here.',
+    parameters: [ pathParam('id', 'The target user ID.') ],
+    responses: {
+        204: { description: 'The account and everything it held are gone.' },
+        400: errorResponse('The caller is the target.'),
+        401: errorResponse('No session.'),
+        403: errorResponse('The caller is not an admin.'),
+        404: errorResponse('No user at this ID.'),
+    },
+});
+
 export const adminStatusSpec = describeRoute({
     tags: [ 'Admin' ],
     summary: 'Get server status',

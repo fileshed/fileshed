@@ -110,6 +110,12 @@ export async function revokeUserSessions(userID : string) : Promise<void>
     await requestVoid(`/api/admin/users/${ userID }/revoke-sessions`, { method: 'POST' });
 }
 
+// Immediate and unrecoverable: the account's files go with it, and the storage behind them is released.
+export async function deleteUser(userID : string) : Promise<void>
+{
+    await requestVoid(`/api/admin/users/${ userID }`, { method: 'DELETE' });
+}
+
 export async function sendTestEmail() : Promise<TestEmailResponse>
 {
     return requestJson('/api/admin/email/test', { method: 'POST', codec: testEmailResponseCodec });

@@ -90,6 +90,7 @@
         promote : [];
         demote : [];
         revokeSessions : [];
+        remove : [];
     }>();
 
     const session = useSessionStore();
@@ -150,6 +151,13 @@
                     disabled: isSelf.value,
                     onSelect: () => emit('ban'),
                 },
+            {
+                label: 'Delete account…',
+                icon: 'i-lucide-trash-2',
+                color: 'error',
+                disabled: isSelf.value,
+                onSelect: () => emit('remove'),
+            },
         ];
 
         return [ manage, danger ];

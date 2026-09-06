@@ -18,6 +18,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 
 import {
     API_BODY_MAX_BYTES,
+    DEFAULT_AVATAR_MAX_BYTES,
     DEFAULT_SKIPPED_UPLOAD_NAMES,
     DEFAULT_UPLOAD_CHUNK_BYTES,
     EXPIRY_PRUNE_INTERVAL_MS,
@@ -85,6 +86,7 @@ import { UserRA } from './resource-access/users/index.ts';
 // Managers
 import { AccessTokenManager } from './managers/accessToken.ts';
 import { AdminManager } from './managers/admin.ts';
+import { deleteAccount } from './managers/accountDeletion.ts';
 import { managedAuthSecretFile, resolveAuthSecret } from './managers/authSecret.ts';
 import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
@@ -221,6 +223,31 @@ function requireHandle(handle ?: DatabaseHandle) : DatabaseHandle
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// The admin manager an auth-only composition gets. Deletion is composed for real rather than degraded: it reclaims
+// an account's storage before the identity goes, and a stand-in that skipped that would leave the bytes on disk with
+// nothing referencing them -- the exact failure the deletion exists to avoid. Everything it needs is a query away
+// from the handle this composition already has; the tunables it never reads for a delete answer the shipped default.
+function authOnlyAdmins(auth : Auth, options : AppOptions) : AdminManager
+{
+    const handle = requireHandle(options.handle);
+    const nodeRA = new NodeRA(handle);
+    const blob = new BlobRA(handle);
+
+    return new AdminManager({
+        auth,
+        users: new UserRA(handle),
+        usage: async () => new Map(),
+        deleteAccount: (userID) => deleteAccount({
+            auth,
+            nodes: nodeRA,
+            shares: new ShareRA(handle),
+            purger: new NodeManager(handle, nodeRA, blob, { defaultQuota: async () => UNLIMITED_QUOTA }),
+            avatars: new AvatarManager({ handle, blob, avatarMaxBytes: async () => DEFAULT_AVATAR_MAX_BYTES }),
+        }, userID),
+        defaultQuota: async () => UNLIMITED_QUOTA,
+    });
+}
+
 export function createApp(auth ?: Auth, services ?: AppServices, options : AppOptions = {}) : Hono
 {
     const app = new Hono();
@@ -306,15 +333,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
         // every account truthfully reports zero usage, and with no settings store the instance default is the
         // shipped one. The user listing has no such honest fallback -- it reads the user table -- so a composition
         // that mounts this surface without a database is a wiring bug rather than a degraded mode.
-        app.route('/api', createAdminRoutes(
-            sessions,
-            services?.admins ?? new AdminManager({
-                auth,
-                users: new UserRA(requireHandle(options.handle)),
-                usage: async () => new Map(),
-                defaultQuota: async () => UNLIMITED_QUOTA,
-            })
-        ));
+        app.route('/api', createAdminRoutes(sessions, services?.admins ?? authOnlyAdmins(auth, options)));
         app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
 
         if(services)
@@ -561,6 +580,13 @@ export async function bootApp(options : BootOptions = {})
         auth,
         users: userRA,
         usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
+        deleteAccount: (userID) => deleteAccount({
+            auth,
+            nodes: nodeRA,
+            shares: shareRA,
+            purger: nodes,
+            avatars,
+        }, userID),
         defaultQuota,
     });
 

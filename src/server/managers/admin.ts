@@ -77,6 +77,11 @@ export interface AdminManagerDeps
 
     usage : UsageResolver;
 
+    // Deleting an account is not a better-auth call with a guard in front of it: the drive has to be reclaimed
+    // first, and the same operation has to run later for a self-deletion falling due with no session behind it. So
+    // it arrives composed, and this manager contributes only the authority to ask for it.
+    deleteAccount : (userID : string) => Promise<void>;
+
     // The instance-wide cap an account with no limit of its own inherits, as a supplier so an admin moving the
     // setting binds the very next listing.
     defaultQuota : () => Promise<number>;
@@ -141,6 +146,7 @@ export class AdminManager
     readonly #auth : Auth;
     readonly #users : UserRA;
     readonly #usage : UsageResolver;
+    readonly #deleteAccount : (userID : string) => Promise<void>;
     readonly #defaultQuota : () => Promise<number>;
 
     constructor(deps : AdminManagerDeps)
@@ -148,6 +154,7 @@ export class AdminManager
         this.#auth = deps.auth;
         this.#users = deps.users;
         this.#usage = deps.usage;
+        this.#deleteAccount = deps.deleteAccount;
         this.#defaultQuota = deps.defaultQuota;
     }
 
@@ -344,6 +351,32 @@ export class AdminManager
         {
             this.#mapMissingUser(error, userID);
         }
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Deletion
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Delete an account and everything it holds, immediately and unrecoverably. The one guard beyond RBAC: an admin
+    // cannot delete THEMSELVES from the user list. Closing your own account is a decision made in your own account
+    // area, not a menu item next to everyone else's; refusing it here also means the actor is always an admin other
+    // than the target, so this can never take the last one.
+    //
+    // The existence check is our own rather than a mapped better-auth 404: deleting a user id that was never there
+    // removes nothing and would otherwise answer 200 to a request that did nothing.
+    async deleteUser(actor : SessionUser, userID : string) : Promise<void>
+    {
+        this.#requireAdmin(actor);
+
+        if(actor.id === userID)
+        {
+            throw new BadRequestError('You cannot delete your own account from the user list.');
+        }
+
+        const summaries = await this.#users.summariesByIDs([ userID ]);
+        if(!summaries.has(userID)) { throw new NotFoundError(`No user ${ userID }.`); }
+
+        await this.#deleteAccount(userID);
     }
 }
 

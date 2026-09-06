@@ -182,6 +182,15 @@ function sha256Of(data : Buffer) : string
         .digest('hex');
 }
 
+// These specs drive quota, never deletion. A stub that throws rather than a no-op, so a spec that starts deleting
+// accounts here fails loudly instead of quietly proving nothing.
+function unusedDeleteAccount() : Promise<void>
+{
+    throw new Error('deleteAccount is not composed for the quota specs');
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('admin-set quota enforced by the blob upload flow', () =>
 {
     let booted : BootedBlobApp;
@@ -196,6 +205,7 @@ describe('admin-set quota enforced by the blob upload flow', () =>
                 auth: booted.auth,
                 users: new UserRA(booted.handle),
                 usage: async () => new Map(),
+                deleteAccount: unusedDeleteAccount,
                 defaultQuota: async () => UNLIMITED_QUOTA,
             })
         ));
@@ -308,6 +318,7 @@ describe('effective quota on admin user rows', () =>
                 auth: booted.auth,
                 users: new UserRA(booted.handle),
                 usage: async () => new Map(),
+                deleteAccount: unusedDeleteAccount,
                 defaultQuota: async () => instanceDefault,
             })
         ));

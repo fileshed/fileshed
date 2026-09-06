@@ -33,6 +33,7 @@ import type { SweepManager } from '../managers/sweeps.ts';
 import {
     adminStatusSpec,
     banUserSpec,
+    deleteUserSpec,
     listUsersSpec,
     revokeSessionsSpec,
     runSweepSpec,
@@ -137,6 +138,15 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
         const actor = await sessions.requireUser(ctx.req.raw.headers);
 
         await admins.revokeSessions(actor, ctx.req.raw.headers, ctx.req.param('id'));
+
+        return ctx.body(null, 204);
+    });
+
+    router.delete('/admin/users/:id', deleteUserSpec, async (ctx) =>
+    {
+        const actor = await sessions.requireUser(ctx.req.raw.headers);
+
+        await admins.deleteUser(actor, ctx.req.param('id'));
 
         return ctx.body(null, 204);
     });

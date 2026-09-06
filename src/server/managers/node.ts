@@ -676,26 +676,26 @@ export class NodeManager
         await this.#deleteSubtree(id, (trx) => this.#offers.insertMany(offers, trx));
     }
 
-    // The trash-purge sweep's per-root exit: permanently delete one expired trashed subtree by its root, with NO actor
-    // and NO ownership gate -- a system sweep answers to no user. It reuses the same subtree-delete + graveyard
-    // transaction as hardDelete but mints NO deletion offers: an automatic purge is not an owner choosing "let
-    // recipients save a copy," so recipients are never invited. The sweep hands only expired ROOTS
-    // (NodeRA.expiredTrashRootIDs), so the parent_id cascade takes each subtree whole and no descendant is processed
-    // twice.
-    async purgeTrashedRoot(rootID : string) : Promise<void>
+    // The system exit from the tree: permanently delete one subtree by its root, with NO actor and NO ownership gate
+    // -- a sweep, or an account being deleted, answers to no user. It reuses the same subtree-delete + graveyard
+    // transaction as hardDelete but mints NO deletion offers: neither an automatic purge nor a closing account is an
+    // owner choosing "let recipients save a copy," so recipients are never invited. Every caller hands ROOTS only --
+    // roots of expired trash, of a departing owner's holdings -- so the parent_id cascade takes each subtree whole
+    // and no descendant is processed twice.
+    async purgeSubtree(rootID : string) : Promise<void>
     {
         await this.#deleteSubtree(rootID);
     }
 
     // Empty the trash: permanently delete every root of the caller's own trashed subtrees, each through the exact
-    // same subtree-delete + blob-graveyard path a single hardDelete purge takes -- purgeTrashedRoot per root, not a
+    // same subtree-delete + blob-graveyard path a single hardDelete purge takes -- purgeSubtree per root, not a
     // bulk delete, so the two can never drift apart. NodeRA.trashedRootIDs is already owner-scoped, so another
     // user's trash is untouched without a further ownership gate here. An empty trash purges nothing and reports 0.
     async emptyTrash(actor : SessionUser) : Promise<EmptyTrashResponse>
     {
         const roots = await this.#nodes.trashedRootIDs(actor.id);
 
-        await Promise.all(roots.map((rootID) => this.purgeTrashedRoot(rootID)));
+        await Promise.all(roots.map((rootID) => this.purgeSubtree(rootID)));
 
         return { purged: roots.length };
     }

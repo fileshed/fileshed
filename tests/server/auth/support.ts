@@ -31,6 +31,7 @@ import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
 import { AdminManager } from '@server/managers/admin.ts';
+import { deleteAccount } from '@server/managers/accountDeletion.ts';
 import { AvatarManager } from '@server/managers/avatar.ts';
 import { BlobManager } from '@server/managers/blob.ts';
 import { BrandingManager } from '@server/managers/branding.ts';
@@ -176,6 +177,7 @@ export function composeFullApp(
     const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
 
     const nodes = new NodeManager(handle, nodeRA, blob, { defaultQuota });
+    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
     const tracker = new LastRunTracker();
 
     // The same suppliers bootApp wires, so a spec can lower a retention through the settings route and have the very
@@ -197,7 +199,7 @@ export function composeFullApp(
         mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
         credentials: new CredentialManager({ auth, handle }),
         setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
-        avatars: new AvatarManager({ handle, blob, avatarMaxBytes }),
+        avatars,
         nodes,
         shares: new ShareManager(handle, nodeRA, shareRA, userRA),
         publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
@@ -231,6 +233,13 @@ export function composeFullApp(
             auth,
             users: userRA,
             usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
+            deleteAccount: (userID) => deleteAccount({
+                auth,
+                nodes: nodeRA,
+                shares: shareRA,
+                purger: nodes,
+                avatars,
+            }, userID),
             defaultQuota,
         }),
         mail,

@@ -37,6 +37,7 @@ vi.mock('@client/resource-access/admin.ts', () => ({
     setUserRole: vi.fn(),
     setUserPassword: vi.fn(),
     revokeUserSessions: vi.fn(),
+    deleteUser: vi.fn(),
     fetchAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
 }));
@@ -91,6 +92,9 @@ function settingsView(defaultQuota : number) : AdminSettingsResponse
 
 const SetQuotaModalStub = { name: 'SetQuotaModal', props: [ 'defaultQuota' ], template: '<div class="quota" />' };
 
+// The dialog itself is tested on its own; here it only has to report a deletion the way the real one does.
+const DeleteUserModalStub = { name: 'DeleteUserModal', template: '<div class="delete-modal" />' };
+
 function quotaModalDefault(wrapper : VueWrapper) : number
 {
     return wrapper.findComponent(SetQuotaModalStub).props('defaultQuota') as number;
@@ -117,9 +121,15 @@ function mountTab() : VueWrapper
                 SetQuotaModal: SetQuotaModalStub,
                 SetPasswordModal: true,
                 BanUserModal: true,
+                DeleteUserModal: DeleteUserModalStub,
             },
         },
     });
+}
+
+function deleteModal(wrapper : VueWrapper) : VueWrapper
+{
+    return wrapper.findComponent(DeleteUserModalStub) as VueWrapper;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -257,6 +267,26 @@ describe('Admin UsersTab', () =>
         await flushPromises();
 
         expect(quotaModalDefault(wrapper)).toBe(20_000);
+    });
+
+    // The row and the total are both what the listing already knows, so a refetch would ask the server to repeat
+    // itself -- and would page differently under an admin who is mid-search.
+    it('drops a deleted account from the listing and the total, without refetching', async () =>
+    {
+        const gone = row({ id: 'u2', email: 'leaver@example.com', name: 'Leaver', role: 'user' });
+        listUsersMock.mockResolvedValue(pageFixture([ row(), gone ]));
+
+        const wrapper = mountTab();
+        await flushPromises();
+        expect(wrapper.text()).toContain('2 accounts');
+
+        deleteModal(wrapper).vm.$emit('deleted', gone);
+        await flushPromises();
+
+        expect(wrapper.text()).not.toContain('leaver@example.com');
+        expect(wrapper.text()).toContain('root@example.com');
+        expect(wrapper.text()).toContain('1 account');
+        expect(listUsersMock).toHaveBeenCalledTimes(1);
     });
 
     it('shows the retry state when the load fails', async () =>

@@ -280,6 +280,20 @@ export class ShareRA
         return Number(result?.numDeletedRows ?? 0) > 0;
     }
 
+    // Every grant this user handed out, dropped in one statement -- what an account deletion revokes on the way out.
+    // Grants on their own nodes are already gone by then (the node delete cascades them); what is left are grants
+    // they made on somebody else's node, and those outlive the authority that made them unless this removes them.
+    // The column carries no ON DELETE, so the user row cannot go while one of these stands.
+    async deleteSharesCreatedBy(creatorID : string) : Promise<number>
+    {
+        const result = await this.#db
+            .deleteFrom('share')
+            .where('created_by', '=', creatorID)
+            .executeTakeFirst();
+
+        return Number(result?.numDeletedRows ?? 0);
+    }
+
     // Every grant on a node, for the owner's share list. Ordered by created_at -- cuid2 ids are non-monotonic, so id
     // is never a stand-in for insertion order.
     async listByNode(nodeID : string) : Promise<Share[]>

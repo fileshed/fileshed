@@ -772,6 +772,27 @@ export class NodeRA
         return rows.map((row) => row.id);
     }
 
+    // The ids of the ROOTS of everything one owner holds -- what an account deletion hands to the purge. A root here
+    // is a node they own whose parent they do not: at the top of their own drive, or dropped into somebody else's
+    // shared folder. Everything else they own is a descendant of one of those, so the parent_id cascade takes it and
+    // the purge never meets a row its own earlier delete already removed. Trashed nodes are included: trash is still
+    // their storage, and it is still charged to them.
+    async ownedRootIDs(ownerID : string) : Promise<string[]>
+    {
+        const rows = await this.#db
+            .selectFrom('node as n')
+            .leftJoin('node as parent', 'parent.id', 'n.parent_id')
+            .select('n.id as id')
+            .where('n.owner_id', '=', ownerID)
+            .where((eb) => eb.or([
+                eb('n.parent_id', 'is', null),
+                eb('parent.owner_id', '!=', ownerID),
+            ]))
+            .execute();
+
+        return rows.map((row) => row.id);
+    }
+
     // The caller's Trash view: the ROOTS of their own trashed subtrees, one page at a time, paged and sorted exactly
     // as a folder listing is -- folders pinned above the file partition, the sort key within each, the id tiebreaker
     // for determinism. Owner-scoped, so only the caller's own trashed nodes appear; roots-only, so a trashed folder

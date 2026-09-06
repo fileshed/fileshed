@@ -3,7 +3,7 @@
 //
 // Drives the manager directly against a real NodeRA + real BlobRA over in-memory SQLite (zero mocks below the RA seam,
 // real FK cascades) -- the same collaborators the trash auto-purge sweep uses. emptyTrash purges each of the caller's
-// trashed roots through purgeTrashedRoot, the identical subtree-delete + blob-graveyard path a single permanent delete
+// trashed roots through purgeSubtree, the identical subtree-delete + blob-graveyard path a single permanent delete
 // takes, so the two can never drift apart. Scoped to the caller: another user's trash is never touched. An empty
 // trash purges nothing and reports zero.
 //----------------------------------------------------------------------------------------------------------------------

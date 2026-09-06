@@ -16,7 +16,7 @@ import { NodeRA } from '@server/resource-access/nodes/node.ts';
 
 // Managers
 import { NodeManager } from '@server/managers/node.ts';
-import { type TrashRootPurger, runTrashPurgeOnce } from '@server/managers/trashPurge.ts';
+import { type SubtreePurger, runTrashPurgeOnce } from '@server/managers/trashPurge.ts';
 
 // Support
 import {
@@ -158,11 +158,11 @@ describe('runTrashPurgeOnce', () =>
         await ra.insert(folderNode({ id: 'alpha', ownerID: 'alice', trashedAt: EXPIRED }));
         await ra.insert(folderNode({ id: 'beta', ownerID: 'alice', trashedAt: EXPIRED }));
 
-        const purger : TrashRootPurger = {
-            async purgeTrashedRoot(rootID : string) : Promise<void>
+        const purger : SubtreePurger = {
+            async purgeSubtree(rootID : string) : Promise<void>
             {
                 if(rootID === 'beta') { throw new Error('simulated purge failure'); }
-                await nodes.purgeTrashedRoot(rootID);
+                await nodes.purgeSubtree(rootID);
             },
         };
 

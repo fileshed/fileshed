@@ -30,6 +30,7 @@ const EXPECTED_ROUTES = [
     // Admin
     'GET /api/admin/users',
     'PATCH /api/admin/users/:id',
+    'DELETE /api/admin/users/:id',
     'POST /api/admin/users/:id/ban',
     'POST /api/admin/users/:id/unban',
     'POST /api/admin/users/:id/role',

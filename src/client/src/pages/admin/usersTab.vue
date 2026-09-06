@@ -63,6 +63,7 @@
                         @promote="runRowAction(() => setUserRole(user.id, 'admin'))"
                         @demote="runRowAction(() => setUserRole(user.id, 'user'))"
                         @revoke-sessions="signOutEverywhere(user)"
+                        @remove="deleteModal?.open(user)"
                     />
                 </tbody>
             </table>
@@ -78,6 +79,7 @@
         <SetQuotaModal ref="quotaModal" :default-quota="settings.defaultQuota" @saved="mergeRow" />
         <SetPasswordModal ref="passwordModal" />
         <BanUserModal ref="banModal" @saved="mergeRow" />
+        <DeleteUserModal ref="deleteModal" @deleted="dropRow" />
     </div>
 </template>
 
@@ -101,6 +103,7 @@
     import SetQuotaModal from '../../components/admin/modals/setQuotaModal.vue';
     import SetPasswordModal from '../../components/admin/modals/setPasswordModal.vue';
     import BanUserModal from '../../components/admin/modals/banUserModal.vue';
+    import DeleteUserModal from '../../components/admin/modals/deleteUserModal.vue';
 
     // Utils
     import { useRunWithToast } from '../../utils/runWithToast.ts';
@@ -176,6 +179,7 @@
     const quotaModal = ref<InstanceType<typeof SetQuotaModal> | null>(null);
     const passwordModal = ref<InstanceType<typeof SetPasswordModal> | null>(null);
     const banModal = ref<InstanceType<typeof BanUserModal> | null>(null);
+    const deleteModal = ref<InstanceType<typeof DeleteUserModal> | null>(null);
 
     function mergeRow(updated : AdminUserResponse) : void
     {
@@ -183,6 +187,16 @@
         {
             return user.id === updated.id ? updated : user;
         });
+    }
+
+    // The listing's own total drops with the row: a refetch would be a second request to learn what this already
+    // knows, and it would page differently under an admin who is mid-search.
+    function dropRow(removed : AdminUserResponse) : void
+    {
+        users.value = users.value.filter((user) => user.id !== removed.id);
+        total.value = Math.max(0, total.value - 1);
+
+        toast.add({ title: `Deleted ${ removed.name ?? removed.email }.` });
     }
 
     const pending = ref(false);

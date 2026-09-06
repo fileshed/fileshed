@@ -164,12 +164,13 @@ describe('UserRow', () =>
         expect(labels).not.toContain('Ban…');
     });
 
-    it('disables self-ban and self-demotion on the signed-in admin\'s own row', () =>
+    it('disables self-ban, self-demotion, and self-deletion on the signed-in admin\'s own row', () =>
     {
         const labels = menuLabels(mountRow(user({ id: 'admin1', role: 'admin' })));
 
         expect(labels.find((entry) => entry.label === 'Demote to user')?.disabled).toBe(true);
         expect(labels.find((entry) => entry.label === 'Ban…')?.disabled).toBe(true);
+        expect(labels.find((entry) => entry.label === 'Delete account…')?.disabled).toBe(true);
     });
 
     it('leaves ban and demote live on someone else\'s row', () =>
@@ -178,6 +179,7 @@ describe('UserRow', () =>
 
         expect(labels.find((entry) => entry.label === 'Demote to user')?.disabled).toBe(false);
         expect(labels.find((entry) => entry.label === 'Ban…')?.disabled).toBe(false);
+        expect(labels.find((entry) => entry.label === 'Delete account…')?.disabled).toBe(false);
     });
 });
 
