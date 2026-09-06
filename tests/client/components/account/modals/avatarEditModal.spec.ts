@@ -358,7 +358,7 @@ describe('AvatarEditModal', () =>
     it('names the instance\'s configured avatar cap', async () =>
     {
         useSessionStore().me = meFixture();
-        useAppStore().limits = { uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 5_000_000 };
+        useAppStore().limits = { skippedUploadNames: [], uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 5_000_000 };
 
         const wrapper = mountModal();
         await openModal(wrapper);
@@ -370,12 +370,12 @@ describe('AvatarEditModal', () =>
     {
         useSessionStore().me = meFixture();
         const app = useAppStore();
-        app.limits = { uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 5_000_000 };
+        app.limits = { skippedUploadNames: [], uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 5_000_000 };
 
         const wrapper = mountModal();
         await openModal(wrapper);
 
-        app.limits = { uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 8_000_000 };
+        app.limits = { skippedUploadNames: [], uploadMaxBytes: 5_000_000_000, avatarMaxBytes: 8_000_000 };
         await flushPromises();
 
         expect(wrapper.find('.u-modal').attributes('data-description')).toContain('8 MB');

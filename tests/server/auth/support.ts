@@ -8,7 +8,13 @@
 
 import type { Hono } from 'hono';
 
-import { DEFAULT_UPLOAD_CHUNK_BYTES, MS_PER_DAY, UNLIMITED_QUOTA } from '@fileshed/core';
+import {
+    DEFAULT_SKIPPED_UPLOAD_NAMES,
+    DEFAULT_UPLOAD_CHUNK_BYTES,
+    MS_PER_DAY,
+    UNLIMITED_QUOTA,
+    parseSkippedNames,
+} from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
@@ -164,6 +170,8 @@ export function composeFullApp(
     // The same settings-backed suppliers bootApp wires, so a spec can patch a cap through the admin route and see
     // the very next request obey it -- a harness reading config directly would freeze them at composition.
     const uploadMaxBytes = () : Promise<number> => settings.numberValue('UPLOAD_MAX_BYTES', config.UPLOAD_MAX_BYTES);
+    const skippedUploadNames = async () : Promise<string[]> =>
+        parseSkippedNames(await settings.stringValue('SKIPPED_UPLOAD_NAMES', DEFAULT_SKIPPED_UPLOAD_NAMES));
     const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);
     const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
 
@@ -182,6 +190,7 @@ export function composeFullApp(
             handle,
             blob,
             uploadMaxBytes,
+            skippedUploadNames,
             uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
             defaultQuota,
         }),
@@ -227,9 +236,13 @@ export function composeFullApp(
         mail,
         limits: async () =>
         {
-            const [ upload, avatar ] = await Promise.all([ uploadMaxBytes(), avatarMaxBytes() ]);
+            const [ upload, avatar, skipped ] = await Promise.all([
+                uploadMaxBytes(),
+                avatarMaxBytes(),
+                skippedUploadNames(),
+            ]);
 
-            return { uploadMaxBytes: upload, avatarMaxBytes: avatar };
+            return { uploadMaxBytes: upload, avatarMaxBytes: avatar, skippedUploadNames: skipped };
         },
         providers: [],
     }, { apiReference: options.apiReference });

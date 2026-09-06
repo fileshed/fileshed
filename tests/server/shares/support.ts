@@ -79,6 +79,7 @@ function composeApp(handle : DatabaseHandle, auth : Auth, blob : BlobRA, uploadM
         handle,
         blob,
         uploadMaxBytes: async () => uploadMaxBytes,
+        skippedUploadNames: async () => [],
         uploadChunkBytes: DEFAULT_UPLOAD_CHUNK_BYTES,
         defaultQuota: async () => UNLIMITED_QUOTA,
     });

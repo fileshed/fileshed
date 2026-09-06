@@ -21,7 +21,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
-import type { NodeResponse, UploadCommitMetadata } from '@fileshed/core';
+import { type NodeResponse, type UploadCommitMetadata, isSkippedName } from '@fileshed/core';
 
 // Stores
 import { useAppStore } from './app.ts';
@@ -349,14 +349,19 @@ export const useUploadsStore = defineStore('uploads', () =>
     // Actions
     //------------------------------------------------------------------------------------------------------------------
 
+    // How many files this batch refused to send because the instance does not store names like theirs.
+    const skipped = ref(0);
+
     // A batch started while nothing is running opens a clean window: the previous batch's rows -- done, errored,
-    // or cancelled -- are history, not part of the new work. Rows join an existing window only while it still has
-    // active items.
+    // or cancelled -- are history, not part of the new work, and neither is what it skipped. Rows join an existing
+    // window only while it still has active items. A window holding nothing but a skipped count is idle too,
+    // otherwise a second batch of pure junk reports the sum of both.
     function startFreshBatchIfIdle() : void
     {
-        if(items.value.length > 0 && items.value.every((item) => TERMINAL.has(item.status)))
+        if(items.value.every((item) => TERMINAL.has(item.status)))
         {
             items.value = [];
+            skipped.value = 0;
         }
     }
 
@@ -375,7 +380,15 @@ export const useUploadsStore = defineStore('uploads', () =>
     // adds inside one payload (loose files, then each folder) never wipe rows the same payload just created.
     function addFiles(files : readonly File[], folderID : string | null) : void
     {
-        for(const file of files)
+        const skipPatterns = useAppStore().skippedUploadNames;
+
+        // Skipped before anything is hashed or sent. These are not errors and they get no row: a folder upload from a
+        // Mac carries one .DS_Store per directory, and a panel listing each of them as a failure would bury the files
+        // the user actually chose. The count is what the panel says instead.
+        const wanted = files.filter((file) => !isSkippedName(file.name, skipPatterns));
+        skipped.value += files.length - wanted.length;
+
+        for(const file of wanted)
         {
             counter += 1;
 
@@ -522,11 +535,13 @@ export const useUploadsStore = defineStore('uploads', () =>
     function clearFinished() : void
     {
         items.value = items.value.filter((item) => !TERMINAL.has(item.status));
+        skipped.value = 0;
     }
 
     //------------------------------------------------------------------------------------------------------------------
 
     return {
+        skipped,
         items,
         currentPrompt,
         activeCount,

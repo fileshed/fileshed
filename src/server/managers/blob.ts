@@ -53,6 +53,7 @@ import {
     type UploadCommitCreate,
     type UploadCommitMetadata,
     isDirectOwner,
+    isSkippedName,
 } from '@fileshed/core';
 
 // Engines
@@ -442,6 +443,9 @@ export interface BlobManagerDeps
     // Read at use time, per request, so an admin raising or lowering the cap needs no restart.
     uploadMaxBytes : () => Promise<number>;
 
+    // The filenames this instance refuses to store, read at use time for the same reason.
+    skippedUploadNames : () => Promise<string[]>;
+
     // The size a client cuts a file into, handed back with every upload ticket. A plain number, not a supplier: it is
     // fixed at boot by the environment, and a client already mid-upload plans against the value its claim answered.
     uploadChunkBytes : number;
@@ -480,6 +484,7 @@ export class BlobManager
     readonly #handle : DatabaseHandle;
     readonly #blob : BlobRA;
     readonly #uploadMaxBytes : () => Promise<number>;
+    readonly #skippedUploadNames : () => Promise<string[]>;
     readonly #uploadChunkBytes : number;
     readonly #defaultQuota : () => Promise<number>;
 
@@ -498,6 +503,7 @@ export class BlobManager
         this.#handle = deps.handle;
         this.#blob = deps.blob;
         this.#uploadMaxBytes = deps.uploadMaxBytes;
+        this.#skippedUploadNames = deps.skippedUploadNames;
         this.#uploadChunkBytes = deps.uploadChunkBytes;
         this.#defaultQuota = deps.defaultQuota;
 
@@ -638,6 +644,8 @@ export class BlobManager
             throw new ForbiddenError('Proof of possession failed.');
         }
 
+        await this.#assertNameAccepted(metadata);
+
         // Known blob: the record already exists, so persistBlob only clears its graveyard marker. If GC hard-deleted
         // the record in the challenge window, resurrect touches nothing and the write fails the blob_id FK.
         const persistBlob = (blob : BlobRA) : Promise<void> => blob.resurrect(challenge.sha256);
@@ -705,6 +713,8 @@ export class BlobManager
         {
             throw new PayloadTooLargeError('Upload exceeds the maximum allowed size.', maxBytes);
         }
+
+        await this.#assertNameAccepted(metadata);
 
         if(offset === 0 && contentLength === ticket.size)
         {
@@ -809,6 +819,19 @@ export class BlobManager
         {
             ticket.inFlight = false;
         }
+    }
+
+    // The instance's junk list, applied where a name first binds to a node. A claim carries a hash and a size and no
+    // name at all, so this is the first point the server sees one -- and the last, which is what makes it the place
+    // an API client is held to the same list the browser applies before it hashes a byte.
+    async #assertNameAccepted(metadata : UploadCommitMetadata) : Promise<void>
+    {
+        if('replaceNodeID' in metadata) { return; }
+
+        const skipped = await this.#skippedUploadNames();
+        if(!isSkippedName(metadata.name, skipped)) { return; }
+
+        throw new BadRequestError(`This instance does not store files named '${ metadata.name }'.`);
     }
 
     // Where this chunk claims to belong, judged against where the upload actually stands. Every rejection here happens

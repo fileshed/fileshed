@@ -94,6 +94,7 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
         handle,
         blob,
         uploadMaxBytes: async () => 5 * 1024 * 1024 * 1024,
+        skippedUploadNames: async () => [],
         uploadChunkBytes: DEFAULT_UPLOAD_CHUNK_BYTES,
         defaultQuota: async () => UNLIMITED_QUOTA,
     });

@@ -17,6 +17,15 @@ export const MIME_TYPE_MAX_LENGTH = 255;
 // What a file is when nothing better is known -- what an unreadable stored mime falls back to on the way out.
 export const FALLBACK_MIME_TYPE = 'application/octet-stream';
 
+// The filenames an instance refuses to store unless an admin says otherwise. Every one is produced by an operating
+// system rather than a person: a Mac writes .DS_Store into every directory it opens and ._ sidecars beside files on
+// non-native filesystems, Windows leaves Thumbs.db and desktop.ini. Nobody uploads these on purpose and nobody misses
+// them, and a folder upload otherwise carries one per directory.
+export const DEFAULT_SKIPPED_UPLOAD_NAMES = '.DS_Store, ._*, Thumbs.db, desktop.ini';
+
+// Long enough for a considered list, short enough that the setting is a list and not a document.
+export const SKIPPED_UPLOAD_NAMES_MAX_LENGTH = 1024;
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // RFC 9110 media-type: `type/subtype` of tokens, then any number of `;name=value` parameters whose values are tokens

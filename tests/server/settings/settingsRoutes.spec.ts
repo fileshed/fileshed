@@ -200,7 +200,20 @@ describe('/api/instance limits', () =>
         expect(await instanceLimits(booted.app)).toEqual({
             uploadMaxBytes: booted.config.UPLOAD_MAX_BYTES,
             avatarMaxBytes: booted.config.AVATAR_MAX_BYTES,
+            skippedUploadNames: [ '.DS_Store', '._*', 'Thumbs.db', 'desktop.ini' ],
         });
+    });
+
+    // The junk list rides out with the caps rather than sitting behind the admin route: the client has to apply it
+    // before it hashes a byte, and it is nobody's secret.
+    it('answers a list an admin has narrowed, on the very next request', async () =>
+    {
+        const booted = await boot();
+        const cookie = await makeAdmin(booted, 'narrower@example.com', 'correct-horse-battery');
+
+        await patchSettings(booted.app, cookie, { SKIPPED_UPLOAD_NAMES: '.DS_Store' });
+
+        expect(await instanceLimits(booted.app)).toMatchObject({ skippedUploadNames: [ '.DS_Store' ] });
     });
 
     it('reflects a patched cap on the very next request', async () =>
@@ -210,7 +223,8 @@ describe('/api/instance limits', () =>
 
         await patchSettings(booted.app, cookie, { UPLOAD_MAX_BYTES: 4096, AVATAR_MAX_BYTES: 2048 });
 
-        expect(await instanceLimits(booted.app)).toEqual({ uploadMaxBytes: 4096, avatarMaxBytes: 2048 });
+        expect(await instanceLimits(booted.app))
+            .toMatchObject({ uploadMaxBytes: 4096, avatarMaxBytes: 2048 });
     });
 
     it('falls back to the configured cap once the override is reset away', async () =>

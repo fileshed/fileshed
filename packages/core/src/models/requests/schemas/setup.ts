@@ -42,6 +42,7 @@ export const instanceResponseCodec = z.strictObject({
         avatarMaxBytes: z.number()
             .int()
             .positive(),
+        skippedUploadNames: z.array(z.string()),
     }),
 });
 

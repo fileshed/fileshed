@@ -19,7 +19,7 @@ import type { Readable } from 'node:stream';
 import { Hono } from 'hono';
 
 // Models
-import { UNLIMITED_QUOTA } from '@fileshed/core';
+import { DEFAULT_SKIPPED_UPLOAD_NAMES, UNLIMITED_QUOTA, parseSkippedNames } from '@fileshed/core';
 
 // Resource Access
 import { type Auth, createAuth } from '@server/resource-access/auth.ts';
@@ -86,6 +86,7 @@ export interface BlobAppOptions
     // The single-upload ceiling. A supplier, not a number, so a spec can move it between requests the way an admin
     // patching the setting does -- which is how a ticket outlives the cap it was issued under.
     uploadMaxBytes ?: () => Promise<number>;
+    skippedUploadNames ?: () => Promise<string[]>;
 
     // The chunk size the instance hands out with a ticket, so a spec can drive an upload against a deployment that
     // tuned it rather than only against the compiled default.
@@ -112,6 +113,7 @@ export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<Boote
         handle,
         blob,
         uploadMaxBytes: options.uploadMaxBytes ?? (async () => config.UPLOAD_MAX_BYTES),
+        skippedUploadNames: options.skippedUploadNames ?? (async () => parseSkippedNames(DEFAULT_SKIPPED_UPLOAD_NAMES)),
         uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
         defaultQuota: options.defaultQuota ?? (async () => UNLIMITED_QUOTA),
     });

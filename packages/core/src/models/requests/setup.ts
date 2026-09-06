@@ -31,6 +31,11 @@ export interface InstanceLimits
 {
     uploadMaxBytes : number;
     avatarMaxBytes : number;
+
+    // The filenames this instance refuses to store, as patterns. It rides here for the same reason the size cap does:
+    // a client that knows the rule before it starts can skip a file rather than hash and send one that will be
+    // refused, and a folder upload from a Mac otherwise carries one .DS_Store per directory.
+    skippedUploadNames : string[];
 }
 
 export interface InstanceResponse

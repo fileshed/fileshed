@@ -43,6 +43,10 @@ export const useAppStore = defineStore('app', () =>
     // lands -- a deployment that moved a cap is described by the server, never by whatever this bundle was built
     // against.
     const uploadMaxBytes = computed(() => limits.value?.uploadMaxBytes ?? DEFAULT_UPLOAD_MAX_BYTES);
+
+    // The junk list this instance refuses. Empty until the handshake answers, which is the right default: skipping
+    // nothing is the behaviour a client that has not been told the rule should have.
+    const skippedUploadNames = computed(() => limits.value?.skippedUploadNames ?? []);
     const avatarMaxBytes = computed(() => limits.value?.avatarMaxBytes ?? DEFAULT_AVATAR_MAX_BYTES);
 
     async function initialize() : Promise<void>
@@ -68,6 +72,7 @@ export const useAppStore = defineStore('app', () =>
         forcedMode,
         logoUrl,
         uploadMaxBytes,
+        skippedUploadNames,
         avatarMaxBytes,
         initialize,
     };

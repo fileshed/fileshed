@@ -18,6 +18,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 
 import {
     API_BODY_MAX_BYTES,
+    DEFAULT_SKIPPED_UPLOAD_NAMES,
     DEFAULT_UPLOAD_CHUNK_BYTES,
     EXPIRY_PRUNE_INTERVAL_MS,
     type InstanceLimits,
@@ -29,6 +30,7 @@ import {
     type SocialProviderID,
     TICKET_TTL_MS,
     UNLIMITED_QUOTA,
+    parseSkippedNames,
     providerSettingKeys,
 } from '@fileshed/core';
 
@@ -489,6 +491,8 @@ export async function bootApp(options : BootOptions = {})
     // next request, and with no override each supplier answers the config value it names. DEFAULT_QUOTA_BYTES has no
     // config twin -- its floor is the vocabulary's own fallback, unlimited.
     const uploadMaxBytes = () : Promise<number> => settings.numberValue('UPLOAD_MAX_BYTES', config.UPLOAD_MAX_BYTES);
+    const skippedUploadNames = async () : Promise<string[]> =>
+        parseSkippedNames(await settings.stringValue('SKIPPED_UPLOAD_NAMES', DEFAULT_SKIPPED_UPLOAD_NAMES));
     const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);
     const trashPurgeDays = () : Promise<number> => settings.numberValue('TRASH_PURGE_DAYS', config.TRASH_PURGE_DAYS);
     const gcGraceDays = () : Promise<number> => settings.numberValue('GC_GRACE_DAYS', config.GC_GRACE_DAYS);
@@ -506,6 +510,7 @@ export async function bootApp(options : BootOptions = {})
         handle,
         blob,
         uploadMaxBytes,
+        skippedUploadNames,
         uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
         defaultQuota,
     });
@@ -643,9 +648,13 @@ export async function bootApp(options : BootOptions = {})
         mail,
         limits: async () =>
         {
-            const [ upload, avatar ] = await Promise.all([ uploadMaxBytes(), avatarMaxBytes() ]);
+            const [ upload, avatar, skipped ] = await Promise.all([
+                uploadMaxBytes(),
+                avatarMaxBytes(),
+                skippedUploadNames(),
+            ]);
 
-            return { uploadMaxBytes: upload, avatarMaxBytes: avatar };
+            return { uploadMaxBytes: upload, avatarMaxBytes: avatar, skippedUploadNames: skipped };
         },
         providers,
     };

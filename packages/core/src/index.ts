@@ -322,6 +322,7 @@ export {
 
 // Utils
 export { compareNames } from './utils/naturalOrder.ts';
+export { isSkippedName, parseSkippedNames } from './utils/skippedNames.ts';
 export {
     LISTING_SORT_FIELDS,
     LISTING_TIEBREAK_FIELDS,

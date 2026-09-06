@@ -28,9 +28,14 @@ import { fetchAdminSettings, patchAdminSettings } from '../resource-access/admin
 //----------------------------------------------------------------------------------------------------------------------
 
 // The settings keys the anonymous handshake carries, and so the ones whose change has to reach surfaces outside this
-// tab: the instance name brands every wordmark and title, the size caps gate the pickers. Moving one should move the
-// admin's own session now, not on the next reload.
-const handshakeKeys : readonly AdminSettingKey[] = [ 'INSTANCE_NAME', 'UPLOAD_MAX_BYTES', 'AVATAR_MAX_BYTES' ];
+// tab: the instance name brands every wordmark and title, the size caps gate the pickers, the junk list decides what
+// the upload panel drops. Moving one should move the admin's own session now, not on the next reload.
+const handshakeKeys : readonly AdminSettingKey[] = [
+    'INSTANCE_NAME',
+    'UPLOAD_MAX_BYTES',
+    'AVATAR_MAX_BYTES',
+    'SKIPPED_UPLOAD_NAMES',
+];
 
 //----------------------------------------------------------------------------------------------------------------------
 

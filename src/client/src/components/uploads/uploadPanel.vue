@@ -9,7 +9,7 @@
 
 <template>
     <div
-        v-if="uploads.hasItems"
+        v-if="uploads.hasItems || uploads.skipped > 0"
         class="fixed inset-x-4 bottom-4 z-40 overflow-hidden rounded-lg border border-default bg-default shadow-lg
             sm:left-auto sm:right-4 sm:w-80"
     >
@@ -35,6 +35,13 @@
                 />
             </div>
         </div>
+
+        <p
+            v-if="!collapsed && uploads.skipped > 0"
+            class="border-b border-default px-3 py-2 text-xs text-muted"
+        >
+            {{ skippedNote }}
+        </p>
 
         <div v-if="!collapsed" class="max-h-80 divide-y divide-default overflow-y-auto px-3">
             <UploadRow
@@ -67,8 +74,24 @@
 
     const collapsed = ref(false);
 
+    // Said once, under the header, rather than as a row each: a folder upload from a Mac carries one .DS_Store per
+    // directory, and listing them would bury the files the user actually chose.
+    const skippedNote = computed(() =>
+    {
+        const count = uploads.skipped;
+
+        return `Skipped ${ count } file${ count === 1 ? '' : 's' } this instance does not store.`;
+    });
+
     const summary = computed(() =>
     {
+        // A batch that was entirely junk leaves no rows to head. The header counts them rather than announcing zero
+        // uploads; the note below says the rest.
+        if(!uploads.hasItems)
+        {
+            return `${ uploads.skipped } file${ uploads.skipped === 1 ? '' : 's' } skipped`;
+        }
+
         const active = uploads.activeCount;
         if(active > 0) { return `Uploading ${ active }…`; }
 

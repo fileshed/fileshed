@@ -12,6 +12,7 @@
 // Constants
 import { INSTANCE_NAME_MAX_LENGTH } from '../constants/branding.ts';
 import { DEFAULT_SMTP_PORT } from '../constants/config.ts';
+import { DEFAULT_SKIPPED_UPLOAD_NAMES, SKIPPED_UPLOAD_NAMES_MAX_LENGTH } from '../constants/node.ts';
 import { UNLIMITED_QUOTA } from '../constants/quota.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -149,6 +150,7 @@ const staticSettingKeys = [
     'TRASH_PURGE_DAYS',
     'GC_GRACE_DAYS',
     'SIGN_UP_ENABLED',
+    'SKIPPED_UPLOAD_NAMES',
     'SMTP_HOST',
     'SMTP_PORT',
     'SMTP_SECURE',
@@ -262,6 +264,18 @@ export const settingDefinitions : Readonly<Record<AdminSettingKey, SettingDefini
 
     SIGN_UP_ENABLED:
         { key: 'SIGN_UP_ENABLED', kind: 'boolean', secret: false, requiresRestart: false, fallback: true },
+
+    // Filenames an upload refuses, comma-separated, `*` matching any run of characters. Read at use time on both
+    // sides: the client skips them before hashing a byte, and the commit refuses them so an API client is held to the
+    // same list. Settings-only -- an instance curates its own junk list, and there is no deployment-time twin.
+    SKIPPED_UPLOAD_NAMES: {
+        key: 'SKIPPED_UPLOAD_NAMES',
+        kind: 'string',
+        secret: false,
+        requiresRestart: false,
+        fallback: DEFAULT_SKIPPED_UPLOAD_NAMES,
+        constraints: { maxLength: SKIPPED_UPLOAD_NAMES_MAX_LENGTH },
+    },
 
     // Mail is read at send time (the auth callbacks and the test-send build the transport per send), so every SMTP
     // knob applies to the next email without a restart. An unset SMTP_HOST or SMTP_FROM means mail is off.

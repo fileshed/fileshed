@@ -651,7 +651,7 @@ describe('useUploadsStore', () =>
 
     function capUploadsAt(maxBytes : number) : void
     {
-        useAppStore().limits = { uploadMaxBytes: maxBytes, avatarMaxBytes: 2_000_000 };
+        useAppStore().limits = { skippedUploadNames: [], uploadMaxBytes: maxBytes, avatarMaxBytes: 2_000_000 };
     }
 
     it('refuses a file over the instance cap without hashing or claiming it', async () =>
@@ -743,6 +743,103 @@ describe('useUploadsStore', () =>
 
         expect(store.items[0]?.status).toBe('error');
         expect(hashFileMock).not.toHaveBeenCalled();
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Skipped names -- the instance's junk list, applied before anything is hashed. These are not failures and get no
+    // row: a folder from a Mac carries one .DS_Store per directory, and a row each would bury the files someone chose.
+    //------------------------------------------------------------------------------------------------------------------
+
+    function skipNames(patterns : string[]) : void
+    {
+        useAppStore().limits = {
+            skippedUploadNames: patterns,
+            uploadMaxBytes: 1_000_000,
+            avatarMaxBytes: 2_000_000,
+        };
+    }
+
+    it('takes no row and moves no bytes for a file the instance does not store', async () =>
+    {
+        mockHappyPipeline();
+        skipNames([ '.DS_Store' ]);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('.DS_Store') ], null);
+        await flushPromises();
+
+        expect(store.items).toHaveLength(0);
+        expect(hashFileMock).not.toHaveBeenCalled();
+        expect(claimBlobMock).not.toHaveBeenCalled();
+    });
+
+    it('counts what it skipped so the panel can say so', async () =>
+    {
+        mockHappyPipeline();
+        skipNames([ '.DS_Store', '._*' ]);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('.DS_Store'), uploadFile('._notes.txt') ], null);
+        await flushPromises();
+
+        expect(store.skipped).toBe(2);
+    });
+
+    it('uploads the rest of the batch', async () =>
+    {
+        mockHappyPipeline();
+        skipNames([ '.DS_Store' ]);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('.DS_Store'), uploadFile('report.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'done', 'the wanted file done');
+
+        expect(store.items).toHaveLength(1);
+        expect(store.items[0]?.name).toBe('report.txt');
+        expect(store.skipped).toBe(1);
+    });
+
+    // The note lives beside the rows, so dismissing the rows dismisses it -- otherwise a count from a batch nobody can
+    // see any more sits under the header until the tab is closed.
+    it('drops the count when the finished rows are cleared', async () =>
+    {
+        mockHappyPipeline();
+        skipNames([ '.DS_Store' ]);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('.DS_Store'), uploadFile('report.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'done', 'the wanted file done');
+
+        store.clearFinished();
+
+        expect(store.skipped).toBe(0);
+    });
+
+    // A batch of pure junk leaves no rows, so nothing but the count says the window is still open -- and a second
+    // drop reporting the sum of both would be a lie about the one the user just made.
+    it('counts each all-skipped batch on its own', async () =>
+    {
+        mockHappyPipeline();
+        skipNames([ '.DS_Store' ]);
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('.DS_Store') ], null);
+        await flushPromises();
+        store.enqueue([ uploadFile('.DS_Store') ], null);
+        await flushPromises();
+
+        expect(store.skipped).toBe(1);
+    });
+
+    it('skips nothing while the instance handshake has yet to answer', async () =>
+    {
+        mockHappyPipeline();
+
+        const store = useUploadsStore();
+        store.enqueue([ uploadFile('.DS_Store') ], null);
+        await waitFor(() => store.items[0]?.status === 'done', 'done');
+
+        expect(store.skipped).toBe(0);
     });
 });
 

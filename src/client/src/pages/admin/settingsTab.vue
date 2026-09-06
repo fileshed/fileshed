@@ -99,6 +99,13 @@
                     unit: 'bytes',
                 },
                 {
+                    key: 'SKIPPED_UPLOAD_NAMES',
+                    label: 'Filenames to skip',
+                    description: 'Filenames this instance refuses to store, separated by commas. A * stands for any '
+                        + 'run of characters, and case is ignored. Uploads drop them before sending; leave it empty '
+                        + 'to store everything.',
+                },
+                {
                     key: 'DEFAULT_QUOTA_BYTES',
                     label: 'Default storage quota',
                     description: 'The cap every account with no quota of its own inherits, and which they follow '
