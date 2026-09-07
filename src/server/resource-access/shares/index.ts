@@ -280,15 +280,34 @@ export class ShareRA
         return Number(result?.numDeletedRows ?? 0) > 0;
     }
 
-    // Every grant this user handed out, dropped in one statement -- what an account deletion revokes on the way out.
-    // Grants on their own nodes are already gone by then (the node delete cascades them); what is left are grants
-    // they made on somebody else's node, and those outlive the authority that made them unless this removes them.
-    // The column carries no ON DELETE, so the user row cannot go while one of these stands.
+    // Every grant this user handed out, dropped in one statement. Only a node's owner may grant, so today these are
+    // the same rows the node delete has already cascaded away -- and this runs anyway, because created_by is the one
+    // column pointing at a user with no ON DELETE on it: a row that outlived its creator does not linger, it refuses
+    // the user delete outright. The day granting widens past owners, this is what keeps that from being an outage.
     async deleteSharesCreatedBy(creatorID : string) : Promise<number>
     {
         const result = await this.#db
             .deleteFrom('share')
             .where('created_by', '=', creatorID)
+            .executeTakeFirst();
+
+        return Number(result?.numDeletedRows ?? 0);
+    }
+
+    // Every grant on everything one owner holds, dropped in one statement -- what an account asking to be deleted
+    // does to the reach it handed out, while its files stay exactly where they are. Stated as "on my files" rather
+    // than "granted by me" because that is the sentence the account was shown before it asked; the two name the same
+    // rows while only an owner may grant.
+    async deleteSharesOnNodesOwnedBy(ownerID : string) : Promise<number>
+    {
+        const result = await this.#db
+            .deleteFrom('share')
+            .where((eb) => eb.exists(
+                eb.selectFrom('node')
+                    .select('node.id')
+                    .whereRef('node.id', '=', 'share.node_id')
+                    .where('node.owner_id', '=', ownerID)
+            ))
             .executeTakeFirst();
 
         return Number(result?.numDeletedRows ?? 0);

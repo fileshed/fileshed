@@ -345,6 +345,64 @@ export class UserRA
             .execute();
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    // Pending deletion
+    //------------------------------------------------------------------------------------------------------------------
+
+    // When this account's owner asked for it to be deleted, or null if they have not. Read fresh from the row: the
+    // session cookie is minted before the request and would still say the account is fine.
+    async deletionRequestedAtOf(userID : string) : Promise<Date | null>
+    {
+        const row = await this.#db
+            .selectFrom('user')
+            .select('deletion_requested_at')
+            .where('id', '=', userID)
+            .executeTakeFirst();
+
+        const stamp = row?.deletion_requested_at ?? null;
+
+        return stamp === null ? null : new Date(stamp);
+    }
+
+    // Stamp or clear the request. Cancelling is this with null, and it restores nothing else -- what the request
+    // revoked stays revoked.
+    async setDeletionRequestedAt(userID : string, at : Date | null) : Promise<void>
+    {
+        await this.#db
+            .updateTable('user')
+            .set({ deletion_requested_at: at === null ? null : at.toISOString() })
+            .where('id', '=', userID)
+            .execute();
+    }
+
+    // The accounts whose window has run out -- what the sweep deletes. The cutoff is computed by the caller from the
+    // window in force at the start of that run, so lengthening the window spares an account that had not yet been
+    // taken.
+    async deletionDueBefore(cutoff : Date) : Promise<string[]>
+    {
+        const rows = await this.#db
+            .selectFrom('user')
+            .select('id')
+            .where('deletion_requested_at', 'is not', null)
+            .where('deletion_requested_at', '<=', cutoff.toISOString())
+            .execute();
+
+        return rows.map((row) => row.id);
+    }
+
+    // How many admins the instance has. The last one cannot schedule their own deletion: an instance with no admin
+    // has no way back short of the database.
+    async adminCount() : Promise<number>
+    {
+        const row = await this.#db
+            .selectFrom('user')
+            .select((eb) => eb.fn.count('id').as('count'))
+            .where('role', '=', 'admin')
+            .executeTakeFirstOrThrow();
+
+        return Number(row.count);
+    }
+
     // The mime any user's avatar carries for this blob hash, or null when NO user references it as their avatar. This
     // is the authorization gate for serving avatar bytes: a hash no avatar points at reads as null, so the serve route
     // 404s rather than handing back arbitrary dedup-store content by hash. Identical bytes carry one mime, so any

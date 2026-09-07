@@ -111,6 +111,16 @@
                 >
                     {{ status.partials === null ? '' : describePartialsRun(status.partials.summary) }}
                 </SweepSummary>
+
+                <SweepSummary
+                    title="Account deletions"
+                    sweep="accountDeletion"
+                    :run="status.accountDeletion"
+                    @ran="load"
+                >
+                    {{ status.accountDeletion === null
+                        ? '' : describeAccountDeletionRun(status.accountDeletion.summary) }}
+                </SweepSummary>
             </section>
         </template>
     </div>
@@ -130,7 +140,12 @@
     import { adminStatus } from '../../resource-access/admin.ts';
 
     // Engines
-    import { describeGcRun, describePartialsRun, describeTrashPurgeRun } from '../../engines/sweepRun.ts';
+    import {
+        describeAccountDeletionRun,
+        describeGcRun,
+        describePartialsRun,
+        describeTrashPurgeRun,
+    } from '../../engines/sweepRun.ts';
 
     // Components
     import BackendList from '../../components/admin/backendList.vue';

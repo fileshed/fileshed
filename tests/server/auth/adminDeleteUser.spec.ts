@@ -291,10 +291,11 @@ describe('what a deleted account releases', () =>
         expect(await bytesExist(booted, sha256)).toBe(false);
     });
 
-    // A grant they made on somebody else's file outlives their own drive: the node it sits on belongs to the other
-    // account, so nothing about deleting theirs would reach it. The column carries no ON DELETE either, so a grant
-    // left standing does not merely linger -- it refuses the delete outright.
-    it('revokes the grants it handed out on other accounts\' files', async () =>
+    // share.created_by is the one column pointing at a user with no ON DELETE on it, so a grant that outlived its
+    // creator does not linger -- it refuses the user delete outright. Only a node's owner may grant today, which means
+    // the node delete has already cascaded these away and the row below has to be written straight into the table to
+    // exist at all. That is the point: this is the backstop for the day granting widens past owners.
+    it('deletes a grant that would otherwise refuse the delete', async () =>
     {
         await bootWithAdminRoutes();
         const cookie = await adminCookie();

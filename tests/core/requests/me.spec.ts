@@ -14,8 +14,9 @@ describe('meResponseCodec', () =>
         id: 'user_1',
         email: 'ada@example.com',
         role: 'user' as const,
-        limits: { trashRetentionDays: 30 },
+        limits: { trashRetentionDays: 30, accountDeletionDays: 30 },
         createdAt: '2026-01-01T00:00:00.000Z',
+        deletion: null,
     };
 
     // A limit of null is an account inheriting the instance default, so the wire shape must admit it rather than

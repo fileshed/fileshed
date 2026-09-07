@@ -120,7 +120,7 @@ describe('NodeManager.me', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), policy);
         const me = await manager.me(testActor({ id: 'alice' }));
 
-        expect(me.limits).toEqual({ trashRetentionDays: 2 });
+        expect(me.limits).toEqual({ trashRetentionDays: 2, accountDeletionDays: 30 });
     });
 
     it('falls back to the default trash retention when none is configured', async () =>
@@ -128,7 +128,7 @@ describe('NodeManager.me', () =>
         const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
         const me = await manager.me(testActor({ id: 'alice' }));
 
-        expect(me.limits).toEqual({ trashRetentionDays: 30 });
+        expect(me.limits).toEqual({ trashRetentionDays: 30, accountDeletionDays: 30 });
     });
 });
 

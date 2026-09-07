@@ -64,6 +64,7 @@ import { createUploadRoutes } from '@server/routes/uploads.ts';
 
 // Auth support (real sign-up/sign-in over the same app)
 import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { accountDeletionsFor } from '../support/accountDeletions.ts';
 import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
@@ -115,7 +116,7 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
     app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
-    app.route('/api', createMeRoutes(sessions, nodes));
+    app.route('/api', createMeRoutes(sessions, nodes, accountDeletionsFor(auth, handle)));
     app.route('/api', createBlobRoutes(sessions, blobs, mediaTags));
     app.route('/api', createUploadRoutes(sessions, blobs, mediaTags));
     app.route('/api', createNodeRoutes(sessions, nodes));

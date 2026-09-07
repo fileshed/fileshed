@@ -139,6 +139,26 @@ export class PublicLinkRA
             .where('revoked_at', 'is', null)
             .execute();
     }
+
+    // Kill every live link on everything one owner holds, in one statement -- what an account asking to be deleted
+    // does to its own reach the moment it asks. Same still-live guard as the single revoke, so links already dead
+    // keep the timestamp that killed them.
+    async revokeAllOwnedBy(ownerID : string) : Promise<number>
+    {
+        const result = await this.#db
+            .updateTable('public_link')
+            .set({ revoked_at: new Date().toISOString() })
+            .where('revoked_at', 'is', null)
+            .where((eb) => eb.exists(
+                eb.selectFrom('node')
+                    .select('node.id')
+                    .whereRef('node.id', '=', 'public_link.node_id')
+                    .where('node.owner_id', '=', ownerID)
+            ))
+            .executeTakeFirst();
+
+        return Number(result?.numUpdatedRows ?? 0);
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------

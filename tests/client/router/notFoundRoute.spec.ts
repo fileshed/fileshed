@@ -30,11 +30,12 @@ function testRouter() : Router
     return createRouter({ history: createMemoryHistory(), routes });
 }
 
-function session(state : { isAuthenticated ?: boolean; isAdmin ?: boolean }) : GuardSession
+function session(state : { isAuthenticated ?: boolean; isAdmin ?: boolean; isClosing ?: boolean }) : GuardSession
 {
     return {
         isAuthenticated: state.isAuthenticated ?? false,
         isAdmin: state.isAdmin ?? false,
+        isClosing: state.isClosing ?? false,
         initialize: () => Promise.resolve(),
     };
 }

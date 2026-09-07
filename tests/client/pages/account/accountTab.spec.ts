@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Account Tab — the account-management composition
 //
-// The tab groups the storage summary, the password-change control, the connected sign-in methods, and the
-// sign-out-everywhere action under four headings. What this guards: every one is present, in order, so the surface
-// never quietly drops one.
+// The tab groups the storage summary, the password-change control, the connected sign-in methods, the
+// sign-out-everywhere action, and the way out under five headings. What this guards: every one is present, in order,
+// so the surface never drops one.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it, vi } from 'vitest';
@@ -20,6 +20,7 @@ import AccountTab from '@client/pages/account/accountTab.vue';
 import AccountStorage from '@client/components/account/accountStorage.vue';
 import ChangePassword from '@client/components/account/changePassword.vue';
 import ConnectedAccounts from '@client/components/account/connectedAccounts.vue';
+import DeleteAccount from '@client/components/account/deleteAccount.vue';
 import RevokeCredentials from '@client/components/account/revokeCredentials.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -33,6 +34,7 @@ function mountTab() : VueWrapper
                 ChangePassword: true,
                 ConnectedAccounts: true,
                 RevokeCredentials: true,
+                DeleteAccount: true,
             },
         },
     });
@@ -42,15 +44,21 @@ function mountTab() : VueWrapper
 
 describe('AccountTab', () =>
 {
-    it('groups the controls under the Storage, Password, Connected accounts, and Sessions headings in order', () =>
+    it('groups the controls under the five account headings, in order', () =>
     {
         const wrapper = mountTab();
 
         expect(wrapper.findAll('h2').map((heading) => heading.text()))
-            .toEqual([ 'Storage', 'Password', 'Connected accounts', 'Sessions and tokens' ]);
+            .toEqual([
+                'Storage',
+                'Password',
+                'Connected accounts',
+                'Sessions and tokens',
+                'Closing this account',
+            ]);
     });
 
-    it('keeps the storage summary, password change, connected accounts, and sign-out-everywhere', () =>
+    it('keeps every control the account area owns', () =>
     {
         const wrapper = mountTab();
 
@@ -58,6 +66,7 @@ describe('AccountTab', () =>
         expect(wrapper.findComponent(ChangePassword).exists()).toBe(true);
         expect(wrapper.findComponent(ConnectedAccounts).exists()).toBe(true);
         expect(wrapper.findComponent(RevokeCredentials).exists()).toBe(true);
+        expect(wrapper.findComponent(DeleteAccount).exists()).toBe(true);
     });
 });
 

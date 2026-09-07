@@ -9,6 +9,11 @@
 // Two metas, easily confused: `public` marks the anonymous-only auth pages, which a signed-in visitor is bounced off
 // of; `unguarded` marks a route belonging to everyone -- the 404 -- which nobody is redirected away from in either
 // direction.
+//
+// An account that has asked to be deleted gets a third: every route but the one marked `closing` sends them to the
+// interstitial. This is a courtesy rather than a control -- the server refuses that account everywhere else anyway --
+// so the point of it is that they meet a page saying when the account goes and offering to call it off, instead of a
+// drive that answers 403 to everything.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { RouteLocationRaw } from 'vue-router';
@@ -20,6 +25,7 @@ export interface GuardSession
     initialize() : Promise<void>;
     isAuthenticated : boolean;
     isAdmin : boolean;
+    isClosing : boolean;
 }
 
 // Only the route fields the decision reads. A real RouteLocationNormalized satisfies this structurally, so the guard
@@ -49,6 +55,11 @@ export function guardDecision(to : GuardRoute, session : GuardSession) : true | 
     if(!session.isAuthenticated)
     {
         return { path: '/signin', query: { redirect: to.fullPath } };
+    }
+
+    if(session.isClosing)
+    {
+        return to.meta.closing === true ? true : { path: '/closing' };
     }
 
     if(to.meta.admin === true && !session.isAdmin)

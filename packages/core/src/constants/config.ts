@@ -13,6 +13,12 @@ export const DEFAULT_STORAGE_ROOT = './data/blobs';
 export const DEFAULT_GC_GRACE_DAYS = 7;
 export const DEFAULT_GC_INTERVAL_MINUTES = 60;
 export const DEFAULT_TRASH_PURGE_DAYS = 30;
+
+// How long an account survives after its owner asks for it to be deleted. The window is the point: a stolen session
+// cannot destroy the account's data on the spot, because the person who actually owns it has this long to notice and
+// say no. Nothing sets it to zero -- that would hand the thief the thing the window exists to deny them.
+export const DEFAULT_ACCOUNT_DELETION_DAYS = 30;
+export const MIN_ACCOUNT_DELETION_DAYS = 1;
 export const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 export const DEFAULT_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_SMTP_PORT = 587;

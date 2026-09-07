@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 // Models
 import {
+    type AccountDeletionRunSummary,
     ConflictError,
     ForbiddenError,
     type GcRunSummary,
@@ -105,6 +106,7 @@ function fakeSweep<T>() : FakeSweep<T>
 let gc : FakeSweep<GcRunSummary>;
 let trashPurge : FakeSweep<TrashPurgeRunSummary>;
 let partials : FakeSweep<PartialsRunSummary>;
+let accountDeletion : FakeSweep<AccountDeletionRunSummary>;
 let tracker : LastRunTracker;
 let manager : SweepManager;
 
@@ -113,10 +115,16 @@ beforeEach(() =>
     gc = fakeSweep<GcRunSummary>();
     trashPurge = fakeSweep<TrashPurgeRunSummary>();
     partials = fakeSweep<PartialsRunSummary>();
+    accountDeletion = fakeSweep<AccountDeletionRunSummary>();
     tracker = new LastRunTracker();
 
     manager = new SweepManager({
-        runners: { gc: gc.run, trashPurge: trashPurge.run, partials: partials.run },
+        runners: {
+            gc: gc.run,
+            trashPurge: trashPurge.run,
+            partials: partials.run,
+            accountDeletion: accountDeletion.run,
+        },
         tracker,
     });
 });

@@ -147,6 +147,15 @@ export interface TrashPurgeRunSummary
     failed : number;
 }
 
+// Accounts whose deletion window has run out. Candidates are the requests that came due; deleted are the ones
+// carried out. A failure leaves the account exactly as it was, request and all, for the next run to try again.
+export interface AccountDeletionRunSummary
+{
+    candidates : number;
+    deleted : number;
+    failed : number;
+}
+
 // Candidates are the staging areas of uploads nobody can still deliver to; the rest are live uploads the sweep left
 // alone and never counted. bytesFreed follows the same rule gc's does -- a staging area counted in failed still
 // occupies its space.
@@ -176,6 +185,12 @@ export interface PartialsRunStatus
     summary : PartialsRunSummary;
 }
 
+export interface AccountDeletionRunStatus
+{
+    ranAt : string;
+    summary : AccountDeletionRunSummary;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Run a sweep now (POST /api/admin/sweeps/:sweep/run)
 //
@@ -184,7 +199,7 @@ export interface PartialsRunStatus
 // admin asking for space back is answered with what this sweep reclaimed, not with an acknowledgement.
 //----------------------------------------------------------------------------------------------------------------------
 
-export const sweepKinds = [ 'gc', 'trashPurge', 'partials' ] as const;
+export const sweepKinds = [ 'gc', 'trashPurge', 'partials', 'accountDeletion' ] as const;
 export type SweepKind = typeof sweepKinds[number];
 
 export interface GcSweepRunResponse extends GcRunStatus
@@ -202,7 +217,16 @@ export interface PartialsSweepRunResponse extends PartialsRunStatus
     sweep : 'partials';
 }
 
-export type SweepRunResponse = GcSweepRunResponse | TrashPurgeSweepRunResponse | PartialsSweepRunResponse;
+export interface AccountDeletionSweepRunResponse extends AccountDeletionRunStatus
+{
+    sweep : 'accountDeletion';
+}
+
+export type SweepRunResponse
+    = | GcSweepRunResponse
+    | TrashPurgeSweepRunResponse
+    | PartialsSweepRunResponse
+    | AccountDeletionSweepRunResponse;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Overview aggregates (part of GET /api/admin/status)
@@ -272,6 +296,7 @@ export interface AdminStatusResponse
     gc : GcRunStatus | null;
     trashPurge : TrashPurgeRunStatus | null;
     partials : PartialsRunStatus | null;
+    accountDeletion : AccountDeletionRunStatus | null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -11,6 +11,11 @@
 // a bearer header, then a route-supplied URL token. The credential union's bare-token arm exists for consumers that
 // have no Headers at all -- a future FTP/SFTP/WebDAV gateway hands the password field straight in.
 //
+// An account whose owner has asked for it to be deleted is refused here too, everywhere but the two surfaces that
+// exist for it: reading its own profile, and calling the deletion off. Sign-in stays open on purpose -- the person
+// who owns the account has to be able to get in and undo this -- so the refusal is what turns an open session into
+// an interstitial rather than a working drive. Those two routes ask for the exemption by name.
+//
 // Token verification is exactly one plugin call (verifyApiKey with the route's demanded permissions -- never
 // getSession, which would double the key's usage accounting), then a user load the plugin does not do itself: keys
 // carry no FK to their owner and verification never consults the user row, so banned and deleted owners are
@@ -25,6 +30,7 @@ import {
     ACCESS_TOKEN_CONFIG_PAT,
     ACCESS_TOKEN_CONFIG_PLAYBACK,
     ACCESS_TOKEN_PREFIX,
+    ForbiddenError,
     PLAYBACK_TOKEN_PREFIX,
     type PermissionStatement,
     UnauthorizedError,
@@ -71,6 +77,25 @@ function bearerToken(headers : Headers) : string | null
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// What a route says about a caller whose account is on its way out. Only the two surfaces that exist for such an
+// account -- reading its own profile, and calling the deletion off -- set this.
+export interface ActorOptions
+{
+    allowClosing ?: boolean;
+}
+
+function assertNotClosing(user : SessionUser, options : ActorOptions) : void
+{
+    if(options.allowClosing === true) { return; }
+
+    if((user as SessionUser & { deletionRequestedAt ?: Date | null }).deletionRequestedAt)
+    {
+        throw new ForbiddenError('This account is scheduled for deletion. Cancel the deletion to use it again.');
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 export class SessionManager
 {
     readonly #auth : Auth;
@@ -86,19 +111,25 @@ export class SessionManager
         return session?.user ?? null;
     }
 
-    async requireUser(headers : Headers) : Promise<SessionUser>
+    async requireUser(headers : Headers, options : ActorOptions = {}) : Promise<SessionUser>
     {
         const user = await this.getUser(headers);
         if(!user) { throw new UnauthorizedError('Sign-in required.'); }
+
+        assertNotClosing(user, options);
 
         return user;
     }
 
     // The common HTTP shape of resolveActor: headers in, demanded statement enforced. Routes with a URL-borne
     // token (the download route) build the request credential themselves.
-    async requireActor(headers : Headers, required : PermissionStatement) : Promise<Actor>
+    async requireActor(headers : Headers, required : PermissionStatement, options : ActorOptions = {}) : Promise<Actor>
     {
-        return this.resolveActor({ kind: 'request', headers }, required);
+        const actor = await this.resolveActor({ kind: 'request', headers }, required);
+
+        assertNotClosing(actor.user, options);
+
+        return actor;
     }
 
     async resolveActor(credential : Credential, required ?: PermissionStatement) : Promise<Actor>

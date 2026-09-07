@@ -41,6 +41,7 @@ import { createMeRoutes } from '@server/routes/me.ts';
 
 // Auth support (real sign-up/sign-in over the same app)
 import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
+import { accountDeletionsFor } from '../support/accountDeletions.ts';
 import { openTestDatabase } from '../support/database.ts';
 
 export { ORIGIN } from '../auth/support.ts';
@@ -59,14 +60,14 @@ export interface BootedAvatarApp
     cleanup : () => Promise<void>;
 }
 
-function composeApp(auth : Auth, avatars : AvatarManager, nodes : NodeManager) : Hono
+function composeApp(auth : Auth, handle : DatabaseHandle, avatars : AvatarManager, nodes : NodeManager) : Hono
 {
     const app = new Hono();
     const sessions = new SessionManager(auth);
 
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
     app.route('/api', createAvatarRoutes(sessions, avatars, nodes));
-    app.route('/api', createMeRoutes(sessions, nodes));
+    app.route('/api', createMeRoutes(sessions, nodes, accountDeletionsFor(auth, handle)));
 
     app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
     app.onError((error, ctx) =>
@@ -94,7 +95,7 @@ export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAv
     const nodes = new NodeManager(handle, new NodeRA(handle), blob, { defaultQuota: async () => UNLIMITED_QUOTA });
 
     return {
-        app: composeApp(auth, avatars, nodes),
+        app: composeApp(auth, handle, avatars, nodes),
         handle,
         auth,
         blob,

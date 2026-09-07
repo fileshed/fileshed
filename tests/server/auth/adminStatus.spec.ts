@@ -74,6 +74,7 @@ beforeEach(async () =>
                 graceMs: async () => GRACE_MS,
             }),
             partials: async () => ({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 }),
+            accountDeletion: async () => ({ candidates: 0, deleted: 0, failed: 0 }),
         },
         tracker,
     });

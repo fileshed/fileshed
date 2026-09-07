@@ -34,6 +34,10 @@ export interface MeResponse
     // so copy like the trash-retention line never lies about an overridden deployment.
     limits : {
         trashRetentionDays : number;
+
+        // How long a requested account deletion waits before it is carried out. Named in the copy that asks the
+        // caller to confirm, so the sentence describes this deployment rather than the shipped default.
+        accountDeletionDays : number;
     };
     preferences : UserPreferences;
 
@@ -41,6 +45,18 @@ export interface MeResponse
     // avatar hash at serialization time -- never a persisted URL.
     image ?: string | null;
     createdAt : string;
+
+    // Set only while the caller has asked for their account to be deleted and the window has yet to run out. The due
+    // date is derived from the request against the instance's current window, so an admin who lengthens it moves this
+    // -- it is what the account will be deleted after, not a promise made at the moment of asking.
+    deletion : AccountDeletionSchedule | null;
+}
+
+// What the caller sees of their own pending deletion.
+export interface AccountDeletionSchedule
+{
+    requestedAt : string;
+    scheduledFor : string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

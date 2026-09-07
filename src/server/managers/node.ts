@@ -18,10 +18,12 @@ import { createId } from '@paralleldrive/cuid2';
 
 // Models
 import {
+    type AccountDeletionSchedule,
     type ChildrenQuery,
     type CopyNodeRequest,
     type CreateFolderRequest,
     type CreateLinkRequest,
+    DEFAULT_ACCOUNT_DELETION_DAYS,
     DEFAULT_GC_GRACE_DAYS,
     DEFAULT_TRASH_PURGE_DAYS,
     type DeletionOffer,
@@ -123,7 +125,12 @@ export interface NodePolicy
 {
     offerGraceMs ?: () => Promise<number>;
     trashRetentionDays ?: () => Promise<number>;
+    accountDeletionDays ?: () => Promise<number>;
     defaultQuota : () => Promise<number>;
+
+    // The caller's own pending deletion, or null when they have none -- what /api/me reports so a client can land
+    // them on the interstitial instead of their drive. A composition that models no deletions answers null.
+    deletionSchedule ?: (userID : string) => Promise<AccountDeletionSchedule | null>;
 }
 
 export class NodeManager
@@ -138,6 +145,8 @@ export class NodeManager
     readonly #orphanedBlobs : OrphanedBlobs;
     readonly #offerGraceMs : () => Promise<number>;
     readonly #trashRetentionDays : () => Promise<number>;
+    readonly #accountDeletionDays : () => Promise<number>;
+    readonly #deletionSchedule : (userID : string) => Promise<AccountDeletionSchedule | null>;
     readonly #defaultQuota : () => Promise<number>;
 
     constructor(handle : DatabaseHandle, nodes : NodeRA, orphanedBlobs : OrphanedBlobs, policy : NodePolicy)
@@ -152,6 +161,8 @@ export class NodeManager
         this.#orphanedBlobs = orphanedBlobs;
         this.#offerGraceMs = policy.offerGraceMs ?? (async () => DEFAULT_GC_GRACE_DAYS * MS_PER_DAY);
         this.#trashRetentionDays = policy.trashRetentionDays ?? (async () => DEFAULT_TRASH_PURGE_DAYS);
+        this.#accountDeletionDays = policy.accountDeletionDays ?? (async () => DEFAULT_ACCOUNT_DELETION_DAYS);
+        this.#deletionSchedule = policy.deletionSchedule ?? (async () => null);
         this.#defaultQuota = policy.defaultQuota;
     }
 
@@ -453,14 +464,17 @@ export class NodeManager
         // The quota, preferences, and avatar all come from the row, not the session snapshot: the cookie cache lags a
         // just-saved value, so a page reload right after a change would otherwise show the stale one. For quota that
         // is not merely cosmetic -- the number shown here is the one the next upload is judged against.
-        const [ used, limit, stored, avatarSha256, trashRetentionDays, defaultQuota ] = await Promise.all([
-            this.#nodes.ownedBytes(actor.id),
-            this.#users.quotaLimitOf(actor.id),
-            this.#users.preferencesOf(actor.id),
-            this.#users.avatarSha256Of(actor.id),
-            this.#trashRetentionDays(),
-            this.#defaultQuota(),
-        ]);
+        const [ used, limit, stored, avatarSha256, trashRetentionDays, accountDeletionDays, defaultQuota, deletion ]
+            = await Promise.all([
+                this.#nodes.ownedBytes(actor.id),
+                this.#users.quotaLimitOf(actor.id),
+                this.#users.preferencesOf(actor.id),
+                this.#users.avatarSha256Of(actor.id),
+                this.#trashRetentionDays(),
+                this.#accountDeletionDays(),
+                this.#defaultQuota(),
+                this.#deletionSchedule(actor.id),
+            ]);
 
         return {
             id: actor.id,
@@ -468,10 +482,11 @@ export class NodeManager
             name: actor.name,
             role: actor.role === 'admin' ? 'admin' : 'user',
             quota: { used, effective: effectiveQuota(limit, defaultQuota), limit },
-            limits: { trashRetentionDays },
+            limits: { trashRetentionDays, accountDeletionDays },
             preferences: toUserPreferences(stored),
             image: avatarImage(avatarSha256),
             createdAt: new Date(actor.createdAt).toISOString(),
+            deletion,
         };
     }
 

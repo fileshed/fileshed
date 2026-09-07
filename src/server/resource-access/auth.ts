@@ -319,6 +319,17 @@ const authOptionsShape = {
             // never the auth API. The mime is stored because an avatar blob has no node row to carry one.
             avatarSha256: { type: 'string', required: false, input: false, fieldName: 'avatar_sha256' },
             avatarMime: { type: 'string', required: false, input: false, fieldName: 'avatar_mime' },
+
+            // When the account's owner asked for it to be deleted, null on every account that has not. The instant of
+            // the request rather than the date it comes due: the window is an instance setting read live, so the due
+            // date is derived from this and moves when an admin moves the setting. input:false -- it is written only
+            // through the app's own deletion routes.
+            deletionRequestedAt: {
+                type: 'date',
+                required: false,
+                input: false,
+                fieldName: 'deletion_requested_at',
+            },
         },
     },
 } satisfies BetterAuthOptions;

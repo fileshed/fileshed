@@ -17,6 +17,7 @@ import { z } from 'zod';
 // Models
 import {
     ANY_HOST,
+    DEFAULT_ACCOUNT_DELETION_DAYS,
     DEFAULT_AVATAR_MAX_BYTES,
     DEFAULT_BASE_URL,
     DEFAULT_DATABASE_PATH,
@@ -33,6 +34,7 @@ import {
     DEFAULT_TRASH_PURGE_DAYS,
     DEFAULT_UPLOAD_CHUNK_BYTES,
     DEFAULT_UPLOAD_MAX_BYTES,
+    MIN_ACCOUNT_DELETION_DAYS,
     MIN_UPLOAD_CHUNK_BYTES,
     type ProviderSettingKey,
     databaseKinds,
@@ -330,6 +332,13 @@ const configSchema = z.object({
         .int()
         .nonnegative()
         .default(DEFAULT_TRASH_PURGE_DAYS),
+
+    // The floor is a day, not zero: a self-requested deletion that took effect at once would let a stolen session
+    // destroy the account before its owner could answer for it.
+    ACCOUNT_DELETION_DAYS: z.coerce.number()
+        .int()
+        .min(MIN_ACCOUNT_DELETION_DAYS)
+        .default(DEFAULT_ACCOUNT_DELETION_DAYS),
     UPLOAD_MAX_BYTES: z.coerce.number()
         .int()
         .positive()

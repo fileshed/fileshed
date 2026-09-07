@@ -208,14 +208,18 @@ describe('TrashPage', () =>
 
     it('states the deployment\'s effective retention in days, not a vague period', async () =>
     {
-        const wrapper = await mountTrash([], [], meFixture({ limits: { trashRetentionDays: 2 } }));
+        const wrapper = await mountTrash([], [], meFixture({
+            limits: { trashRetentionDays: 2, accountDeletionDays: 30 },
+        }));
 
         expect(wrapper.text()).toContain('permanently deleted after 2 days.');
     });
 
     it('pluralizes a one-day retention correctly', async () =>
     {
-        const wrapper = await mountTrash([], [], meFixture({ limits: { trashRetentionDays: 1 } }));
+        const wrapper = await mountTrash([], [], meFixture({
+            limits: { trashRetentionDays: 1, accountDeletionDays: 30 },
+        }));
 
         expect(wrapper.text()).toContain('permanently deleted after 1 day.');
     });

@@ -8,11 +8,12 @@ import { type GuardSession, createAuthGuard, guardDecision } from '@client/route
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function session(state : { isAuthenticated ?: boolean; isAdmin ?: boolean }) : GuardSession
+function session(state : { isAuthenticated ?: boolean; isAdmin ?: boolean; isClosing ?: boolean }) : GuardSession
 {
     return {
         isAuthenticated: state.isAuthenticated ?? false,
         isAdmin: state.isAdmin ?? false,
+        isClosing: state.isClosing ?? false,
         initialize: () => Promise.resolve(),
     };
 }
@@ -74,6 +75,50 @@ describe('guardDecision', () =>
 
         expect(decision).toBe(true);
     });
+
+    // An account on its way out is refused everywhere by the server, so sending it to the drive would only produce a
+    // page of 403s where a date and a cancel button belong.
+    it('sends an account scheduled for deletion to the interstitial', () =>
+    {
+        const decision = guardDecision(
+            { fullPath: '/trash', meta: {} },
+            session({ isAuthenticated: true, isClosing: true })
+        );
+
+        expect(decision).toEqual({ path: '/closing' });
+    });
+
+    it('lets it reach the interstitial itself', () =>
+    {
+        const decision = guardDecision(
+            { fullPath: '/closing', meta: { closing: true } },
+            session({ isAuthenticated: true, isClosing: true })
+        );
+
+        expect(decision).toBe(true);
+    });
+
+    // Admin is beside the point once the account is going: the interstitial comes first either way.
+    it('sends a closing admin to the interstitial rather than the admin area', () =>
+    {
+        const decision = guardDecision(
+            { fullPath: '/admin', meta: { admin: true } },
+            session({ isAuthenticated: true, isAdmin: true, isClosing: true })
+        );
+
+        expect(decision).toEqual({ path: '/closing' });
+    });
+
+    // The interstitial is for an account that is going, not a signed-out visitor who typed the URL.
+    it('sends an anonymous visitor at the interstitial to sign in', () =>
+    {
+        const decision = guardDecision(
+            { fullPath: '/closing', meta: { closing: true } },
+            session({ isAuthenticated: false })
+        );
+
+        expect(decision).toEqual({ path: '/signin', query: { redirect: '/closing' } });
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -86,6 +131,7 @@ describe('createAuthGuard', () =>
         const restoring : GuardSession = {
             isAuthenticated: false,
             isAdmin: false,
+            isClosing: false,
             initialize: async () => { events.push('init'); },
         };
         const guard = createAuthGuard(() => restoring);

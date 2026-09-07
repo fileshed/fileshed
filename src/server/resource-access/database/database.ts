@@ -98,6 +98,10 @@ export interface UserTable
     // auth additionalFields (input:false); written only through the app's own avatar routes, never the auth API.
     avatar_sha256 : string | null;
     avatar_mime : string | null;
+
+    // When this account's owner asked for it to be deleted; null on every account that has not. The date it comes due
+    // is derived from this against the instance's window, never stored. Better-auth additionalField (input:false).
+    deletion_requested_at : Timestamp | null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

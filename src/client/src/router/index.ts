@@ -16,6 +16,7 @@ import SignInPage from '../pages/signInPage.vue';
 import SignUpPage from '../pages/signUpPage.vue';
 import ForgotPasswordPage from '../pages/forgotPasswordPage.vue';
 import ResetPasswordPage from '../pages/resetPasswordPage.vue';
+import AccountClosingPage from '../pages/accountClosingPage.vue';
 import DrivePage from '../pages/drivePage.vue';
 import FilePage from '../pages/filePage.vue';
 import SharedPage from '../pages/sharedPage.vue';
@@ -51,6 +52,9 @@ export const routes : RouteRecordRaw[] = [
     { path: '/signup', name: 'signup', component: SignUpPage, meta: { public: true } },
     { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage, meta: { public: true } },
     { path: '/reset-password', name: 'reset-password', component: ResetPasswordPage, meta: { public: true } },
+
+    // Where an account on its way out is sent, and the only route it may reach.
+    { path: '/closing', name: 'closing', component: AccountClosingPage, meta: { closing: true } },
     {
         path: '/',
         component: MainLayout,

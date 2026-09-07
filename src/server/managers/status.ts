@@ -80,6 +80,7 @@ export class StatusManager
             gc: this.#gcStatus(),
             trashPurge: this.#trashPurgeStatus(),
             partials: this.#partialsStatus(),
+            accountDeletion: this.#accountDeletionStatus(),
         };
     }
 
@@ -141,6 +142,12 @@ export class StatusManager
     #partialsStatus() : AdminStatusResponse['partials']
     {
         const last = this.#deps.tracker.partials;
+        return last === null ? null : { ranAt: last.at.toISOString(), summary: last.summary };
+    }
+
+    #accountDeletionStatus() : AdminStatusResponse['accountDeletion']
+    {
+        const last = this.#deps.tracker.accountDeletion;
         return last === null ? null : { ranAt: last.at.toISOString(), summary: last.summary };
     }
 }

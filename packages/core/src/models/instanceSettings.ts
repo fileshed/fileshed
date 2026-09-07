@@ -11,7 +11,7 @@
 
 // Constants
 import { INSTANCE_NAME_MAX_LENGTH } from '../constants/branding.ts';
-import { DEFAULT_SMTP_PORT } from '../constants/config.ts';
+import { DEFAULT_SMTP_PORT, MIN_ACCOUNT_DELETION_DAYS } from '../constants/config.ts';
 import { DEFAULT_SKIPPED_UPLOAD_NAMES, SKIPPED_UPLOAD_NAMES_MAX_LENGTH } from '../constants/node.ts';
 import { UNLIMITED_QUOTA } from '../constants/quota.ts';
 
@@ -149,6 +149,7 @@ const staticSettingKeys = [
     'DEFAULT_QUOTA_BYTES',
     'TRASH_PURGE_DAYS',
     'GC_GRACE_DAYS',
+    'ACCOUNT_DELETION_DAYS',
     'SIGN_UP_ENABLED',
     'SKIPPED_UPLOAD_NAMES',
     'SMTP_HOST',
@@ -260,6 +261,18 @@ export const settingDefinitions : Readonly<Record<AdminSettingKey, SettingDefini
         requiresRestart: false,
         fallback: null,
         constraints: { min: 0 },
+    },
+
+    // How long a requested account deletion waits before the sweep carries it out. Read live, so an admin who
+    // lengthens the window moves every deletion already waiting -- the due date is derived from the request, never
+    // frozen at the moment of asking. The floor is one day: the delay is the whole protection.
+    ACCOUNT_DELETION_DAYS: {
+        key: 'ACCOUNT_DELETION_DAYS',
+        kind: 'number',
+        secret: false,
+        requiresRestart: false,
+        fallback: null,
+        constraints: { min: MIN_ACCOUNT_DELETION_DAYS },
     },
 
     SIGN_UP_ENABLED:

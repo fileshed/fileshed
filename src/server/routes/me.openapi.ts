@@ -45,3 +45,33 @@ export const updatePreferencesSpec = describeRoute({
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+
+export const requestAccountDeletionSpec = describeRoute({
+    tags: [ ME_TAG ],
+    summary: 'Ask for this account to be deleted',
+    description: 'Schedules the caller\'s own account for deletion after the instance\'s deletion window, and '
+        + 'immediately revokes everything it reaches outward: every share on their files and every share they '
+        + 'granted, every public link on their files, all their access tokens, and all their sessions. Their files '
+        + 'and settings are untouched until the window runs out. Cancelling restores the account but none of those '
+        + 'revocations. The only admin on an instance cannot schedule their own deletion. Asking twice answers the '
+        + 'schedule already in force rather than restarting the window.',
+    responses: {
+        200: jsonResponse('The account is scheduled for deletion.', meResponseCodec),
+        400: errorResponse('The caller is the only admin.'),
+        401: errorResponse('No session.'),
+    },
+});
+
+export const cancelAccountDeletionSpec = describeRoute({
+    tags: [ ME_TAG ],
+    summary: 'Call off this account\'s deletion',
+    description: 'Cancels the caller\'s pending deletion. Their files, folders, and settings come back exactly as '
+        + 'they were; the shares, links, and access tokens the request revoked stay revoked. An account with no '
+        + 'pending deletion is unaffected.',
+    responses: {
+        200: jsonResponse('The deletion is called off.', meResponseCodec),
+        401: errorResponse('No session.'),
+    },
+});
+
+//----------------------------------------------------------------------------------------------------------------------

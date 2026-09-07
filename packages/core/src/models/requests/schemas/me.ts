@@ -48,12 +48,19 @@ export const meResponseCodec = z.strictObject({
         trashRetentionDays: z.number()
             .int()
             .nonnegative(),
+        accountDeletionDays: z.number()
+            .int()
+            .positive(),
     }),
     preferences: userPreferencesCodec.default({}),
     image: z.string()
         .nullable()
         .optional(),
     createdAt: isoDateTimeCodec,
+    deletion: z.strictObject({
+        requestedAt: isoDateTimeCodec,
+        scheduledFor: isoDateTimeCodec,
+    }).nullable(),
 });
 
 typeAssert<Equals<z.output<typeof meResponseCodec>, MeResponse>>();

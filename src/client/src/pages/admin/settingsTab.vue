@@ -127,6 +127,15 @@
                     sweep: { kind: 'trashPurge', label: 'Trash purge' },
                 },
                 {
+                    key: 'ACCOUNT_DELETION_DAYS',
+                    label: 'Account deletion window',
+                    description: 'How long a deletion somebody requests for their own account waits before it is '
+                        + 'carried out. Their shares, links, and tokens are revoked the moment they ask; their files '
+                        + 'wait this long and come back if they cancel. Applies to deletions already waiting.',
+                    unit: 'days',
+                    sweep: { kind: 'accountDeletion', label: 'Account deletion' },
+                },
+                {
                     key: 'GC_GRACE_DAYS',
                     label: 'Deleted file grace period',
                     description: 'How many days the bytes behind a deleted file are kept before collection, and how '

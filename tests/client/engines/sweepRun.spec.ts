@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 // Under test
 import {
+    describeAccountDeletionRun,
     describeGcRun,
     describePartialsRun,
     describeSweepRun,
@@ -97,6 +98,27 @@ describe('describePartialsRun', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+describe('describeAccountDeletionRun', () =>
+{
+    // Accounts, and no byte figure: what a deletion frees is graveyarded rather than gone, and quoting bytes here
+    // would promise space the collector has yet to take.
+    it('counts accounts rather than bytes', () =>
+    {
+        const line = describeAccountDeletionRun({ candidates: 2, deleted: 2, failed: 0 });
+
+        expect(line).toBe('2 of 2 deleted.');
+    });
+
+    it('names the deletions it could not carry out', () =>
+    {
+        const line = describeAccountDeletionRun({ candidates: 3, deleted: 2, failed: 1 });
+
+        expect(line).toContain('1 failed');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('describeSweepRun', () =>
 {
     it('describes each sweep in its own terms rather than a shared one that fits none of them', () =>
@@ -119,9 +141,16 @@ describe('describeSweepRun', () =>
             summary: { candidates: 2, reclaimed: 2, failed: 0, bytesFreed: 4096 },
         });
 
+        const closed = describeSweepRun({
+            sweep: 'accountDeletion',
+            ranAt: '2026-08-12T10:00:00.000Z',
+            summary: { candidates: 1, deleted: 1, failed: 0 },
+        });
+
         expect(collected).toBe('4.1 kB reclaimed, 1 of 1 collected.');
         expect(purged).toBe('2 of 2 purged.');
         expect(reaped).toBe('4.1 kB reclaimed, 2 of 2 cleared.');
+        expect(closed).toBe('1 of 1 deleted.');
     });
 });
 

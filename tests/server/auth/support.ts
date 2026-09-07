@@ -31,7 +31,8 @@ import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
 import { AdminManager } from '@server/managers/admin.ts';
-import { deleteAccount } from '@server/managers/accountDeletion.ts';
+import { AccountDeletionManager, deleteAccount } from '@server/managers/accountDeletion.ts';
+import { runAccountDeletionOnce } from '@server/managers/accountDeletionSweep.ts';
 import { AvatarManager } from '@server/managers/avatar.ts';
 import { BlobManager } from '@server/managers/blob.ts';
 import { BrandingManager } from '@server/managers/branding.ts';
@@ -97,6 +98,7 @@ export function testConfig(overrides : Partial<Config> = {}) : Config
         GC_GRACE_DAYS: 7,
         GC_INTERVAL_MINUTES: 60,
         TRASH_PURGE_DAYS: 30,
+        ACCOUNT_DELETION_DAYS: 30,
         UPLOAD_MAX_BYTES: 5 * 1024 * 1024 * 1024,
         AVATAR_MAX_BYTES: 2 * 1024 * 1024,
         UPLOAD_CHUNK_BYTES: DEFAULT_UPLOAD_CHUNK_BYTES,
@@ -176,8 +178,33 @@ export function composeFullApp(
     const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);
     const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
 
-    const nodes = new NodeManager(handle, nodeRA, blob, { defaultQuota });
+    const publicLinkRA = new PublicLinkRA(handle);
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
+    const accountDeletionDays = () : Promise<number> =>
+        settings.numberValue('ACCOUNT_DELETION_DAYS', config.ACCOUNT_DELETION_DAYS);
+
+    const accountDeletions = new AccountDeletionManager({
+        auth,
+        handle,
+        users: userRA,
+        shares: shareRA,
+        links: publicLinkRA,
+        deletionDays: accountDeletionDays,
+    });
+
+    const nodes = new NodeManager(handle, nodeRA, blob, {
+        defaultQuota,
+        accountDeletionDays,
+        deletionSchedule: (userID) => accountDeletions.scheduleFor(userID),
+    });
+
+    const purgeAccount = (userID : string) : Promise<void> => deleteAccount({
+        auth,
+        nodes: nodeRA,
+        shares: shareRA,
+        purger: nodes,
+        avatars,
+    }, userID);
     const tracker = new LastRunTracker();
 
     // The same suppliers bootApp wires, so a spec can lower a retention through the settings route and have the very
@@ -202,7 +229,7 @@ export function composeFullApp(
         avatars,
         nodes,
         shares: new ShareManager(handle, nodeRA, shareRA, userRA),
-        publicLinks: new PublicLinkManager(nodeRA, blob, new PublicLinkRA(handle), (userID, nodeID) =>
+        publicLinks: new PublicLinkManager(nodeRA, blob, publicLinkRA, (userID, nodeID) =>
             shareRA.effectiveRole(userID, nodeID)),
         deletionOffers: new DeletionOfferManager(handle, nodes),
         adminStatus: new StatusManager({
@@ -223,23 +250,23 @@ export function composeFullApp(
                 gc: () => runGcOnce({ blob, graceMs: gcGraceMs }),
                 trashPurge: () => runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: trashGraceMs }),
                 partials: async () => ({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 }),
+                accountDeletion: () => runAccountDeletionOnce({
+                    users: userRA,
+                    deleteAccount: purgeAccount,
+                    windowMs: async () => await accountDeletionDays() * MS_PER_DAY,
+                }),
             },
             tracker,
         }),
         users: new UserManager(userRA),
         settings,
         branding: new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes }),
+        accountDeletions,
         admins: new AdminManager({
             auth,
             users: userRA,
             usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
-            deleteAccount: (userID) => deleteAccount({
-                auth,
-                nodes: nodeRA,
-                shares: shareRA,
-                purger: nodes,
-                avatars,
-            }, userID),
+            deleteAccount: purgeAccount,
             defaultQuota,
         }),
         mail,

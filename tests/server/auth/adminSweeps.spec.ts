@@ -88,6 +88,7 @@ function mountAdmin(runners ?: Partial<SweepRunners>) : void
             gc: () => runGcOnce({ blob: booted.blob, graceMs: async () => GRACE_MS }),
             trashPurge: () => runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: async () => GRACE_MS }),
             partials: async () => ({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 }),
+            accountDeletion: async () => ({ candidates: 0, deleted: 0, failed: 0 }),
             ...runners,
         },
         tracker,

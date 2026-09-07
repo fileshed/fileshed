@@ -86,7 +86,8 @@ import { UserRA } from './resource-access/users/index.ts';
 // Managers
 import { AccessTokenManager } from './managers/accessToken.ts';
 import { AdminManager } from './managers/admin.ts';
-import { deleteAccount } from './managers/accountDeletion.ts';
+import { AccountDeletionManager, deleteAccount } from './managers/accountDeletion.ts';
+import { runAccountDeletionOnce } from './managers/accountDeletionSweep.ts';
 import { managedAuthSecretFile, resolveAuthSecret } from './managers/authSecret.ts';
 import { AvatarManager } from './managers/avatar.ts';
 import { BlobManager } from './managers/blob.ts';
@@ -194,6 +195,7 @@ export interface AppServices
     settings : SettingsManager;
     branding : BrandingManager;
     admins : AdminManager;
+    accountDeletions : AccountDeletionManager;
     mail : MailManager;
 
     // The size caps /api/instance publishes, resolved per request so a raised cap needs no restart.
@@ -389,7 +391,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             app.route('/api', createUploadRoutes(sessions, services.blobs, services.mediaTags));
             app.route('/api', createNodeRoutes(sessions, services.nodes));
             app.route('/api', createSearchRoutes(sessions, services.nodes));
-            app.route('/api', createMeRoutes(sessions, services.nodes));
+            app.route('/api', createMeRoutes(sessions, services.nodes, services.accountDeletions));
             app.route('/api', createCredentialRoutes(sessions, services.credentials));
             app.route('/api', createUserRoutes(sessions, services.users));
             app.route('/api', createAvatarRoutes(sessions, services.avatars, services.nodes));
@@ -523,6 +525,7 @@ export async function bootApp(options : BootOptions = {})
     const nodeRA = new NodeRA(handle);
     const shareRA = new ShareRA(handle);
     const userRA = new UserRA(handle);
+    const publicLinkRA = new PublicLinkRA(handle);
     const tracker = new LastRunTracker();
 
     // The tunables are closures over the settings manager, resolved per use: an admin override applies to the very
@@ -535,6 +538,8 @@ export async function bootApp(options : BootOptions = {})
     const trashPurgeDays = () : Promise<number> => settings.numberValue('TRASH_PURGE_DAYS', config.TRASH_PURGE_DAYS);
     const gcGraceDays = () : Promise<number> => settings.numberValue('GC_GRACE_DAYS', config.GC_GRACE_DAYS);
     const gcGraceMs = async () : Promise<number> => await gcGraceDays() * MS_PER_DAY;
+    const accountDeletionDays = () : Promise<number> =>
+        settings.numberValue('ACCOUNT_DELETION_DAYS', config.ACCOUNT_DELETION_DAYS);
     const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
 
     // A tuned chunk size is worth one line in the boot log: it changes how every client cuts its uploads, and an
@@ -556,10 +561,21 @@ export async function bootApp(options : BootOptions = {})
     const credentials = new CredentialManager({ auth, handle });
     const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
     const branding = new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes });
+    const accountDeletions = new AccountDeletionManager({
+        auth,
+        handle,
+        users: userRA,
+        shares: shareRA,
+        links: publicLinkRA,
+        deletionDays: accountDeletionDays,
+    });
+
     const nodes = new NodeManager(handle, nodeRA, blob, {
         offerGraceMs: gcGraceMs,
         trashRetentionDays: trashPurgeDays,
+        accountDeletionDays,
         defaultQuota,
+        deletionSchedule: (userID) => accountDeletions.scheduleFor(userID),
     });
     const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
     const users = new UserManager(userRA);
@@ -579,6 +595,16 @@ export async function bootApp(options : BootOptions = {})
         signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),
     });
 
+    // One deletion, however it was asked for: an admin deleting somebody and a self-requested deletion falling due
+    // are the same act on the same dependencies.
+    const purgeAccount = (userID : string) : Promise<void> => deleteAccount({
+        auth,
+        nodes: nodeRA,
+        shares: shareRA,
+        purger: nodes,
+        avatars,
+    }, userID);
+
     // Both grace windows are resolved per sweep rather than closed over once, so an admin who lowers a retention and
     // then runs the sweep gets the window they just set, not the one this process booted with. The partials window is
     // no setting at all: it is the ticket TTL, the point past which no chunk of that upload can still be honoured.
@@ -591,6 +617,11 @@ export async function bootApp(options : BootOptions = {})
                 graceMs: async () => await trashPurgeDays() * MS_PER_DAY,
             }),
             partials: () => runPartialsOnce({ blob, ttlMs: TICKET_TTL_MS }),
+            accountDeletion: () => runAccountDeletionOnce({
+                users: userRA,
+                deleteAccount: purgeAccount,
+                windowMs: async () => await accountDeletionDays() * MS_PER_DAY,
+            }),
         },
         tracker,
     });
@@ -599,13 +630,7 @@ export async function bootApp(options : BootOptions = {})
         auth,
         users: userRA,
         usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
-        deleteAccount: (userID) => deleteAccount({
-            auth,
-            nodes: nodeRA,
-            shares: shareRA,
-            purger: nodes,
-            avatars,
-        }, userID),
+        deleteAccount: purgeAccount,
         defaultQuota,
     });
 
@@ -620,7 +645,7 @@ export async function bootApp(options : BootOptions = {})
     const publicLinks = new PublicLinkManager(
         nodeRA,
         blob,
-        new PublicLinkRA(handle),
+        publicLinkRA,
         (userID, nodeID) => shareRA.effectiveRole(userID, nodeID)
     );
 
@@ -628,7 +653,7 @@ export async function bootApp(options : BootOptions = {})
     // Recurring work
     //------------------------------------------------------------------------------------------------------------------
 
-    // The two sweeps that read the database run on the configured interval. Every sweep also runs at boot, and that
+    // The three sweeps that read the database run on the configured interval. Every sweep also runs at boot, and that
     // pass matters more than it looks: a deployment restarted more often than its interval would otherwise never
     // sweep at all, and the admin status page would report an eternal "never".
     const sweepIntervalMs = config.GC_INTERVAL_MINUTES * MS_PER_MINUTE;
@@ -646,6 +671,15 @@ export async function bootApp(options : BootOptions = {})
         intervalMs: sweepIntervalMs,
         immediate: true,
         run: () => sweeps.runScheduled('trashPurge'),
+    });
+
+    // Accounts whose deletion window has run out. On the sweep interval like the other two database sweeps: the
+    // window is measured in days, so an hour either side of due is not a promise anyone made.
+    timers.register({
+        name: 'sweep.accountDeletion',
+        intervalMs: sweepIntervalMs,
+        immediate: true,
+        run: () => sweeps.runScheduled('accountDeletion'),
     });
 
     // The partials reaper comes round far more often, on a cadence of its own: it only reads the staging directory,
@@ -690,6 +724,7 @@ export async function bootApp(options : BootOptions = {})
         settings,
         branding,
         admins,
+        accountDeletions,
         mail,
         limits: async () =>
         {

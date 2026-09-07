@@ -1,8 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Account Tab
   --
-  -- The account area's account-management tab: the storage summary, the password change control, and the connected
-  -- sign-in methods. Each owns its own data and mutation; the tab only groups them under section headings.
+  -- The account area's account-management tab: the storage summary, the password change control, the connected
+  -- sign-in methods, and the way out. Each owns its own data and mutation; the tab only groups them under section
+  -- headings.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -34,6 +35,13 @@
             </h2>
             <RevokeCredentials />
         </section>
+
+        <section class="flex flex-col gap-3">
+            <h2 class="text-lg font-semibold text-highlighted">
+                Closing this account
+            </h2>
+            <DeleteAccount />
+        </section>
     </div>
 </template>
 
@@ -44,6 +52,7 @@
     import AccountStorage from '../../components/account/accountStorage.vue';
     import ChangePassword from '../../components/account/changePassword.vue';
     import ConnectedAccounts from '../../components/account/connectedAccounts.vue';
+    import DeleteAccount from '../../components/account/deleteAccount.vue';
     import RevokeCredentials from '../../components/account/revokeCredentials.vue';
 </script>
 

@@ -133,7 +133,11 @@ export {
     type ChallengeAnswerReplace,
     type ChallengeAnswerRequest,
 } from './models/requests/blobs.ts';
-export { type MeResponse, type UpdatePreferencesRequest } from './models/requests/me.ts';
+export {
+    type AccountDeletionSchedule,
+    type MeResponse,
+    type UpdatePreferencesRequest,
+} from './models/requests/me.ts';
 export { type UserLookupQuery } from './models/requests/users.ts';
 export { type PublicLinkResponse, type PublicLinkListResponse } from './models/requests/publicLinks.ts';
 export {
@@ -164,13 +168,16 @@ export {
     type GcRunSummary,
     type TrashPurgeRunSummary,
     type PartialsRunSummary,
+    type AccountDeletionRunSummary,
     type GcRunStatus,
     type TrashPurgeRunStatus,
     type PartialsRunStatus,
+    type AccountDeletionRunStatus,
     type SweepKind,
     type GcSweepRunResponse,
     type TrashPurgeSweepRunResponse,
     type PartialsSweepRunResponse,
+    type AccountDeletionSweepRunResponse,
     type SweepRunResponse,
     type OverviewUsers,
     type OverviewNodes,

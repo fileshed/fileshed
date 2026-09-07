@@ -34,10 +34,11 @@ export function meFixture(overrides : Partial<MeResponse> = {}) : MeResponse
         name: 'Ada Lovelace',
         role: 'user',
         quota: { used: 0, effective: null, limit: null },
-        limits: { trashRetentionDays: 30 },
+        limits: { trashRetentionDays: 30, accountDeletionDays: 30 },
         preferences: {},
         image: null,
         createdAt: '2026-07-20T00:00:00.000Z',
+        deletion: null,
         ...overrides,
     };
 }

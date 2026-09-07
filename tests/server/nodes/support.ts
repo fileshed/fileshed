@@ -31,6 +31,7 @@ import { createMeRoutes } from '@server/routes/me.ts';
 
 // Support
 import type { BootedApp } from '../auth/support.ts';
+import { accountDeletionsFor } from '../support/accountDeletions.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Orphaned-blob doubles
@@ -84,7 +85,7 @@ export function composeNodeApp(
     app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => booted.auth.handler(ctx.req.raw));
     app.route('/api', createNodeRoutes(sessions, nodes));
     app.route('/api', createSearchRoutes(sessions, nodes));
-    app.route('/api', createMeRoutes(sessions, nodes));
+    app.route('/api', createMeRoutes(sessions, nodes, accountDeletionsFor(booted.auth, booted.handle)));
 
     app.onError((error, ctx) =>
     {

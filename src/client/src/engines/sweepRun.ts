@@ -6,7 +6,13 @@
 // rather than a shared vocabulary that would fit none of them.
 //----------------------------------------------------------------------------------------------------------------------
 
-import type { GcRunSummary, PartialsRunSummary, SweepRunResponse, TrashPurgeRunSummary } from '@fileshed/core';
+import type {
+    AccountDeletionRunSummary,
+    GcRunSummary,
+    PartialsRunSummary,
+    SweepRunResponse,
+    TrashPurgeRunSummary,
+} from '@fileshed/core';
 
 // Utils
 import { formatBytes } from '../utils/formatters/index.ts';
@@ -54,6 +60,17 @@ export function describePartialsRun(summary : PartialsRunSummary) : string
     return `${ parts.join(', ') }.`;
 }
 
+// Accounts, and no byte figure at all: what a deletion frees is graveyarded rather than gone, and the collector is
+// the sweep that reports bytes.
+export function describeAccountDeletionRun(summary : AccountDeletionRunSummary) : string
+{
+    const parts = [ `${ summary.deleted } of ${ summary.candidates } deleted` ];
+
+    if(summary.failed > 0) { parts.push(`${ summary.failed } failed`); }
+
+    return `${ parts.join(', ') }.`;
+}
+
 export function describeSweepRun(run : SweepRunResponse) : string
 {
     switch (run.sweep)
@@ -61,6 +78,7 @@ export function describeSweepRun(run : SweepRunResponse) : string
         case 'gc': return describeGcRun(run.summary);
         case 'trashPurge': return describeTrashPurgeRun(run.summary);
         case 'partials': return describePartialsRun(run.summary);
+        case 'accountDeletion': return describeAccountDeletionRun(run.summary);
     }
 }
 

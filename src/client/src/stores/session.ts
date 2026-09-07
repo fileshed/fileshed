@@ -46,6 +46,11 @@ export const useSessionStore = defineStore('session', () =>
     const isAuthenticated = computed(() => me.value !== null);
     const isAdmin = computed(() => me.value?.role === 'admin');
 
+    // The account has asked to be deleted and the window has yet to run out. Everything but the interstitial is
+    // refused by the server while this holds, so the router sends them there rather than to a drive that would only
+    // answer 403.
+    const isClosing = computed(() => me.value?.deletion != null);
+
     // The files-root name, with the default standing in until the user sets one. The single place that fallback lives,
     // so every surface that renders the root -- sidebar, breadcrumb, move picker -- reads it here.
     const rootLabel = computed(() => me.value?.preferences.rootLabel ?? DEFAULT_ROOT_LABEL);
@@ -226,6 +231,7 @@ export const useSessionStore = defineStore('session', () =>
         initialized,
         isAuthenticated,
         isAdmin,
+        isClosing,
         rootLabel,
         timeFormat,
         editorTheme,

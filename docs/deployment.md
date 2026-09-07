@@ -103,7 +103,9 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `UPLOAD_CHUNK_BYTES` | no | 8 MiB | Bytes per upload request. Minimum 1 MiB. See below. |
 | `AVATAR_MAX_BYTES` | no | 2 MiB | Avatar image cap. |
 | `GC_GRACE_DAYS` | no | 7 | Days a dereferenced blob lingers before deletion. |
-| `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, media-tag backfill). Abandoned upload staging is reclaimed on a fixed one-minute cadence of its own, since it costs only a directory read. |
+| `TRASH_PURGE_DAYS` | no | 30 | Days a trashed item survives before it is permanently deleted. 0 purges on the next sweep. Also settable in the admin Settings tab. |
+| `ACCOUNT_DELETION_DAYS` | no | 30 | Days a deletion somebody requests for their own account waits before it is carried out. Minimum 1: the delay is what stops a stolen session destroying the account on the spot. Also settable in the admin Settings tab. |
+| `GC_INTERVAL_MINUTES` | no | 60 | Maintenance sweep cadence (GC, trash purge, account deletion, media-tag backfill). Abandoned upload staging is reclaimed on a fixed one-minute cadence of its own, since it costs only a directory read. |
 | `FILESHED_SETUP_TOKEN` | no | — | Operator-chosen first-run setup token (for automation); omit to use the boot-printed code. |
 | `SMTP_HOST` | no | — | Outgoing mail server; unset leaves email off. Also settable in the admin Email tab. |
 | `SMTP_PORT` | no | 587 | 587 (STARTTLS) or 465 (TLS). |

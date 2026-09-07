@@ -80,6 +80,7 @@ function statusFixture(overrides : Partial<AdminStatusResponse> = {}) : AdminSta
             ranAt: '2026-07-28T10:30:00.000Z',
             summary: { candidates: 5, reclaimed: 5, failed: 0, bytesFreed: 120_000 },
         },
+        accountDeletion: null,
         ...overrides,
     };
 }

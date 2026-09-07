@@ -192,10 +192,20 @@ const partialsRunStatusCodec = z.strictObject({
     }),
 });
 
+const accountDeletionRunStatusCodec = z.strictObject({
+    ranAt: isoDateTimeCodec,
+    summary: z.strictObject({
+        candidates: wholeCount,
+        deleted: wholeCount,
+        failed: wholeCount,
+    }),
+});
+
 export const sweepRunResponseCodec = z.discriminatedUnion('sweep', [
     gcRunStatusCodec.extend({ sweep: z.literal('gc') }),
     trashPurgeRunStatusCodec.extend({ sweep: z.literal('trashPurge') }),
     partialsRunStatusCodec.extend({ sweep: z.literal('partials') }),
+    accountDeletionRunStatusCodec.extend({ sweep: z.literal('accountDeletion') }),
 ]);
 
 typeAssert<Equals<z.output<typeof sweepRunResponseCodec>, SweepRunResponse>>();
@@ -240,6 +250,7 @@ export const adminStatusResponseCodec = z.strictObject({
     gc: gcRunStatusCodec.nullable(),
     trashPurge: trashPurgeRunStatusCodec.nullable(),
     partials: partialsRunStatusCodec.nullable(),
+    accountDeletion: accountDeletionRunStatusCodec.nullable(),
 });
 
 typeAssert<Equals<z.output<typeof adminStatusResponseCodec>, AdminStatusResponse>>();

@@ -65,6 +65,8 @@ const EXPECTED_ROUTES = [
     // Me
     'GET /api/me',
     'PATCH /api/me/preferences',
+    'POST /api/me/deletion',
+    'DELETE /api/me/deletion',
     'POST /api/me/revoke-credentials',
 
     // Access tokens (the only key-management surface; the plugin's own endpoints are gated shut)

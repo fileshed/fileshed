@@ -164,6 +164,17 @@
             };
         }
 
+        // Asking for the account to be deleted ends every session, this one included. Signing back in is how they
+        // reach the page that says when it goes and offers to call it off.
+        if(route.query.reason === 'deletion-requested')
+        {
+            return {
+                description: 'Your account is scheduled for deletion and you were signed out everywhere. Sign in to '
+                    + 'see the date, or to cancel it.',
+                color: 'warning',
+            };
+        }
+
         return null;
     });
 

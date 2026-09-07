@@ -15,6 +15,7 @@
 
 // Models
 import {
+    type AccountDeletionRunSummary,
     ConflictError,
     ForbiddenError,
     type GcRunSummary,
@@ -43,6 +44,7 @@ const sweepLabels : Record<SweepKind, string> = {
     gc: 'garbage collection',
     trashPurge: 'trash purge',
     partials: 'abandoned upload',
+    accountDeletion: 'account deletion',
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -55,6 +57,7 @@ export interface SweepRunners
     gc : () => Promise<GcRunSummary>;
     trashPurge : () => Promise<TrashPurgeRunSummary>;
     partials : () => Promise<PartialsRunSummary>;
+    accountDeletion : () => Promise<AccountDeletionRunSummary>;
 }
 
 export interface SweepManagerDeps
@@ -156,6 +159,13 @@ export class SweepManager
                 const last = this.#tracker.recordPartials(await this.#runners.partials());
 
                 return { sweep: 'partials', ranAt: last.at.toISOString(), summary: last.summary };
+            }
+
+            case 'accountDeletion':
+            {
+                const last = this.#tracker.recordAccountDeletion(await this.#runners.accountDeletion());
+
+                return { sweep: 'accountDeletion', ranAt: last.at.toISOString(), summary: last.summary };
             }
         }
     }
