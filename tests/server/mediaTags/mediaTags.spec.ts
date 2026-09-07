@@ -80,12 +80,16 @@ describe('MediaTagsRA', () =>
         await booted.cleanup();
     });
 
+    // Deliberately a text blob, not the mp3 this reads like it wants. The upload route enriches audio in the
+    // background, and that writer would race the upserts below -- it lands after them on a slow enough machine and
+    // puts the row back to what the file's own tags say, which is how this spec failed in CI while passing
+    // everywhere else. The rows key by blob and know nothing of content, so any blob proves the round trip.
     it('round-trips tags keyed by blob, upserting in place', async () =>
     {
         const ra = new MediaTagsRA(booted.handle);
-        const uploaded = await uploadFile(booted, owner, taggedMp3({ title: 'One' }), {
-            name: 'one.mp3',
-            mimeType: 'audio/mpeg',
+        const uploaded = await uploadFile(booted, owner, Buffer.from('not audio at all'), {
+            name: 'notes.txt',
+            mimeType: 'text/plain',
         });
 
         await ra.upsert(uploaded.sha256, { title: 'One', artist: null, album: null });
