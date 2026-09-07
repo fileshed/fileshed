@@ -5,8 +5,10 @@
   -- resolved to nothing, and otherwise the result count line plus a dense row per hit -- name with its sharing, plus
   -- owner, size, modified, and type, the same facts the drive's list view shows. The name outranks the metadata
   -- columns, which leave as the surface narrows until only the name and the go-to-folder jump remain. Opening relays up
-  -- so the page runs the shared open intent; there is no selection and no per-row menu here, since search is a finder,
-  -- not a manager. Reads the search store for its listing state directly.
+  -- so the page runs the shared open intent. Selection relays up the same way, with the drive's gestures exactly --
+  -- click, ctrl/cmd-click, shift-click -- so cleaning up hits scattered across folders needs no folder visits. There
+  -- is no per-row menu: the actions live on the selection bar, where they can be judged against the whole selection.
+  -- Reads the search store for its listing state directly.
   --
   -- One request answers a search in full, so the rows are all here at once and only the ones in view are mounted. The
   -- column header sits outside the scroller, so it pads itself by the scrollbar the scroller always reserves.
@@ -60,6 +62,7 @@
                 :items="rows"
                 :item-height="rowHeight"
                 :item-key="(row : ResultRow) => row.node.id"
+                @empty-click="emit('clear-empty')"
             >
                 <template #default="{ item: row } : { item : ResultRow }">
                     <div
@@ -67,10 +70,13 @@
                             sm:grid-cols-[minmax(0,1fr)_9rem_2.5rem]
                             lg:grid-cols-[minmax(0,1fr)_7rem_9rem_2.5rem]
                             xl:grid-cols-[minmax(0,1fr)_10rem_6rem_9rem_6rem_2.5rem] items-center gap-2 border-b
-                            border-default px-3 text-sm transition-colors hover:bg-elevated/50 sm:h-12 sm:gap-4"
+                            border-default px-3 text-sm transition-colors sm:h-12 sm:gap-4"
+                        :class="selection.has(row.node.id) ? 'bg-primary/10' : 'hover:bg-elevated/50'"
                         role="button"
                         tabindex="0"
+                        :aria-selected="selection.has(row.node.id)"
                         :aria-label="row.node.name"
+                        @click="emit('select', row.node, $event)"
                         @dblclick="emit('open', row.node)"
                         @keydown.enter="emit('open', row.node)"
                     >
@@ -123,6 +129,7 @@
                             size="xs"
                             :aria-label="`Open the folder containing ${ row.node.name }`"
                             :title="`Open the folder containing ${ row.node.name }`"
+                            @click.stop
                         />
                     </div>
                 </template>
@@ -167,8 +174,14 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
+    defineProps<{
+        selection : ReadonlySet<string>;
+    }>();
+
     const emit = defineEmits<{
-        open : [ node : NodeResponse ];
+        'select' : [ node : NodeResponse, event : MouseEvent ];
+        'open' : [ node : NodeResponse ];
+        'clear-empty' : [];
     }>();
 
     const store = useSearchStore();

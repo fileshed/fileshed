@@ -7,6 +7,11 @@
 // surface more hits than the server's candidate cap, and the largest page it will serve is that same cap, so one
 // request answers any search in full -- there is nothing here to page. A blank query never reaches the RA -- the page
 // calls load only once it has a non-empty term -- so there is no listing-vs-no-query ambiguity to track here.
+//
+// The mutations a selection can run from here are the drive's, minus the drive: each hits the same node routes and
+// then re-runs the search, because the results are the listing that has to settle and the caller's open folder --
+// whichever it was -- is not on screen. A copy from here lands in the caller's own root rather than a current folder,
+// there being no such thing on this surface.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -19,7 +24,11 @@ import {
     type UserSummary,
 } from '@fileshed/core';
 
+// Stores
+import { useSessionStore } from './session.ts';
+
 // Resource Access
+import { copyNode, hardDeleteNode, trashNode } from '../resource-access/nodes.ts';
 import { search } from '../resource-access/search.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -70,6 +79,35 @@ export const useSearchStore = defineStore('search', () =>
         await load(q.value);
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    // Mutations
+    //------------------------------------------------------------------------------------------------------------------
+
+    async function trash(id : string) : Promise<void>
+    {
+        await trashNode(id);
+        await retry();
+    }
+
+    // A dead link is removed rather than trashed: links carry no trashed_at, so removal is the only way out of a
+    // listing for one.
+    async function removeDeadLink(id : string) : Promise<void>
+    {
+        await hardDeleteNode(id);
+        await retry();
+    }
+
+    // Into the caller's root, the only destination this surface can name. The copy charges their quota, so the gauge
+    // refreshes with it.
+    async function copy(id : string) : Promise<void>
+    {
+        await copyNode(id, { parentID: null });
+        await retry();
+        await useSessionStore()
+            .refreshProfile()
+            .catch(() => undefined);
+    }
+
     function clear() : void
     {
         q.value = '';
@@ -91,6 +129,9 @@ export const useSearchStore = defineStore('search', () =>
         isEmpty,
         load,
         retry,
+        trash,
+        removeDeadLink,
+        copy,
         clear,
     };
 });
