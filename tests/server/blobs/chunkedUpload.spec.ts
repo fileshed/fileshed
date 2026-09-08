@@ -129,6 +129,9 @@ function stallingChunk(bytes : Buffer) : StallingChunk
 // the manager marks the ticket as receiving before it ever asks the store to append. The transport is no help here --
 // a request body can be pulled while the request is still on its way to the handler, so a spec that keyed off the wire
 // would race the very state it means to stand inside.
+//
+// The budget is well inside the suite's own, deliberately: a wait allowed to run as long as the test may live can
+// only ever be reported as "the test timed out", naming neither what was awaited nor how close it came.
 async function whenReceiving() : Promise<void>
 {
     const deadline = Date.now() + 5000;

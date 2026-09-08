@@ -6,13 +6,17 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Test support
-import { dropOrphanedDatabases } from './database.ts';
+import { closeAdminClient, dropOrphanedDatabases } from './database.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export async function setup() : Promise<void>
 {
     await dropOrphanedDatabases();
+
+    // This runs in vitest's own process, which has no afterAll to close what the sweep opened -- and an admin
+    // connection left open here keeps the whole run from exiting once the last worker is done.
+    await closeAdminClient();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

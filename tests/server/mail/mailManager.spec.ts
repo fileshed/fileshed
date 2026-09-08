@@ -73,6 +73,9 @@ beforeEach(async () =>
 
 // The auth-flow senders are deliberately fire-and-forget, so a send reaches the transport however many real round
 // trips the settings read takes -- a microtask flush would only ever prove the SQLite timing.
+// Comfortably inside the suite's own test budget, which is the whole point of the number: a wait allowed to run as
+// long as the test may live can only ever be reported as "the test timed out", naming neither what was awaited nor
+// how close it came. Failing first, and by its own assertion, is what makes a slow send legible.
 async function awaitSendAttempts(count : number) : Promise<void>
 {
     await vi.waitFor(() => expect(transport.attempts).toBe(count), { timeout: 5000, interval: 10 });

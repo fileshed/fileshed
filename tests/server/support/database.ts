@@ -46,14 +46,44 @@ export interface TestDatabase
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// One admin connection per spec file rather than one per call. A run provisions around nine hundred databases and
+// sweeps after each test, and every one of those used to cost a fresh connect and disconnect -- some eighteen
+// hundred backend forks against a server that is already the run's bottleneck. The file-scoped afterAll in
+// support/setup.ts closes it, so nothing is left holding the event loop open when a worker is done.
+let admin : Client | null = null;
+
+async function adminClient() : Promise<Client>
+{
+    if(admin !== null) { return admin; }
+
+    const client = new Client({ connectionString: ADMIN_URL });
+    await client.connect();
+    admin = client;
+
+    return client;
+}
+
+export async function closeAdminClient() : Promise<void>
+{
+    const client = admin;
+    admin = null;
+
+    if(client !== null) { await client.end().catch(() => undefined); }
+}
+
+// A query error leaves the connection perfectly usable, but a connection-level one does not, and the two are not
+// worth telling apart here: dropping the client means the next caller reconnects, which is the only recovery either
+// case has.
 export async function onAdmin(run : (client : Client) => Promise<void>) : Promise<void>
 {
-    const client = new Client({ connectionString: ADMIN_URL });
-
-    await client.connect();
+    const client = await adminClient();
 
     try { await run(client); }
-    finally { await client.end(); }
+    catch(error)
+    {
+        await closeAdminClient();
+        throw error;
+    }
 }
 
 // Swap the database name into the admin URL, keeping credentials, host and query parameters exactly as given.
