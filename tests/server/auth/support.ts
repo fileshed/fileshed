@@ -31,6 +31,7 @@ import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
 import { AdminManager } from '@server/managers/admin.ts';
+import { ArchiveManager } from '@server/managers/archive.ts';
 import { AccountDeletionManager, deleteAccount } from '@server/managers/accountDeletion.ts';
 import { runAccountDeletionOnce } from '@server/managers/accountDeletionSweep.ts';
 import { AvatarManager } from '@server/managers/avatar.ts';
@@ -231,6 +232,11 @@ export function composeFullApp(
         shares: new ShareManager(handle, nodeRA, shareRA, userRA),
         publicLinks: new PublicLinkManager(nodeRA, blob, publicLinkRA, (userID, nodeID) =>
             shareRA.effectiveRole(userID, nodeID)),
+        archives: new ArchiveManager({
+            nodes: nodeRA,
+            blob,
+            resolveRoles: (userID, nodeIDs) => shareRA.effectiveRoles(userID, nodeIDs),
+        }),
         deletionOffers: new DeletionOfferManager(handle, nodes),
         adminStatus: new StatusManager({
             blob,

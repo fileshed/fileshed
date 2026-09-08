@@ -37,6 +37,7 @@ const FULL_CAPS = {
     count: 2,
     canCopy: true,
     copyTooltip: 'Make a copy',
+    canDownload: true,
     canRename: true,
     canShare: true,
     canMove: true,
@@ -49,10 +50,51 @@ function mountBar(overrides : Partial<typeof FULL_CAPS> = {}) : VueWrapper
     return mount(SelectionBar, { props: { ...FULL_CAPS, ...overrides }, global: { stubs: STUBS } });
 }
 
+// Both the overflow menu and the Download menu render through the same stub, so each is reached by the identity the
+// component gives it rather than by the stub's own class.
 function overflowItems(wrapper : VueWrapper) : ReturnType<VueWrapper['findAll']>
 {
-    return wrapper.findAll('.overflow-menu .menu-item');
+    return wrapper.findAll('[data-menu="overflow"] .menu-item');
 }
+
+function downloadItems(wrapper : VueWrapper) : ReturnType<VueWrapper['findAll']>
+{
+    return wrapper.findAll('[data-menu="download"] .menu-item');
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('SelectionBar — Download', () =>
+{
+    // Downloading asks only read access, so it is offered whatever the selection is made of and whoever owns it --
+    // the one bulk action a viewer's grant leaves standing alongside Copy.
+    it('offers both formats behind one button', () =>
+    {
+        const wrapper = mountBar({
+            canCopy: false,
+            canRename: false,
+            canShare: false,
+            canMove: false,
+            canTrash: false,
+        });
+
+        expect(downloadItems(wrapper).map((item) => item.text())).toEqual([ 'As .zip', 'As .tgz' ]);
+    });
+
+    it('names the format it was asked for', async () =>
+    {
+        const wrapper = mountBar();
+
+        await downloadItems(wrapper)[1]?.trigger('click');
+
+        expect(wrapper.emitted('download')?.[0]).toEqual([ 'tgz' ]);
+    });
+
+    it('offers nothing to download when the caps withhold it', () =>
+    {
+        expect(downloadItems(mountBar({ canDownload: false }))).toHaveLength(0);
+    });
+});
 
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -47,6 +47,7 @@ import { createMeRoutes } from './routes/me.ts';
 import { createAccessRequestRoutes } from './routes/accessRequests.ts';
 import { createDeletionOfferRoutes } from './routes/deletionOffers.ts';
 import { createDirectRoutes } from './routes/direct.ts';
+import { createArchiveRoutes } from './routes/archives.ts';
 import { createDownloadRoutes } from './routes/downloads.ts';
 import { createNodeRoutes } from './routes/nodes.ts';
 import { mountApiReference, mountOpenApiSpec } from './routes/openapi.ts';
@@ -86,6 +87,7 @@ import { UserRA } from './resource-access/users/index.ts';
 // Managers
 import { AccessTokenManager } from './managers/accessToken.ts';
 import { AdminManager } from './managers/admin.ts';
+import { ArchiveManager } from './managers/archive.ts';
 import { AccountDeletionManager, deleteAccount } from './managers/accountDeletion.ts';
 import { runAccountDeletionOnce } from './managers/accountDeletionSweep.ts';
 import { managedAuthSecretFile, resolveAuthSecret } from './managers/authSecret.ts';
@@ -187,6 +189,7 @@ export interface AppServices
     nodes : NodeManager;
     shares : ShareManager;
     publicLinks : PublicLinkManager;
+    archives : ArchiveManager;
     deletionOffers : DeletionOfferManager;
     adminStatus : StatusManager;
     sweeps : SweepManager;
@@ -398,6 +401,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             app.route('/api', createShareRoutes(sessions, services.shares));
             app.route('/api', createAccessRequestRoutes(sessions, services.shares));
             app.route('/api', createDownloadRoutes(sessions, services.publicLinks));
+            app.route('/api', createArchiveRoutes(sessions, services.archives));
             app.route('/api', createPublicLinkRoutes(sessions, services.publicLinks));
             app.route('/api', createDeletionOfferRoutes(sessions, services.deletionOffers));
             app.route('/d', createDirectRoutes(services.publicLinks));
@@ -649,6 +653,14 @@ export async function bootApp(options : BootOptions = {})
         (userID, nodeID) => shareRA.effectiveRole(userID, nodeID)
     );
 
+    // One batched role resolution for the whole walk rather than one per node: an archive of a deep folder would
+    // otherwise ask the same question thousands of times.
+    const archives = new ArchiveManager({
+        nodes: nodeRA,
+        blob,
+        resolveRoles: (userID, nodeIDs) => shareRA.effectiveRoles(userID, nodeIDs),
+    });
+
     //------------------------------------------------------------------------------------------------------------------
     // Recurring work
     //------------------------------------------------------------------------------------------------------------------
@@ -716,6 +728,7 @@ export async function bootApp(options : BootOptions = {})
         nodes,
         shares,
         publicLinks,
+        archives,
         deletionOffers,
         adminStatus,
         sweeps,

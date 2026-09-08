@@ -42,6 +42,7 @@ import {
 } from '@fileshed/core';
 
 // Engines
+import { contentDisposition } from '../engines/contentDisposition.ts';
 import { servedContentType } from '../engines/servedContentType.ts';
 
 // Resource Access
@@ -143,25 +144,6 @@ function parseRange(header : string | undefined, size : number) : RangePlan
 function strongEtag(sha256 : string) : string
 {
     return `"${ sha256 }"`;
-}
-
-const NON_ASCII = /[^\x20-\x7e]/;
-const NON_ASCII_GLOBAL = /[^\x20-\x7e]/g;
-
-// Content-Disposition per RFC 6266: an inline hotlink or a forced download, always with a filename. A non-ASCII
-// name can't ride the quoted `filename` param, so a sanitized ASCII fallback is paired with an RFC 5987 `filename*`
-// carrying the real UTF-8 name percent-encoded. Quotes and backslashes are stripped from the fallback so they cannot
-// break out of the quoted-string, and forward slashes with them so the fallback names a file rather than a path.
-function contentDisposition(disposition : ContentDisposition, filename : string) : string
-{
-    const asciiFallback = filename.replace(NON_ASCII_GLOBAL, '_').replace(/["\\/]/g, '_');
-
-    if(NON_ASCII.test(filename))
-    {
-        return `${ disposition }; filename="${ asciiFallback }"; filename*=UTF-8''${ encodeURIComponent(filename) }`;
-    }
-
-    return `${ disposition }; filename="${ asciiFallback }"`;
 }
 
 // The node's mime type if a header can carry it, the generic binary type if it cannot. The codec refuses an unwritable

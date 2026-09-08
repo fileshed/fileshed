@@ -44,6 +44,7 @@ import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
 // Managers
 import { AccessTokenManager } from '@server/managers/accessToken.ts';
 import { BlobManager } from '@server/managers/blob.ts';
+import { ArchiveManager } from '@server/managers/archive.ts';
 import { MediaTagManager } from '@server/managers/mediaTags.ts';
 import { NodeManager } from '@server/managers/node.ts';
 import { PublicLinkManager } from '@server/managers/publicLink.ts';
@@ -55,6 +56,7 @@ import { mapManagerError } from '@server/managers/errors.ts';
 import { createBlobRoutes } from '@server/routes/blobs.ts';
 import { createDirectRoutes } from '@server/routes/direct.ts';
 import { createAccessTokenRoutes } from '@server/routes/accessTokens.ts';
+import { createArchiveRoutes } from '@server/routes/archives.ts';
 import { createDownloadRoutes } from '@server/routes/downloads.ts';
 import { createMeRoutes } from '@server/routes/me.ts';
 import { createNodeRoutes } from '@server/routes/nodes.ts';
@@ -122,6 +124,11 @@ function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
     app.route('/api', createNodeRoutes(sessions, nodes));
     app.route('/api', createShareRoutes(sessions, shares));
     app.route('/api', createDownloadRoutes(sessions, links));
+    app.route('/api', createArchiveRoutes(sessions, new ArchiveManager({
+        nodes: nodeRA,
+        blob,
+        resolveRoles: (userID, nodeIDs) => shareRA.effectiveRoles(userID, nodeIDs),
+    })));
     app.route('/api', createPublicLinkRoutes(sessions, links));
     app.route('/d', createDirectRoutes(links));
 
@@ -249,13 +256,38 @@ export async function forceMimeType(booted : BootedServeApp, nodeID : string, mi
         .execute();
 }
 
-export async function createFolder(booted : BootedServeApp, user : TestUser, name = 'folder') : Promise<NodeResponse>
+export async function createFolder(
+    booted : BootedServeApp,
+    user : TestUser,
+    name = 'folder',
+    parentID : string | null = null
+) : Promise<NodeResponse>
 {
     const res = await booted.app.request(`${ ORIGIN }/api/nodes`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'cookie': user.cookie },
-        body: JSON.stringify({ type: 'folder', name }),
+        body: JSON.stringify({ type: 'folder', name, parentID }),
     });
+    return res.json() as Promise<NodeResponse>;
+}
+
+// A LINK NODE -- a placement in the caller's own tree pointing at a node that may well be somebody else's, which is
+// what makes a link worth having and what makes its access a question about the target. Not to be confused with
+// createLink below, which mints a public link.
+export async function createNodeLink(
+    booted : BootedServeApp,
+    user : TestUser,
+    targetNodeID : string,
+    parentID : string | null = null,
+    name ?: string
+) : Promise<NodeResponse>
+{
+    const res = await booted.app.request(`${ ORIGIN }/api/nodes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'cookie': user.cookie },
+        body: JSON.stringify({ type: 'link', targetNodeID, parentID, ...name === undefined ? {} : { name } }),
+    });
+
     return res.json() as Promise<NodeResponse>;
 }
 

@@ -682,6 +682,35 @@ export class NodeRA
         return [ ...shas ];
     }
 
+    // Every node in the subtrees rooted at `ids`, the roots included, with the facts an archive needs to lay them out:
+    // what each is, what it is called, where it hangs, and which blob holds its bytes. The walk follows parent_id only
+    // -- a link never steers it, so a link pointing back at an ancestor cannot make the walk loop -- and is bounded by
+    // the same depth every other descent here uses.
+    //
+    // Seeded from every root at once rather than once per root: a selection can name a folder and something inside it,
+    // and one walk visits that node once instead of twice.
+    async subtreeNodes(ids : readonly string[]) : Promise<Node[]>
+    {
+        if(ids.length === 0) { return []; }
+
+        const rows = await this.#db
+            .withRecursive('subtree(id, depth)', (qc) => qc
+                .selectFrom('node')
+                .select([ 'id', sql<number>`0`.as('depth') ])
+                .where('id', 'in', [ ...ids ])
+                .unionAll(qc
+                    .selectFrom('node as child')
+                    .innerJoin('subtree', 'subtree.id', 'child.parent_id')
+                    .select([ 'child.id', sql<number>`subtree.depth + 1`.as('depth') ])
+                    .where('subtree.depth', '<', MAX_TREE_DEPTH)))
+            .selectFrom('node')
+            .selectAll()
+            .where('id', 'in', (eb) => eb.selectFrom('subtree').select('id'))
+            .execute();
+
+        return rows.map(nodeFromRow);
+    }
+
     // The link children directly under `parentID` that `ownerID` placed -- the candidate set a broken-link purge
     // resolves and prunes. Scoped to the caller's own links because a purge removes only their placements, never a
     // contributor's links in a shared folder; scoped to direct children because "clean up broken links" acts on the

@@ -26,6 +26,15 @@ export const DEFAULT_SKIPPED_UPLOAD_NAMES = '.DS_Store, ._*, Thumbs.db, desktop.
 // Long enough for a considered list, short enough that the setting is a list and not a document.
 export const SKIPPED_UPLOAD_NAMES_MAX_LENGTH = 1024;
 
+// How many nodes one archive request may name. The ids travel in the query string, which every proxy between here
+// and the browser bounds -- a few hundred cuid2 ids sit comfortably inside the usual 8 KB request line. It caps the
+// SELECTION, never the archive: one folder in that selection carries however much it holds.
+export const MAX_ARCHIVE_NODES = 200;
+
+// The file an archive carries when something in the selection could not go in, written only when there is something
+// to say. Named in caps so it sorts to the top of a listing and reads as a note rather than content.
+export const ARCHIVE_SKIPPED_MANIFEST = 'SKIPPED.txt';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 // RFC 9110 media-type: `type/subtype` of tokens, then any number of `;name=value` parameters whose values are tokens

@@ -21,6 +21,7 @@
                 :count="selectedNodes.length"
                 :can-copy="canCopy"
                 :copy-tooltip="copyTooltip"
+                :can-download="selectedNodes.length > 0"
                 :can-rename="canRename"
                 :can-share="canShare"
                 :can-move="canMove"
@@ -29,6 +30,7 @@
                 @clear="clearSel"
                 @move="moveSelection"
                 @copy="copySelected"
+                @download="downloadSelected"
                 @rename="renameSingle"
                 @share="shareSingle"
                 @trash="trashSelected"
@@ -65,7 +67,8 @@
     import { useToast } from '@nuxt/ui/composables';
     import type { ContextMenuItem } from '@nuxt/ui';
 
-    import type { NodeResponse, NodeSortKey, ViewMode } from '@fileshed/core';
+    import { type ArchiveFormat, MAX_ARCHIVE_NODES, type NodeResponse, type NodeSortKey, type ViewMode }
+        from '@fileshed/core';
 
     // Stores
     import { useDriveStore } from '../stores/drive.ts';
@@ -73,6 +76,7 @@
     import { useUploadsStore } from '../stores/uploads.ts';
 
     // Resource Access
+    import { archiveUrl } from '../resource-access/downloads.ts';
     import { takeLegacyViewMode } from '../resource-access/legacyViewMode.ts';
 
     // Components
@@ -398,6 +402,30 @@
     function copyFile(node : NodeResponse) : void
     {
         void runMutation(() => store.copy(node.id));
+    }
+
+    // The selection bar's Download: one archive of the whole selection, streamed. Asks only read access, so it is
+    // offered for anything selected -- a folder recurses, and anything the caller cannot read is left out of the
+    // archive with a note rather than refusing the lot.
+    function downloadSelected(format : ArchiveFormat) : void
+    {
+        const ids = selectedNodes.value.map((node) => node.id);
+        if(ids.length === 0) { return; }
+
+        // The ids ride the URL, which bounds how many one request can name. Said here rather than left to the
+        // server: a navigation that answers 400 lands the caller on a page of JSON with no way back.
+        if(ids.length > MAX_ARCHIVE_NODES)
+        {
+            toast.add({
+                title: 'That is too much to download at once',
+                description: `Pick at most ${ MAX_ARCHIVE_NODES } items, or a folder that holds them.`,
+                color: 'warning',
+            });
+
+            return;
+        }
+
+        window.open(archiveUrl(ids, format), '_blank');
     }
 
     // The selection bar's Copy: only reachable when every selected node is a file, each copied into the current folder.

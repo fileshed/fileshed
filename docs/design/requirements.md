@@ -33,6 +33,7 @@ FileShed (`fileshed` internally — repo, package, binary) is self-hosted, multi
 | Database | **Postgres (primary target)**, SQLite (supported convenience deployment) | Deployment-time choice. Feature parity required, but when a tradeoff appears, Postgres wins and SQLite gets the workaround. |
 | Client-side hashing | hash-wasm | Incremental SHA-256 over `File.stream()`. Do NOT use `crypto.subtle.digest` (requires whole file in memory). |
 | Migrations | Kysely migrations, hand-written, dialect-aware where necessary | |
+| Archive generation | archiver | .zip and .tgz for a multi-node download, both streamed as they are built. Chosen over hand-rolling because a streaming zip is not the simple half: it needs CRC32, data descriptors and zip64, and with a 5 GB single-upload cap an archive passes 4 GB routinely. Tar is genuinely hand-writable and yazl alone would have cost two packages against archiver's forty-one, but one library covering both formats beats two halves maintained differently. 7z is out: no streaming-friendly implementation without native code. |
 
 Domain modeling convention: canonical TypeScript domain types with Zod codecs at the boundaries (DB rows ⇄ domain, API DTOs ⇄ domain). Tables serve the domain types, not vice versa. Placement: domain types, domain schemas, and API DTO schemas live in `@fileshed/core` (shared client/server); DB row shapes and row ⇄ domain transforms are a server resource-access implementation detail and never enter core.
 

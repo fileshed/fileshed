@@ -13,6 +13,8 @@
 // rather than acting on the part of the selection the caller does own.
 //----------------------------------------------------------------------------------------------------------------------
 
+import { defineComponent } from 'vue';
+
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -102,7 +104,17 @@ const STUBS = {
     },
     UIcon: true,
     UTooltip: { template: '<div><slot /></div>' },
-    UDropdownMenu: { props: [ 'items' ], template: '<div class="overflow"><slot /></div>' },
+    UDropdownMenu: defineComponent({
+        props: { items: { type: Array, default: () => [] } },
+        computed: {
+            flat() : { label : string; onSelect ?: () => void }[]
+            {
+                return (this.items as { label : string; onSelect ?: () => void }[][]).flat();
+            },
+        },
+        template: '<div class="menu"><button v-for="item in flat" :key="item.label" class="menu-item" '
+            + '@click="item.onSelect && item.onSelect()">{{ item.label }}</button><slot /></div>',
+    }),
     UAvatar: { props: [ 'src', 'alt' ], template: '<span class="avatar" :data-src="src" :data-alt="alt"></span>' },
 };
 
@@ -116,6 +128,11 @@ function resultRows(wrapper : VueWrapper) : ReturnType<VueWrapper['findAll']>
 function actionButton(wrapper : VueWrapper, label : string) : ReturnType<VueWrapper['find']>
 {
     return wrapper.find(`button[data-label="${ label }"]`);
+}
+
+function downloadItems(wrapper : VueWrapper) : ReturnType<VueWrapper['findAll']>
+{
+    return wrapper.findAll('[data-menu="download"] .menu-item');
 }
 
 async function mountSearch(query ?: string) : Promise<{ wrapper : VueWrapper; router : Router }>
@@ -517,6 +534,31 @@ describe('SearchPage selection', () =>
         await resultRows(wrapper)[0]?.trigger('click');
 
         expect(actionButton(wrapper, 'Copy').attributes('disabled')).toBeDefined();
+    });
+
+    // Downloading asks only read access, so it is offered for a foreign hit too -- and a folder among the results
+    // carries its whole tree, which is what makes a search a way to collect scattered files.
+    it('downloads the selection as one archive, in the format asked for', async () =>
+    {
+        const opened = vi.spyOn(window, 'open').mockReturnValue(null);
+
+        const wrapper = await withResults([
+            fileNode('f1', 'a.txt', ME_ID),
+            folderNode('d1', 'Archive', 'someone-else'),
+        ]);
+
+        await resultRows(wrapper)[0]?.trigger('click');
+        await resultRows(wrapper)[1]?.trigger('click', { ctrlKey: true });
+
+        const items = downloadItems(wrapper);
+        expect(items.map((item) => item.text())).toEqual([ 'As .zip', 'As .tgz' ]);
+
+        await items[1]?.trigger('click');
+        await flushPromises();
+
+        expect(opened).toHaveBeenCalledWith('/api/archives?ids=f1%2Cd1&format=tgz', '_blank');
+
+        opened.mockRestore();
     });
 
     // Links carry no trashed_at, so a links-only selection is removed rather than trashed, and the button says so.

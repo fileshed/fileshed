@@ -42,6 +42,22 @@
                 />
             </UTooltip>
 
+            <UDropdownMenu
+                v-if="canDownload"
+                data-menu="download"
+                :items="downloadItems"
+                :ui="{ content: 'w-40' }"
+            >
+                <UButton
+                    icon="i-lucide-download"
+                    color="neutral"
+                    variant="subtle"
+                    label="Download"
+                    aria-label="Download"
+                    :ui="{ label: 'hidden lg:inline' }"
+                />
+            </UDropdownMenu>
+
             <UTooltip v-if="canMove" text="Move">
                 <UButton
                     icon="i-lucide-folder-input"
@@ -93,7 +109,12 @@
                 />
             </UTooltip>
 
-            <UDropdownMenu :items="overflowItems" :ui="{ content: 'w-48' }" class="lg:hidden">
+            <UDropdownMenu
+                data-menu="overflow"
+                :items="overflowItems"
+                :ui="{ content: 'w-48' }"
+                class="lg:hidden"
+            >
                 <UButton
                     icon="i-lucide-ellipsis-vertical"
                     color="neutral"
@@ -111,12 +132,15 @@
     import { computed } from 'vue';
     import type { DropdownMenuItem } from '@nuxt/ui';
 
+    import type { ArchiveFormat } from '@fileshed/core';
+
     //------------------------------------------------------------------------------------------------------------------
 
     const props = defineProps<{
         count : number;
         canCopy : boolean;
         copyTooltip : string;
+        canDownload : boolean;
         canRename : boolean;
         canShare : boolean;
         canMove : boolean;
@@ -128,6 +152,7 @@
         clear : [];
         move : [];
         copy : [];
+        download : [ format : ArchiveFormat ];
         rename : [];
         share : [];
         trash : [];
@@ -137,6 +162,16 @@
 
     // Copy rides as a disabled item rather than disappearing: the wide bar's tooltip explains why a folder can't be
     // copied, and an action that simply vanishes leaves that unsaid.
+    // Both formats behind one button rather than two: a person wants their files, and picking a container is a
+    // detail they should not have to see before they have decided to download at all.
+    const downloadItems = computed<DropdownMenuItem[][]>(() =>
+    {
+        return [ [
+            { label: 'As .zip', icon: 'i-lucide-file-archive', onSelect: () => emit('download', 'zip') },
+            { label: 'As .tgz', icon: 'i-lucide-file-archive', onSelect: () => emit('download', 'tgz') },
+        ] ];
+    });
+
     const overflowItems = computed<DropdownMenuItem[][]>(() =>
     {
         const items : DropdownMenuItem[] = [

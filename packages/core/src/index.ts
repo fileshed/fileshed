@@ -133,6 +133,7 @@ export {
     type ChallengeAnswerReplace,
     type ChallengeAnswerRequest,
 } from './models/requests/blobs.ts';
+export { type ArchiveFormat, type ArchiveQuery, archiveFormats } from './models/requests/archives.ts';
 export {
     type AccountDeletionSchedule,
     type MeResponse,
@@ -248,6 +249,7 @@ export {
     searchQueryCodec,
     searchResponseCodec,
 } from './models/requests/schemas/search.ts';
+export { archiveQueryCodec } from './models/requests/schemas/archives.ts';
 export {
     claimRequestCodec,
     claimResponseCodec,

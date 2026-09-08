@@ -41,6 +41,7 @@
                     :count="selectedNodes.length"
                     :can-copy="canCopy"
                     :copy-tooltip="copyTooltip"
+                    :can-download="selectedNodes.length > 0"
                     :can-rename="false"
                     :can-share="false"
                     :can-move="false"
@@ -48,6 +49,7 @@
                     :trash-label="trashLabel"
                     @clear="clearSelection"
                     @copy="copySelected"
+                    @download="downloadSelected"
                     @trash="trashSelected"
                 />
             </div>
@@ -70,11 +72,14 @@
     import { useRoute } from 'vue-router';
     import { useToast } from '@nuxt/ui/composables';
 
-    import type { NodeResponse } from '@fileshed/core';
+    import { type ArchiveFormat, MAX_ARCHIVE_NODES, type NodeResponse } from '@fileshed/core';
 
     // Stores
     import { useSearchStore } from '../stores/search.ts';
     import { useSessionStore } from '../stores/session.ts';
+
+    // Resource Access
+    import { archiveUrl } from '../resource-access/downloads.ts';
 
     // Components
     import SearchSurface from '../components/search/searchSurface.vue';
@@ -165,6 +170,29 @@
     //------------------------------------------------------------------------------------------------------------------
     // Actions
     //------------------------------------------------------------------------------------------------------------------
+
+    // One archive of the whole selection, streamed. Asks only read access, so it is offered for anything found --
+    // which is what makes a search a way to collect scattered files rather than only to find them.
+    function downloadSelected(format : ArchiveFormat) : void
+    {
+        const ids = selectedNodes.value.map((node) => node.id);
+        if(ids.length === 0) { return; }
+
+        // The ids ride the URL, which bounds how many one request can name. Said here rather than left to the
+        // server: a navigation that answers 400 lands the caller on a page of JSON with no way back.
+        if(ids.length > MAX_ARCHIVE_NODES)
+        {
+            toast.add({
+                title: 'That is too much to download at once',
+                description: `Pick at most ${ MAX_ARCHIVE_NODES } items, or a folder that holds them.`,
+                color: 'warning',
+            });
+
+            return;
+        }
+
+        window.open(archiveUrl(ids, format), '_blank');
+    }
 
     // Into the caller's own root: this surface has no open folder to copy into, and a hit found by search is as
     // likely to live in somebody else's folder as their own.

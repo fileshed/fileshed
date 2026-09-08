@@ -115,6 +115,7 @@ const EXPECTED_ROUTES = [
 
     // Downloads (authenticated)
     'GET /api/nodes/:id/download',
+    'GET /api/archives',
 
     // Deletion offers
     'GET /api/deletion-offers',
