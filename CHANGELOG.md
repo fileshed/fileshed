@@ -54,8 +54,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Anyone who can view bytes inline can save them, so the choice lives in the URL: `/d/:token` serves inline, and
   `?download` saves. **BREAKING** for API clients: the create-link request no longer takes a body, and the `mode`
   and `disposition` columns are dropped by migration 007.
+- The PDF viewer gets the chrome it was missing. A sidebar carries page thumbnails, the document outline, and any
+  files embedded in the PDF; pages step one at a time beside the page box; find gains whole-word matching,
+  diacritic matching, and a highlight-all switch; annotations can be undone and redone; pages lay out vertically,
+  horizontally, wrapped or one at a time, with optional facing pages; a pan tool drags the page when you are
+  zoomed past the window; and full screen and a document-properties dialog are both there. An image can be
+  stamped onto a page beside the existing text, drawing and highlight tools, and given a description for anyone
+  reading with a screen reader. The keyboard map is the one Mozilla's viewer taught: arrows or n and p to page,
+  Home and End for the ends, plus and minus to zoom, r to rotate, F4 for the sidebar. A document now opens at
+  automatic zoom rather than stretched to the window's width.
 - The public-link badge is a globe. A chain already marked a link node on the same tiles and rows, so one glyph
   was standing for two unrelated things.
+- `BASE_URL` defaults to `http://localhost:7433` rather than Vite's `5173`, which every other project on a
+  machine also wants. A deployment that sets `BASE_URL` is unaffected, which is every deployment that works.
 - better-auth updated to 1.7.2, and every high and moderate advisory in the dependency tree cleared.
 
 ### Fixed
@@ -75,6 +86,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An upload no longer dies over a collision that clears itself. A chunk torn and immediately re-sent is retried,
   an upload that loses track of where it stands is told where to resume, and a retry arriving after the file has
   already been committed is told the file is stored rather than meeting an expired ticket.
+- What is drawn on a PDF page lines up with the page again. pdf.js's stylesheet is written for the browser's
+  default box model and the app's own reset is not, so every layer above the page sat up to 18 pixels off it,
+  drifting further towards the bottom right corner: search highlights beside their words, selection beside its
+  text, and an annotation placed on a word saved slightly next to it.
+- The toolbar on a selected annotation works. Its delete button drew the trash icon a couple of hundred pixels
+  below the button itself, so pressing the icon you could see pressed nothing at all, and a highlight offered no
+  way to change its colour once it had been drawn.
+- Printing a PDF prints what is on screen. It used to open the copy held on the server, so annotations that had
+  been made but not yet saved were missing from the printout.
 - Shift-clicking a range no longer highlights the names and dates it crosses.
 - The media-tag backfill cannot start a pass on top of one already running, so a library slower to walk than the
   sweep interval no longer has two passes extracting the same files.
