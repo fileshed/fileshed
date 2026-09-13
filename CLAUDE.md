@@ -34,7 +34,7 @@ Copy `.env.sample` to `.env` and adjust values. The `.env` file is gitignored.
 
 ```bash
 HOST=0.0.0.0            # Server bind address
-PORT=3000              # Server port
+PORT=3950              # Server port
 LAUNCH_EDITOR=webstorm  # Editor for Vue DevTools "open in editor"
 ```
 

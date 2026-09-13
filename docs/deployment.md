@@ -83,7 +83,7 @@ both. `FILESHED_CONFIG` points at an alternative yaml file.
 | `AUTH_SECRET_FILE` | no | `/data/auth-secret` (image) | A file holding that key. Generated when missing at that default path; at any other path it is read-only and a missing one fails the boot. |
 | `AUTH_SECRET_PREVIOUS` | no | — | The key being replaced, for the one boot that migrates stored secrets to the new one. |
 | `FILESHED_DISCARD_SEALED_SECRETS` | no | `false` | `1` clears stored secrets no available key can open — the only circumstance in which FileShed deletes one. Without it, such a boot refuses. |
-| `BASE_URL` | yes | `http://localhost:5173` | The externally reachable URL — behind a proxy, the public one. |
+| `BASE_URL` | yes | `http://localhost:7433` | The externally reachable URL — behind a proxy, the public one. |
 | `TRUSTED_ORIGINS` | no | — | Further origins the instance answers on, comma-separated. See below. |
 | `ALLOWED_HOSTS` | no | — | Further hosts the instance may build its own URLs from, comma-separated. See below. |
 | `TRUSTED_PROXIES` | no | — | Reverse proxies whose `X-Forwarded-For` is believed, as addresses or CIDR ranges. `none` says nothing fronts this instance. See below. |

@@ -134,7 +134,7 @@ async function startProbe(databaseURL : string) : Promise<Probe>
 
             // vitest exports vite's own BASE_URL -- '/' -- into the worker environment, and the config schema wants
             // an absolute one. The probe never serves anything; it just has to load a config.
-            BASE_URL: 'http://localhost:5173',
+            BASE_URL: 'http://localhost:7433',
 
             // pino's default level, pinned so the spec reads what an operator sees rather than whatever the shell
             // that started the run happened to set.

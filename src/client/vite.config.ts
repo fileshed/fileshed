@@ -103,6 +103,15 @@ export default defineConfig(({ mode }) =>
             }),
         ],
         server: {
+            // SHED on a phone keypad. Vite's own 5173 is contended by every other project on a developer's machine,
+            // and BASE_URL has to name whatever port this actually answers on.
+            port: 7433,
+
+            // Fail rather than move. Vite's default is to take the next free port, which leaves the dev server
+            // answering somewhere BASE_URL does not name -- sign-in and every email link then point at a port
+            // nothing is listening on, which reads as a broken app rather than a taken port.
+            strictPort: true,
+
             // Poll instead of trusting macOS FSEvents: the kernel stream drops events under filesystem storms
             // (full test runs alongside the dev server), leaving HMR serving stale modules until a restart. Polling
             // has no event channel to lose; at this tree's size the interval costs nothing noticeable.

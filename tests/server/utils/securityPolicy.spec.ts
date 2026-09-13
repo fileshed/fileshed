@@ -81,7 +81,7 @@ describe('securityWarnings', () =>
 
     it('stays quiet outside production about the settings that only describe a deployment', () =>
     {
-        const undecided = settled({ BASE_URL: 'http://localhost:5173', TRUSTED_PROXIES: null });
+        const undecided = settled({ BASE_URL: 'http://localhost:7433', TRUSTED_PROXIES: null });
 
         expect(securityWarnings(undecided, { NODE_ENV: undefined })).toEqual([]);
         expect(securityWarnings(undecided, { NODE_ENV: 'development' })).toEqual([]);
