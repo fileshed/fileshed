@@ -244,11 +244,13 @@
         void uploads.enqueueDropped(entries, files, store.folderID);
     }
 
+    // Choosing binds this browser first and the account second: the device keeps what it was told even if the save
+    // fails, which is the half that can, and a device that has never chosen still follows the account.
     function setView(mode : ViewMode) : void
     {
         if(mode === session.viewMode) { return; }
 
-        session.applyPreferences({ viewMode: mode });
+        session.chooseViewMode(mode);
         void runMutation(() => session.savePreferences({ viewMode: mode }));
     }
 

@@ -28,6 +28,7 @@ import {
 import { ApiError } from '../resource-access/apiError.ts';
 import { authClient } from '../resource-access/authClient.ts';
 import { deleteAvatar, uploadAvatar } from '../resource-access/avatar.ts';
+import { readDeviceViewMode, writeDeviceViewMode } from '../resource-access/deviceViewMode.ts';
 import { fetchMe } from '../resource-access/me.ts';
 import { updatePreferences } from '../resource-access/preferences.ts';
 
@@ -65,9 +66,11 @@ export const useSessionStore = defineStore('session', () =>
     const editorTheme = computed(() => me.value?.preferences.editorTheme ?? DEFAULT_EDITOR_THEME);
     const editorGutter = computed(() => me.value?.preferences.editorGutter ?? DEFAULT_EDITOR_GUTTER);
 
-    // The drive's grid-vs-list choice, defaulting until the user picks one. The single place that fallback lives; the
-    // drive page reads it here.
-    const viewMode = computed(() => me.value?.preferences.viewMode ?? DEFAULT_VIEW_MODE);
+    // The drive's grid-vs-list choice, in the order of who gets to decide: this browser, if it has ever been told;
+    // then the account, which is what a device inherits before it has an opinion of its own; then the default. The
+    // single place that fallback lives; the drive page reads it here.
+    const deviceViewMode = ref<ViewMode | null>(readDeviceViewMode());
+    const viewMode = computed(() => deviceViewMode.value ?? me.value?.preferences.viewMode ?? DEFAULT_VIEW_MODE);
 
     // Whether a playlist entry pointing off this instance may be played. The media player reads it here; a playlist is
     // something one user hands another, and this is the reader deciding whether their own browser answers it.
@@ -225,6 +228,16 @@ export const useSessionStore = defineStore('session', () =>
         me.value = { ...me.value, preferences: { ...me.value.preferences, ...patch } };
     }
 
+    // Choosing binds this browser and updates the account, so the next device to arrive inherits the most recent
+    // choice rather than whatever was picked first. Persisting to the account is the caller's to do, since it is the
+    // half that can fail.
+    function chooseViewMode(mode : ViewMode) : void
+    {
+        deviceViewMode.value = mode;
+        writeDeviceViewMode(mode);
+        applyPreferences({ viewMode: mode });
+    }
+
     return {
         me,
         pending,
@@ -237,6 +250,7 @@ export const useSessionStore = defineStore('session', () =>
         editorTheme,
         editorGutter,
         viewMode,
+        chooseViewMode,
         colorMode,
         allowRemoteMedia,
         trashRetentionDays,

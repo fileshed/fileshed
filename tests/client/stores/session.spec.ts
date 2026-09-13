@@ -54,6 +54,10 @@ describe('useSessionStore', () =>
     {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+
+        // The device's own view mode lives in localStorage and outranks the account's, so a value left by one test
+        // would decide the next one's answer.
+        window.localStorage.clear();
     });
 
     //------------------------------------------------------------------------------------------------------------------
@@ -353,6 +357,57 @@ describe('useSessionStore', () =>
         await store.initialize();
 
         expect(store.viewMode).toBe('list');
+    });
+
+    // The account preference is what a device inherits before it has an opinion; once somebody chooses on a device,
+    // that device keeps its choice. Otherwise a phone opens in whatever was last picked on a desktop, which is the
+    // whole complaint.
+    it('lets this browser outrank the account\'s stored view mode', async () =>
+    {
+        window.localStorage.setItem('fileshed.drive.deviceViewMode', 'list');
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'grid' } }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.viewMode).toBe('list');
+    });
+
+    it('follows the account when this browser has never chosen', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.viewMode).toBe('list');
+    });
+
+    it('ignores a stored value that is not a view mode', async () =>
+    {
+        window.localStorage.setItem('fileshed.drive.deviceViewMode', 'mosaic');
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+        const store = useSessionStore();
+
+        await store.initialize();
+
+        expect(store.viewMode).toBe('list');
+    });
+
+    // Binding the browser and updating the account are one gesture: the device keeps what it was told, and the next
+    // device to arrive inherits the most recent choice rather than whatever was picked first.
+    it('binds this browser and the account together when a view mode is chosen', async () =>
+    {
+        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'grid' } }));
+        const store = useSessionStore();
+        await store.initialize();
+
+        store.chooseViewMode('list');
+
+        expect(store.viewMode).toBe('list');
+        expect(window.localStorage.getItem('fileshed.drive.deviceViewMode')).toBe('list');
+        expect(store.me?.preferences.viewMode).toBe('list');
+        expect(updatePreferencesMock).not.toHaveBeenCalled();
     });
 
     it('applies a view-mode preference in memory at once without hitting the wire', async () =>
