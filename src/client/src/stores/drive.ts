@@ -487,6 +487,15 @@ export const useDriveStore = defineStore('drive', () =>
         await refresh();
     }
 
+    // A link placed in a folder of the caller's own, pointing at a node they can read. The destination defaults to
+    // the open folder -- which is what "New -> Link" means -- and is named explicitly when the placement was chosen
+    // in a picker instead. The name is left to the server, which takes the target's own.
+    async function createLink(targetNodeID : string, parentID : string | null = folderID.value) : Promise<void>
+    {
+        await createNode({ type: 'link', targetNodeID, parentID });
+        await refresh();
+    }
+
     async function rename(id : string, name : string) : Promise<void>
     {
         await patchNode(id, { name });
@@ -568,6 +577,7 @@ export const useDriveStore = defineStore('drive', () =>
         setModified,
         clearFilters,
         createFolder,
+        createLink,
         rename,
         move,
         trash,

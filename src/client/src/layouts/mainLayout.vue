@@ -157,6 +157,13 @@
             },
             { label: 'New text file', icon: 'i-lucide-file', onSelect: () => { void requestCreate('text'); } },
         ],
+        [
+            {
+                label: 'Link to a file or folder',
+                icon: 'i-lucide-link',
+                onSelect: () => { void requestCreate('link'); },
+            },
+        ],
     ]);
 </script>
 

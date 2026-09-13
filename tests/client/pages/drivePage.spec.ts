@@ -403,7 +403,7 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         const wrapper = await mountDrive([ node ]);
 
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
-            [ 'Open', 'Download', 'Share', 'Rename', 'Move', 'Make a copy', 'Trash' ]
+            [ 'Open', 'Download', 'Share', 'Rename', 'Move', 'Add a link…', 'Make a copy', 'Trash' ]
         );
     });
 
@@ -412,7 +412,8 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         const node = folderNode('d1');
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Share', 'Rename', 'Move', 'Trash' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node)))
+            .toEqual([ 'Open', 'Share', 'Rename', 'Move', 'Add a link…', 'Trash' ]);
     });
 
     // A node with a live public link hands it out from the menu itself, in either form, beside Share -- the dialog is
@@ -423,7 +424,18 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         const wrapper = await mountDrive([ node ]);
 
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
-            [ 'Open', 'Download', 'Share', 'Copy link', 'Copy download link', 'Rename', 'Move', 'Make a copy', 'Trash' ]
+            [
+                'Open',
+                'Download',
+                'Share',
+                'Copy link',
+                'Copy download link',
+                'Rename',
+                'Move',
+                'Add a link…',
+                'Make a copy',
+                'Trash',
+            ]
         );
     });
 
@@ -434,7 +446,7 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         const wrapper = await mountDrive([ node ]);
 
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
-            [ 'Open', 'Download', 'Share', 'Rename', 'Move', 'Make a copy', 'Trash' ]
+            [ 'Open', 'Download', 'Share', 'Rename', 'Move', 'Add a link…', 'Make a copy', 'Trash' ]
         );
     });
 
@@ -454,20 +466,23 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Remove' ]);
     });
 
-    it('offers only Open, Download and Save a copy for a file the caller does not own', async () =>
+    // Save a copy and Add a link both ask only read access -- one takes the bytes, the other points at them -- so a
+    // non-owner gets both and nothing else.
+    it('offers a non-owner the two actions read access earns, and no administration', async () =>
     {
         const node = fileNode('f1', { ownerID: 'someone-else', role: 'editor' });
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download', 'Save a copy' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download', 'Save a copy', 'Add a link…' ]);
     });
 
-    it('offers only Open for a folder the caller does not own', async () =>
+    // A folder has no bytes to copy, so linking is the whole of what read access earns here.
+    it('offers a link but no copy for a folder the caller does not own', async () =>
     {
         const node = folderNode('d1', { ownerID: 'someone-else', role: 'viewer' });
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Add a link…' ]);
     });
 
     it('offers only Open and Download for a resolved link the caller does not own', async () =>
@@ -494,7 +509,7 @@ describe('DrivePage — kebab menu, ownership gating', () =>
         const node = fileNode('f1', { ownerID: 'contributor', role: 'owner' });
         const wrapper = await mountDrive([ node ]);
 
-        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download', 'Save a copy' ]);
+        expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual([ 'Open', 'Download', 'Save a copy', 'Add a link…' ]);
     });
 
     it('wires a non-owner\'s Save a copy to the same copy mutation as the owner\'s Make a copy', async () =>

@@ -3,8 +3,10 @@
   --
   -- A read-only browse-and-pick over the caller's own drive: drill into folders, pick a single file. Folders are always
   -- navigable; files are selectable only when they match the `accept` list, in the HTML accept attribute's own
-  -- vocabulary -- an exact mime, a whole family via `type/*`, or a `.ext` name suffix (playlist files travel under
-  -- too many mimes to enumerate) -- so a caller can constrain the pick without re-implementing the navigation. Selecting
+  -- vocabulary -- an exact mime, a whole family via `type/*`, a bare `*` for any file at all (its own entry, since
+  -- the mime forms cannot express it: `*/*` would ask for a mime beginning with `*`), or a `.ext` name suffix
+  -- (playlist files travel under too many mimes to enumerate) -- so a caller can constrain the pick without
+  -- re-implementing the navigation. Selecting
   -- a file emits it; the host decides what to do with it, including leaving the picker open to pick again. A host
   -- picking repeatedly can mark rows already taken (pickedIDs draws a check, rows stay pickable) and offer whole
   -- folders (folderAddable puts an Add-all on folder rows; the row itself still navigates). Links are omitted --
@@ -83,14 +85,14 @@
 
                 <UButton
                     v-if="folderAddable && entry.type === 'folder'"
-                    icon="i-lucide-list-plus"
-                    label="Add all"
+                    :icon="folderActionIcon"
+                    :label="folderActionLabel"
                     color="neutral"
                     variant="subtle"
                     size="xs"
                     class="mr-2 shrink-0"
                     :disabled="pending"
-                    :aria-label="`Add all media in ${ entry.name }`"
+                    :aria-label="`${ folderActionLabel }: ${ entry.name }`"
                     @click="emit('select-folder', entry)"
                 />
             </div>
@@ -130,12 +132,19 @@
         cancelLabel ?: string;
         pickedIDs ?: ReadonlySet<string>;
         folderAddable ?: boolean;
+
+        // What the folder-row button says and shows. Defaults to the playlist wording it was written for; a host
+        // taking a folder as the thing itself, rather than as a bag of media, says so here.
+        folderActionLabel ?: string;
+        folderActionIcon ?: string;
     }>(), {
         pending: false,
         caption: 'Pick a file to continue.',
         cancelLabel: 'Cancel',
         pickedIDs: undefined,
         folderAddable: false,
+        folderActionLabel: 'Add all',
+        folderActionIcon: 'i-lucide-list-plus',
     });
 
     const emit = defineEmits<{
@@ -171,6 +180,7 @@
 
         return props.accept.some((entry) =>
         {
+            if(entry === '*') { return true; }
             if(entry.startsWith('.')) { return node.name.toLowerCase().endsWith(entry); }
 
             return entry.endsWith('/*') ? node.mimeType.startsWith(entry.slice(0, -1)) : node.mimeType === entry;

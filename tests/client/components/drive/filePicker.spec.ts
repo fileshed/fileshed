@@ -228,3 +228,49 @@ describe('FilePicker', () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
+
+describe('FilePicker — a host that constrains nothing', () =>
+{
+    beforeEach(() =>
+    {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    // The mime forms cannot express "anything": '*/*' would ask for a mime beginning with '*', which no file has. So
+    // the bare '*' is its own entry, for a host whose only rule is that the caller can read the thing.
+    it('accepts every file for a bare wildcard', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([
+            fileNode('f1', 'notes.txt', 'text/plain'),
+            fileNode('f2', 'clip.mp4', 'video/mp4'),
+        ]));
+
+        const wrapper = mountPicker([ '*' ]);
+        await flushPromises();
+
+        expect((entry(wrapper, 'notes.txt')?.element as HTMLButtonElement).disabled).toBe(false);
+        expect((entry(wrapper, 'clip.mp4')?.element as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    // The folder button was written for playlists and said so. A host taking a folder as the thing itself, rather
+    // than as a bag of media, names its own verb.
+    it('lets the host name the folder action', async () =>
+    {
+        getChildrenMock.mockResolvedValue(page([ folderNode('d1', 'Reports') ]));
+
+        const wrapper = mountPicker([ '*' ], {
+            folderAddable: true,
+            folderActionLabel: 'Link',
+            folderActionIcon: 'i-lucide-link',
+        });
+        await flushPromises();
+
+        const action = wrapper.get('button[data-label="Link"]');
+
+        expect(action.attributes('aria-label')).toBe('Link: Reports');
+        expect(wrapper.find('button[data-label="Add all"]').exists()).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------

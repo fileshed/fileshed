@@ -53,9 +53,11 @@
 
         <RenameNode ref="renameModal" />
         <MoveNodes ref="moveModal" />
+        <LinkInto ref="linkModal" />
         <ShareDialog ref="shareModal" @changed="onShareChanged" />
         <NewFolder />
         <NewDocument />
+        <NewLink />
     </section>
 </template>
 
@@ -90,6 +92,8 @@
     import ShareDialog from '../components/share/modals/shareDialog.vue';
     import NewFolder from '../components/drive/modals/newFolder.vue';
     import NewDocument from '../components/drive/modals/newDocument.vue';
+    import NewLink from '../components/drive/modals/newLink.vue';
+    import LinkInto from '../components/drive/modals/linkInto.vue';
 
     // Types
     import type { DriveCrumb } from '../components/drive/linkCrumbCard/types.ts';
@@ -122,6 +126,7 @@
     const surface = ref<InstanceType<typeof NodeSurface> | null>(null);
     const renameModal = ref<InstanceType<typeof RenameNode> | null>(null);
     const moveModal = ref<InstanceType<typeof MoveNodes> | null>(null);
+    const linkModal = ref<InstanceType<typeof LinkInto> | null>(null);
     const shareModal = ref<InstanceType<typeof ShareDialog> | null>(null);
 
     //------------------------------------------------------------------------------------------------------------------
@@ -353,6 +358,11 @@
         moveModal.value?.open(nodes);
     }
 
+    function openLink(node : NodeResponse) : void
+    {
+        linkModal.value?.open(node);
+    }
+
     function openShare(node : NodeResponse) : void
     {
         shareModal.value?.open(node);
@@ -524,12 +534,24 @@
 
         const groups : ContextMenuItem[][] = [ open ];
 
+        // Placing a link asks only read access -- it is a pointer in the caller's own tree, not a change to what it
+        // points at -- so it rides for any role, beside Save a copy. A link is the one thing that cannot be linked:
+        // the server refuses a link to a link, and offering it here would only be a refusal in waiting.
+        const linkable = node.type !== 'link';
+
         if(!owned)
         {
+            const foreign : ContextMenuItem[] = [];
+
             if(intent.selection.canCopyNode(node))
             {
-                groups.push([ { label: 'Save a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) } ]);
+                foreign.push({ label: 'Save a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) });
             }
+            if(linkable)
+            {
+                foreign.push({ label: 'Add a link…', icon: 'i-lucide-link', onSelect: () => openLink(node) });
+            }
+            if(foreign.length > 0) { groups.push(foreign); }
 
             return groups;
         }
@@ -566,6 +588,10 @@
             { label: 'Rename', icon: 'i-lucide-pencil', onSelect: () => openRename(node) },
             { label: 'Move', icon: 'i-lucide-folder-input', onSelect: () => openMove([ node ]) },
         ];
+        if(linkable)
+        {
+            edit.push({ label: 'Add a link…', icon: 'i-lucide-link', onSelect: () => openLink(node) });
+        }
         if(intent.selection.canCopyNode(node))
         {
             edit.push({ label: 'Make a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) });

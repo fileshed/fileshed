@@ -12,7 +12,7 @@ import { defineStore } from 'pinia';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export type NewItemKind = 'folder' | 'markdown' | 'text';
+export type NewItemKind = 'folder' | 'link' | 'markdown' | 'text';
 
 export interface NewItemRequest
 {
