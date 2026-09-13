@@ -1,10 +1,12 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Find Bar
   --
-  -- The in-page search strip: a query box, a case-sensitivity toggle, the "x of y" match tally, previous/next walkers,
-  -- and a close button. It reads and drives the annotator store, which owns the query, the toggle, the tally, and the
+  -- The in-page search strip: a query box, the four search toggles, the "x of y" match tally, previous/next walkers,
+  -- and a close button. It reads and drives the annotator store, which owns the query, the toggles, the tally, and the
   -- search commands the render surface carries to pdf.js's find controller. Typing searches as you go; Enter and the
   -- walkers step through matches; Escape closes. Opened focused, so the caller's Cmd/Ctrl+F lands the cursor in the box.
+  --
+  -- Shift+Enter walks backwards, which is the binding every find box in every browser has taught people to expect.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -20,7 +22,8 @@
             class="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-dimmed sm:w-40
                 sm:flex-none"
             @input="onInput"
-            @keydown.enter.prevent="onEnter"
+            @keydown.enter.exact.prevent="store.findNext()"
+            @keydown.enter.shift.prevent="store.findPrev()"
             @keydown.esc.prevent="store.closeFind()"
         >
 
@@ -29,13 +32,18 @@
         </span>
 
         <UButton
-            icon="i-lucide-case-sensitive"
-            :variant="store.findCaseSensitive ? 'solid' : 'ghost'"
+            v-for="toggle in toggles"
+            :key="toggle.option"
+            :icon="toggle.icon"
+            :variant="store.findOptions[toggle.option] ? 'solid' : 'ghost'"
             color="neutral"
             size="xs"
-            aria-label="Match case"
-            @click="store.toggleFindCase()"
+            :aria-label="toggle.label"
+            :aria-pressed="store.findOptions[toggle.option]"
+            :title="toggle.label"
+            @click="store.toggleFindOption(toggle.option)"
         />
+
         <UButton
             icon="i-lucide-chevron-up"
             variant="ghost"
@@ -71,6 +79,9 @@
     // Stores
     import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
+    // Components
+    import type { FindOptions } from './types.ts';
+
     //------------------------------------------------------------------------------------------------------------------
 
     defineOptions({ name: 'PdfFindBar' });
@@ -79,16 +90,19 @@
 
     const input = ref<HTMLInputElement | null>(null);
 
+    const toggles : readonly { option : keyof FindOptions; icon : string; label : string }[]
+        = [
+            { option: 'highlightAll', icon: 'i-lucide-highlighter', label: 'Highlight all' },
+            { option: 'caseSensitive', icon: 'i-lucide-case-sensitive', label: 'Match case' },
+            { option: 'entireWord', icon: 'i-lucide-whole-word', label: 'Whole words' },
+            { option: 'matchDiacritics', icon: 'i-lucide-a-large-small', label: 'Match diacritics' },
+        ];
+
     //------------------------------------------------------------------------------------------------------------------
 
     function onInput(event : Event) : void
     {
         store.setFindQuery((event.target as HTMLInputElement).value);
-    }
-
-    function onEnter() : void
-    {
-        store.findNext();
     }
 
     onMounted(() => { input.value?.focus(); });

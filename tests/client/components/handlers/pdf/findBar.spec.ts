@@ -2,9 +2,9 @@
 // PDF Find Bar
 //
 // The find strip drives the real annotator store: typing searches as you go, the walkers repeat the search forward and
-// back, the case button re-runs with the new sensitivity, close tears the search down, and the tally reflects what the
-// renderer reported. Only the store's resource-access and toast seams are mocked -- the store's own find logic runs, so
-// each test asserts the store state a real search would leave, not that a handler fired.
+// back, each toggle re-runs the term already in the box, close tears the search down, and the tally reflects what the
+// renderer reported. Only the store's resource-access and toast boundaries are mocked -- the store's own find logic
+// runs, so each test asserts the store state a real search would leave, not that a handler fired.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type VueWrapper, mount } from '@vue/test-utils';
@@ -90,7 +90,37 @@ describe('PdfFindBar', () =>
 
         await wrapper.get('[aria-label="Match case"]').trigger('click');
 
-        expect(store.findCaseSensitive).toBe(true);
+        expect(store.findOptions.caseSensitive).toBe(true);
+    });
+
+    it('re-runs the term already in the box when whole-words is switched on', async () =>
+    {
+        const store = usePdfAnnotatorStore();
+        store.setFindQuery('port');
+        const wrapper = mountBar();
+
+        await wrapper.get('[aria-label="Whole words"]').trigger('click');
+
+        expect(store.findOptions.entireWord).toBe(true);
+        expect(store.findRequest).toMatchObject({ query: 'port', entireWord: true });
+    });
+
+    it('offers highlight-all switched on, since that is what the renderer is told by default', () =>
+    {
+        const wrapper = mountBar();
+
+        expect(wrapper.get('[aria-label="Highlight all"]').attributes('data-variant')).toBe('solid');
+    });
+
+    it('walks backwards on Shift+Enter, the binding every find box has taught', async () =>
+    {
+        const store = usePdfAnnotatorStore();
+        store.setFindQuery('invoice');
+        const wrapper = mountBar();
+
+        await wrapper.get('input').trigger('keydown.enter', { shiftKey: true });
+
+        expect(store.findRequest).toMatchObject({ again: true, findPrevious: true });
     });
 
     it('closes the find bar', async () =>

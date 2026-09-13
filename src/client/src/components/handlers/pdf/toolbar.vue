@@ -1,16 +1,26 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Annotator Toolbar
   --
-  -- The control row above the render surface: an in-page find, the annotation-tool switches (select, text, draw,
-  -- highlight) with a params caret, an editable page indicator, zoom step/preset controls, and an overflow menu (rotate,
-  -- first/last page, print). Identity -- the file name, save state, and Save -- lives in the layout header (the PDF
-  -- identity bar). A read-only session (a viewer) drops the annotation tools and the params caret but keeps find, the
-  -- page indicator, zoom, and the overflow menu, since viewing controls harm nothing. It reads and drives the annotator
-  -- store.
+  -- The control row above the render surface: the sidebar switch, an in-page find, the annotation tools with their
+  -- params caret, undo and redo, page stepping, zoom, and the view menu. Identity -- the file name, save state, and
+  -- Save -- lives in the layout header (the PDF identity bar).
+  --
+  -- A read-only session (a viewer) drops the annotation tools, the params caret, and the history controls, and keeps
+  -- everything else: no viewing control harms anything.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <div class="flex flex-wrap items-center gap-3 border-b border-default px-4 py-2">
+    <div class="flex flex-wrap items-center gap-2 border-b border-default px-3 py-2">
+        <UButton
+            icon="i-lucide-panel-left"
+            color="neutral"
+            :variant="store.sidebarOpen ? 'solid' : 'ghost'"
+            size="sm"
+            aria-label="Toggle sidebar"
+            title="Toggle sidebar"
+            @click="store.toggleSidebar()"
+        />
+
         <PdfFindBar v-if="store.findOpen" class="w-full sm:w-auto" />
         <UButton
             v-else
@@ -28,15 +38,16 @@
                 :key="tool.mode"
                 :icon="tool.icon"
                 :aria-label="tool.label"
+                :title="tool.label"
                 :variant="store.mode === tool.mode ? 'solid' : 'outline'"
                 color="neutral"
                 size="sm"
-                @click="store.setMode(tool.mode)"
+                @click="choose(tool.mode)"
             />
             <UPopover>
                 <UButton
                     icon="i-lucide-chevron-down"
-                    :disabled="store.mode === 'none'"
+                    :disabled="!hasParams"
                     variant="outline"
                     color="neutral"
                     size="sm"
@@ -48,82 +59,61 @@
             </UPopover>
         </UFieldGroup>
 
-        <div v-if="store.pageCount > 0" class="flex items-center gap-1 text-sm text-dimmed tabular-nums">
-            <UInput
-                :model-value="pageDraft"
-                aria-label="Page number"
-                size="sm"
-                :ui="{ base: 'w-12 text-center' }"
-                @update:model-value="pageDraft = String($event)"
-                @keydown.enter="commitPage"
-                @blur="commitPage"
-            />
-            <span>/ {{ store.pageCount }}</span>
-        </div>
-
-        <UFieldGroup>
+        <UFieldGroup v-if="!store.readOnly">
             <UButton
-                icon="i-lucide-zoom-out"
+                icon="i-lucide-undo-2"
                 color="neutral"
                 variant="subtle"
                 size="sm"
-                aria-label="Zoom out"
-                @click="store.zoomOut()"
-            />
-            <USelectMenu
-                :model-value="store.zoom"
-                value-key="value"
-                :items="zoomPresets"
-                :search-input="false"
-                size="sm"
-                color="neutral"
-                variant="subtle"
-                :ui="{ content: 'w-40' }"
-                @update:model-value="store.setZoom"
+                aria-label="Undo"
+                title="Undo"
+                :disabled="!store.canUndo"
+                @click="store.undo()"
             />
             <UButton
-                icon="i-lucide-zoom-in"
+                icon="i-lucide-redo-2"
                 color="neutral"
                 variant="subtle"
                 size="sm"
-                aria-label="Zoom in"
-                @click="store.zoomIn()"
+                aria-label="Redo"
+                title="Redo"
+                :disabled="!store.canRedo"
+                @click="store.redo()"
             />
         </UFieldGroup>
 
-        <UDropdownMenu :items="overflowItems">
-            <UButton
-                icon="i-lucide-ellipsis-vertical"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="More actions"
-            />
-        </UDropdownMenu>
+        <PdfPageControls />
+
+        <PdfZoomControls />
+
+        <PdfViewMenu class="ml-auto" @present="emit('present')" />
     </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, ref, watch } from 'vue';
-    import type { DropdownMenuItem } from '@nuxt/ui';
-
-    // Resource Access
-    import { downloadUrl } from '../../../resource-access/downloads.ts';
+    import { computed } from 'vue';
 
     // Stores
     import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Components
-    import { type AnnotationMode, zoomPresets } from './types.ts';
+    import type { AnnotationMode } from './types.ts';
     import PdfFindBar from './findBar.vue';
+    import PdfPageControls from './pageControls.vue';
     import PdfParamsPopover from './paramsPopover.vue';
+    import PdfViewMenu from './viewMenu.vue';
+    import PdfZoomControls from './zoomControls.vue';
 
     //------------------------------------------------------------------------------------------------------------------
 
     // The registered name stays descriptive though the file is just the handler namespace's `toolbar`.
     defineOptions({ name: 'PdfToolbar' });
+
+    const emit = defineEmits<{
+        present : [];
+    }>();
 
     const store = usePdfAnnotatorStore();
 
@@ -133,54 +123,19 @@
             { mode: 'freetext', icon: 'i-lucide-type', label: 'Add text' },
             { mode: 'ink', icon: 'i-lucide-pen-line', label: 'Draw' },
             { mode: 'highlight', icon: 'i-lucide-highlighter', label: 'Highlight' },
+            { mode: 'stamp', icon: 'i-lucide-image', label: 'Add image' },
         ];
 
-    //------------------------------------------------------------------------------------------------------------------
-    // Page jump
-    //------------------------------------------------------------------------------------------------------------------
+    // Stamp takes no settings -- it asks for an image and places it -- so the caret has nothing to open for it.
+    const hasParams = computed(() => store.mode !== 'none' && store.mode !== 'stamp');
 
-    // The page box is an editable draft that tracks the scrolled-to page until the user types; committing clamps the
-    // parse through the store and snaps the draft back to the accepted page.
-    const pageDraft = ref(String(store.currentPage));
-    watch(() => store.currentPage, (page) => { pageDraft.value = String(page); });
-
-    function commitPage() : void
+    // Every tool but the image is a mode the pointer then works in. The image is a command: pressing it asks for a
+    // picture there and then, and pressing it again asks for another.
+    function choose(next : AnnotationMode) : void
     {
-        const parsed = Number.parseInt(pageDraft.value, 10);
-        if(Number.isFinite(parsed)) { store.goToPage(parsed); }
-        pageDraft.value = String(store.currentPage);
+        if(next === 'stamp') { store.addImage(); }
+        else { store.setMode(next); }
     }
-
-    //------------------------------------------------------------------------------------------------------------------
-    // Overflow menu
-    //------------------------------------------------------------------------------------------------------------------
-
-    // Print is pragmatic v1: open the file's inline URL in a new tab and let the browser's own PDF viewer print. The
-    // annotator's unsaved marks are not in that stream -- printing reflects what is saved on the server.
-    function print() : void
-    {
-        const current = store.node;
-        if(current === null) { return; }
-
-        window.open(downloadUrl(current.id, 'inline'), '_blank', 'noopener');
-    }
-
-    const overflowItems = computed<DropdownMenuItem[][]>(() =>
-    {
-        return [
-            [
-                { label: 'Rotate right', icon: 'i-lucide-rotate-cw', onSelect: () => { store.rotateCW(); } },
-                { label: 'Rotate left', icon: 'i-lucide-rotate-ccw', onSelect: () => { store.rotateCCW(); } },
-            ],
-            [
-                { label: 'First page', icon: 'i-lucide-chevrons-left', onSelect: () => { store.firstPage(); } },
-                { label: 'Last page', icon: 'i-lucide-chevrons-right', onSelect: () => { store.lastPage(); } },
-            ],
-            [
-                { label: 'Print (opens in new tab)', icon: 'i-lucide-printer', onSelect: print },
-            ],
-        ];
-    });
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

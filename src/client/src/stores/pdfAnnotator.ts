@@ -13,8 +13,9 @@
 // Save. Each save re-arms the optimistic-concurrency guard with the blob it just wrote, so a stale save (someone else
 // saved first) is refused with a conflict the user resolves by reloading or overwriting.
 //
-// The store does not import pdf.js. The bytes to save come from a save source the surface registers once it has a live
-// document -- the single seam across the pdf.js boundary, which keeps this whole pipeline testable without a renderer.
+// The store does not import pdf.js. Everything it needs of a live document -- the bytes to save, a thumbnail, an
+// attachment's content, a jump to an outline destination, undo and redo -- comes from an access object the surface
+// registers once a document is open, which keeps this whole pipeline testable without a renderer.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -26,6 +27,7 @@ import { type NodeResponse, PDF_ANNOTATOR_MAX_BYTES, type UploadCommitMetadata, 
 import { ApiError } from '../resource-access/apiError.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '../resource-access/blobs.ts';
 import { fetchNodeBlob } from '../resource-access/content.ts';
+import { downloadUrl, saveBytes, showBytesIn } from '../resource-access/downloads.ts';
 import { getNode, patchNode } from '../resource-access/nodes.ts';
 
 // Engines
@@ -37,15 +39,26 @@ import { describeApiError } from '../utils/runWithToast.ts';
 
 // Components
 import {
+    type AltTextRequest,
     type AnnotationMode,
+    type CursorTool,
     DEFAULT_ZOOM,
+    type DocumentProperties,
     type EditorParams,
+    type FindOptions,
     type FindQuery,
     type HighlightParams,
     type InkParams,
+    type OutlineDestination,
+    type OutlineEntry,
+    type PdfAttachment,
     ROTATION_STEP,
+    type ScrollModeName,
+    type SidebarTab,
+    type SpreadModeName,
     type TextParams,
     defaultEditorParams,
+    defaultFindOptions,
     zoomLadder,
 } from '../components/handlers/pdf/types.ts';
 
@@ -53,9 +66,25 @@ import {
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
-// Produces the current annotated document as bytes -- the surface's saveDocument call, registered once a document is
-// live. Held out of reactive state: it is machinery, not view data.
-type SaveSource = () => Promise<Uint8Array>;
+// What the store can ask of a live document, registered by the surface once one is open. Held out of reactive state:
+// it is machinery, not view data, and it is the only way anything outside the surface reaches the renderer.
+//
+// View state the renderer should follow (mode, zoom, rotation, layout) stays as plain reactive state that the surface
+// watches. These are the calls that go the other way -- a question or a one-shot command, with no state to mirror.
+interface PdfDocumentAccess
+{
+    save : () => Promise<Uint8Array>;
+
+    // The same bytes a save would write, without declaring the marks saved. Printing needs the document; it has not
+    // earned the right to clear the unsaved-marks flag.
+    serialize : () => Promise<Uint8Array>;
+    renderThumbnail : (page : number, canvas : HTMLCanvasElement, width : number) => Promise<void>;
+    readAttachment : (id : string) => Promise<Uint8Array | null>;
+    goToDestination : (dest : OutlineDestination) => void;
+    addImage : () => void;
+    undo : () => void;
+    redo : () => void;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -80,12 +109,42 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // surface, re-applied on a remount so a reload keeps the chosen tool settings.
     const editorParams = ref<EditorParams>(defaultEditorParams());
 
-    // In-page search. The query text, case toggle, and match tally are display state the find bar binds to; findRequest
-    // is an edge-triggered command the surface watches -- its nonce forces a fresh dispatch even when the query text is
-    // unchanged (the next/prev walk over the same term).
+    // How pages are laid out in the scroll container, and what a drag on the page does. The layout pair is handed
+    // straight to the renderer; the cursor tool is the surface's own behavior and never reaches pdf.js.
+    const scrollMode = ref<ScrollModeName>('vertical');
+    const spreadMode = ref<SpreadModeName>('none');
+    const cursorTool = ref<CursorTool>('select');
+
+    // The navigation rail: whether it is open, which tab it shows, and the two documents facts it lists. The outline
+    // and attachments are read once when the document opens and are empty for a document carrying neither.
+    const sidebarOpen = ref(false);
+    const sidebarTab = ref<SidebarTab>('thumbnails');
+    const outline = ref<OutlineEntry[]>([]);
+    const attachments = ref<PdfAttachment[]>([]);
+
+    // Whether the document is filling the screen. Set by the surface once the browser confirms the change rather than
+    // when it is asked for, since the reader can leave fullscreen by a route this app never hears about (Escape).
+    const presenting = ref(false);
+
+    const properties = ref<DocumentProperties | null>(null);
+    const propertiesOpen = ref(false);
+
+    // An image annotation's description, while the dialog asking for it is open. The annotation that asked is held
+    // outside reactive state, like the document access is: it is a way back to the renderer, not something to render.
+    const altTextOpen = ref(false);
+    const altText = ref('');
+    const altTextDecorative = ref(false);
+
+    // Whether the annotation editor has anything to step back or forward through, as the renderer reports it.
+    const canUndo = ref(false);
+    const canRedo = ref(false);
+
+    // In-page search. The query text, the toggles, and the match tally are display state the find bar binds to;
+    // findRequest is an edge-triggered command the surface watches -- its nonce forces a fresh dispatch even when the
+    // query text is unchanged (the next/prev walk over the same term).
     const findOpen = ref(false);
     const findQuery = ref('');
-    const findCaseSensitive = ref(false);
+    const findOptions = ref<FindOptions>(defaultFindOptions());
     const findCurrent = ref(0);
     const findTotal = ref(0);
     const findRequest = ref<(FindQuery & { seq : number }) | null>(null);
@@ -102,6 +161,8 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
 
     const saving = ref(false);
     const saveError = ref<string | null>(null);
+    const printing = ref(false);
+    const printError = ref<string | null>(null);
     const conflict = ref(false);
     const lastSavedAt = ref<number | null>(null);
 
@@ -109,7 +170,8 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // gates on it; the store trusts it rather than diffing bytes, since only the renderer knows the editor's state.
     const dirty = ref(false);
 
-    let saveSource : SaveSource | null = null;
+    let access : PdfDocumentAccess | null = null;
+    let altTextApply : AltTextRequest['apply'] | null = null;
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -180,14 +242,14 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // a conflict. With no registered save source (no live document) there is nothing to write.
     async function runSave(force : boolean) : Promise<void>
     {
-        if(saving.value || node.value === null || readOnly.value || saveSource === null) { return; }
+        if(saving.value || node.value === null || readOnly.value || access === null) { return; }
 
         saving.value = true;
         saveError.value = null;
 
         try
         {
-            const out = await saveSource();
+            const out = await access.save();
             await performSave(out, force);
         }
         catch(caught)
@@ -210,9 +272,9 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // Surface seam
     //------------------------------------------------------------------------------------------------------------------
 
-    function setSaveSource(source : SaveSource | null) : void
+    function setDocumentAccess(source : PdfDocumentAccess | null) : void
     {
-        saveSource = source;
+        access = source;
     }
 
     function setDirty(value : boolean) : void
@@ -272,6 +334,8 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
 
     function firstPage() : void { goToPage(1); }
     function lastPage() : void { goToPage(pageCount.value); }
+    function nextPage() : void { goToPage(currentPage.value + 1); }
+    function prevPage() : void { goToPage(currentPage.value - 1); }
 
     //------------------------------------------------------------------------------------------------------------------
     // Annotation editor params
@@ -296,6 +360,19 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // Find
     //------------------------------------------------------------------------------------------------------------------
 
+    // Every dispatched search is the query box plus the current toggles; only the walk's direction and whether this is
+    // a repeat over the same term vary between them.
+    function buildQuery(findPrevious : boolean, again : boolean) : FindQuery & { seq : number }
+    {
+        return {
+            query: findQuery.value,
+            ...findOptions.value,
+            findPrevious,
+            again,
+            seq: ++commandSeq,
+        };
+    }
+
     // Issue a fresh search over the current query, or clear the tally when the query is empty. Empty clears findRequest
     // so the surface knows to drop any live highlight.
     function runFind() : void
@@ -308,14 +385,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
             return;
         }
 
-        findRequest.value = {
-            query: findQuery.value,
-            caseSensitive: findCaseSensitive.value,
-            highlightAll: true,
-            findPrevious: false,
-            again: false,
-            seq: ++commandSeq,
-        };
+        findRequest.value = buildQuery(false, false);
     }
 
     function openFind() : void
@@ -339,9 +409,11 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         runFind();
     }
 
-    function toggleFindCase() : void
+    // Flip one of the search toggles and re-run the term already in the box, so a reader who narrows a search sees the
+    // narrowed tally without retyping anything.
+    function toggleFindOption(option : keyof FindOptions) : void
     {
-        findCaseSensitive.value = !findCaseSensitive.value;
+        findOptions.value = { ...findOptions.value, [option]: !findOptions.value[option] };
         runFind();
     }
 
@@ -351,14 +423,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     {
         if(findQuery.value.trim() === '') { return; }
 
-        findRequest.value = {
-            query: findQuery.value,
-            caseSensitive: findCaseSensitive.value,
-            highlightAll: true,
-            findPrevious,
-            again: true,
-            seq: ++commandSeq,
-        };
+        findRequest.value = buildQuery(findPrevious, true);
     }
 
     function findNext() : void { stepFind(false); }
@@ -370,14 +435,191 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         findTotal.value = total;
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    // Layout and cursor
+    //------------------------------------------------------------------------------------------------------------------
+
+    function setScrollMode(next : ScrollModeName) : void { scrollMode.value = next; }
+    function setSpreadMode(next : SpreadModeName) : void { spreadMode.value = next; }
+    function setCursorTool(next : CursorTool) : void { cursorTool.value = next; }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Sidebar
+    //------------------------------------------------------------------------------------------------------------------
+
+    function toggleSidebar() : void { sidebarOpen.value = !sidebarOpen.value; }
+
+    // Choosing a tab opens the rail: a reader who picks Outline from a closed rail wants to see the outline, not to
+    // arm a choice that takes a second press to reveal.
+    function showSidebarTab(tab : SidebarTab) : void
+    {
+        sidebarTab.value = tab;
+        sidebarOpen.value = true;
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Document facts, reported by the surface
+    //------------------------------------------------------------------------------------------------------------------
+
+    // The outline, attachments, and properties a freshly opened document carries. The rail falls back to thumbnails
+    // when the tab it was left on has nothing behind it, so a reader moving between documents is never handed a pane
+    // that is blank for a reason they cannot see.
+    function setDocumentFacts(
+        facts : { outline : OutlineEntry[]; attachments : PdfAttachment[]; properties : DocumentProperties }
+    ) : void
+    {
+        outline.value = facts.outline;
+        attachments.value = facts.attachments;
+        properties.value = facts.properties;
+
+        const emptyTab = (sidebarTab.value === 'outline' && facts.outline.length === 0)
+            || (sidebarTab.value === 'attachments' && facts.attachments.length === 0);
+
+        if(emptyTab) { sidebarTab.value = 'thumbnails'; }
+    }
+
+    function setEditorHistory(undoable : boolean, redoable : boolean) : void
+    {
+        canUndo.value = undoable;
+        canRedo.value = redoable;
+    }
+
+    function setPresenting(value : boolean) : void { presenting.value = value; }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Asking the document
+    //------------------------------------------------------------------------------------------------------------------
+
+    function goToDestination(dest : OutlineDestination) : void
+    {
+        access?.goToDestination(dest);
+    }
+
+    // A thumbnail is painted into a canvas the rail owns. With no live document there is nothing to paint and the
+    // canvas is left as it was, which is blank.
+    async function renderThumbnail(page : number, canvas : HTMLCanvasElement, width : number) : Promise<void>
+    {
+        await access?.renderThumbnail(page, canvas, width);
+    }
+
+    // Save one embedded file out of the document. The bytes never leave the browser -- the renderer reads them out of
+    // the PDF it already holds -- and the type is generic, because an embedded file declares a name and not a type.
+    async function saveAttachment(id : string, filename : string) : Promise<void>
+    {
+        const content = await access?.readAttachment(id) ?? null;
+        if(content === null) { return; }
+
+        saveBytes(content, filename, 'application/octet-stream');
+    }
+
+    // Placing an image is a command, not a mode the way the other tools are: pdf.js makes the editor the moment it is
+    // asked, and the file picker follows. Arming the mode alone leaves the tool inert, and pressing the button again
+    // while it is already armed has to place another image rather than do nothing.
+    function addImage() : void
+    {
+        if(readOnly.value) { return; }
+
+        mode.value = 'stamp';
+        access?.addImage();
+    }
+
+    function undo() : void { if(!readOnly.value) { access?.undo(); } }
+    function redo() : void { if(!readOnly.value) { access?.redo(); } }
+
+    function openProperties() : void { propertiesOpen.value = true; }
+    function closeProperties() : void { propertiesOpen.value = false; }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Alt text
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Raised by the renderer when a reader presses an image annotation's description button.
+    function openAltText(request : AltTextRequest) : void
+    {
+        altText.value = request.altText;
+        altTextDecorative.value = request.decorative;
+        altTextApply = request.apply;
+        altTextOpen.value = true;
+    }
+
+    function closeAltText() : void
+    {
+        altTextOpen.value = false;
+        altTextApply = null;
+    }
+
+    // A decorative image is the statement that there is nothing to describe, so it is saved with no description
+    // rather than with one nothing will ever read.
+    function saveAltText(text : string, decorative : boolean) : void
+    {
+        altTextApply?.(decorative ? '' : text.trim(), decorative);
+        closeAltText();
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Print
+    //------------------------------------------------------------------------------------------------------------------
+
+    // Print what is on screen, unsaved marks included, by handing the browser the annotated document and letting its
+    // own PDF viewer print it -- full fidelity, and exactly the bytes a save would write. It goes to a new tab rather
+    // than a hidden frame because the app's Content-Security-Policy permits no framing at all, and weakening that for
+    // a print button is a poor trade.
+    //
+    // The tab is opened before anything is awaited: a window.open that is not the direct consequence of a click is not
+    // a user gesture, and a popup blocker refuses it.
+    async function print() : Promise<void>
+    {
+        const current = node.value;
+        if(current === null) { return; }
+
+        if(access === null)
+        {
+            window.open(downloadUrl(current.id, 'inline'), '_blank', 'noopener');
+            return;
+        }
+
+        const target = window.open('', '_blank', 'noopener');
+        if(target === null)
+        {
+            printError.value = 'Your browser blocked the print tab. Allow pop-ups for this site and try again.';
+            return;
+        }
+
+        printing.value = true;
+        printError.value = null;
+
+        try
+        {
+            showBytesIn(target, await access.serialize(), 'application/pdf');
+        }
+        catch(caught)
+        {
+            target.close();
+            printError.value = describeApiError(caught);
+        }
+        finally
+        {
+            printing.value = false;
+        }
+    }
+
     // The view-only state (rotation, editor params, search) a fresh load or a reset clears back to defaults.
     function resetView() : void
     {
         rotation.value = 0;
+        scrollMode.value = 'vertical';
+        spreadMode.value = 'none';
+        cursorTool.value = 'select';
+        canUndo.value = false;
+        canRedo.value = false;
+        propertiesOpen.value = false;
+        printError.value = null;
+        altTextOpen.value = false;
+        altTextApply = null;
         editorParams.value = defaultEditorParams();
         findOpen.value = false;
         findQuery.value = '';
-        findCaseSensitive.value = false;
+        findOptions.value = defaultFindOptions();
         findCurrent.value = 0;
         findTotal.value = 0;
         findRequest.value = null;
@@ -400,6 +642,9 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         pageCount.value = 0;
         currentPage.value = 1;
         zoom.value = DEFAULT_ZOOM;
+        outline.value = [];
+        attachments.value = [];
+        properties.value = null;
         resetView();
 
         try
@@ -475,7 +720,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
 
     function reset() : void
     {
-        saveSource = null;
+        access = null;
         node.value = null;
         bytes.value = null;
         loadedBlobID.value = null;
@@ -487,9 +732,16 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         loadError.value = null;
         saving.value = false;
         saveError.value = null;
+        printing.value = false;
         conflict.value = false;
         lastSavedAt.value = null;
         dirty.value = false;
+        outline.value = [];
+        attachments.value = [];
+        properties.value = null;
+        sidebarOpen.value = false;
+        sidebarTab.value = 'thumbnails';
+        presenting.value = false;
         resetView();
     }
 
@@ -506,7 +758,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         editorParams,
         findOpen,
         findQuery,
-        findCaseSensitive,
+        findOptions,
         findCurrent,
         findTotal,
         findRequest,
@@ -515,13 +767,31 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         loadError,
         saving,
         saveError,
+        printing,
+        printError,
         conflict,
         lastSavedAt,
         dirty,
         readOnly,
+        scrollMode,
+        spreadMode,
+        cursorTool,
+        sidebarOpen,
+        sidebarTab,
+        outline,
+        attachments,
+        presenting,
+        properties,
+        propertiesOpen,
+        altTextOpen,
+        altText,
+        altTextDecorative,
+        canUndo,
+        canRedo,
         open,
         save,
-        setSaveSource,
+        print,
+        setDocumentAccess,
         setDirty,
         setMode,
         setPage,
@@ -533,16 +803,37 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         goToPage,
         firstPage,
         lastPage,
+        nextPage,
+        prevPage,
         updateHighlight,
         updateText,
         updateInk,
         openFind,
         closeFind,
         setFindQuery,
-        toggleFindCase,
+        toggleFindOption,
         findNext,
         findPrev,
         setFindResult,
+        setScrollMode,
+        setSpreadMode,
+        setCursorTool,
+        toggleSidebar,
+        showSidebarTab,
+        setDocumentFacts,
+        setEditorHistory,
+        setPresenting,
+        goToDestination,
+        addImage,
+        renderThumbnail,
+        saveAttachment,
+        undo,
+        redo,
+        openProperties,
+        closeProperties,
+        openAltText,
+        closeAltText,
+        saveAltText,
         reload,
         overwrite,
         dismissConflict,

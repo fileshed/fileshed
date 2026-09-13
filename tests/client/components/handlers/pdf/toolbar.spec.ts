@@ -2,9 +2,9 @@
 // PDF Annotator Toolbar
 //
 // The toolbar drives the real annotator store: the zoom steppers walk the scale, the page box commits a clamped jump,
-// the overflow menu rotates and paginates, print opens the file's inline URL in a new tab, and the find button reveals
-// the find bar. Only the store's resource-access and toast seams are mocked; each test asserts the store state (or the
-// window it opened) a real click would produce, not that a handler was wired.
+// the view menu rotates and paginates, print falls back to the stored file when no renderer is attached, and the find
+// button reveals the find bar. Only the store's resource-access and toast boundaries are mocked; each test asserts the
+// store state (or the window it opened) a real click would produce, not that a handler was wired.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type VueWrapper, mount } from '@vue/test-utils';
@@ -198,14 +198,16 @@ describe('PdfToolbar overflow menu', () =>
         expect(store.currentPage).toBe(10);
     });
 
-    it('prints by opening the file\'s inline URL in a new tab', async () =>
+    // With no live renderer registered there are no annotated bytes to print, so printing falls back to the stored
+    // file. A document that IS open prints what is on screen; that belongs to the store and is asserted there.
+    it('prints the stored file when no document is open', async () =>
     {
         const store = usePdfAnnotatorStore();
         store.node = fileNode({ id: 'f1' });
         const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null) as unknown as Mock;
         const wrapper = mountToolbar();
 
-        await wrapper.get('[data-menuitem="Print (opens in new tab)"]').trigger('click');
+        await wrapper.get('[data-menuitem="Print"]').trigger('click');
 
         expect(openSpy).toHaveBeenCalledWith('/api/nodes/f1/download?disposition=inline', '_blank', 'noopener');
     });
@@ -257,7 +259,7 @@ describe('PdfToolbar slimmed row', () =>
 
         expect(wrapper.find('[aria-label="Find in document"]').exists()).toBe(true);
         expect(wrapper.find('[aria-label="Zoom in"]').exists()).toBe(true);
-        expect(wrapper.find('[aria-label="More actions"]').exists()).toBe(true);
+        expect(wrapper.find('[aria-label="View options"]').exists()).toBe(true);
     });
 });
 

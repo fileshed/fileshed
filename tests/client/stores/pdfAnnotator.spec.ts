@@ -18,6 +18,7 @@ import { ApiError } from '@client/resource-access/apiError.ts';
 import { getNode, patchNode } from '@client/resource-access/nodes.ts';
 import { fetchNodeBlob } from '@client/resource-access/content.ts';
 import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
+import { saveBytes, showBytesIn } from '@client/resource-access/downloads.ts';
 
 // Engines
 import { computeProofAnswer } from '@client/engines/claim.ts';
@@ -27,6 +28,9 @@ import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
 
 // Stores
 import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+
+// Components
+import type { DocumentProperties, OutlineEntry } from '@client/components/handlers/pdf/types.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -38,6 +42,11 @@ vi.mock('@client/resource-access/blobs.ts', () => ({
     answerChallenge: vi.fn(),
 }));
 vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
+vi.mock('@client/resource-access/downloads.ts', () => ({
+    downloadUrl: vi.fn(() => '/api/nodes/f1/download?disposition=inline'),
+    saveBytes: vi.fn(),
+    showBytesIn: vi.fn(),
+}));
 vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
@@ -49,6 +58,8 @@ const answerChallengeMock = answerChallenge as unknown as Mock;
 const proofMock = computeProofAnswer as unknown as Mock;
 const hashFileMock = hashFile as unknown as Mock;
 const readWindowsMock = readSampleWindows as unknown as Mock;
+const saveBytesMock = saveBytes as unknown as Mock;
+const showBytesInMock = showBytesIn as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -80,12 +91,64 @@ function fileNode(overrides : Partial<{
     };
 }
 
-// A store loaded and ready over a PDF file with blob 'b1'. A save source is registered by default, standing in for the
-// live renderer's saveDocument -- it yields fixed bytes, since hashFile is mocked and the byte content never matters to
+function outlineEntry() : OutlineEntry
+{
+    return { id: '0', title: 'Chapter one', bold: false, italic: false, dest: 'ch1', items: [] };
+}
+
+function documentProperties() : DocumentProperties
+{
+    return {
+        title: null,
+        author: null,
+        subject: null,
+        keywords: null,
+        creator: null,
+        producer: null,
+        creationDate: null,
+        modificationDate: null,
+        version: '1.7',
+        pageCount: 3,
+        pageSize: 'Letter',
+        linearized: false,
+    };
+}
+
+// Stands in for the live renderer. Every call is recorded so a test can assert the store reached the document at all;
+// save and serialize yield fixed bytes, since hashFile is mocked and the byte content never matters to the assertions.
+function documentAccess(overrides : Partial<PdfAccessDouble> = {}) : PdfAccessDouble
+{
+    return {
+        save: vi.fn(() => Promise.resolve(new Uint8Array([ 1, 2, 3, 4 ]))),
+        serialize: vi.fn(() => Promise.resolve(new Uint8Array([ 5, 6, 7, 8 ]))),
+        renderThumbnail: vi.fn(() => Promise.resolve()),
+        readAttachment: vi.fn(() => Promise.resolve(null)),
+        goToDestination: vi.fn(),
+        addImage: vi.fn(),
+        undo: vi.fn(),
+        redo: vi.fn(),
+        ...overrides,
+    };
+}
+
+interface PdfAccessDouble
+{
+    save : () => Promise<Uint8Array>;
+    serialize : () => Promise<Uint8Array>;
+    renderThumbnail : (page : number, canvas : HTMLCanvasElement, width : number) => Promise<void>;
+    readAttachment : (id : string) => Promise<Uint8Array | null>;
+    goToDestination : (dest : string | unknown[]) => void;
+    addImage : () => void;
+    undo : () => void;
+    redo : () => void;
+}
+
+// A store loaded and ready over a PDF file with blob 'b1'. Document access is registered by default, standing in for
+// the live renderer -- it yields fixed bytes, since hashFile is mocked and the byte content never matters to
 // the assertions. Save defaults to a fresh-content ticket commit landing a node whose blob is 'b2'.
 async function openReady(
     overrides : Parameters<typeof fileNode>[0] = {},
-    withSaveSource = true
+    withAccess = true
 ) : Promise<ReturnType<typeof usePdfAnnotatorStore>>
 {
     getNodeMock.mockResolvedValue(fileNode(overrides));
@@ -94,7 +157,7 @@ async function openReady(
     const store = usePdfAnnotatorStore();
     await store.open('f1');
 
-    if(withSaveSource) { store.setSaveSource(() => Promise.resolve(new Uint8Array([ 1, 2, 3, 4 ]))); }
+    if(withAccess) { store.setDocumentAccess(documentAccess()); }
     return store;
 }
 
@@ -487,7 +550,7 @@ describe('usePdfAnnotatorStore zoom stepping', () =>
     it('steps from a fit preset as if it were 100%', async () =>
     {
         const store = await openReady();
-        // A fresh session opens at the page-width fit preset, which has no rung of its own.
+        // A fresh session opens at the automatic preset, which has no rung of its own.
         store.zoomIn();
 
         expect(store.zoom).toBe('1.25');
@@ -574,6 +637,43 @@ describe('usePdfAnnotatorStore page navigation', () =>
 // Find
 //----------------------------------------------------------------------------------------------------------------------
 
+describe('usePdfAnnotatorStore page stepping', () =>
+{
+    it('steps forward and back a page at a time', async () =>
+    {
+        const store = await openReady();
+        store.setPage(2, 10);
+
+        store.nextPage();
+        expect(store.currentPage).toBe(3);
+
+        store.prevPage();
+        expect(store.currentPage).toBe(2);
+    });
+
+    it('stops at the first page rather than stepping past it', async () =>
+    {
+        const store = await openReady();
+        store.setPage(1, 10);
+
+        store.prevPage();
+
+        expect(store.currentPage).toBe(1);
+    });
+
+    it('stops at the last page rather than stepping past it', async () =>
+    {
+        const store = await openReady();
+        store.setPage(10, 10);
+
+        store.nextPage();
+
+        expect(store.currentPage).toBe(10);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 describe('usePdfAnnotatorStore find', () =>
 {
     it('opens the find bar', async () =>
@@ -650,10 +750,27 @@ describe('usePdfAnnotatorStore find', () =>
         const store = await openReady();
         store.setFindQuery('invoice');
 
-        store.toggleFindCase();
+        store.toggleFindOption('caseSensitive');
 
-        expect(store.findCaseSensitive).toBe(true);
+        expect(store.findOptions.caseSensitive).toBe(true);
         expect(store.findRequest).toMatchObject({ query: 'invoice', caseSensitive: true });
+    });
+
+    it('carries every search toggle on the dispatched query', async () =>
+    {
+        const store = await openReady();
+        store.setFindQuery('resume');
+
+        store.toggleFindOption('entireWord');
+        store.toggleFindOption('matchDiacritics');
+        store.toggleFindOption('highlightAll');
+
+        expect(store.findRequest).toMatchObject({
+            query: 'resume',
+            entireWord: true,
+            matchDiacritics: true,
+            highlightAll: false,
+        });
     });
 
     it('records the match tally the renderer reports', async () =>
@@ -720,6 +837,240 @@ describe('PdfAnnotatorStore.rename', () =>
 
         expect(store.node?.name).toBe('contract.pdf');
         expect(patchNode).not.toHaveBeenCalled();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('usePdfAnnotatorStore sidebar', () =>
+{
+    it('opens the rail when a tab is chosen from a closed one', async () =>
+    {
+        const store = await openReady();
+
+        store.showSidebarTab('outline');
+
+        expect(store.sidebarOpen).toBe(true);
+        expect(store.sidebarTab).toBe('outline');
+    });
+
+    it('falls back to thumbnails when the document has nothing behind the open tab', async () =>
+    {
+        const store = await openReady();
+        store.showSidebarTab('outline');
+
+        store.setDocumentFacts({ outline: [], attachments: [], properties: documentProperties() });
+
+        expect(store.sidebarTab).toBe('thumbnails');
+    });
+
+    it('leaves the open tab alone when the document has something behind it', async () =>
+    {
+        const store = await openReady();
+        store.showSidebarTab('outline');
+
+        store.setDocumentFacts({ outline: [ outlineEntry() ], attachments: [], properties: documentProperties() });
+
+        expect(store.sidebarTab).toBe('outline');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('usePdfAnnotatorStore layout', () =>
+{
+    it('clears the layout back to a single vertical column on a fresh load', async () =>
+    {
+        const store = await openReady();
+        store.setScrollMode('wrapped');
+        store.setSpreadMode('odd');
+        store.setCursorTool('pan');
+
+        await store.open('f1');
+
+        expect(store.scrollMode).toBe('vertical');
+        expect(store.spreadMode).toBe('none');
+        expect(store.cursorTool).toBe('select');
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('usePdfAnnotatorStore editor history', () =>
+{
+    it('steps the renderer back and forward for an editor', async () =>
+    {
+        const access = documentAccess();
+        const store = await openReady({}, false);
+        store.setDocumentAccess(access);
+
+        store.undo();
+        store.redo();
+
+        expect(access.undo).toHaveBeenCalledTimes(1);
+        expect(access.redo).toHaveBeenCalledTimes(1);
+    });
+
+    it('places an image and arms the tool, since a click on the page never makes one', async () =>
+    {
+        const access = documentAccess();
+        const store = await openReady({}, false);
+        store.setDocumentAccess(access);
+
+        store.addImage();
+
+        expect(access.addImage).toHaveBeenCalledTimes(1);
+        expect(store.mode).toBe('stamp');
+    });
+
+    it('places a second image on a second press rather than sitting inert', async () =>
+    {
+        const access = documentAccess();
+        const store = await openReady({}, false);
+        store.setDocumentAccess(access);
+
+        store.addImage();
+        store.addImage();
+
+        expect(access.addImage).toHaveBeenCalledTimes(2);
+    });
+
+    it('refuses to place an image in a read-only session', async () =>
+    {
+        const access = documentAccess();
+        const store = await openReady({ role: 'viewer' }, false);
+        store.setDocumentAccess(access);
+
+        store.addImage();
+
+        expect(access.addImage).not.toHaveBeenCalled();
+        expect(store.mode).toBe('none');
+    });
+
+    it('refuses to step a read-only session, which has no marks of its own to step through', async () =>
+    {
+        const access = documentAccess();
+        const store = await openReady({ role: 'viewer' }, false);
+        store.setDocumentAccess(access);
+
+        store.undo();
+        store.redo();
+
+        expect(access.undo).not.toHaveBeenCalled();
+        expect(access.redo).not.toHaveBeenCalled();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('usePdfAnnotatorStore alt text', () =>
+{
+    it('opens the dialog on the description the annotation already carries', async () =>
+    {
+        const store = await openReady();
+
+        store.openAltText({ altText: 'A bar chart', decorative: false, apply: vi.fn() });
+
+        expect(store.altTextOpen).toBe(true);
+        expect(store.altText).toBe('A bar chart');
+        expect(store.altTextDecorative).toBe(false);
+    });
+
+    it('hands the description back to the annotation that asked', async () =>
+    {
+        const apply = vi.fn();
+        const store = await openReady();
+        store.openAltText({ altText: '', decorative: false, apply });
+
+        store.saveAltText('  A bar chart  ', false);
+
+        expect(apply).toHaveBeenCalledWith('A bar chart', false);
+        expect(store.altTextOpen).toBe(false);
+    });
+
+    it('saves a decorative image with no description, since it states there is nothing to read', async () =>
+    {
+        const apply = vi.fn();
+        const store = await openReady();
+        store.openAltText({ altText: 'left over', decorative: false, apply });
+
+        store.saveAltText('left over', true);
+
+        expect(apply).toHaveBeenCalledWith('', true);
+    });
+
+    it('changes nothing when the dialog is closed without saving', async () =>
+    {
+        const apply = vi.fn();
+        const store = await openReady();
+        store.openAltText({ altText: 'A bar chart', decorative: false, apply });
+
+        store.closeAltText();
+
+        expect(apply).not.toHaveBeenCalled();
+        expect(store.altTextOpen).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('usePdfAnnotatorStore attachments', () =>
+{
+    it('saves the bytes the renderer holds for an embedded file', async () =>
+    {
+        const content = new Uint8Array([ 9, 9, 9 ]);
+        const store = await openReady({}, false);
+        store.setDocumentAccess(documentAccess({ readAttachment: vi.fn(() => Promise.resolve(content)) }));
+
+        await store.saveAttachment('a0', 'appendix.csv');
+
+        expect(saveBytesMock).toHaveBeenCalledWith(content, 'appendix.csv', 'application/octet-stream');
+    });
+
+    it('saves nothing for an attachment the renderer cannot read', async () =>
+    {
+        const store = await openReady();
+
+        await store.saveAttachment('nope', 'missing.csv');
+
+        expect(saveBytesMock).not.toHaveBeenCalled();
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('usePdfAnnotatorStore print', () =>
+{
+    it('hands the tab the annotated document without declaring the marks saved', async () =>
+    {
+        const target = {} as Window;
+        const openSpy = vi.spyOn(window, 'open').mockReturnValue(target);
+        const access = documentAccess();
+        const store = await openReady({}, false);
+        store.setDocumentAccess(access);
+        store.setDirty(true);
+
+        await store.print();
+
+        expect(access.serialize).toHaveBeenCalledTimes(1);
+        expect(access.save).not.toHaveBeenCalled();
+        expect(showBytesInMock).toHaveBeenCalledWith(target, new Uint8Array([ 5, 6, 7, 8 ]), 'application/pdf');
+        expect(store.dirty).toBe(true);
+
+        openSpy.mockRestore();
+    });
+
+    it('reports a blocked pop-up rather than failing silently', async () =>
+    {
+        const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+        const store = await openReady();
+
+        await store.print();
+
+        expect(store.printError).toMatch(/pop-ups/i);
+        expect(showBytesInMock).not.toHaveBeenCalled();
+
+        openSpy.mockRestore();
     });
 });
 
