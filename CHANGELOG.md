@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-14
+
 ### Added
 
 - Chunked uploads: bytes travel as a sequence of requests against one ticket, so a connection lost part-way
@@ -67,7 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was standing for two unrelated things.
 - `BASE_URL` defaults to `http://localhost:7433` rather than Vite's `5173`, which every other project on a
   machine also wants. A deployment that sets `BASE_URL` is unaffected, which is every deployment that works.
-- better-auth updated to 1.7.2, and every high and moderate advisory in the dependency tree cleared.
+- better-auth updated to 1.7.2, nodemailer to 9.1.1 and hono to 4.13.7, clearing every high and moderate advisory
+  in the dependency tree.
 
 ### Fixed
 
@@ -180,5 +183,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker images for amd64 and arm64 at `ghcr.io/fileshed/fileshed`, with `dev`, `beta`, and `latest` tags.
 - A responsive interface, usable down to 360px-wide screens.
 
-[Unreleased]: https://github.com/fileshed/fileshed/compare/v0.1.0...main
+[Unreleased]: https://github.com/fileshed/fileshed/compare/v0.2.0...main
+[0.2.0]: https://github.com/fileshed/fileshed/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fileshed/fileshed/releases/tag/v0.1.0
