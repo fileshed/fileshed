@@ -75,7 +75,7 @@ function mountAdmin(runners ?: Partial<SweepRunners>) : void
         users: new UserRA(booted.handle),
         shares: new ShareRA(booted.handle),
         tracker,
-        version: '0.0.0-sweep-spec',
+        build: { version: '0.0.0-sweep-spec', commit: null, branch: null },
         databaseKind: booted.handle.kind,
         startedAt: new Date(),
         activeProviders: 0,

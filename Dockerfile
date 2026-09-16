@@ -74,6 +74,14 @@ COPY --from=deps /app/src/server/node_modules ./src/server/node_modules
 
 COPY --from=build /app/src/client/dist ./client-dist
 
+# The git facts the image reports, passed by whatever builds it -- an image has no repository to ask, and putting one
+# in the build context to answer two strings is not worth what it costs. Declared after every COPY on purpose: a
+# changing commit invalidates every layer below the ARG that reads it, and above here that would mean the installs.
+ARG COMMIT_SHA=""
+ARG COMMIT_REF=""
+ENV COMMIT_SHA=$COMMIT_SHA \
+    COMMIT_REF=$COMMIT_REF
+
 VOLUME /data
 EXPOSE 3000
 

@@ -32,6 +32,9 @@ import type { NodeRA } from '../resource-access/nodes/node.ts';
 import type { ShareRA } from '../resource-access/shares/index.ts';
 import type { UserRA } from '../resource-access/users/index.ts';
 
+// Utils
+import type { BuildInfo } from '../utils/version.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface StatusManagerDeps
@@ -42,7 +45,7 @@ export interface StatusManagerDeps
     shares : ShareRA;
     tracker : LastRunTracker;
 
-    version : string;
+    build : BuildInfo;
     databaseKind : DatabaseKind;
     startedAt : Date;
     activeProviders : number;
@@ -115,7 +118,9 @@ export class StatusManager
             trash,
             accessRequestsPending,
             instance: {
-                version: this.#deps.version,
+                version: this.#deps.build.version,
+                commit: this.#deps.build.commit,
+                branch: this.#deps.build.branch,
                 databaseKind: this.#deps.databaseKind,
                 // Clamped at zero: a host clock stepping backwards would otherwise report a negative uptime, which
                 // the response codec rejects outright -- one bad NTP correction should not blank the whole readout.

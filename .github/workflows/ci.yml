@@ -118,6 +118,9 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            COMMIT_REF=${{ github.head_ref || github.ref_name }}
           tags: fileshed:ci
           provenance: false
           cache-from: type=gha

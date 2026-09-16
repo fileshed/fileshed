@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AboutModal: typeof import('./src/components/layout/modals/aboutModal.vue')['default']
     AccessTokenList: typeof import('./src/components/account/tokens/accessTokenList.vue')['default']
     AccountStorage: typeof import('./src/components/account/accountStorage.vue')['default']
     AddToFiles: typeof import('./src/components/shared/modals/addToFiles.vue')['default']

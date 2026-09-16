@@ -45,6 +45,8 @@
 
     const rows = computed(() => [
         { label: 'Version', value: props.instance.version },
+        ...props.instance.commit === null ? [] : [ { label: 'Commit', value: props.instance.commit } ],
+        ...props.instance.branch === null ? [] : [ { label: 'Branch', value: props.instance.branch } ],
         { label: 'Database', value: DIALECT_LABELS[props.instance.databaseKind] },
         { label: 'Uptime', value: formatUptime(props.instance.uptimeSeconds) },
         { label: 'Email', value: props.instance.emailEnabled ? 'Configured' : 'Not configured' },

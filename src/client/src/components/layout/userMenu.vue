@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- User Menu
   --
-  -- The signed-in user's avatar dropdown: identity label, a link to the account area, the admin entry for admins, and
-  -- sign-out. It owns its own sign-out and post-sign-out redirect, so any shell -- the drive top bar, the editor
+  -- The signed-in user's avatar dropdown: identity label, a link to the account area, the admin entry for admins,
+  -- the About dialog, and sign-out. It owns its own sign-out and post-sign-out redirect, so any shell -- the drive top bar, the editor
   -- header -- mounts it without wiring anything through.
   --------------------------------------------------------------------------------------------------------------------->
 
@@ -13,16 +13,21 @@
             <span class="hidden sm:inline">{{ displayName }}</span>
         </UButton>
     </UDropdownMenu>
+
+    <AboutModal ref="about" />
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed } from 'vue';
+    import { computed, useTemplateRef } from 'vue';
     import { useRouter } from 'vue-router';
     import type { DropdownMenuItem } from '@nuxt/ui';
 
     import type { ColorMode } from '@fileshed/core';
+
+    // Components
+    import AboutModal from './modals/aboutModal.vue';
 
     // Stores
     import { useAppStore } from '../../stores/app.ts';
@@ -59,6 +64,8 @@
         void runMutation(() => session.savePreferences({ colorMode: mode }));
     }
 
+    const about = useTemplateRef<{ open : () => void }>('about');
+
     const userMenuItems = computed<DropdownMenuItem[][]>(() =>
     {
         const groups : DropdownMenuItem[][] = [ [ { label: session.me?.email ?? '', type: 'label' } ] ];
@@ -85,6 +92,12 @@
         {
             groups.push([ { label: 'Admin', icon: 'i-lucide-shield', to: '/admin' } ]);
         }
+
+        groups.push([ {
+            label: 'About',
+            icon: 'i-lucide-info',
+            onSelect: () => { about.value?.open(); },
+        } ]);
 
         groups.push([ { label: 'Sign out', icon: 'i-lucide-log-out', color: 'error', onSelect: signOut } ]);
 

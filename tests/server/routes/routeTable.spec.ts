@@ -49,6 +49,9 @@ const EXPECTED_ROUTES = [
     // Health
     'GET /api/health',
 
+    // Version (session-only)
+    'GET /api/version',
+
     // Instance & first-run setup (anonymous by design)
     'GET /api/instance',
     'POST /api/setup',

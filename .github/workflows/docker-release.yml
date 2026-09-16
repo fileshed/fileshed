@@ -43,6 +43,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          # A release builds from a tag, so there is no branch to record -- the image reports version and commit.
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}

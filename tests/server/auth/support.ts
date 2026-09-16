@@ -59,7 +59,7 @@ import { createApp } from '@server/app.ts';
 // Utils
 import type { Config } from '@server/utils/config.ts';
 import { SecretBox } from '@server/utils/secretBox.ts';
-import { VERSION } from '@server/utils/version.ts';
+import { BUILD_INFO } from '@server/utils/version.ts';
 
 // Test support
 import { openTestDatabase } from '../support/database.ts';
@@ -244,7 +244,7 @@ export function composeFullApp(
             users: userRA,
             shares: shareRA,
             tracker,
-            version: VERSION,
+            build: BUILD_INFO,
             databaseKind: handle.kind,
             startedAt,
             activeProviders: 0,

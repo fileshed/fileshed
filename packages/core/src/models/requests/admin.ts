@@ -272,6 +272,11 @@ export interface OverviewTrash
 export interface OverviewInstance
 {
     version : string;
+
+    // What the running code was built from, null when the build recorded neither.
+    commit : string | null;
+    branch : string | null;
+
     databaseKind : DatabaseKind;
     uptimeSeconds : number;
     emailEnabled : boolean;

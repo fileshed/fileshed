@@ -65,7 +65,7 @@ beforeEach(async () =>
         users: new UserRA(booted.handle),
         shares,
         tracker: new LastRunTracker(),
-        version: '9.9.9',
+        build: { version: '9.9.9', commit: 'a0931ee', branch: 'topic-branch' },
         databaseKind: booted.handle.kind,
         startedAt: new Date(Date.now() - (UPTIME_SECONDS * MS_PER_SECOND)),
         activeProviders: 2,
@@ -306,6 +306,8 @@ describe('StatusManager.status', () =>
         const view = await overview();
 
         expect(view.instance.version).toBe('9.9.9');
+        expect(view.instance.commit).toBe('a0931ee');
+        expect(view.instance.branch).toBe('topic-branch');
         expect(view.instance.databaseKind).toBe(booted.handle.kind);
         expect(view.instance.activeProviders).toBe(2);
         expect(view.instance.uptimeSeconds).toBeGreaterThanOrEqual(UPTIME_SECONDS);

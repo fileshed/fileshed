@@ -40,7 +40,7 @@ const GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Deliberately not the real VERSION: the route's job is to carry whatever the manager was built with out to the wire,
 // and an assertion against the live constant would hold even if the field were hardcoded downstream.
-const INJECTED_VERSION = '7.7.7-route-spec';
+const INJECTED_BUILD = { version: '7.7.7-route-spec', commit: 'a0931ee', branch: 'route-spec' };
 
 let booted : BootedBlobApp;
 let tracker : LastRunTracker;
@@ -57,7 +57,7 @@ beforeEach(async () =>
         users: new UserRA(booted.handle),
         shares: new ShareRA(booted.handle),
         tracker,
-        version: INJECTED_VERSION,
+        build: INJECTED_BUILD,
         databaseKind: booted.handle.kind,
         startedAt: new Date(),
         activeProviders: 0,
@@ -181,7 +181,9 @@ describe('GET /api/admin/status', () =>
 
         expect(res.status).toBe(200);
         expect(body.overview.users).toEqual({ total: 1, admins: 1, banned: 0, newThisWeek: 1 });
-        expect(body.overview.instance.version).toBe(INJECTED_VERSION);
+        expect(body.overview.instance.version).toBe(INJECTED_BUILD.version);
+        expect(body.overview.instance.commit).toBe(INJECTED_BUILD.commit);
+        expect(body.overview.instance.branch).toBe(INJECTED_BUILD.branch);
         expect(body.overview.instance.databaseKind).toBe(booted.handle.kind);
     });
 

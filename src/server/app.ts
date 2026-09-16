@@ -60,6 +60,7 @@ import { createSetupRoutes } from './routes/setup.ts';
 import { createShareRoutes } from './routes/shares.ts';
 import { createUploadRoutes } from './routes/uploads.ts';
 import { createUserRoutes } from './routes/users.ts';
+import { createVersionRoutes } from './routes/version.ts';
 
 // Middleware
 import { securityMiddleware } from './middleware/index.ts';
@@ -118,7 +119,7 @@ import { runTrashPurgeOnce } from './managers/trashPurge.ts';
 import { type Config, loadConfig } from './utils/config.ts';
 import { SecretBox } from './utils/secretBox.ts';
 import { getLogger } from './utils/logger.ts';
-import { VERSION } from './utils/version.ts';
+import { BUILD_INFO } from './utils/version.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -359,6 +360,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
         // that mounts this surface without a database is a wiring bug rather than a degraded mode.
         app.route('/api', createAdminRoutes(sessions, services?.admins ?? authOnlyAdmins(auth, options)));
         app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
+        app.route('/api', createVersionRoutes(sessions, BUILD_INFO));
 
         if(services)
         {
@@ -591,7 +593,7 @@ export async function bootApp(options : BootOptions = {})
         users: userRA,
         shares: shareRA,
         tracker,
-        version: VERSION,
+        build: BUILD_INFO,
         databaseKind: handle.kind,
         startedAt,
         activeProviders: providers.length,

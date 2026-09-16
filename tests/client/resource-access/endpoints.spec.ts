@@ -64,6 +64,7 @@ import {
 } from '@client/resource-access/admin.ts';
 import { completeSetup, fetchInstance } from '@client/resource-access/instance.ts';
 import { downloadUrl } from '@client/resource-access/downloads.ts';
+import { fetchVersion } from '@client/resource-access/version.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -381,6 +382,9 @@ const rows : EndpointRow[] = [
         path: '/api/setup',
         body: { token: 'tok', name: 'Admin', email: 'a@example.com', password: 'pw12345678' },
     },
+
+    // Version
+    { name: 'fetchVersion', call: () => fetchVersion(), method: 'GET', path: '/api/version' },
 ];
 
 //----------------------------------------------------------------------------------------------------------------------

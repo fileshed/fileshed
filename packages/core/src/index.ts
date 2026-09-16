@@ -221,6 +221,7 @@ export {
     type CreatePlaybackTokenRequest,
     type PlaybackTokenResponse,
 } from './models/requests/accessTokens.ts';
+export { type VersionResponse } from './models/requests/version.ts';
 
 // Request Schemas
 export { isoDateTimeCodec } from './models/requests/schemas/common.ts';
@@ -312,6 +313,7 @@ export {
     toDeletionOfferListResponse,
 } from './models/requests/schemas/deletionOffers.ts';
 export { instanceResponseCodec, setupRequestCodec, setupResponseCodec } from './models/requests/schemas/setup.ts';
+export { versionResponseCodec } from './models/requests/schemas/version.ts';
 export {
     adminSettingEntryCodec,
     adminSettingsResponseCodec,

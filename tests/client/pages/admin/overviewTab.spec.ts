@@ -54,6 +54,8 @@ function overviewFixture(overrides : Partial<AdminOverview> = {}) : AdminOvervie
         accessRequestsPending: 2,
         instance: {
             version: '1.4.2',
+            commit: 'a0931ee',
+            branch: null,
             databaseKind: 'postgres',
             uptimeSeconds: (5 * 86_400) + (3 * 3600),
             emailEnabled: true,
@@ -187,10 +189,19 @@ describe('Admin OverviewTab', () =>
         const wrapper = await mountWith(statusFixture());
 
         expect(wrapper.text()).toContain('1.4.2');
+        expect(wrapper.text()).toContain('a0931ee');
         expect(wrapper.text()).toContain('PostgreSQL');
         expect(wrapper.text()).toContain('5d 3h');
         expect(wrapper.text()).toContain('Configured');
         expect(wrapper.text()).toContain('Closed');
+    });
+
+    // A release build records no branch, and a row reading "Branch: —" is worse than no row at all.
+    it('leaves the branch row out when the build recorded none', async () =>
+    {
+        const wrapper = await mountWith(statusFixture());
+
+        expect(wrapper.text()).not.toContain('Branch');
     });
 
     it('lists each backend, badging the default, and reports the sweep summaries', async () =>

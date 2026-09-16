@@ -1,9 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
-// User Menu — the theme quick toggle
+// User Menu — the theme quick toggle and the About entry
 //
 // The menu offers the three-mode theme picker exactly when the instance is not forcing a mode: picking one
 // persists through the preferences blob and paints optimistically, the active mode carries the check, and a
-// forced instance hides the group entirely -- same honesty rule as the account control.
+// forced instance hides the group entirely -- same honesty rule as the account control. About opens the dialog that
+// answers what this instance is running, and sits above sign-out so the destructive entry stays last.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,10 +29,12 @@ import UserMenu from '@client/components/layout/userMenu.vue';
 
 vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
 vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn() }));
+vi.mock('@client/resource-access/version.ts', () => ({ fetchVersion: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const updatePreferencesMock = updatePreferences as unknown as Mock;
+const openAbout = vi.fn();
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -39,6 +42,12 @@ const UDropdownMenuStub = {
     name: 'UDropdownMenu',
     props: [ 'items' ],
     template: '<div><slot /></div>',
+};
+
+const AboutModalStub = {
+    name: 'AboutModal',
+    template: '<div class="about" />',
+    methods: { open: openAbout },
 };
 
 function mountMenu() : VueWrapper
@@ -49,16 +58,20 @@ function mountMenu() : VueWrapper
                 UDropdownMenu: UDropdownMenuStub,
                 UButton: { template: '<button><slot /></button>' },
                 UAvatar: true,
+                AboutModal: AboutModalStub,
             },
         },
     });
 }
 
+function menuItems(wrapper : VueWrapper) : DropdownMenuItem[]
+{
+    return (wrapper.findComponent({ name: 'UDropdownMenu' }).props('items') as DropdownMenuItem[][]).flat();
+}
+
 function themeGroup(wrapper : VueWrapper) : DropdownMenuItem | undefined
 {
-    const items = wrapper.findComponent({ name: 'UDropdownMenu' }).props('items') as DropdownMenuItem[][];
-
-    return items.flat().find((item) => item.label === 'Theme');
+    return menuItems(wrapper).find((item) => item.label === 'Theme');
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -83,9 +96,7 @@ describe('UserMenu theme toggle', () =>
         expect(children.map((child) => child.label)).toEqual([ 'System', 'Light', 'Dark' ]);
         expect(children.map((child) => child.checked)).toEqual([ false, false, true ]);
 
-        const labels = (wrapper.findComponent({ name: 'UDropdownMenu' }).props('items') as DropdownMenuItem[][])
-            .flat()
-            .map((item) => item.label);
+        const labels = menuItems(wrapper).map((item) => item.label);
         expect(labels.indexOf('Theme')).toBeLessThan(labels.indexOf('Account'));
     });
 
@@ -113,6 +124,41 @@ describe('UserMenu theme toggle', () =>
         app.branding = { instanceName: 'FileShed', mode: 'dark', forcedMode: true, logo: null };
 
         expect(themeGroup(mountMenu())).toBeUndefined();
+    });
+});
+
+describe('UserMenu about entry', () =>
+{
+    beforeEach(() =>
+    {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('offers About above sign-out, so the destructive entry stays last', () =>
+    {
+        const session = useSessionStore();
+        session.me = meFixture();
+
+        const labels = menuItems(mountMenu()).map((item) => item.label);
+
+        expect(labels.indexOf('About')).toBeLessThan(labels.indexOf('Sign out'));
+        expect(labels.at(-1)).toBe('Sign out');
+    });
+
+    it('opens the dialog when About is chosen, rather than navigating away', () =>
+    {
+        const session = useSessionStore();
+        session.me = meFixture();
+
+        const wrapper = mountMenu();
+        const about = menuItems(wrapper).find((item) => item.label === 'About');
+
+        expect(about?.to).toBeUndefined();
+
+        about?.onSelect?.(new Event('select'));
+
+        expect(openAbout).toHaveBeenCalledTimes(1);
     });
 });
 

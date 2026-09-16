@@ -21,6 +21,7 @@ import {
     DEFAULT_VIEW_MODE,
     type MeResponse,
     type UpdatePreferencesRequest,
+    type VersionResponse,
     type ViewMode,
 } from '@fileshed/core';
 
@@ -31,6 +32,7 @@ import { deleteAvatar, uploadAvatar } from '../resource-access/avatar.ts';
 import { readDeviceViewMode, writeDeviceViewMode } from '../resource-access/deviceViewMode.ts';
 import { fetchMe } from '../resource-access/me.ts';
 import { updatePreferences } from '../resource-access/preferences.ts';
+import { fetchVersion } from '../resource-access/version.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -39,6 +41,10 @@ export const useSessionStore = defineStore('session', () =>
     const me = ref<MeResponse | null>(null);
     const pending = ref(false);
     const initialized = ref(false);
+
+    // What the server reports itself as. Kept apart from `me` because it only changes when the instance is upgraded,
+    // and a page loaded before that upgrade is running the old client anyway.
+    const build = ref<VersionResponse | null>(null);
 
     // Restoration is awaited by the router guard on first navigation; the in-flight promise is shared so concurrent
     // callers restore exactly once.
@@ -164,6 +170,12 @@ export const useSessionStore = defineStore('session', () =>
         me.value = await fetchMe();
     }
 
+    async function loadVersion() : Promise<void>
+    {
+        if(build.value !== null) { return; }
+        build.value = await fetchVersion();
+    }
+
     // Drop the signed-in state without a sign-out round trip -- for when the server already killed the session
     // (revocation, ban) and calling the sign-out endpoint would just 401 again.
     function clearSession() : void
@@ -260,6 +272,8 @@ export const useSessionStore = defineStore('session', () =>
         signOut,
         clearSession,
         refreshProfile,
+        build,
+        loadVersion,
         savePreferences,
         applyPreferences,
         updateName,

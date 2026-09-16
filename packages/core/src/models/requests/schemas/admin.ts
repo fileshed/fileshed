@@ -234,6 +234,8 @@ const adminOverviewCodec = z.strictObject({
     accessRequestsPending: wholeCount,
     instance: z.strictObject({
         version: z.string(),
+        commit: z.string().nullable(),
+        branch: z.string().nullable(),
         databaseKind: z.enum(databaseKinds),
         uptimeSeconds: wholeCount,
         emailEnabled: z.boolean(),

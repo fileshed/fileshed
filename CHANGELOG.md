@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The interface says what it is running. About, in the account menu, names the version, the commit it was built
+  from, and the branch when there was one, with the commit ready to copy into a bug report, beside links to report
+  a bug, read this version's release notes, and read the source.
+- The admin overview carries that commit and branch beside the version it already showed, so two deployments of the
+  same version can be told apart.
+- `GET /api/version` answers the same facts to any signed-in caller. It takes a session on purpose: a version
+  number tells a stranger which published vulnerabilities apply to an instance, so it stays out of the anonymous
+  handshake. Published images record the commit they were built from; an image built without it, or an install from
+  a tarball with no repository behind it, reports none rather than guessing.
+
 ## [0.2.0] - 2026-09-14
 
 ### Added
