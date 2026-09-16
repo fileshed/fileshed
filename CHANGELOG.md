@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-16
+
 ### Added
 
 - The interface says what it is running. About, in the account menu, names the version, the commit it was built
@@ -195,6 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker images for amd64 and arm64 at `ghcr.io/fileshed/fileshed`, with `dev`, `beta`, and `latest` tags.
 - A responsive interface, usable down to 360px-wide screens.
 
-[Unreleased]: https://github.com/fileshed/fileshed/compare/v0.2.0...main
+[Unreleased]: https://github.com/fileshed/fileshed/compare/v0.2.1...main
+[0.2.1]: https://github.com/fileshed/fileshed/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/fileshed/fileshed/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fileshed/fileshed/releases/tag/v0.1.0
