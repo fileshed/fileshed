@@ -21,7 +21,7 @@ import { Hono } from 'hono';
 import { DEFAULT_UPLOAD_CHUNK_BYTES, UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Resource Access
-import { type Auth, createAuth } from '@server/resource-access/auth.ts';
+import { type Auth, authOptions, createAuth } from '@server/resource-access/auth.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
@@ -116,8 +116,8 @@ export async function bootShareApp() : Promise<BootedShareApp>
     const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-shares-'));
     const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot }));
 
+    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
     const auth = createAuth(handle, config, TEST_AUTH_SECRET);
-    await initialize(handle, auth);
 
     const backendID = await seedDefaultBackend(handle, config);
     const blob = new BlobRA(handle);

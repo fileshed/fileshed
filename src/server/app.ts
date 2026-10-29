@@ -70,6 +70,7 @@ import {
     type Auth,
     type ProviderBootValues,
     activeProviderIDs,
+    authOptions,
     createAuth,
     providerValuesFromConfig,
 } from './resource-access/auth.ts';
@@ -486,8 +487,8 @@ export async function bootApp(options : BootOptions = {})
     const handle = createDatabase(config);
     const settingsRA = new SettingsRA(handle);
 
-    // Before the auth instance, and so before every migration: better-auth's own migrator runs off the instance
-    // this secret constructs, and the SecretBox that seals stored settings derives its key from the same value.
+    // Before every migration: better-auth's own migrator runs off auth options this secret is part of, and the
+    // SecretBox that seals stored settings derives its key from the same value.
     const authSecret = await resolveAuthSecret({
         managedFile: managedAuthSecretFile(config),
         configuredFile: config.AUTH_SECRET_FILE ?? null,
@@ -506,26 +507,27 @@ export async function bootApp(options : BootOptions = {})
     });
     const mail = new MailManager({ settings, mail: new MailRA() });
 
-    // better-auth freezes requireEmailVerification and the OAuth providers at construction, and construction
-    // happens before the migrations -- the boot-tolerant reads answer the config defaults on a first boot with no
-    // settings table. providerValues also feeds /api/instance, so the sign-in buttons mirror exactly what this
-    // process registered.
+    // Every migration runs before the auth instance exists (see resource-access/boot.ts). These options only have to
+    // describe the schema, which the boot-read values below do not touch.
+    await initialize(handle, authOptions(handle, config, authSecret));
+    await seedDefaultBackend(handle, config);
+
+    // better-auth freezes requireEmailVerification and the OAuth providers at construction, so they are read here,
+    // between the migrations and the instance. providerValues also feeds /api/instance, so the sign-in buttons
+    // mirror exactly what this process registered.
     const configProviderValues = providerValuesFromConfig(config);
     const providerValues : ProviderBootValues = Object.fromEntries(await Promise.all(
         providerSettingKeys.map(async (key) =>
-            [ key, await settings.stringValueAtBoot(key, configProviderValues[key] ?? null) ] as const)
+            [ key, await settings.optionalStringValue(key, configProviderValues[key] ?? null) ] as const)
     ));
     const auth = createAuth(handle, config, authSecret, {
         mail,
-        requireEmailVerification: await settings.booleanValueAtBoot(
+        requireEmailVerification: await settings.booleanValue(
             'EMAIL_VERIFICATION_REQUIRED',
             config.EMAIL_VERIFICATION_REQUIRED
         ),
         providerValues,
     });
-
-    await initialize(handle, auth);
-    await seedDefaultBackend(handle, config);
 
     const blob = new BlobRA(handle);
     const nodeRA = new NodeRA(handle);

@@ -39,6 +39,7 @@ const ICON_OVERRIDES : Partial<Record<SocialProviderID, string>> = {
 const CONSOLE_URLS : Partial<Record<SocialProviderID, string>> = {
     apple: 'https://developer.apple.com/account/resources/identifiers/list/serviceId',
     atlassian: 'https://developer.atlassian.com/console/myapps/',
+    cloudflare: 'https://dash.cloudflare.com/?to=/:account/oauth-clients',
     cognito: 'https://console.aws.amazon.com/cognito/',
     discord: 'https://discord.com/developers/applications',
     facebook: 'https://developers.facebook.com/apps/',

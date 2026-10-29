@@ -365,10 +365,10 @@ const configSchema = z.object({
     FILESHED_SETUP_TOKEN: z.string().min(8, 'FILESHED_SETUP_TOKEN must be at least 8 characters')
         .optional(),
 
-    // OAuth provider settings, one optional string per key, generated from the provider vocabulary -- 35 providers
-    // would be 70 lines of noise written out. They reach here through the env overlay in loadConfig rather than
-    // yaml lines; a provider activates only when every key its contract requires is set (judged at boot, not
-    // here -- a partial pair is an admin mid-entry, not a misconfiguration).
+    // OAuth provider settings, one optional string per key, generated from the provider vocabulary -- two keys per
+    // provider would be dozens of lines of noise written out. They reach here through the env overlay in loadConfig
+    // rather than yaml lines; a provider activates only when every key its contract requires is set (judged at boot,
+    // not here -- a partial pair is an admin mid-entry, not a misconfiguration).
     ...providerConfigShape,
 
     // Outgoing email. These are the config-side defaults for the SMTP_* admin settings (same names); an unset
@@ -480,7 +480,7 @@ function loadConfigDocument(path : string, env : Record<string, string | undefin
     return Object.fromEntries(Object.entries(parsed).filter(([ , value ]) => value !== '' && value !== null));
 }
 
-// Provider credentials skip the yaml: with 35 providers the file would be mostly ${VAR:-} noise. Instead any
+// Provider credentials skip the yaml: with every provider in it the file would be mostly ${VAR:-} noise. Instead any
 // provider setting key set in the environment flows straight into the document (yaml still wins if a deployment
 // chose to write the key there), so `GITLAB_CLIENT_ID=... GITLAB_CLIENT_SECRET=...` alone enables a provider.
 function overlayProviderEnv(

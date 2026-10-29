@@ -15,6 +15,10 @@ updates:
       development:
         dependency-type: development
         update-types: [ minor, patch ]
+    ignore:
+      # marked moves with @tiptap/markdown's major, not on its own: lineModel.ts hands tiptap a marked instance.
+      - dependency-name: marked
+        update-types: [ version-update:semver-major ]
 
   - package-ecosystem: github-actions
     directory: /

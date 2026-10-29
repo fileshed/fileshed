@@ -258,33 +258,15 @@ describe('SettingsManager', () =>
     });
 
     it(
-        'boot reads prefer a stored override, fall back to the given default, and never leak an empty string',
+        'an optional string prefers a stored override and otherwise answers the given default',
         async () =>
         {
-            expect(await manager.stringValueAtBoot('GITHUB_CLIENT_ID', 'env-id')).toBe('env-id');
+            expect(await manager.optionalStringValue('GITHUB_CLIENT_ID', 'env-id')).toBe('env-id');
 
             await manager.patch(admin, { changes: { GITHUB_CLIENT_ID: 'settings-id' } });
-            expect(await manager.stringValueAtBoot('GITHUB_CLIENT_ID', 'env-id')).toBe('settings-id');
+            expect(await manager.optionalStringValue('GITHUB_CLIENT_ID', 'env-id')).toBe('settings-id');
         }
     );
-
-    it('boot reads answer the fallback instead of failing when the settings table does not exist yet', async () =>
-    {
-        // A first boot reads before the migrations run; model it with a database that never migrated.
-        const { createDatabase } = await import('@server/resource-access/database/database.ts');
-        const bare = createDatabase(booted.config);
-        const unmigrated = new SettingsManager({
-            settings: new SettingsRA(bare),
-            config: booted.config,
-            box: new SecretBox(TEST_AUTH_SECRET),
-            startedAt: new Date(),
-        });
-
-        expect(await unmigrated.stringValueAtBoot('GITHUB_CLIENT_ID', 'env-id')).toBe('env-id');
-        expect(await unmigrated.booleanValueAtBoot('EMAIL_VERIFICATION_REQUIRED', false)).toBe(false);
-
-        await bare.db.destroy();
-    });
 
     it('masks a stored secret in the admin view -- the plaintext never crosses the wire again', async () =>
     {
