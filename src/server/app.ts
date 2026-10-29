@@ -409,7 +409,7 @@ export function createApp(auth ?: Auth, services ?: AppServices, options : AppOp
             app.route('/d', createDirectRoutes(services.publicLinks));
         }
 
-        mountOpenApiSpec(app);
+        mountOpenApiSpec(app, BUILD_INFO.version);
 
         // Never from a deployment. The reference is a page that loads a bundle and offers to call this API from it,
         // and an instance has no business serving one anonymously; a developer asks for it explicitly at launch.

@@ -12,6 +12,7 @@
 // composition; no request hits the database, so nothing is migrated.
 //----------------------------------------------------------------------------------------------------------------------
 
+import { createRequire } from 'node:module';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Resource Access
@@ -22,6 +23,8 @@ import { createDatabase } from '@server/resource-access/database/database.ts';
 import { TEST_AUTH_SECRET, composeFullApp, testConfig } from '../auth/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
+
+const rootManifest = createRequire(import.meta.url)('../../../package.json') as { version : string };
 
 const config = testConfig();
 const handle = createDatabase(config);
@@ -113,6 +116,13 @@ describe('GET /api/openapi.json', () =>
         expect(spec.openapi).toMatch(/^3\./);
         expect(spec.info).toMatchObject({ title: expect.any(String), version: expect.any(String) });
         expect(spec.paths).toBeTypeOf('object');
+    });
+
+    it('states the release the instance runs as the document version', async () =>
+    {
+        const spec = await fetchSpec();
+
+        expect(spec.info.version).toBe(rootManifest.version);
     });
 
     it('documents GET /api/nodes/{id} as a read operation', async () =>
