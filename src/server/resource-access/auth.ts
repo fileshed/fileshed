@@ -227,17 +227,17 @@ const apiKeyConfigurations = [
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// A representative of the auth options, present only to give createAuth a nameable return type. better-auth's instance
-// type is a deep inference over the enabled plugins and additionalFields (it carries $Infer), with no hand-writable
-// annotation that preserves it. The runtime values below are placeholders -- only the shape and its type-bearing parts
-// (plugins, additionalFields) matter here; createAuth builds the live options with the real handle and config. This is
-// a const object, not a function, so it needs no return-type annotation.
+// A representative of the auth options, present only to give authOptions and createAuth nameable return types.
+// better-auth's instance type is a deep inference over the enabled plugins and additionalFields (it carries $Infer),
+// with no hand-writable annotation that preserves it. The runtime values below are placeholders -- only the shape and
+// its type-bearing parts (plugins, additionalFields) matter here; authOptions builds the live options with the real
+// handle and config. This is a const object, not a function, so it needs no return-type annotation.
 const authOptionsShape = {
     database: {} as { db : DatabaseHandle['db']; type : DatabaseHandle['kind'] },
     secret: '',
     baseURL: { allowedHosts: [], protocol: 'https', fallback: '' } as DynamicBaseURL,
     trustedOrigins: [] as string[],
-    // Placeholders past `enabled`, for the type only: createAuth supplies the live mail callbacks and the boot-read
+    // Placeholders past `enabled`, for the type only: authOptions supplies the live mail callbacks and the boot-read
     // verification flag.
     emailAndPassword: {
         enabled: true,
@@ -251,7 +251,7 @@ const authOptionsShape = {
         sendVerificationEmail:
             undefined as NonNullable<BetterAuthOptions['emailVerification']>['sendVerificationEmail'],
     },
-    // Placeholder for the type only: createAuth supplies the config-derived value. Carried here so the Auth type
+    // Placeholder for the type only: authOptions supplies the config-derived value. Carried here so the Auth type
     // reflects that social providers may be configured.
     socialProviders: undefined as BetterAuthOptions['socialProviders'],
     session: {
@@ -267,7 +267,7 @@ const authOptionsShape = {
         cookieCache: { enabled: false },
     },
     plugins: [ admin(), apiKey(apiKeyConfigurations) ],
-    // Placeholder for the type only, like socialProviders: createAuth supplies the live hooks, which need the
+    // Placeholder for the type only, like socialProviders: authOptions supplies the live hooks, which need the
     // database handle this shape cannot carry.
     databaseHooks: undefined as BetterAuthOptions['databaseHooks'],
 
@@ -290,7 +290,7 @@ const authOptionsShape = {
         // cuid2 everywhere, matching the app's own ids.
         database: { generateId: () => createId() },
 
-        // Placeholder for the type only: createAuth supplies the config-derived policy.
+        // Placeholder for the type only: authOptions supplies the config-derived policy.
         ipAddress: { ipAddressHeaders: [] as string[], trustedProxies: [] as string[] },
 
         // Whether x-forwarded-host may name the host this instance builds its URLs from. Written down rather than
@@ -334,7 +334,8 @@ const authOptionsShape = {
     },
 } satisfies BetterAuthOptions;
 
-export type Auth = ReturnType<typeof betterAuth<typeof authOptionsShape>>;
+export type AuthOptions = typeof authOptionsShape;
+export type Auth = ReturnType<typeof betterAuth<AuthOptions>>;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -468,11 +469,19 @@ function emailVerificationOptions(mail : AuthMailHooks | undefined) : typeof aut
     };
 }
 
+// The live options, apart from the instance. Boot hands them to better-auth's migrator before any instance exists:
+// an instance validates the schema as it is constructed, so the tables have to be there by then.
+//
 // The secret is a parameter rather than a config read: config.AUTH_SECRET is optional, and the value that actually
 // signs sessions is resolved at boot (environment over stored over generated, see managers/authSecret.ts).
-export function createAuth(handle : DatabaseHandle, config : Config, secret : string, extras : AuthExtras = {}) : Auth
+export function authOptions(
+    handle : DatabaseHandle,
+    config : Config,
+    secret : string,
+    extras : AuthExtras = {}
+) : AuthOptions
 {
-    return betterAuth({
+    return {
         ...authOptionsShape,
         database: { db: handle.db, type: handle.kind },
         secret,
@@ -485,7 +494,12 @@ export function createAuth(handle : DatabaseHandle, config : Config, secret : st
         plugins: [ admin(), apiKey(apiKeyConfigurations) ],
         databaseHooks: accessTokenCleanupHooks(handle),
         advanced: { ...authOptionsShape.advanced, ipAddress: resolveIpAddressPolicy(config) },
-    });
+    };
+}
+
+export function createAuth(handle : DatabaseHandle, config : Config, secret : string, extras : AuthExtras = {}) : Auth
+{
+    return betterAuth(authOptions(handle, config, secret, extras));
 }
 
 // The signed-in user as better-auth infers it: the base identity plus the admin plugin's `role` and our `quotaLimit`

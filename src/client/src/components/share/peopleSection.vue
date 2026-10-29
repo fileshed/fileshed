@@ -137,7 +137,7 @@
                     size="sm"
                     class="w-28"
                     :disabled="pendingRowID === entry.share.id"
-                    @update:model-value="(value) => changeRole(entry, value as ShareRole)"
+                    @update:model-value="(value : ShareRole) => changeRole(entry, value)"
                 />
                 <UTooltip text="Remove access">
                     <UButton

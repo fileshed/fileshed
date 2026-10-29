@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 
 // Resource Access
-import { type Auth, createAuth } from '@server/resource-access/auth.ts';
+import { type Auth, authOptions, createAuth } from '@server/resource-access/auth.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 import { UserRA } from '@server/resource-access/users/index.ts';
@@ -42,8 +42,8 @@ export interface BootedUserApp
 export async function bootUserApp() : Promise<BootedUserApp>
 {
     const { config, handle, dispose } = await openTestDatabase(testConfig());
+    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
     const auth = createAuth(handle, config, TEST_AUTH_SECRET);
-    await initialize(handle, auth);
 
     const sessions = new SessionManager(auth);
     const users = new UserManager(new UserRA(handle));

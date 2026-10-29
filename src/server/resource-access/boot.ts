@@ -3,15 +3,17 @@
 //
 // Brings the database from empty to ready. The order is a hard constraint: better-auth's own migrator must create
 // the identity tables (user/session/account/verification + the role and quota_limit columns it owns) BEFORE the
-// app migrations run, because the app tables carry FKs to user.id. First-run admin creation is NOT boot's job --
-// the setup wizard owns it (managers/setup.ts), gated by its one-time code.
+// app migrations run, because the app tables carry FKs to user.id. And all of it runs from the auth options, before
+// any auth instance exists: an instance validates the schema as it is constructed, so one built over an unmigrated
+// database reports the tables it is about to get as missing. First-run admin creation is NOT boot's job -- the setup
+// wizard owns it (managers/setup.ts), gated by its one-time code.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { getMigrations } from 'better-auth/db/migration';
 
 // Resource Access
 import { backfillAccountIssuer } from './database/accountIssuer.ts';
-import type { Auth } from './auth.ts';
+import type { AuthOptions } from './auth.ts';
 import type { DatabaseHandle } from './database/database.ts';
 import { migrateToLatest } from './database/migrator.ts';
 
@@ -21,11 +23,11 @@ import { migrateToLatest } from './database/migrator.ts';
 // One thing has to happen before it: better-auth refuses to add a required column with no default to a table that
 // already has rows, so a database written before it keyed accounts on (issuer, accountId) has to carry that column
 // already or the boot stops there instead of upgrading.
-export async function runMigrations(handle : DatabaseHandle, auth : Auth) : Promise<void>
+export async function runMigrations(handle : DatabaseHandle, authOptions : AuthOptions) : Promise<void>
 {
     await backfillAccountIssuer(handle);
 
-    const { runMigrations: runAuthMigrations } = await getMigrations(auth.options);
+    const { runMigrations: runAuthMigrations } = await getMigrations(authOptions);
     await runAuthMigrations();
 
     await migrateToLatest(handle.db, handle.kind);
@@ -33,9 +35,9 @@ export async function runMigrations(handle : DatabaseHandle, auth : Auth) : Prom
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function initialize(handle : DatabaseHandle, auth : Auth) : Promise<void>
+export async function initialize(handle : DatabaseHandle, authOptions : AuthOptions) : Promise<void>
 {
-    await runMigrations(handle, auth);
+    await runMigrations(handle, authOptions);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -22,7 +22,7 @@ import { Hono } from 'hono';
 import { UNLIMITED_QUOTA } from '@fileshed/core';
 
 // Resource Access
-import { type Auth, createAuth } from '@server/resource-access/auth.ts';
+import { type Auth, authOptions, createAuth } from '@server/resource-access/auth.ts';
 import { BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
 import { NodeRA } from '@server/resource-access/nodes/node.ts';
 import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
@@ -86,8 +86,8 @@ export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAv
     const overrides = avatarMaxBytes === undefined ? {} : { AVATAR_MAX_BYTES: avatarMaxBytes };
     const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot, ...overrides }));
 
+    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
     const auth = createAuth(handle, config, TEST_AUTH_SECRET);
-    await initialize(handle, auth);
 
     const backendID = await seedDefaultBackend(handle, config);
     const blob = new BlobRA(handle);

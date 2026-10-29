@@ -31,6 +31,7 @@ export type SettingKind = typeof settingKinds[number];
 export const socialProviderIDs = [
     'apple',
     'atlassian',
+    'cloudflare',
     'cognito',
     'discord',
     'facebook',

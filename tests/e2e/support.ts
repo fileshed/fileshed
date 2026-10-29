@@ -100,6 +100,7 @@ export interface ServerHandle
     dataDir : string;
     databasePath : string;
     storageRoot : string;
+    output() : { stdout : string; stderr : string };
     stop(options ?: StopOptions) : Promise<void>;
 }
 
@@ -274,6 +275,7 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
         dataDir,
         databasePath,
         storageRoot,
+        output: () => ({ stdout, stderr }),
         stop: async ({ keep = false } : StopOptions = {}) =>
         {
             await terminate(child);

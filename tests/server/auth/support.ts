@@ -18,7 +18,7 @@ import {
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { type Auth, type AuthExtras, createAuth } from '@server/resource-access/auth.ts';
+import { type Auth, type AuthExtras, authOptions, createAuth } from '@server/resource-access/auth.ts';
 import { initialize } from '@server/resource-access/boot.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import { MailRA } from '@server/resource-access/mail/index.ts';
@@ -128,9 +128,9 @@ export interface BootedApp
 export async function bootTestApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
 {
     const { config, handle } = await openTestDatabase(testConfig(overrides));
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
+    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
 
-    await initialize(handle, auth);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
 
     return { config, handle, auth, app: createApp(auth, undefined, { handle }) };
 }
@@ -294,9 +294,9 @@ export function composeFullApp(
 export async function bootFullApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
 {
     const { config, handle } = await openTestDatabase(testConfig(overrides));
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
+    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
 
-    await initialize(handle, auth);
+    const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
 
     return { config, handle, auth, app: composeFullApp(auth, handle, config) };
 }

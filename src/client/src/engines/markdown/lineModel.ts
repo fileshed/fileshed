@@ -221,11 +221,11 @@ export const MarkdownBlockquote = Blockquote.extend({
     },
 });
 
-const stockListItemParse = ListItem.config.parseMarkdown;
-const stockTaskItemParse = TaskItem.config.parseMarkdown;
-
 export const MarkdownListItem = ListItem.extend({
-    parseMarkdown: (token, helpers) => wrapStrayInline(stockListItemParse?.(token, helpers) ?? []),
+    parseMarkdown(token, helpers)
+    {
+        return wrapStrayInline(this.parent?.(token, helpers) ?? []);
+    },
 
     renderMarkdown: (node, helpers, ctx) : string =>
     {
@@ -240,7 +240,10 @@ export const MarkdownListItem = ListItem.extend({
 });
 
 export const MarkdownTaskItem = TaskItem.extend({
-    parseMarkdown: (token, helpers) => wrapStrayInline(stockTaskItemParse?.(token, helpers) ?? []),
+    parseMarkdown(token, helpers)
+    {
+        return wrapStrayInline(this.parent?.(token, helpers) ?? []);
+    },
 
     renderMarkdown: (node, helpers) : string =>
     {

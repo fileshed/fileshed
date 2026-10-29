@@ -14,7 +14,7 @@ import { type Kysely, sql } from 'kysely';
 
 // Resource Access
 import { initialize } from '@server/resource-access/boot.ts';
-import { createAuth } from '@server/resource-access/auth.ts';
+import { authOptions } from '@server/resource-access/auth.ts';
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
 
 // Test support
@@ -93,7 +93,7 @@ describe('booting over accounts written before the issuer key', () =>
         handles.push(handle);
         await seedPreIssuerIdentity(handle.db);
 
-        await initialize(handle, createAuth(handle, config, TEST_AUTH_SECRET));
+        await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
 
         const { rows } = await sql<{ id : string; issuer : string }>`
             select id, issuer from account order by id
