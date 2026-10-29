@@ -27,4 +27,4 @@ jobs:
           path-to-signatures: 'signatures/version1/cla.json'
           # Signatures live off main on a branch that must stay unprotected; the action commits to it directly.
           branch: 'cla-signatures'
-          allowlist: morgul,dependabot[bot],*[bot]
+          allowlist: Morgul,dependabot[bot],*[bot]

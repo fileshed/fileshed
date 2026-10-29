@@ -105,7 +105,7 @@ async function loadBundle() : Promise<Bundle | null>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function mountOpenApiSpec(app : Hono) : void
+export function mountOpenApiSpec(app : Hono, version : string) : void
 {
     const specSpec = describeRoute({
         tags: [ 'Docs' ],
@@ -120,7 +120,9 @@ export function mountOpenApiSpec(app : Hono) : void
         documentation: {
             info: {
                 title: 'FileShed API',
-                version: '0.1.0',
+                // Anonymous readers get the release here even though GET /api/version wants a session: the paths
+                // below already tell them which release they are reading.
+                version,
                 description: 'Self-hosted, multi-user file hosting.',
             },
             tags,
