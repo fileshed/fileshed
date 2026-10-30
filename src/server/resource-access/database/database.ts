@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Database Factory & Row Schema
 //
-// Builds the Kysely instance for the deployment's chosen dialect and declares the row shapes of every table. These row
-// types are a resource-access implementation detail -- the on-disk representation, snake_case and all -- and never
-// enter @fileshed/core, which owns the canonical domain types. The row <-> domain transforms live alongside this file
-// in the resource-access layer.
+// The row types are the on-disk representation, snake_case and all, and never enter @fileshed/core, which owns the
+// canonical domain types.
 //
 // Dual-dialect notes (Postgres is primary; SQLite is the convenience deployment):
 //   - Timestamps: `timestamptz` on Postgres, ISO-8601 `text` on SQLite. pg hands back a Date, node:sqlite a string,
@@ -14,8 +12,7 @@
 //     and byte views). Selects read back as `boolean | number`; binds must be dialect-appropriate (true/false on
 //     Postgres, 1/0 on SQLite).
 //   - bigint columns (size, quota_limit): `bigint` on Postgres, `integer` on SQLite. The Postgres driver is configured
-//     below to parse int8 as a JS number, so both dialects yield `number` (quota is a JS number; a
-//     file exceeding 2^53 bytes is not a v1 concern).
+//     below to parse int8 as a JS number, so both dialects yield `number`; a size past 2^53 bytes is not supported.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { mkdirSync } from 'node:fs';
@@ -27,7 +24,16 @@ import { Pool, types as pgTypes } from 'pg';
 import { NodeSqliteDialect } from '@fileshed/kysely-node-sqlite';
 
 // Models
-import { SQLITE_BUSY_TIMEOUT_MS, SQLITE_CACHE_SIZE } from '@fileshed/core';
+import {
+    type DatabaseKind,
+    type NodeType,
+    SQLITE_BUSY_TIMEOUT_MS,
+    SQLITE_CACHE_SIZE,
+    type ShareRequestStatus,
+    type ShareRole,
+    type StorageBackendKind,
+    type UserRole,
+} from '@fileshed/core';
 
 // Utils
 import type { Config } from '../../utils/config.ts';
@@ -77,7 +83,7 @@ export interface UserTable
     // role gates admin tooling; quota_limit is the per-user byte cap (null = unlimited). The role enum is enforced at
     // the codec and regulation layers. role is a nullable column upstream, but the admin plugin's create hook always
     // populates it, so the app treats it as set.
-    role : 'admin' | 'user';
+    role : UserRole;
     quota_limit : number | null;
 
     // The admin plugin's ban flag, reason, and expiry (all null on accounts it has never banned), and better-auth's
@@ -111,7 +117,7 @@ export interface UserTable
 export interface StorageBackendTable
 {
     id : string;
-    kind : 'fs' | 'db' | 's3' | 'azure';
+    kind : StorageBackendKind;
     config : string;
     is_default : Bool;
 }
@@ -147,7 +153,7 @@ export interface MediaTagsTable
 export interface NodeTable
 {
     id : string;
-    type : 'file' | 'folder' | 'link';
+    type : NodeType;
     name : string;
     owner_id : string;
     parent_id : string | null;
@@ -165,7 +171,7 @@ export interface ShareTable
     id : string;
     node_id : string;
     grantee_user_id : string;
-    role : 'viewer' | 'editor';
+    role : ShareRole;
     created_by : string;
     created_at : Timestamp;
 }
@@ -175,9 +181,9 @@ export interface ShareRequestTable
     id : string;
     node_id : string;
     requester_id : string;
-    requested_role : 'viewer' | 'editor';
+    requested_role : ShareRole;
     message : string | null;
-    status : 'pending' | 'granted' | 'declined';
+    status : ShareRequestStatus;
     created_at : Timestamp;
     resolved_at : Timestamp | null;
 }
@@ -229,14 +235,20 @@ export interface Database
     instance_setting : InstanceSettingTable;
 }
 
-// The dialect discriminator. A subset of BetterAuth's KyselyDatabaseType, so it drops straight into the
-// `database: { db, type }` wiring.
-export type DatabaseKind = Config['DATABASE_KIND'];
-
 export interface DatabaseHandle
 {
     db : Kysely<Database>;
+
+    // A subset of BetterAuth's KyselyDatabaseType, so it drops straight into the `database: { db, type }` wiring.
     kind : DatabaseKind;
+}
+
+// One transaction, handed to the work as a handle of its own. Every query inside goes through an RA built over that
+// handle: one built over the outer handle runs outside the transaction, and on SQLite it waits for the single
+// connection the transaction is holding and never returns.
+export async function inTransaction<T>(handle : DatabaseHandle, work : (tx : DatabaseHandle) => Promise<T>) : Promise<T>
+{
+    return handle.db.transaction().execute((trx) => work({ db: trx, kind: handle.kind }));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

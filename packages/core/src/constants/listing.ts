@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Listing Geometry
 //
-// The measurements a virtualized listing needs up front: every row and tile is a fixed size, so the scroller places
-// items by arithmetic instead of measuring the DOM. Change a height here and the matching height class on the row or
-// tile moves with it, or the listing overlaps itself.
+// Every row and tile is a fixed size so the scroller can place items by arithmetic instead of measuring the DOM. A
+// height changed here has to change in the matching height class on the row or tile as well, or the listing overlaps
+// itself.
 //----------------------------------------------------------------------------------------------------------------------
 
 // A list row, and the taller one the narrow tier renders: below `sm` a row stacks its size and modified time under the
@@ -27,22 +27,5 @@ export const LISTING_GRID_TIERS = [
     { minWidth: 768, columns: 4 },
     { minWidth: 640, columns: 3 },
 ] as const;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-export function listingGridColumns(viewportWidth : number) : number
-{
-    for(const tier of LISTING_GRID_TIERS)
-    {
-        if(viewportWidth >= tier.minWidth) { return tier.columns; }
-    }
-
-    return LISTING_GRID_BASE_COLUMNS;
-}
-
-export function listingRowHeight(viewportWidth : number) : number
-{
-    return viewportWidth < LISTING_STACK_WIDTH ? LISTING_ROW_HEIGHT_STACKED : LISTING_ROW_HEIGHT;
-}
 
 //----------------------------------------------------------------------------------------------------------------------

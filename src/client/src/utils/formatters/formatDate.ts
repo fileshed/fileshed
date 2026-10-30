@@ -1,11 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Relative Date Formatting
-//
-// Short, glanceable node timestamps for the drive surface. Today's edits read as a clock time ("14:02 today", or
-// "2:02 PM today" under the 12-hour preference); older dates in the current year drop to a month-and-day ("Jul 3");
-// anything further back carries the year ("Jul 3, 2024"). The clock style is passed in, never read here, so the
-// formatter stays pure -- the caller resolves the preference. `now` is injectable so the boundaries are testable
-// without freezing the wall clock.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { TimeFormat } from '@fileshed/core';

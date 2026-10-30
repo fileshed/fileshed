@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Branding Engine
 //
-// One theme document becomes the stylesheet /api/branding.css serves: the token variables Nuxt UI reads in a
-// :root block, then the admin's custom CSS verbatim, last -- so the escape hatch can override anything the
-// tokens said. A fully stock theme renders to nothing at all; the build-time look is the default, not a copy.
+// The admin's custom CSS goes last, verbatim, so it can override anything the token variables set. A fully stock theme
+// renders to nothing: the build-time look is the default and is never copied in.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

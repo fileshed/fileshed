@@ -1,11 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Drive Page
   --
-  -- The heart of the UI: My Files and every folder under it. A two-row header sits over the node surface -- the header
-  -- row is constant (breadcrumb trail and the view toggle), and beneath it a constant-HEIGHT strip swaps between the
-  -- idle controls and the selection bar, so the listing never reflows under a click. This route component owns the
-  -- selection, the open action, and the context menu; the store owns the data and the mutations, and the child
-  -- components render each piece. Navigation is deep-linkable: `/` is the root, `/folder/:id` a folder, both this view.
+  -- Beneath the header row a constant-height strip swaps between the filter bar and the selection bar, so the listing
+  -- never reflows under a click.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -79,7 +76,6 @@
 
     // Resource Access
     import { archiveUrl } from '../resource-access/downloads.ts';
-    import { takeLegacyViewMode } from '../resource-access/legacyViewMode.ts';
 
     // Components
     import DriveHeader from '../components/drive/driveHeader.vue';
@@ -99,11 +95,11 @@
     import type { DriveCrumb } from '../components/drive/linkCrumbCard/types.ts';
 
     // Engines
-    import { type SelectionState, intent } from '../engines/intent/index.ts';
+    import { type NodeMenuAction, type SelectionState, intent } from '../engines/intent/index.ts';
 
     // Utils
     import { copyToClipboard } from '../utils/copyToClipboard.ts';
-    import { isDeadLink } from '../utils/formatters/index.ts';
+    import { isDeadLink, openActionIcon } from '../utils/formatters/index.ts';
     import { publicLinkUrl } from '../utils/publicLinkUrl.ts';
     import { ownerIDFor, resolveOwner } from '../utils/resolveOwner.ts';
     import { useOpenNode } from '../utils/openNode.ts';
@@ -155,14 +151,15 @@
     }
 
     // Trim selection to what's actually present after any listing change (navigation, a mutation's re-read, a chunk
-    // landing). Arriving pointed at a node also scrolls to it: only the rows in view are mounted, so a node three
-    // thousand rows down is nowhere on screen until the listing is told to go there.
-    watch(() => store.children, async () =>
+    // landing). Arriving pointed at a node also scrolls to it once the listing is on screen: only the rows in view are
+    // mounted, so a node three thousand rows down is nowhere on screen until the listing is told to go there, and the
+    // rows of a folder whose breadcrumb is still resolving are not mounted at all.
+    watch([ () => store.children, () => store.loading ], async () =>
     {
         selection.value = intent.selection.reconcile(selection.value, store.children.map((node) => node.id));
 
         const arriving = arrivalSelectID();
-        if(arriving === null) { return; }
+        if(arriving === null || store.loading) { return; }
 
         const index = store.children.findIndex((node) => node.id === arriving);
         if(index === -1) { return; }
@@ -179,22 +176,9 @@
         if(event.key === 'Escape') { selection.value = intent.selection.clearSelection(); }
     }
 
-    // A pre-migration browser may still hold the view mode in localStorage. Adopted only when the profile's own blob
-    // carries none, so a value already in the blob always wins; the legacy key is cleared either way, since it is
-    // consulted at most once.
-    function migrateLegacyViewMode() : void
-    {
-        const legacy = takeLegacyViewMode();
-        if(legacy === null || session.me === null || session.me.preferences.viewMode !== undefined) { return; }
-
-        session.applyPreferences({ viewMode: legacy });
-        void runMutation(() => session.savePreferences({ viewMode: legacy }));
-    }
-
     onMounted(() =>
     {
         void store.load(routeFolderID());
-        migrateLegacyViewMode();
         window.addEventListener('keydown', onKeydown);
     });
 
@@ -328,21 +312,6 @@
     function download(nodeID : string) : void
     {
         perform({ kind: 'download', nodeID });
-    }
-
-    function openIcon(node : NodeResponse) : string
-    {
-        switch (intent.handlers.resolveOpen(node).kind)
-        {
-            case 'navigate': return 'i-lucide-folder-open';
-            case 'edit': return 'i-lucide-file-pen';
-            case 'annotate': return 'i-lucide-pen-tool';
-            case 'play': return 'i-lucide-play';
-            case 'play-playlist': return 'i-lucide-list-music';
-            case 'view': return 'i-lucide-external-link';
-            case 'download': return 'i-lucide-download';
-            case 'none': return 'i-lucide-external-link';
-        }
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -503,109 +472,64 @@
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    // Context menu -- gated by direct ownership (node.ownerID), never the resolved `role`, exactly like the selection
-    // bar above. A dead link owned by someone else offers nothing: there is no target to open and no administering it.
-    // A foreign file (a viewer or editor's own contribution, or a node reached through a traversed folder link) gets
-    // Open plus Save a copy -- Copy asks only read access, so it rides for any role -- so a non-owner is never left
-    // with a bare Open. Every owner-only action -- Share, the copy-link entries, Rename, Move, Trash/Remove --
-    // disappears entirely for a node the caller does not directly own.
+    // Context menu -- the menu engine decides which actions a node offers; the page names and wires them.
     //------------------------------------------------------------------------------------------------------------------
+
+    function downloadNode(node : NodeResponse) : void
+    {
+        const nodeID = intent.handlers.resolveDownload(node);
+        if(nodeID !== null) { download(nodeID); }
+    }
+
+    function copyNodeLink(node : NodeResponse, asDownload : boolean) : void
+    {
+        const linkUrl = node.sharing?.linkUrl ?? null;
+        if(linkUrl !== null) { void copyLink(linkUrl, asDownload); }
+    }
+
+    function menuItem(action : NodeMenuAction, node : NodeResponse) : ContextMenuItem
+    {
+        switch (action)
+        {
+            case 'open':
+                return {
+                    label: 'Open',
+                    icon: openActionIcon(intent.handlers.resolveOpen(node)),
+                    onSelect: () => onOpen(node),
+                };
+            case 'download':
+                return { label: 'Download', icon: 'i-lucide-download', onSelect: () => downloadNode(node) };
+            case 'saveCopy':
+                return { label: 'Save a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) };
+            case 'addLink':
+                return { label: 'Add a link…', icon: 'i-lucide-link', onSelect: () => openLink(node) };
+            case 'share':
+                return { label: 'Share', icon: 'i-lucide-user-plus', onSelect: () => openShare(node) };
+            case 'copyLink':
+                return { label: 'Copy link', icon: 'i-lucide-link', onSelect: () => copyNodeLink(node, false) };
+            case 'copyDownloadLink':
+                return {
+                    label: 'Copy download link',
+                    icon: 'i-lucide-file-down',
+                    onSelect: () => copyNodeLink(node, true),
+                };
+            case 'rename':
+                return { label: 'Rename', icon: 'i-lucide-pencil', onSelect: () => openRename(node) };
+            case 'move':
+                return { label: 'Move', icon: 'i-lucide-folder-input', onSelect: () => openMove([ node ]) };
+            case 'makeCopy':
+                return { label: 'Make a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) };
+            case 'trash':
+                return { label: 'Trash', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => trashOne(node) };
+            case 'remove':
+                return { label: 'Remove', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => removeLink(node) };
+        }
+    }
 
     function buildMenu(node : NodeResponse) : ContextMenuItem[][]
     {
-        const owned = intent.selection.isOwnedBy(node, currentUserID.value);
-
-        if(isDeadLink(node))
-        {
-            if(!owned) { return []; }
-
-            return [ [
-                { label: 'Remove', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => removeLink(node) },
-            ] ];
-        }
-
-        const open : ContextMenuItem[] = [
-            { label: 'Open', icon: openIcon(node), onSelect: () => onOpen(node) },
-        ];
-
-        const downloadID = intent.handlers.resolveDownload(node);
-        if(downloadID !== null)
-        {
-            open.push({ label: 'Download', icon: 'i-lucide-download', onSelect: () => download(downloadID) });
-        }
-
-        const groups : ContextMenuItem[][] = [ open ];
-
-        // Placing a link asks only read access -- it is a pointer in the caller's own tree, not a change to what it
-        // points at -- so it rides for any role, beside Save a copy. A link is the one thing that cannot be linked:
-        // the server refuses a link to a link, and offering it here would only be a refusal in waiting.
-        const linkable = node.type !== 'link';
-
-        if(!owned)
-        {
-            const foreign : ContextMenuItem[] = [];
-
-            if(intent.selection.canCopyNode(node))
-            {
-                foreign.push({ label: 'Save a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) });
-            }
-            if(linkable)
-            {
-                foreign.push({ label: 'Add a link…', icon: 'i-lucide-link', onSelect: () => openLink(node) });
-            }
-            if(foreign.length > 0) { groups.push(foreign); }
-
-            return groups;
-        }
-
-        if(node.type !== 'link')
-        {
-            const sharing : ContextMenuItem[] = [
-                { label: 'Share', icon: 'i-lucide-user-plus', onSelect: () => openShare(node) },
-            ];
-
-            // A node with a live public link hands it out from here, in either form, without the dialog: the dialog is
-            // where links are minted and killed, not where an existing one is fetched. Nothing to copy, no entries.
-            const linkUrl = node.sharing?.linkUrl ?? null;
-            if(linkUrl !== null)
-            {
-                sharing.push(
-                    {
-                        label: 'Copy link',
-                        icon: 'i-lucide-link',
-                        onSelect: () => void copyLink(linkUrl),
-                    },
-                    {
-                        label: 'Copy download link',
-                        icon: 'i-lucide-file-down',
-                        onSelect: () => void copyLink(linkUrl, true),
-                    }
-                );
-            }
-
-            groups.push(sharing);
-        }
-
-        const edit : ContextMenuItem[] = [
-            { label: 'Rename', icon: 'i-lucide-pencil', onSelect: () => openRename(node) },
-            { label: 'Move', icon: 'i-lucide-folder-input', onSelect: () => openMove([ node ]) },
-        ];
-        if(linkable)
-        {
-            edit.push({ label: 'Add a link…', icon: 'i-lucide-link', onSelect: () => openLink(node) });
-        }
-        if(intent.selection.canCopyNode(node))
-        {
-            edit.push({ label: 'Make a copy', icon: 'i-lucide-copy', onSelect: () => copyFile(node) });
-        }
-        groups.push(edit);
-
-        const remove : ContextMenuItem = node.type === 'link'
-            ? { label: 'Remove', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => removeLink(node) }
-            : { label: 'Trash', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => trashOne(node) };
-        groups.push([ remove ]);
-
-        return groups;
+        return intent.menu.nodeMenu(node, currentUserID.value)
+            .map((group) => group.map((action) => menuItem(action, node)));
     }
 </script>
 

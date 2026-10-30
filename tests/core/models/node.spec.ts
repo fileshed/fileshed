@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { nodeCodec } from '@fileshed/core';
+import { type FolderNode, type LinkNode, isHiddenTrash, nodeCodec } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -164,6 +164,51 @@ describe('nodeCodec', () =>
         const result = nodeCodec.safeParse(unknownTypeNode);
 
         expect(result.success).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('isHiddenTrash', () =>
+{
+    const folder = (trashedAt : Date | null) : FolderNode => ({
+        id: 'node_folder',
+        type: 'folder',
+        name: 'Shared',
+        ownerID: 'owner',
+        parentID: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        trashedAt,
+    });
+
+    it('hides a trashed node from anyone but its direct owner', () =>
+    {
+        const trashed = folder(new Date('2026-02-01T00:00:00.000Z'));
+
+        expect(isHiddenTrash(trashed, 'recipient')).toBe(true);
+        expect(isHiddenTrash(trashed, 'owner')).toBe(false);
+    });
+
+    it('hides nothing that is not in the trash', () =>
+    {
+        expect(isHiddenTrash(folder(null), 'recipient')).toBe(false);
+    });
+
+    it('never hides a link, which has no trash state of its own', () =>
+    {
+        const link : LinkNode = {
+            id: 'node_link',
+            type: 'link',
+            name: 'Shared',
+            ownerID: 'owner',
+            parentID: null,
+            targetNodeID: 'node_folder',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        };
+
+        expect(isHiddenTrash(link, 'recipient')).toBe(false);
     });
 });
 

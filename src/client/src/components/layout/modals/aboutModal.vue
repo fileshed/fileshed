@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- About Modal
   --
-  -- What this instance is, and where to take a problem with it. The commit is the one fact a bug report needs and the
-  -- one nobody can retype from memory, so it carries a copy rather than asking to be read off the screen. The build
-  -- facts are fetched when the dialog opens instead of on every mount of the menu that holds it.
+  -- The commit is the one fact a bug report needs and the one nobody can retype from memory, so it carries a copy
+  -- button. The build facts are fetched when the dialog opens instead of on every mount of the menu that holds it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

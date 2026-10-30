@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Resource Access
-//
-// The typed client for the sharing surface: grant a share on a node, list a node's grants, the caller's shared-with-me
-// listing, leaving a share granted to you, and revoking one you granted. Leave and revoke answer 204 and resolve void.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
@@ -34,7 +31,7 @@ export async function listSharesForNode(nodeID : string) : Promise<ShareListResp
 // The caller's shared-with-me listing, optionally narrowed by the Type/Modified filters on each target. The type
 // families ride one comma-separated param; an empty selection and absent date bounds are dropped, so an unfiltered
 // call issues a bare GET with no query string.
-export async function sharedWithMe(query : Partial<SharedWithMeQuery> = {}) : Promise<SharedWithMeResponse>
+export async function listSharedWithMe(query : Partial<SharedWithMeQuery> = {}) : Promise<SharedWithMeResponse>
 {
     const { types, ...rest } = query;
     const params : QueryParams = { ...rest };

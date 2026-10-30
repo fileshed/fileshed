@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Instance Theme Domain Model
 //
-// The instance's look as one JSON document: brand colors, chrome warmth, corner radius, color-mode policy, and a
-// raw-CSS escape hatch. Null everywhere means "not set" -- the stock build-time look IS the default, and the
-// theme only ever stores overrides. The document deliberately excludes identity (INSTANCE_NAME is a plain
-// setting) and stays purely visual so a future installed theme package can replace it wholesale.
+// Null everywhere means "not set": the stock build-time look is the default, and the theme only ever stores overrides.
+// Identity stays out of it (INSTANCE_NAME is a plain setting), so the document is purely visual and replacing it
+// wholesale never touches the instance's name.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const colorModes = [ 'system', 'light', 'dark' ] as const;

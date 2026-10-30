@@ -1,9 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Regulation Engine
 //
-// The client-side legality layer: pure judgments over node placement, no I/O. Per-domain engines compose into one
-// facade grouped by domain, so a caller reaches for `regulation.node.canMoveInto` rather than importing the chunk
-// file directly.
+// Callers reach for `regulation.node.canMoveInto` through this facade rather than importing a domain file directly.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Regulation
@@ -19,11 +17,5 @@ export const regulation = {
         canEnterFolderForMove,
     },
 } as const;
-
-//----------------------------------------------------------------------------------------------------------------------
-// Re-exports
-//----------------------------------------------------------------------------------------------------------------------
-
-export { canMoveInto, canEnterFolder, canMoveAllInto, canEnterFolderForMove } from './node.ts';
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF View Menu
-  --
-  -- Everything about how the document is presented rather than what is in it: rotation, what a drag does, page layout,
-  -- the ends of the document, full screen, print, and the properties dialog.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

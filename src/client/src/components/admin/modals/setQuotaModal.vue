@@ -1,10 +1,10 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Set Quota Modal
   --
-  -- Opened imperatively for one account. A quota has three states and the control shows all three, because two of them
-  -- look identical on an instance that defaults to unlimited and diverge the moment an admin tightens the default:
-  -- inheriting the instance default moves the account with it, while an explicit Unlimited pins the account above it.
-  -- The third is a cap this account alone carries.
+  -- A quota has three states and the control shows all three, because two of them look identical on an instance that
+  -- defaults to unlimited and diverge the moment an admin tightens the default: inheriting the instance default moves
+  -- the account with it, while an explicit Unlimited pins the account above it. The third is a cap this account alone
+  -- carries.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

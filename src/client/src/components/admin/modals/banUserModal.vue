@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Ban User Modal
-  --
-  -- Opened imperatively for one account. The reason is optional and lands in the row's badge tooltip; the expiry is
-  -- whole days, blank meaning the ban holds until an admin lifts it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -1,19 +1,61 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Shared Error Vocabulary
 //
-// Every typed error the client and server branch on, in one place. These are plain, portable classes -- no Node or
-// framework imports may enter this file -- so both packages throw and recognise the same errors. The HTTP status each
-// maps to is the server's transport concern (src/server/managers/errors.ts), not encoded here; what is encoded here is
-// the stable `code` strings and violation vocabulary, which ARE the wire contract.
+// No Node or framework import may enter this file: the client and server both throw and recognise these classes. The
+// `code` strings and the violation vocabulary are the wire contract. An error names its kind, never a protocol status;
+// each client protocol answers a kind from its own table (HTTP's is HTTP_STATUS_BY_ERROR_KIND).
 //----------------------------------------------------------------------------------------------------------------------
+
+// Constants
+import { REGULATION_CODE_KINDS } from './constants/regulation.ts';
+
+//----------------------------------------------------------------------------------------------------------------------
+// Application errors
+//----------------------------------------------------------------------------------------------------------------------
+
+export const errorKinds = [
+    'unauthenticated',
+    'forbidden',
+    'invalid',
+    'notFound',
+    'conflict',
+    'tooLarge',
+    'rateLimited',
+    'illegalState',
+] as const;
+
+export type ErrorKind = typeof errorKinds[number];
+
+// The machine-readable fields a refusal shows its caller beside the message.
+export interface ErrorDetails
+{
+    code ?: ConflictCode;
+    receivedBytes ?: number;
+    maxBytes ?: number;
+    violations ?: RegulationViolation[];
+}
+
+// A refusal the caller can act on. Anything thrown that is not an AppError is the server failing, and is answered as
+// that.
+export abstract class AppError extends Error
+{
+    abstract readonly kind : ErrorKind;
+
+    get details() : ErrorDetails
+    {
+        return {};
+    }
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 // Request-shaped errors
 //----------------------------------------------------------------------------------------------------------------------
 
 // A caller has no valid session.
-export class UnauthorizedError extends Error
+export class UnauthorizedError extends AppError
 {
+    readonly kind = 'unauthenticated';
+
     constructor(message : string)
     {
         super(message);
@@ -22,8 +64,10 @@ export class UnauthorizedError extends Error
 }
 
 // A caller authenticated but lacks the authority for this operation.
-export class ForbiddenError extends Error
+export class ForbiddenError extends AppError
 {
+    readonly kind = 'forbidden';
+
     constructor(message : string)
     {
         super(message);
@@ -34,8 +78,10 @@ export class ForbiddenError extends Error
 // The request itself is malformed for this operation. Distinct from a codec shape rejection: this is a semantic
 // mismatch the codecs can't see (the streamed bytes disagree with the claimed hash/size, a declared Content-Length that
 // contradicts the claim).
-export class BadRequestError extends Error
+export class BadRequestError extends AppError
 {
+    readonly kind = 'invalid';
+
     constructor(message : string)
     {
         super(message);
@@ -44,8 +90,10 @@ export class BadRequestError extends Error
 }
 
 // The addressed resource does not exist (or no longer does: a consumed or expired single-use ticket/challenge).
-export class NotFoundError extends Error
+export class NotFoundError extends AppError
 {
+    readonly kind = 'notFound';
+
     constructor(message : string)
     {
         super(message);
@@ -56,8 +104,9 @@ export class NotFoundError extends Error
 // The upload exceeds the configured byte ceiling. The ceiling travels with the refusal: it is a live setting, so the
 // only number that describes why this upload was refused is the one the check just read, and a caller told "too large"
 // without it has nothing to show the person who picked the file.
-export class PayloadTooLargeError extends Error
+export class PayloadTooLargeError extends AppError
 {
+    readonly kind = 'tooLarge';
     readonly maxBytes : number;
 
     constructor(message : string, maxBytes : number)
@@ -66,11 +115,18 @@ export class PayloadTooLargeError extends Error
         this.name = 'PayloadTooLargeError';
         this.maxBytes = maxBytes;
     }
+
+    get details() : ErrorDetails
+    {
+        return { maxBytes: this.maxBytes };
+    }
 }
 
 // The caller has tripped a per-user rate limit (a run of failed proofs is someone probing hashes they don't hold).
-export class TooManyRequestsError extends Error
+export class TooManyRequestsError extends AppError
 {
+    readonly kind = 'rateLimited';
+
     constructor(message : string)
     {
         super(message);
@@ -92,8 +148,9 @@ export const conflictCodes = [
 export type ConflictCode = typeof conflictCodes[number];
 
 // Two writes to the same thing collided. The code, not the message, is what a caller branches on.
-export class ConflictError extends Error
+export class ConflictError extends AppError
 {
+    readonly kind = 'conflict';
     readonly code : ConflictCode;
 
     constructor(code : ConflictCode, message : string)
@@ -101,6 +158,11 @@ export class ConflictError extends Error
         super(message);
         this.name = 'ConflictError';
         this.code = code;
+    }
+
+    get details() : ErrorDetails
+    {
+        return { code: this.code };
     }
 }
 
@@ -117,6 +179,11 @@ export class OffsetConflictError extends ConflictError
         this.name = 'OffsetConflictError';
         this.receivedBytes = receivedBytes;
     }
+
+    get details() : ErrorDetails
+    {
+        return { code: this.code, receivedBytes: this.receivedBytes };
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -128,7 +195,6 @@ export class OffsetConflictError extends ConflictError
 
 export type RegulationCode
     = | 'link.targetIsLink'
-    | 'link.selfTarget'
     | 'link.noAccess'
     | 'parent.notFolder'
     | 'parent.trashed'
@@ -153,7 +219,6 @@ export type RegulationCode
 // can't ship without its copy.
 export const RegulationCodeDisplay : Record<RegulationCode, string> = {
     'link.targetIsLink': 'You can\'t create a link to another link.',
-    'link.selfTarget': 'You can\'t create a link to itself.',
     'link.noAccess': 'You no longer have access to that item.',
     'parent.notFolder': 'That destination isn\'t a folder.',
     'parent.trashed': 'That destination is in the trash.',
@@ -189,7 +254,7 @@ export interface RegulationViolation
 
 // One or more regulation violations blocked a mutation. Carries the typed violations so the client receives their
 // stable codes, not just a message.
-export class RegulationError extends Error
+export class RegulationError extends AppError
 {
     readonly violations : RegulationViolation[];
 
@@ -198,6 +263,23 @@ export class RegulationError extends Error
         super(violations[0]?.message ?? 'The request violates a placement rule.');
         this.name = 'RegulationError';
         this.violations = violations;
+    }
+
+    // One authorization failure makes the whole refusal one: the caller lacks the authority, whatever else is wrong.
+    get kind() : ErrorKind
+    {
+        const forbidden = this.violations.some((violation) => REGULATION_CODE_KINDS[violation.code] === 'forbidden');
+
+        return forbidden ? 'forbidden' : 'illegalState';
+    }
+
+    // The identity of OTHER users stays on the server: a violation tells the caller which rule blocked them, never who
+    // else is involved. An authorization failure that named the owner would hand any signed-in user the owner of a node
+    // they cannot even read. The resource ids stay, since the caller supplied them, and the full violations stay on the
+    // error for server-side logging.
+    get details() : ErrorDetails
+    {
+        return { violations: this.violations.map(({ ownerID, actorID, ...shown }) => shown) };
     }
 }
 
@@ -330,14 +412,20 @@ export class UnsupportedBackendError extends Error
 // Node store corruption
 //----------------------------------------------------------------------------------------------------------------------
 
-// A row that contradicts its own type discriminator -- a file without a blob, a link with a size, and so on. The DB
-// CHECK constraint keeps this from ever being stored, so seeing one means the store was corrupted out from under us.
-export class NodeRowCorruptionError extends Error
+// A stored row this code never writes: a node that contradicts its own type discriminator, a resolved request with
+// no resolution, a value that is not the JSON it is always written as. A CHECK constraint or the writing RA keeps it
+// from ever being stored, so seeing one means the store was changed out from under us.
+export class RowCorruptionError extends Error
 {
-    constructor(message : string)
+    readonly table : string;
+    readonly rowID : string;
+
+    constructor(table : string, rowID : string, problem : string)
     {
-        super(message);
-        this.name = 'NodeRowCorruptionError';
+        super(`${ table } ${ rowID }: ${ problem }`);
+        this.name = 'RowCorruptionError';
+        this.table = table;
+        this.rowID = rowID;
     }
 }
 

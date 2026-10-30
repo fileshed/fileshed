@@ -10,9 +10,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
 import {
-    type BootedShareApp,
+    type BootedStoreApp,
     type TestUser,
-    bootShareApp,
+    bootStoreApp,
     createFolder,
     grantShare,
     makeUser,
@@ -24,14 +24,14 @@ import {
 
 type Json = Record<string, unknown>;
 
-let booted : BootedShareApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let grantee : TestUser;
 let stranger : TestUser;
 
 beforeEach(async () =>
 {
-    booted = await bootShareApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     grantee = await makeUser(booted, 'grantee@example.com');
     stranger = await makeUser(booted, 'stranger@example.com');

@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Connected Accounts
   --
-  -- The sign-in methods attached to this account: the email/password credential and any linked OAuth providers.
-  -- Connect buttons appear only for providers the running instance actually offers; Connect redirects through the
-  -- provider and returns here. Disconnect is refused server-side for the last remaining method, so an account can
-  -- never unlink itself out of existence.
+  -- The server refuses to disconnect the last remaining sign-in method, so an account can't unlink itself out of
+  -- existence.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -69,6 +67,7 @@
     import { type SocialProviderID, socialProviderIDs } from '@fileshed/core';
 
     // Resource Access
+    import { apiErrorFromAuth } from '../../resource-access/apiError.ts';
     import { authClient } from '../../resource-access/authClient.ts';
     import { fetchInstance } from '../../resource-access/instance.ts';
 
@@ -103,7 +102,7 @@
         try
         {
             const [ accounts, instance ] = await Promise.all([ authClient.listAccounts(), fetchInstance() ]);
-            if(accounts.error) { throw new Error(accounts.error.message ?? 'Unable to list sign-in methods.'); }
+            if(accounts.error) { throw apiErrorFromAuth(accounts.error, 'Unable to list sign-in methods.'); }
 
             linkedAccounts.value = (accounts.data ?? [])
                 .map((account) => ({ id: account.id, providerId: account.providerId }));
@@ -163,7 +162,7 @@
                 provider,
                 callbackURL: `${ window.location.origin }/account/account`,
             });
-            if(linkError) { throw new Error(linkError.message ?? 'Unable to start the link.'); }
+            if(linkError) { throw apiErrorFromAuth(linkError, 'Unable to start the link.'); }
         }, undefined, undefined).finally(() => { busyProvider.value = null; });
     }
 
@@ -173,12 +172,14 @@
         void runMutation(async () =>
         {
             // One row, the way disconnecting one method always worked -- an account holding two identities with the
-            // same provider keeps the rest, and the list redraws around what is left.
+            // same provider keeps the rest, and the list redraws around what is left. A method already missing from
+            // the list has nothing left to unlink, and the redraw shows it gone.
             const account = linkedAccounts.value.find((linked) => linked.providerId === provider);
-            if(account === undefined) { throw new Error('That sign-in method is no longer connected.'); }
-
-            const { error: unlinkError } = await authClient.unlinkAccount({ accountId: account.id });
-            if(unlinkError) { throw new Error(unlinkError.message ?? 'Unable to disconnect.'); }
+            if(account !== undefined)
+            {
+                const { error: unlinkError } = await authClient.unlinkAccount({ accountId: account.id });
+                if(unlinkError) { throw apiErrorFromAuth(unlinkError, 'Unable to disconnect.'); }
+            }
 
             await load();
         }, undefined, undefined).finally(() => { busyProvider.value = null; });

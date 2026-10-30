@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- FileShed — Root Component
-  --
-  -- The root also owns the instance-wide side effects no page should: the document title follows the instance
-  -- name, and the color mode re-resolves whenever the branding facts or the signed-in user's preference change.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -24,8 +21,8 @@
     // Engines
     import { resolveColorMode } from './engines/colorMode.ts';
 
-    // Resource Access
-    import { applyColorMode } from './resource-access/colorModeControl.ts';
+    // Utils
+    import { applyColorMode } from './utils/colorModeControl.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

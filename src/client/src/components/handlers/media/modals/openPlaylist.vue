@@ -1,11 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Open Playlist Modal
   --
-  -- Browse-and-pick over the drive, constrained to playlist files. With a queue already playing, a pick asks
-  -- whether to open (replace the queue -- the picked playlist becomes what Save overwrites) or append (pour its
-  -- tracks in, ownership unchanged); an empty session just opens. Entries that can't be resolved are reported by
-  -- count -- they stay visible in the queue as broken rows. Imperative: the playlist panel opens it via the
-  -- exposed open().
+  -- With a queue already playing, a pick asks whether to open the playlist, which replaces the queue and makes it the
+  -- file Save overwrites, or append its tracks, which leaves the file Save overwrites unchanged.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

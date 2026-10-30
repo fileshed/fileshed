@@ -23,7 +23,7 @@ import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 
 // Support
-import { meFixture } from '../../../support.ts';
+import { fileNode, meFixture } from '../../../support.ts';
 
 // Under test
 import MediaPlayer from '@client/components/handlers/media/mediaPlayer.vue';
@@ -38,13 +38,10 @@ vi.mock('@client/resource-access/mediaTags.ts', () => ({
 }));
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getChildren: vi.fn(),
+    listChildren: vi.fn(),
 
     // The identity bar reads the playing track's sharing off the node it fetches, so this has to answer a node.
     getNode: vi.fn(async (id : string) => ({ id, sharing: null })),
-}));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
 }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
 vi.mock('@client/resource-access/accessTokens.ts', () => ({
@@ -54,26 +51,7 @@ vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function fileNode(overrides : Partial<{ id : string; name : string; mimeType : string }> = {}) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'f1',
-        name: overrides.name ?? 'song.mp3',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: overrides.mimeType ?? 'audio/mpeg',
-        trashedAt: null,
-    };
-}
+const AUDIO = { mimeType: 'audio/mpeg' };
 
 const stubs = {
     UButton: {
@@ -133,7 +111,7 @@ describe('MediaPlayer surfaces', () =>
         const store = useMediaPlayerStore();
         store.playbackToken = { id: 'k1', token: 'fsplay_sessionkey', expiresAt: Date.now() + 3_600_000 };
 
-        const wrapper = mountPlayer(fileNode());
+        const wrapper = mountPlayer(fileNode(AUDIO));
         const src = wrapper.get('audio').attributes('src') ?? '';
 
         expect(src).toContain('disposition=inline');
@@ -147,9 +125,9 @@ describe('MediaPlayer surfaces', () =>
         const session = useSessionStore();
         session.me = meFixture({ preferences: { allowRemoteMedia: false } });
         const store = useMediaPlayerStore();
-        const wrapper = mountPlayer(fileNode());
+        const wrapper = mountPlayer(fileNode(AUDIO));
 
-        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3'));
+        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3', 'seat-1'));
         await wrapper.vm.$nextTick();
 
         expect(wrapper.get('audio').attributes('src')).toBe('');
@@ -160,9 +138,9 @@ describe('MediaPlayer surfaces', () =>
         const session = useSessionStore();
         session.me = meFixture({ preferences: {} });
         const store = useMediaPlayerStore();
-        const wrapper = mountPlayer(fileNode());
+        const wrapper = mountPlayer(fileNode(AUDIO));
 
-        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3'));
+        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3', 'seat-1'));
         await wrapper.vm.$nextTick();
 
         expect(wrapper.get('audio').attributes('src')).toBe('https://radio.example/live.mp3');
@@ -170,7 +148,7 @@ describe('MediaPlayer surfaces', () =>
 
     it('opens the routed audio file as the session and mounts the audio card, not the video canvas', () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1', name: 'one.mp3' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }));
         const store = useMediaPlayerStore();
 
         expect(store.track?.nodeID).toBe('a1');
@@ -189,7 +167,7 @@ describe('MediaPlayer surfaces', () =>
 
     it('shows the empty invitation once the last track is removed', async () =>
     {
-        const wrapper = mountPlayer(fileNode());
+        const wrapper = mountPlayer(fileNode(AUDIO));
         const store = useMediaPlayerStore();
 
         store.removeTrack(0);
@@ -208,7 +186,7 @@ describe('MediaPlayer surfaces', () =>
             artworkUrl: 'blob:fake-cover',
         });
 
-        const wrapper = mountPlayer(fileNode({ id: 'a1', name: 'one.mp3' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }));
         await flushPromises();
 
         expect(wrapper.get('img').attributes('src')).toBe('blob:fake-cover');
@@ -219,7 +197,7 @@ describe('MediaPlayer surfaces', () =>
 
     it('falls back to a placeholder and the filename when the file carries no tags', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1', name: 'one.mp3' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }));
         await flushPromises();
 
         expect(wrapper.find('img').exists()).toBe(false);
@@ -230,7 +208,7 @@ describe('MediaPlayer surfaces', () =>
     // listen at the window: playback keys work from anywhere on the page except typing surfaces.
     it('drives the player from window-level shortcuts, deferring to typing surfaces', async () =>
     {
-        const wrapper = mountPlayer(fileNode());
+        const wrapper = mountPlayer(fileNode(AUDIO));
         wrapper.element.ownerDocument.body.appendChild(wrapper.element);
 
         window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
@@ -249,7 +227,7 @@ describe('MediaPlayer surfaces', () =>
 
     it('resets the session when the page unmounts', () =>
     {
-        const wrapper = mountPlayer(fileNode());
+        const wrapper = mountPlayer(fileNode(AUDIO));
         const store = useMediaPlayerStore();
 
         wrapper.unmount();
@@ -265,9 +243,9 @@ describe('MediaPlayer queue playback', () =>
 {
     it('advances to the next track on the same living element, the listener\'s volume riding along', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1' }));
         const store = useMediaPlayerStore();
-        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
         await nextTick();
 
         const element = wrapper.get('audio').element as HTMLAudioElement;
@@ -289,7 +267,7 @@ describe('MediaPlayer queue playback', () =>
 
     it('stays on the last track when it ends with nothing queued after it', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1' }));
         const store = useMediaPlayerStore();
 
         wrapper.get('audio').element.dispatchEvent(new Event('ended'));
@@ -301,7 +279,7 @@ describe('MediaPlayer queue playback', () =>
 
     it('switches surface when the queue crosses from audio into video', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1' }));
         const store = useMediaPlayerStore();
         store.add(fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' }));
         await nextTick();
@@ -315,9 +293,9 @@ describe('MediaPlayer queue playback', () =>
 
     it('keeps the playing track untouched when a row above it is removed', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1' }));
         const store = useMediaPlayerStore();
-        store.add(fileNode({ id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.next();
         await nextTick();
 
@@ -331,9 +309,9 @@ describe('MediaPlayer queue playback', () =>
 
     it('skips past a track the browser cannot decode instead of stalling the queue', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1' }));
         const store = useMediaPlayerStore();
-        store.add(fileNode({ id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         await nextTick();
 
         wrapper.get('audio').element.dispatchEvent(new Event('error'));
@@ -345,7 +323,7 @@ describe('MediaPlayer queue playback', () =>
 
     it('restarts the same track on the same element when it ends under repeat-one', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1' }));
         const store = useMediaPlayerStore();
         store.cycleRepeat();
         store.cycleRepeat();
@@ -366,7 +344,7 @@ describe('MediaPlayer queue playback', () =>
     {
         const wrapper = mountPlayer(fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' }), 'video');
         const store = useMediaPlayerStore();
-        store.add(fileNode({ id: 'a1', name: 'one.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }));
         await nextTick();
 
         expect(wrapper.text()).toContain('Playlist');
@@ -382,9 +360,9 @@ describe('MediaPlayer queue playback', () =>
 
     it('walks the queue from the transport\'s previous and next', async () =>
     {
-        const wrapper = mountPlayer(fileNode({ id: 'a1' }));
+        const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1' }));
         const store = useMediaPlayerStore();
-        store.add(fileNode({ id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         await nextTick();
 
         await wrapper.get('button[aria-label="Next track"]').trigger('click');

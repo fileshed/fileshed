@@ -10,8 +10,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-// App
-import { targetsGatedAuthSurface, targetsSignUpSurface } from '@server/app.ts';
+// Middleware
+import { targetsGatedAuthSurface, targetsSignUpSurface } from '@server/clients/http/middleware/authGate.ts';
 
 // Support
 import { ORIGIN, bootTestApp, makeAdmin } from './support.ts';

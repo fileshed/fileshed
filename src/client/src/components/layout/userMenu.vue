@@ -1,9 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- User Menu
   --
-  -- The signed-in user's avatar dropdown: identity label, a link to the account area, the admin entry for admins,
-  -- the About dialog, and sign-out. It owns its own sign-out and post-sign-out redirect, so any shell -- the drive top bar, the editor
-  -- header -- mounts it without wiring anything through.
+  -- It owns its sign-out and the redirect after it, so any shell can mount it without wiring anything through.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

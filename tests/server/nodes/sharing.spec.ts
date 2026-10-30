@@ -24,10 +24,10 @@ import type {
 
 // Support
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
-    bootServeApp,
+    bootStoreApp,
     createFolder,
     createLink,
     makeUser,
@@ -41,14 +41,14 @@ import {
 
 const NOTHING_SHARED = { granteeCount: 0, linkUrl: null };
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let friend : TestUser;
 let colleague : TestUser;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     friend = await makeUser(booted, 'friend@example.com');
     colleague = await makeUser(booted, 'colleague@example.com');

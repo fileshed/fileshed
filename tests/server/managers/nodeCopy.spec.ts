@@ -17,10 +17,10 @@ import { ForbiddenError, NotFoundError, RegulationError } from '@fileshed/core';
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
-import { NodeManager, type OrphanedBlobs } from '@server/managers/node.ts';
+import { NodeManager, type OrphanedBlobsFor } from '@server/managers/node.ts';
 
 // Support
 import {
@@ -76,9 +76,9 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
         .execute();
 }
 
-function manager(orphanedBlobs : OrphanedBlobs = noopOrphanedBlobs()) : NodeManager
+function manager(orphanedBlobs : OrphanedBlobsFor = noopOrphanedBlobs()) : NodeManager
 {
-    return new NodeManager(handle, ra, orphanedBlobs, testNodePolicy());
+    return new NodeManager({ handle, orphanedBlobs, policy: testNodePolicy() });
 }
 
 async function caught(promise : Promise<unknown>) : Promise<unknown>
@@ -219,7 +219,11 @@ describe('NodeManager.copy', () =>
     {
         await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
 
-        const bound = new NodeManager(handle, ra, noopOrphanedBlobs(), { defaultQuota: async () => 1500 });
+        const bound = new NodeManager({
+            handle,
+            orphanedBlobs: noopOrphanedBlobs(),
+            policy: { defaultQuota: async () => 1500 },
+        });
         const error = await caught(bound.copy(testActor({ id: 'alice' }), 'src', { parentID: null }));
 
         expect(error).toBeInstanceOf(ForbiddenError);
@@ -232,7 +236,11 @@ describe('NodeManager.copy', () =>
 
         await setUserQuota(handle.db, 'alice', 0);
 
-        const bound = new NodeManager(handle, ra, noopOrphanedBlobs(), { defaultQuota: async () => 1500 });
+        const bound = new NodeManager({
+            handle,
+            orphanedBlobs: noopOrphanedBlobs(),
+            policy: { defaultQuota: async () => 1500 },
+        });
         await bound.copy(testActor({ id: 'alice' }), 'src', { parentID: null });
 
         expect(await ra.ownedBytes('alice')).toBe(2000);
@@ -305,7 +313,7 @@ describe('NodeManager.copy', () =>
         await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
         await seedShare('src', 'bob', 'viewer');
 
-        const mgr = manager(new BlobRA(handle));
+        const mgr = manager((tx) => new BlobRA(tx));
         const copy = await mgr.copy(testActor({ id: 'bob' }), 'src', { parentID: null });
 
         await mgr.hardDelete(testActor({ id: 'alice' }), 'src');

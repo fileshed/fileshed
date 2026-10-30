@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Attachment List
   --
-  -- Files embedded in the PDF. Saving one never reaches the server: the renderer reads the bytes out of the document
-  -- it already holds. The format records no length for an embedded file, so none is shown.
+  -- Saving an attachment never reaches the server: the renderer reads the bytes out of the document it already holds.
+  -- The format records no length for an embedded file, so none is shown.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

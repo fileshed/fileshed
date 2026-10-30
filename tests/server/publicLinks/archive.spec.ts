@@ -20,10 +20,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
-    bootServeApp,
+    bootStoreApp,
     createFolder,
     createNodeLink,
     makeUser,
@@ -36,13 +36,13 @@ import {
 
 const run = promisify(execFile);
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let scratch : string;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     scratch = await mkdtemp(join(tmpdir(), 'fileshed-archive-'));
 });
@@ -134,6 +134,17 @@ describe('GET /api/archives', () =>
         expect((await getArchive(owner, [ 'no-such-node' ])).status).toBe(404);
     });
 
+    it('answers 404 when the selection names only nodes the caller cannot read', async () =>
+    {
+        const stranger = await makeUser(booted, 'stranger@example.com');
+        const hidden = await uploadFile(booted, owner, Buffer.from('secret'), { name: 'hidden.txt' });
+
+        const res = await getArchive(stranger, [ hidden.node.id ]);
+
+        expect(res.status).toBe(404);
+        expect(res.headers.get('content-disposition')).toBeNull();
+    });
+
     //------------------------------------------------------------------------------------------------------------------
     // The round trip
     //------------------------------------------------------------------------------------------------------------------
@@ -213,7 +224,7 @@ describe('GET /api/archives', () =>
     //------------------------------------------------------------------------------------------------------------------
 
     // Per-node authorization: the archive is exactly what the caller could have downloaded one file at a time.
-    it('leaves out a node the caller cannot read, and names it in the manifest', async () =>
+    it('leaves out a node the caller cannot read as though it did not exist', async () =>
     {
         const stranger = await makeUser(booted, 'stranger@example.com');
 
@@ -226,8 +237,7 @@ describe('GET /api/archives', () =>
         const res = await getArchive(stranger, [ own.node.id, shared.node.id, hidden.node.id ]);
         const path = await saveArchive(res, 'partial.zip');
 
-        expect(await zipEntries(path)).toEqual([ 'SKIPPED.txt', 'own.txt', 'shared.txt' ]);
-        expect(await zipEntryBytes(path, 'SKIPPED.txt')).toContain('hidden.txt');
+        expect(await zipEntries(path)).toEqual([ 'own.txt', 'shared.txt' ]);
 
         // A viewer's grant is enough to be in the archive, which is the whole role gate: what they could have
         // downloaded one at a time is what they get in one file.

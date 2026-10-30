@@ -1,13 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Run Sweep Button
   --
-  -- Runs one maintenance sweep now and reports what it reclaimed. The wait is the point: the button stays busy until
-  -- the sweep finishes, and the toast carries that run's own counts rather than an acknowledgement. A sweep already
-  -- running -- usually the scheduled one -- comes back as the server's refusal, which the shared error toast shows as
-  -- written.
-  --
-  -- The host can block a run for a reason only it can see, and gets the same treatment as the server's refusal: the
-  -- sweep does not start and the admin is told why, rather than a button that looks dead for no stated reason.
+  -- The button stays busy until the sweep finishes, so the toast can carry that run's own counts. A sweep already
+  -- running (usually the scheduled one) comes back as the server's refusal. A run the host blocks with `blockedReason`
+  -- still toasts the reason instead of disabling the button, so it never looks dead for no stated reason.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

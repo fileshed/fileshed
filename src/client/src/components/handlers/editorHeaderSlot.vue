@@ -1,14 +1,10 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Editor Header Slot
   --
-  -- The seam a handler family uses to contribute its identity into the editor layout's header. It teleports its slot
-  -- into the header's center region (#editor-header-center), so a family renders its name + action cluster wherever it
-  -- lives in the tree and the chrome lands in the header.
-  --
-  -- The target lives in editorLayout, a different component tree, so <Teleport defer> is no help -- defer only resolves a
-  -- target rendered later within this same tree, and teleporting to a wholly-absent target warns. A mounted-target check
-  -- gates the Teleport instead: the target is always present under the real layout, and skipped in an isolated unit
-  -- mount, so a family spec renders nothing into the void rather than tripping a Teleport warning.
+  -- The target lives in editorLayout, a different component tree, so <Teleport defer> is no help: defer only resolves a
+  -- target rendered later within the same tree, and teleporting to an absent target warns. A mounted-target check
+  -- guards the Teleport instead. The target is always present under the real layout and absent in an isolated unit
+  -- mount, so a family spec renders nothing rather than tripping a Teleport warning.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

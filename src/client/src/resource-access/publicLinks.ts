@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Public Link Resource Access
 //
-// The typed client for public-link management: mint a link on a file node, list a node's links, revoke one. Minting
-// sends no body -- a link has nothing to configure. The response carries the ready-to-use `/d/:token` path, so nothing
-// here rebuilds the direct-serving URL -- that endpoint streams bytes to an anonymous visitor and is a plain href,
-// never a JSON fetch. Revoke answers 204 and resolves void.
+// The response carries the ready-to-use `/d/:token` path, so nothing here builds the direct-serving URL; that endpoint
+// is a plain href, never a JSON fetch.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {

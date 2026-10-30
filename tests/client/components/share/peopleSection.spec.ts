@@ -8,7 +8,6 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import type {
     AccessRequestListEntry,
     AccessRequestResponse,
-    NodeResponse,
     ShareListEntry,
     ShareRole,
     UserSummary,
@@ -23,6 +22,9 @@ import {
     listAccessRequests,
 } from '@client/resource-access/accessRequests.ts';
 import { lookupUser } from '@client/resource-access/users.ts';
+
+// Support
+import { fileNode } from '../../support.ts';
 
 // Under test
 import PeopleSection from '@client/components/share/peopleSection.vue';
@@ -85,25 +87,6 @@ function incomingRequest(
     return { request: accessRequest(role, nodeID, requester.id, id, message), requester };
 }
 
-function fileNode() : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'f1',
-        name: 'report.txt',
-        ownerID: 'owner1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
-
 // Each row of a shares-list response pairs the grant with its grantee's summary, exactly as the server sends it --
 // the display never falls back to a placeholder because the summary always rides with the grant.
 function shareEntry(role : 'viewer' | 'editor', grantee : UserSummary = GRACE) : ShareListEntry
@@ -142,7 +125,7 @@ const STUBS = {
 function mountSection(owner : UserSummary | null = OWNER) : VueWrapper
 {
     return mount(PeopleSection, {
-        props: { node: fileNode(), owner },
+        props: { node: fileNode({ ownerID: OWNER.id }), owner },
         global: { stubs: STUBS },
     });
 }

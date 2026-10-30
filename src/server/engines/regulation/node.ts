@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Regulation
-//
-// Cross-record legality for node placement: link creation, parent-edge legality, cycle prevention on real parent
-// edges, and trash legality. Pure -- every fact the judgement needs is passed in; the manager gathers, the engine
-// judges.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -35,15 +31,13 @@ function isAtLeastEditor(role : Role | null) : boolean
 // target's real ancestor chain, since links never conduct permissions.
 export interface LinkCreationFacts
 {
-    linkID : string;
     targetNodeID : string;
     targetType : NodeType;
     creatorRoleOnTarget : Role | null;
 }
 
-// A link's target must be a file or folder (never a link), a link may not point at itself, and creating one requires
-// ownership of or an active share on the target. Self-links onto a node you own are fine -- ownership shows up as a
-// non-null role -- so no special casing beyond the self-target guard.
+// A link's target must be a file or folder (never a link), and creating one requires ownership of or an active share on
+// the target. A link onto a node you own is fine -- ownership shows up as a non-null role.
 export function judgeLinkCreation(facts : LinkCreationFacts) : RegulationResult
 {
     const violations : RegulationViolation[] = [];
@@ -53,15 +47,6 @@ export function judgeLinkCreation(facts : LinkCreationFacts) : RegulationResult
         violations.push({
             code: 'link.targetIsLink',
             message: 'A link may not target another link.',
-            targetNodeID: facts.targetNodeID,
-        });
-    }
-
-    if(facts.targetNodeID === facts.linkID)
-    {
-        violations.push({
-            code: 'link.selfTarget',
-            message: 'A link may not target itself.',
             targetNodeID: facts.targetNodeID,
         });
     }

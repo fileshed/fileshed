@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Kysely, Selectable } from 'kysely';
 
 // Models
-import { NodeRowCorruptionError } from '@fileshed/core';
+import { RowCorruptionError } from '@fileshed/core';
 
 // Resource Access
 import type { Database, DatabaseHandle, NodeTable } from '@server/resource-access/database/database.ts';
@@ -127,21 +127,21 @@ describe('nodeFromRow corruption detection', () =>
     {
         const row : Selectable<NodeTable> = { ...fileRow(), blob_id: null };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 
     it('throws when a folder row carries a size', () =>
     {
         const row : Selectable<NodeTable> = { ...fileRow(), type: 'folder', blob_id: null, mime_type: null, size: 10 };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 
     it('throws when a link row carries a blob', () =>
     {
         const row : Selectable<NodeTable> = { ...fileRow(), type: 'link', target_node_id: 'd1', blob_id: 'sha-a' };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 
     it('throws when a link row carries a trashed_at (links are never trashed)', () =>
@@ -156,7 +156,7 @@ describe('nodeFromRow corruption detection', () =>
             trashed_at: '2026-02-03T04:05:06.000Z',
         };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 });
 

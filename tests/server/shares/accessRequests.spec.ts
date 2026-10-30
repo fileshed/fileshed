@@ -13,9 +13,9 @@ import { ACCESS_REQUEST_MESSAGE_MAX_CHARS } from '@fileshed/core';
 
 // Support
 import {
-    type BootedShareApp,
+    type BootedStoreApp,
     type TestUser,
-    bootShareApp,
+    bootStoreApp,
     createFolder,
     grantShare,
     makeUser,
@@ -27,14 +27,14 @@ import {
 
 type Json = Record<string, unknown>;
 
-let booted : BootedShareApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let requester : TestUser;
 let folder : string;
 
 beforeEach(async () =>
 {
-    booted = await bootShareApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     requester = await makeUser(booted, 'requester@example.com');
 

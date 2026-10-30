@@ -23,6 +23,9 @@ export const CUSTOM_CSS_MAX_LENGTH = 65_536;
 // stops being a name and starts breaking layouts.
 export const INSTANCE_NAME_MAX_LENGTH = 100;
 
+// What an instance nobody has named calls itself.
+export const DEFAULT_INSTANCE_NAME = 'FileShed';
+
 // Wider than the avatar whitelist on purpose: SVG is the natural logo format and the favicon path wants ICO,
 // and unlike avatars (user-generated, served to everyone) the logo is uploaded by the admin -- who already
 // holds the custom-CSS pen, so SVG's script surface adds nothing new.

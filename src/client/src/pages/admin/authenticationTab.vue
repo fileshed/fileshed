@@ -1,12 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Authentication Tab
   --
-  -- Social sign-in over better-auth's full provider list, uncurated: nothing renders until an admin adds a
-  -- provider, and a provider with any stored value keeps its card on every visit. Each card mounts the
-  -- providerFields wrapper, which knows whether the provider needs more than a credential pair, and spells out
-  -- the callback URL the provider's OAuth app must whitelist -- the step everyone forgets. Removing a card with
-  -- anything stored behind it goes through a confirming modal; an empty one just closes. Every knob here is
-  -- restart-flagged: better-auth registers the OAuth routes at boot.
+  -- Each card spells out the callback URL, because whitelisting it in the provider's OAuth app is the step everyone
+  -- forgets. Every setting here needs a restart, since better-auth registers the OAuth routes at boot.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

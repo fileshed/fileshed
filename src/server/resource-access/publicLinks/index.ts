@@ -1,11 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Public Link Resource Access
 //
-// The query surface over the `public_link` table: mint a link, revoke it, list a node's links, and resolve a token.
-// getByToken fetches regardless of revoked_at -- a revoked token still RESOLVES, to a dead link (the model's documented
-// intent); the manager decides what a dead link serves. Ordering is by created_at, never by id (cuid2 is
-// non-monotonic) -- id appears only as a tiebreak, where two links share a timestamp and the answer must not
-// alternate between reads.
+// getByToken fetches regardless of revoked_at: a revoked token still resolves, to a dead link, and the manager decides
+// what a dead link serves. Listings order by created_at, never by id (cuid2 is non-monotonic); id appears only as a
+// tiebreak, so two links sharing a timestamp do not alternate between reads.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- insert values and where clauses name snake_case DB columns (house convention) */

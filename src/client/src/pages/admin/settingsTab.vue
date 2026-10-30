@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Settings Tab
   --
-  -- The instance-settings editor: every vocabulary key as a SettingField, grouped by what it governs. The
-  -- presentation map here is deliberately the only place a key gains a human label -- the vocabulary stays
-  -- wire-shaped, and a key without an entry here simply doesn't render, which is the safe failure for a client
-  -- older than its server.
+  -- The presentation map here is the only place a key gets a human label; the vocabulary stays as the wire sends it. A
+  -- key without an entry doesn't render, the safe failure for a client older than its server.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

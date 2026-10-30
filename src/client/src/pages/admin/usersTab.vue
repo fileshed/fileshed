@@ -1,12 +1,11 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Users Tab
   --
-  -- The instance's accounts: searchable (email or name), sortable, with charged usage, quota, ban state, and the
-  -- per-row management actions. Actions that answer the refreshed row merge it in place; refetches happen only when
-  -- the listing itself changes shape (search, sort).
+  -- Actions that answer the refreshed row merge it in place; the listing is refetched only when its search or sort
+  -- changes.
   --
-  -- The instance settings ride along for the set-quota modal alone: its inherit option names the current default in
-  -- so many bytes. A row's own quota column needs nothing from them -- the listing already carries what is enforced.
+  -- The instance settings are loaded for the set-quota modal alone, whose inherit option names the current default in
+  -- bytes. A row's own quota column needs nothing from them, since the listing already carries what is enforced.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -89,7 +88,7 @@
     import { onMounted, ref, watch } from 'vue';
     import { useToast } from '@nuxt/ui/composables';
 
-    import type { AdminUserResponse, AdminUserSearchField, AdminUserSortKey } from '@fileshed/core';
+    import type { AdminUserResponse, AdminUserSearchField, AdminUserSortKey, SortDirection } from '@fileshed/core';
 
     // Stores
     import { useAdminSettingsStore } from '../../stores/adminSettings.ts';
@@ -127,7 +126,7 @@
         { label: 'Name', value: 'name' },
     ];
 
-    const sort = ref<{ key : AdminUserSortKey; direction : 'asc' | 'desc' } | null>(null);
+    const sort = ref<{ key : AdminUserSortKey; direction : SortDirection } | null>(null);
 
     async function load() : Promise<void>
     {
@@ -139,7 +138,7 @@
             const page = await listUsers({
                 limit: 100,
                 ...trimmed === '' ? {} : { search: trimmed, searchField: searchField.value },
-                ...sort.value === null ? {} : { sortBy: sort.value.key, sortDirection: sort.value.direction },
+                ...sort.value === null ? {} : { sortKey: sort.value.key, sortDirection: sort.value.direction },
             });
             users.value = page.users;
             total.value = page.total;

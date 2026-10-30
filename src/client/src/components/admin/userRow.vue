@@ -1,12 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin User Row
   --
-  -- One account in the admin table: identity, role and ban badges, charged usage, quota, joined date, and the
-  -- actions menu. The row decides nothing -- every action is emitted for the tab to run -- but it does gray out the
-  -- self-directed footguns (self-ban, self-demotion) the server would refuse anyway.
-  --
-  -- The quota shown is what the server says is actually enforced: an account with no limit of its own is capped by
-  -- the instance default, and says so, rather than claiming to be unlimited.
+  -- Self-directed actions the server would refuse (banning or demoting yourself) are disabled here too. The quota shown
+  -- is the one the server enforces: an account with no limit of its own is capped by the instance default, and says so.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

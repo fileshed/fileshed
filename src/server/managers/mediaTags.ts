@@ -1,11 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Media Tag Manager
 //
-// Orchestrates tag extraction: given a blob and the mime a node claims for it, decide whether extraction applies
-// (audio content, not a playlist, not already extracted), stream the bytes from the store, and persist whatever
-// the parser found -- including nothing, which still writes the row that marks the blob as done. Called after the
-// upload and dedup-claim commits (fire-and-forget: enrichment never delays or fails a write), and by the backfill
-// sweep that walks pre-existing libraries.
+// Extraction runs after the upload and dedup-claim commits without being awaited, so enrichment never delays or fails a
+// write. The backfill sweep covers blobs uploaded before extraction existed.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -22,7 +19,7 @@ import { getLogger } from '../utils/logger.ts';
 
 const logger = getLogger('mediaTags');
 
-export interface MediaTagDeps
+export interface MediaTagManagerDeps
 {
     blob : BlobRA;
     tags : MediaTagsRA;
@@ -37,7 +34,7 @@ export class MediaTagManager
 
     #sweeping = false;
 
-    constructor(deps : MediaTagDeps)
+    constructor(deps : MediaTagManagerDeps)
     {
         this.#blob = deps.blob;
         this.#tags = deps.tags;
@@ -53,7 +50,7 @@ export class MediaTagManager
         const blob = await this.#blob.get(blobID);
         if(blob === undefined || blob.deletedAt !== null) { return; }
 
-        const stream = await this.#blob.getStream({ backendID: blob.backendID, storageKey: blob.storageKey });
+        const stream = await this.#blob.getStream(blob);
         const tags = await extractTags(stream);
 
         await this.#tags.upsert(blobID, tags);

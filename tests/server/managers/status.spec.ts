@@ -15,17 +15,16 @@ import { type AdminOverview, ForbiddenError, MS_PER_DAY, MS_PER_SECOND } from '@
 
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
-import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
+import { seedDefaultBackend } from '@server/resource-access/blob/seeds.ts';
 
 // Managers
 import { LastRunTracker } from '@server/managers/lastRun.ts';
 import { StatusManager } from '@server/managers/status.ts';
 
 // Support
-import { type BootedApp, bootFullApp, makeAdmin, signUp } from '../auth/support.ts';
+import { type BootedApp, bootTestApp, makeAdmin, signUp } from '../auth/support.ts';
 import { fileNode, folderNode, linkNode } from '../resource-access/nodes/support.ts';
 import { testActor } from '../nodes/support.ts';
 
@@ -49,7 +48,7 @@ let signUpsOpen : boolean;
 
 beforeEach(async () =>
 {
-    booted = await bootFullApp();
+    booted = await bootTestApp();
     backendID = await seedDefaultBackend(booted.handle, booted.config);
 
     nodes = new NodeRA(booted.handle);
@@ -60,13 +59,10 @@ beforeEach(async () =>
     signUpsOpen = true;
 
     manager = new StatusManager({
+        handle: booted.handle,
         blob,
-        nodes,
-        users: new UserRA(booted.handle),
-        shares,
         tracker: new LastRunTracker(),
         build: { version: '9.9.9', commit: 'a0931ee', branch: 'topic-branch' },
-        databaseKind: booted.handle.kind,
         startedAt: new Date(Date.now() - (UPTIME_SECONDS * MS_PER_SECOND)),
         activeProviders: 2,
         emailEnabled: async () => emailConfigured,

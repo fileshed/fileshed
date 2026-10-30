@@ -13,10 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     copyNode,
     createNode,
-    getChildren,
     getNode,
-    getTrash,
     hardDeleteNode,
+    listChildren,
+    listTrash,
     patchNode,
     purgeBrokenLinks,
     restoreNode,
@@ -26,9 +26,9 @@ import { search } from '@client/resource-access/search.ts';
 import {
     grantShare,
     leaveShare,
+    listSharedWithMe,
     listSharesForNode,
     revokeShare,
-    sharedWithMe,
 } from '@client/resource-access/shares.ts';
 import {
     declineAccessRequest,
@@ -44,13 +44,13 @@ import {
 import { createPublicLink, listLinksForNode, revokePublicLink } from '@client/resource-access/publicLinks.ts';
 import { lookupUser } from '@client/resource-access/users.ts';
 import { revokeAllCredentials } from '@client/resource-access/credentials.ts';
-import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
+import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
 import {
-    adminStatus,
     banUser,
     deleteBrandingLogo,
     fetchAdminSettings,
     fetchBranding,
+    getAdminStatus,
     listUsers,
     patchAdminSettings,
     patchBranding,
@@ -65,6 +65,9 @@ import {
 import { completeSetup, fetchInstance } from '@client/resource-access/instance.ts';
 import { downloadUrl } from '@client/resource-access/downloads.ts';
 import { fetchVersion } from '@client/resource-access/version.ts';
+
+// Support
+import { SERVER_ROUTES } from '../../support/routeTable.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -96,22 +99,21 @@ interface EndpointRow
 }
 
 const sha256 = 'a'.repeat(64);
-const uploadBytes = new Blob([ 'file-bytes' ]);
 const logoFile = new File([ 'logo-bytes' ], 'logo.png', { type: 'image/png' });
 
 const rows : EndpointRow[] = [
     // Nodes
     { name: 'getNode', call: () => getNode('n1'), method: 'GET', path: '/api/nodes/n1' },
     {
-        name: 'getChildren (root)',
-        call: () => getChildren(null, { limit: 50 }),
+        name: 'listChildren (root)',
+        call: () => listChildren(null, { limit: 50 }),
         method: 'GET',
         path: '/api/nodes/children',
         query: { limit: '50' },
     },
     {
-        name: 'getChildren (folder)',
-        call: () => getChildren('n1', { sortKey: 'size', sortDirection: 'desc' }),
+        name: 'listChildren (folder)',
+        call: () => listChildren('n1', { sortKey: 'size', sortDirection: 'desc' }),
         method: 'GET',
         path: '/api/nodes/n1/children',
         query: { sortKey: 'size', sortDirection: 'desc' },
@@ -131,15 +133,15 @@ const rows : EndpointRow[] = [
         body: { name: 'renamed' },
     },
     {
-        name: 'getTrash',
-        call: () => getTrash({ limit: 50, sortKey: 'name', sortDirection: 'asc' }),
+        name: 'listTrash',
+        call: () => listTrash({ limit: 50, sortKey: 'name', sortDirection: 'asc' }),
         method: 'GET',
         path: '/api/trash',
         query: { limit: '50', sortKey: 'name', sortDirection: 'asc' },
     },
     {
-        name: 'getTrash (filtered)',
-        call: () => getTrash({ limit: 50, types: [ 'images', 'pdfs' ], updatedAfter: '2026-02-01T00:00:00.000Z' }),
+        name: 'listTrash (filtered)',
+        call: () => listTrash({ limit: 50, types: [ 'images', 'pdfs' ], updatedAfter: '2026-02-01T00:00:00.000Z' }),
         method: 'GET',
         path: '/api/trash',
         query: { limit: '50', types: 'images,pdfs', updatedAfter: '2026-02-01T00:00:00.000Z' },
@@ -205,10 +207,10 @@ const rows : EndpointRow[] = [
         method: 'POST',
         path: '/api/me/revoke-credentials',
     },
-    { name: 'sharedWithMe', call: () => sharedWithMe(), method: 'GET', path: '/api/shared-with-me' },
+    { name: 'listSharedWithMe', call: () => listSharedWithMe(), method: 'GET', path: '/api/shared-with-me' },
     {
-        name: 'sharedWithMe (filtered)',
-        call: () => sharedWithMe({ types: [ 'images' ], updatedBefore: '2026-03-01T00:00:00.000Z' }),
+        name: 'listSharedWithMe (filtered)',
+        call: () => listSharedWithMe({ types: [ 'images' ], updatedBefore: '2026-03-01T00:00:00.000Z' }),
         method: 'GET',
         path: '/api/shared-with-me',
         query: { types: 'images', updatedBefore: '2026-03-01T00:00:00.000Z' },
@@ -275,14 +277,6 @@ const rows : EndpointRow[] = [
         path: '/api/blobs/claim/c1',
         body: { answer: 'x', name: 'f.txt', parentID: null, mimeType: 'text/plain' },
     },
-    {
-        name: 'uploadTicket',
-        call: () => uploadTicket('tkt', uploadBytes, { name: 'f.txt', parentID: 'n2', mimeType: 'text/plain' }),
-        method: 'PUT',
-        path: '/api/uploads/tkt',
-        query: { name: 'f.txt', parentID: 'n2', mimeType: 'text/plain' },
-        rawBody: uploadBytes,
-    },
 
     // Admin
     {
@@ -294,10 +288,10 @@ const rows : EndpointRow[] = [
     },
     {
         name: 'listUsers (search + sort)',
-        call: () => listUsers({ search: 'ada', searchField: 'name', sortBy: 'email', sortDirection: 'desc' }),
+        call: () => listUsers({ search: 'ada', searchField: 'name', sortKey: 'email', sortDirection: 'desc' }),
         method: 'GET',
         path: '/api/admin/users',
-        query: { search: 'ada', searchField: 'name', sortBy: 'email', sortDirection: 'desc' },
+        query: { search: 'ada', searchField: 'name', sortKey: 'email', sortDirection: 'desc' },
     },
     {
         name: 'banUser',
@@ -341,7 +335,7 @@ const rows : EndpointRow[] = [
         path: '/api/admin/users/u1',
         body: { quotaLimit: null },
     },
-    { name: 'adminStatus', call: () => adminStatus(), method: 'GET', path: '/api/admin/status' },
+    { name: 'getAdminStatus', call: () => getAdminStatus(), method: 'GET', path: '/api/admin/status' },
     { name: 'sendTestEmail', call: () => sendTestEmail(), method: 'POST', path: '/api/admin/email/test' },
     { name: 'fetchAdminSettings', call: () => fetchAdminSettings(), method: 'GET', path: '/api/admin/settings' },
     {
@@ -420,6 +414,49 @@ describe('resource-access endpoint wiring', () =>
             }
         });
     }
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+interface RoutePattern
+{
+    method : string;
+    pattern : RegExp;
+}
+
+// A Hono route as an anchored regex: a `:param` segment matches any one segment, and a `*` segment the rest of the
+// path.
+function routePattern(route : string) : RoutePattern
+{
+    const space = route.indexOf(' ');
+    const source = route.slice(space + 1)
+        .split('/')
+        .map((segment) =>
+        {
+            if(segment.startsWith(':')) { return '[^/]+'; }
+            if(segment === '*') { return '.*'; }
+
+            return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        })
+        .join('/');
+
+    return { method: route.slice(0, space), pattern: new RegExp(`^${ source }$`) };
+}
+
+describe('resource-access routes', () =>
+{
+    // The wiring rows prove what the client sends. This proves the server registers it: a route renamed on the server,
+    // with its table updated to match, still fails here for every client call left on the old path.
+    it('issues only method and path pairs the server registers', () =>
+    {
+        const routes = SERVER_ROUTES.map(routePattern);
+
+        const unrouted = rows
+            .filter((row) => !routes.some((route) => route.method === row.method && route.pattern.test(row.path)))
+            .map((row) => `${ row.method } ${ row.path }`);
+
+        expect(unrouted).toEqual([]);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

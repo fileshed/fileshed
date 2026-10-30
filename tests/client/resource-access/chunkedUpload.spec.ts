@@ -8,11 +8,7 @@
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-    type NodeResponse,
-    UPLOAD_CHUNK_IN_FLIGHT_MAX_ATTEMPTS,
-    UPLOAD_CHUNK_MAX_ATTEMPTS,
-} from '@fileshed/core';
+import { UPLOAD_CHUNK_IN_FLIGHT_MAX_ATTEMPTS, UPLOAD_CHUNK_MAX_ATTEMPTS } from '@fileshed/core';
 
 // Resource Access (under test)
 import { ApiError, ConflictApiError } from '@client/resource-access/apiError.ts';
@@ -23,6 +19,9 @@ import {
     uploadWithProgress,
 } from '@client/resource-access/uploadWithProgress.ts';
 
+// Support
+import { fileNode } from '../support.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/uploadWithProgress.ts', () => ({ uploadWithProgress: vi.fn() }));
@@ -31,28 +30,7 @@ const uploadMock = uploadWithProgress as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
 const COMMIT = { name: 'f.bin', parentID: null, mimeType: 'application/octet-stream' };
-
-function committedNode() : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'n1',
-        name: 'f.bin',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: 'application/octet-stream',
-        trashedAt: null,
-    };
-}
 
 // One request as the transport saw it: where the bytes belonged and what they were.
 interface SentChunk
@@ -76,7 +54,7 @@ function accepted(chunk : SentChunk, totalBytes ?: number) : UploadOutcome
 
 function commits() : UploadOutcome
 {
-    return { committed: true, node: committedNode() };
+    return { committed: true, node: fileNode({ id: 'n1' }) };
 }
 
 // Far above what any spec here legitimately sends, and low enough to trip in milliseconds. An upload that keeps

@@ -1,13 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Virtual Scroller
   --
-  -- The scrolling box every long listing renders into: it owns the scroll, and mounts only the items in view plus a
-  -- small margin, so a folder of ten thousand costs the same DOM as a folder of ten. Items are a fixed size -- one
-  -- column for a row list, several for a tile grid -- which is what lets it place them without measuring the DOM.
-  --
-  -- Two things ride out of it that a plain list gives for free: a click that misses every item (the gesture that
-  -- clears a selection), and how far the rendered range has reached, which is what asks a listing past the ceiling for
-  -- its next chunk.
+  -- Items are a fixed size (one column for a row list, several for a tile grid), which is what lets it place them
+  -- without measuring the DOM.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

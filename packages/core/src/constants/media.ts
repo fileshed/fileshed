@@ -27,16 +27,4 @@ export const MEDIA_TAG_MAX_LENGTH = 512;
 // entry here is a raster format a browser renders in an <img> and nothing else.
 export const ARTWORK_MIME_TYPES = [ 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp' ] as const;
 
-// A playlist by declared type or by extension -- browsers and servers disagree on m3u mimes often enough that the
-// name is the more reliable witness. Beside familyOfMimeType because it plays the same classifying role: the drive's
-// presentation and the client's open-intent registry both key off it.
-export function isPlaylistFile(mimeType : string, name : string) : boolean
-{
-    if(PLAYLIST_MIME_TYPES.has(mimeType)) { return true; }
-
-    const lower = name.toLowerCase();
-
-    return PLAYLIST_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
-
 //----------------------------------------------------------------------------------------------------------------------

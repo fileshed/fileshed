@@ -21,7 +21,7 @@ import {
     type ClaimResponse,
     type GcSweepRunResponse,
     type NodeResponse,
-    type PartialsSweepRunResponse,
+    type StagedUploadsSweepRunResponse,
     TICKET_TTL_MS,
     type TrashPurgeSweepRunResponse,
 } from '@fileshed/core';
@@ -44,9 +44,9 @@ const ADMIN_EMAIL = 'sweep-now-admin@fileshed.test';
 const ADMIN_PASSWORD = 'admin-password-e2e';
 
 // The two database sweeps are held wide open and scheduled an hour out, so the gc and trash-purge runs asserted below
-// are the ones an admin asked for. The partials reaper has a fixed minute cadence that nothing can hold open, and does
-// not need one: staging is only a candidate once it has aged past a whole ticket lifetime, and the one file that ever
-// does is aged by hand a moment before the sweep this spec runs.
+// are the ones an admin asked for. The staged-upload sweep has a fixed minute cadence that nothing can hold open, and
+// does not need one: staging is only a candidate once it has aged past a whole ticket lifetime, and the one file that
+// ever does is aged by hand a moment before the sweep this spec runs.
 const HELD_OPEN = { GC_GRACE_DAYS: '7', TRASH_PURGE_DAYS: '30', GC_INTERVAL_MINUTES: '60' };
 
 // The boot pass fires a second after the server starts, so setup is usually past it already; this is the backstop
@@ -93,7 +93,7 @@ async function uploadFile(name : string, bytes : Buffer) : Promise<NodeResponse>
 async function waitOutTheBootPass(deadline = Date.now() + BOOT_PASS_TIMEOUT_MS) : Promise<void>
 {
     const body = await (await admin.get('/api/admin/status')).json() as AdminStatusResponse;
-    if(body.gc !== null && body.trashPurge !== null && body.partials !== null) { return; }
+    if(body.gc !== null && body.trashPurge !== null && body.stagedUploads !== null) { return; }
 
     if(Date.now() >= deadline) { throw new Error('setup: the server never finished its boot sweeps'); }
 
@@ -102,17 +102,17 @@ async function waitOutTheBootPass(deadline = Date.now() + BOOT_PASS_TIMEOUT_MS) 
     return waitOutTheBootPass(deadline);
 }
 
-async function stagedPartials() : Promise<string[]>
+async function stagedUploads() : Promise<string[]>
 {
     return readdir(join(server.storageRoot, '.partials')).catch(() => []);
 }
 
 // Age every staging file past the ticket TTL. The reaper judges staging by when a chunk last touched it, so this is
 // what "nobody has delivered against this upload in half an hour" looks like without waiting half an hour.
-async function abandonStagedPartials() : Promise<void>
+async function abandonStagedUploads() : Promise<void>
 {
     const touched = new Date(Date.now() - (TICKET_TTL_MS * 2));
-    const staged = await stagedPartials();
+    const staged = await stagedUploads();
 
     await Promise.all(staged.map((name) => utimes(join(server.storageRoot, '.partials', name), touched, touched)));
 }
@@ -252,21 +252,21 @@ describe('running a sweep from the admin surface', () =>
         });
 
         expect((await admin.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, delivered)).status).toBe(202);
-        expect(await stagedPartials()).toHaveLength(1);
+        expect(await stagedUploads()).toHaveLength(1);
 
-        await abandonStagedPartials();
+        await abandonStagedUploads();
 
-        const res = await admin.post('/api/admin/sweeps/partials/run');
+        const res = await admin.post('/api/admin/sweeps/stagedUploads/run');
         expect(res.status).toBe(200);
 
         // What it says it reclaimed is the delivered chunk's own size, and the staging directory agrees.
-        const body = await res.json() as PartialsSweepRunResponse;
-        expect(body.sweep).toBe('partials');
+        const body = await res.json() as StagedUploadsSweepRunResponse;
+        expect(body.sweep).toBe('stagedUploads');
         expect(body.summary).toEqual({ candidates: 1, reclaimed: 1, failed: 0, bytesFreed: delivered.length });
-        expect(await stagedPartials()).toEqual([]);
+        expect(await stagedUploads()).toEqual([]);
 
         const status = await (await admin.get('/api/admin/status')).json() as AdminStatusResponse;
-        expect(status.partials).toEqual({ ranAt: body.ranAt, summary: body.summary });
+        expect(status.stagedUploads).toEqual({ ranAt: body.ranAt, summary: body.summary });
     });
 
     it('refuses a caller who is not an admin', async () =>

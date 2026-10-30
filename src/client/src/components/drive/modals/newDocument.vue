@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- New Document Modal
-  --
-  -- The New Markdown / New text prompt, self-subscribed to the sidebar's create signal. It defaults to an extensioned
-  -- name and enforces that extension on whatever the user types, then creates an empty file in the open folder. Stays
-  -- open until the create resolves, so a rejection can toast without the dialog vanishing under it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -32,7 +28,7 @@
     import NameDialog from '../nameDialog.vue';
 
     // Utils
-    import { ensureExtension } from '../../../utils/formatters/index.ts';
+    import { ensureExtension } from '../../../utils/ensureExtension.ts';
     import { useRunWithToast } from '../../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------

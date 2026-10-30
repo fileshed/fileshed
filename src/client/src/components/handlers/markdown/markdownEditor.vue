@@ -1,30 +1,15 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Markdown Editor
   --
-  -- The WYSIWYG markdown handler's single mount component, and the markdown twin of the text family's editing surface.
-  -- It mirrors that surface's host contract exactly so integration is a registry entry plus one host case:
+  -- The formatting toolbar, bubble toolbar, and slash menu mount inside the UEditor slot so they can inject its handler
+  -- registry. Only features that round-trip to real GFM are offered; the image extension is disabled, so a pasted or
+  -- dropped image does nothing rather than inlining a base64 blob.
   --
-  --   props   modelValue : string   -- the markdown source buffer (store.buffer)
-  --           mode       : EditorMode
-  --           readOnly   : boolean
-  --           theme      : string   -- CodeMirror colorscheme id, for Source mode
-  --           gutter     : boolean  -- CodeMirror line-number gutter, for Source mode
-  --   emits   update:modelValue : [ string ]   -- wire to store.setBuffer
-  --
-  -- It reads as a word processor: the file identity (name, save state, Preview/Source, Save) teleports into the layout
-  -- header via the identity bar, a fixed formatting toolbar pins below it in WYSIWYG mode, and the document is an
-  -- elevated page on a darker scrolling canvas. The surface is Nuxt UI's UEditor (TipTap with GFM markdown
-  -- serialization); the formatting toolbar, a slimmed bubble toolbar (B/I/S/link) on selection, and a slash menu for
-  -- block insertion all mount inside the UEditor slot so they inject its handler registry. Only honestly-serializable
-  -- features are offered: task lists, tables, strikethrough, and code blocks all round-trip to real GFM. Images are out
-  -- -- the image extension is disabled, so a pasted or dropped image is a no-op rather than an inlined base64 blob.
-  --
-  -- Normalization policy. Serializing back to markdown normalizes formatting, so to keep the saved diff honest the
-  -- buffer is written only on a real edit, never on a view. The initial content rides UEditor's constructor (no update
-  -- fires). A genuine edit emits the re-serialized (normalized) markdown; merely viewing does not -- every resync (a
-  -- toggle back from Source, an external reload) goes through setContent with emitUpdate off, so it never counts as an
-  -- edit. Source edits write the buffer verbatim. The accepted tradeoff: the first WYSIWYG edit of a hand-authored file
-  -- may reflow its markdown to the serializer's house style.
+  -- Serializing back to markdown normalizes formatting, so to keep the saved diff honest the buffer is written only on
+  -- a real edit, never on a view. The initial content goes through UEditor's constructor (no update fires), and every
+  -- resync (toggling back from Source, an external reload) goes through setContent with emitUpdate off. Source edits
+  -- write the buffer verbatim. The first WYSIWYG edit of a hand-authored file may reflow its markdown to the
+  -- serializer's style.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

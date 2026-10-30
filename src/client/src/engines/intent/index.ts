@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Intent Engine
 //
-// Interpreting user gestures into typed intents: what the user means to operate on, which operations apply to it,
-// and what opening a node should do. Per-domain engines compose into one facade grouped by domain, so a caller
-// reaches for `intent.selection.applyClick` or `intent.handlers.resolveOpen` rather than importing the chunk file
-// directly. Pure, no I/O.
+// Callers reach for `intent.selection.applyClick` or `intent.handlers.resolveOpen` through this facade rather than
+// importing a domain file directly.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Intent
@@ -29,6 +27,7 @@ import {
     resolveSharedDownload,
     resolveSharedOpen,
 } from './handlers.ts';
+import { nodeMenu } from './menu.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -54,35 +53,15 @@ export const intent = {
         resolveDownload,
         resolveSharedDownload,
     },
+    menu: {
+        nodeMenu,
+    },
 } as const;
 
 //----------------------------------------------------------------------------------------------------------------------
-// Re-exports
-//----------------------------------------------------------------------------------------------------------------------
 
-export type { SelectionState, ClickModifiers, TrashMode, TrashPlan } from './selection.ts';
-export {
-    emptySelection,
-    applyClick,
-    clearSelection,
-    reconcile,
-    selectOnly,
-    canCopyNode,
-    canCopySelection,
-    planTrash,
-    isOwnedBy,
-    canShareNode,
-    ownsSelection,
-} from './selection.ts';
-
+export type { SelectionState } from './selection.ts';
 export type { EditorMode, OpenAction } from './handlers.ts';
-export {
-    canViewInline,
-    defaultEditorMode,
-    resolveDownload,
-    resolveOpen,
-    resolveSharedDownload,
-    resolveSharedOpen,
-} from './handlers.ts';
+export type { NodeMenuAction } from './menu.ts';
 
 //----------------------------------------------------------------------------------------------------------------------

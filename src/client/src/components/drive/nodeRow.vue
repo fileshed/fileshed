@@ -1,16 +1,6 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Node Row
   --
-  -- One dense row in the list: name with its type icon and sharing, owner, size, modified time, kind, and an
-  -- end-of-row kebab. The name outranks the metadata columns: as the surface narrows Type leaves first, then Size,
-  -- then Modified, and at the narrowest tier size and modified return as one meta line under the name. Name, owner,
-  -- and the kebab stay.
-  -- Same interaction contract as the grid tile -- click emits selection intent with modifiers, double-click emits
-  -- open, the menu items (right-click, or the kebab) are a prop. A dead link dims and reads "Broken link" in the kind
-  -- column. The owner avatar resolves against the listing's owners facet -- a link attributes to its resolved
-  -- TARGET's owner, falling back to the link's own owner when dead; a miss (should not happen for a drive listing)
-  -- falls back to an initials avatar keyed off the raw owner id instead of hiding the cell.
-  --
   -- The row is a fixed height, which is what lets the list place it without measuring, and it carries its node's id so
   -- a right-click anywhere in the list can tell which row it landed on. The kebab's menu and the owner's hover card
   -- wait for the pointer: in a folder of ten thousand a row is mounted every time it scrolls back into view, and

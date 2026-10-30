@@ -1,9 +1,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Archive Plan
 //
-// What a selection becomes inside an archive: which files go in, under what paths, which folders exist, and what was
-// left out and why. Pure -- it is handed the walked subtree and the roles already resolved, and decides layout only.
-//
 // Paths are relative to the selection rather than to anyone's drive. A selected file is its own name at the archive
 // root; a selected folder is a directory of that name with its tree beneath it. Nothing above the selection appears,
 // so an archive of one deep folder does not carry the folders it happened to live under.
@@ -13,11 +10,12 @@
 // to a folder is not followed -- it would reach outside the selection, and a link pointing back at an ancestor would
 // have no end -- and the same content reached twice really is in the tree twice, so it is in the archive twice.
 //
-// What cannot go in is named in the manifest rather than failing the request:
+// A selected node the caller cannot read is dropped as though the walk had not returned it: it is somebody else's,
+// and the manifest is no place to learn its name. Anything else that cannot go in is named in the manifest rather
+// than failing the request:
 //
-// - A node the caller cannot read. Reachable mostly as a stale selection: a role resolves down the tree, so a folder
-//   they can read has no descendant they cannot.
-// - A trashed node. Trashing a folder stamps its whole subtree, so a trashed node under a live folder is one somebody
+// - A node inside a selected folder that the caller cannot read.
+// - A trashed node. Trashing a folder marks its whole subtree, so a trashed node under a live folder is one somebody
 //   threw away on purpose; putting it back in an archive of that folder would undo the throwing away.
 // - A link whose target is gone, unreadable, or a folder. The manifest names what it pointed at, so the note says
 //   what is missing rather than only that something was.
@@ -156,6 +154,7 @@ function markCovered(node : Node, childrenOf : ReadonlyMap<string, Node[]>, cove
 export function planArchive(input : ArchivePlanInput) : ArchivePlan
 {
     const byID = new Map(input.nodes.map((node) => [ node.id, node ]));
+    const readable = (id : string) : boolean => (input.roles.get(id) ?? null) !== null;
     const childrenOf = new Map<string, Node[]>();
 
     for(const node of input.nodes.filter((candidate) => candidate.parentID !== null))
@@ -175,7 +174,7 @@ export function planArchive(input : ArchivePlanInput) : ArchivePlan
     const covered = new Set<string>();
     const roots = input.selectedIDs
         .map((id) => byID.get(id))
-        .filter((node) : node is Node => node !== undefined);
+        .filter((node) : node is Node => node !== undefined && readable(node.id));
 
     for(const root of roots)
     {
@@ -184,10 +183,9 @@ export function planArchive(input : ArchivePlanInput) : ArchivePlan
 
     function place(node : Node, parentPath : string) : void
     {
-        const readable = (input.roles.get(node.id) ?? null) !== null;
         const path = uniquePath(taken, `${ parentPath }${ safeSegment(node.name) }`);
 
-        const omission = omissionFor(node, readable);
+        const omission = omissionFor(node, readable(node.id));
         if(omission !== null)
         {
             plan.omissions.push({ path, reason: omission });
@@ -199,7 +197,7 @@ export function planArchive(input : ArchivePlanInput) : ArchivePlan
         if(node.type === 'link')
         {
             const target = input.targets.get(node.targetNodeID);
-            const targetReadable = target !== undefined && (input.roles.get(target.id) ?? null) !== null;
+            const targetReadable = target !== undefined && readable(target.id);
 
             if(target !== undefined && targetReadable && target.type === 'file' && target.trashedAt === null)
             {

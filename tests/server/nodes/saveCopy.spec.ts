@@ -11,9 +11,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
 import {
-    type BootedShareApp,
+    type BootedStoreApp,
     type TestUser,
-    bootShareApp,
+    bootStoreApp,
     createFolder,
     grantShare,
     makeUser,
@@ -25,13 +25,13 @@ import {
 
 type Json = Record<string, unknown>;
 
-let booted : BootedShareApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let recipient : TestUser;
 
 beforeEach(async () =>
 {
-    booted = await bootShareApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     recipient = await makeUser(booted, 'recipient@example.com');
 });

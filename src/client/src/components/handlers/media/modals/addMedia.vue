@@ -1,11 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Add Media Modal
   --
-  -- The playlist's browse-and-add: a file picker over the caller's drive constrained to audio and video, where every
-  -- pick appends to the queue and the picker stays open -- building a playlist is a run of picks, not one choice.
-  -- Rows already in the queue wear a check, folder rows carry an Add-all that queues the folder's media (recursing
-  -- into subfolders), and the caption keeps a running count so every action lands visibly. Imperative: the playlist
-  -- opens it via the exposed open().
+  -- The picker stays open after each pick, since building a playlist is a run of picks rather than one choice.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

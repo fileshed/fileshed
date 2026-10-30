@@ -10,19 +10,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
-import { type BootedUserApp, type TestUser, bootUserApp, makeUser, request } from './support.ts';
+import { type BootedStoreApp, type TestUser, bootStoreApp, makeUser, request } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 type Json = Record<string, unknown>;
 
-let booted : BootedUserApp;
+let booted : BootedStoreApp;
 let caller : TestUser;
 let target : TestUser;
 
 beforeEach(async () =>
 {
-    booted = await bootUserApp();
+    booted = await bootStoreApp();
     caller = await makeUser(booted, 'caller@example.com', 'Ada Caller');
     target = await makeUser(booted, 'grace@example.com', 'Grace Hopper');
 });

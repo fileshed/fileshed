@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- View Toggle
-  --
-  -- The grid/list switch shared by every file surface (drive, shared, trash). The active mode reads solid, the other
-  -- outline, so the current choice is unmistakable. It carries no preference of its own -- the surface owns the value
-  -- and persists the pick; this only reports which way the user clicked.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

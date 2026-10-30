@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Delete Forever Modal
-  --
-  -- The destructive confirm behind Delete forever, opened imperatively by the trash page for one node. It names the
-  -- node and warns the delete is permanent; a folder additionally warns its contents go with it. Stays open until the
-  -- delete resolves, so a rejection can toast without the dialog vanishing under it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

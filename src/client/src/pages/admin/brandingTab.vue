@@ -1,10 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Branding Tab
   --
-  -- The instance's look, live: every knob edits a draft that repaints this very page through preview variables,
-  -- and nothing becomes real for anyone else until Save. No restart banner belongs here -- the whole surface
-  -- applies on the next page load by design. Identity (the instance name) is an ordinary per-field setting; the
-  -- visual knobs share the one draft/save bar.
+  -- Every knob edits a draft that repaints this page through preview variables; nothing reaches anyone else until Save.
+  -- There is no restart banner because branding applies on the next page load. The instance name is an ordinary
+  -- per-field setting outside the draft.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -7,15 +7,16 @@
 // that carries none.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ClaimResponse } from '@fileshed/core';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     answerChallenge,
     bootBlobApp,
     claim,
@@ -27,14 +28,7 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
+let booted : BootedStoreApp;
 
 // Above SMALL_FILE_THRESHOLD_BYTES, so a second claim on the same hash is worth a proof-of-possession round trip
 // rather than another upload -- which is the only way to reach the deduped commit.

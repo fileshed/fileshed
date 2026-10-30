@@ -21,6 +21,9 @@ data/
 # Logs
 *.log
 
+# desloppify local state
+.desloppify/
+
 # Editor
 .idea/
 .vscode/

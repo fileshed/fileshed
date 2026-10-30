@@ -1,20 +1,19 @@
 //----------------------------------------------------------------------------------------------------------------------
 // pdf.js Binding
 //
-// The one place anything touches pdf.js: the surface drives PDFs through a small, house-shaped API and the rest of the
+// The one place anything touches pdf.js: the surface drives PDFs through a small API of our own, and the rest of the
 // family (store, toolbar, sidebar, tests) never imports the renderer.
 //
-// It is built on pdfjs-dist's viewer *components* (PDFViewer + EventBus + PDFLinkService + PDFFindController), not the
-// prebuilt Mozilla viewer application, which the npm package does not ship at all. PDFViewer already does the hard
-// parts correctly and version-stably -- lazy page rendering, the selectable text layer, the find controller wired to
-// the text layer, and the AnnotationEditorLayer wired to a shared editor UI manager. What the components bundle leaves
-// out is the chrome: the sidebar, the thumbnails, the outline, the document properties. Those are assembled here out of
-// the document APIs, which are stable and documented, rather than reached for inside Mozilla's application.
+// It is built on pdfjs-dist's viewer components (PDFViewer, EventBus, PDFLinkService, PDFFindController), not the
+// prebuilt Mozilla viewer application, which the npm package does not ship. PDFViewer already handles lazy page
+// rendering, the selectable text layer, the find controller, and the annotation editor layer. The components leave out
+// the chrome (sidebar, thumbnails, outline, document properties), which is assembled here from the documented document
+// APIs rather than reached for inside Mozilla's application.
 //
-// pdf.js cannot edit existing page content. The annotation editors add marks OVER the page (free text, ink, highlight,
+// pdf.js cannot edit existing page content. The annotation editors add marks over the page (free text, ink, highlight,
 // stamp); saveDocument serializes those, plus any AcroForm field values, as an incremental update to the original
-// bytes -- a real, valid PDF, not a re-render. The worker is bundled (Vite ?url import), never fetched from a CDN, so a
-// self-hosted deployment carries its own renderer.
+// bytes. The worker is bundled (a Vite ?url import), never fetched from a CDN, so a self-hosted deployment carries its
+// own renderer.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
@@ -34,7 +33,7 @@ import {
 } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Components
+// Engines
 import {
     type AltTextRequest,
     type AnnotationMode,
@@ -48,7 +47,13 @@ import {
     type ScrollModeName,
     type SpreadModeName,
     highlightColors,
-} from './types.ts';
+} from '../../../engines/pdf/types.ts';
+import {
+    type RawOutlineEntry,
+    adoptOutline,
+    describePageSize,
+    textOrNull,
+} from '../../../engines/pdf/documentFacts.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -149,16 +154,6 @@ interface FindMatchesEvent { matchesCount : { current : number; total : number }
 interface EditorUIManagerEvent { uiManager : { undo : () => void; redo : () => void } | null; }
 interface EditingStatesEvent { details : { hasSomethingToUndo ?: boolean; hasSomethingToRedo ?: boolean }; }
 
-// pdf.js's outline reply, which its .d.ts describes only loosely. Only the fields rendered are named.
-interface RawOutlineEntry
-{
-    title : string;
-    bold : boolean;
-    italic : boolean;
-    dest : OutlineDestination | null;
-    items : RawOutlineEntry[];
-}
-
 interface RawAttachment { filename : string; rawFilename : string; description : string; }
 
 // The half of an annotation editor an alt-text dialog touches. pdf.js hands the editor over untyped.
@@ -189,47 +184,6 @@ interface RawDocumentInfo
 // Document facts
 //----------------------------------------------------------------------------------------------------------------------
 
-// Named page sizes, in PDF points, matched within a point either way -- a generator's rounding should not cost a
-// document its name. Landscape is the same paper, so both orientations match.
-const PAGE_SIZES : readonly { name : string; width : number; height : number }[]
-    = [
-        { name: 'Letter', width: 612, height: 792 },
-        { name: 'Legal', width: 612, height: 1008 },
-        { name: 'Tabloid', width: 792, height: 1224 },
-        { name: 'A3', width: 842, height: 1191 },
-        { name: 'A4', width: 595, height: 842 },
-        { name: 'A5', width: 420, height: 595 },
-    ];
-
-const POINTS_PER_INCH = 72;
-const MM_PER_INCH = 25.4;
-
-function namePageSize(width : number, height : number) : string | null
-{
-    const match = PAGE_SIZES.find((size) =>
-    {
-        const upright = Math.abs(size.width - width) <= 1 && Math.abs(size.height - height) <= 1;
-        const landscape = Math.abs(size.height - width) <= 1 && Math.abs(size.width - height) <= 1;
-
-        return upright || landscape;
-    });
-
-    if(match === undefined) { return null; }
-
-    return width > height ? `${ match.name }, landscape` : match.name;
-}
-
-function describePageSize(width : number, height : number) : string
-{
-    const inches = (value : number) : string => (Math.round((value / POINTS_PER_INCH) * 100) / 100).toString();
-    const mm = (value : number) : string => Math.round((value / POINTS_PER_INCH) * MM_PER_INCH).toString();
-
-    const measured = `${ inches(width) } × ${ inches(height) } in (${ mm(width) } × ${ mm(height) } mm)`;
-    const named = namePageSize(width, height);
-
-    return named === null ? measured : `${ measured } — ${ named }`;
-}
-
 function formatDate(raw : string | undefined) : string | null
 {
     if(raw === undefined) { return null; }
@@ -237,14 +191,6 @@ function formatDate(raw : string | undefined) : string | null
     const parsed = PDFDateString.toDateObject(raw);
 
     return parsed === null ? null : parsed.toLocaleString();
-}
-
-// A blank value in a PDF's info dictionary means the same thing as an absent one: nothing to print.
-function textOrNull(raw : string | undefined) : string | null
-{
-    const trimmed = raw?.trim() ?? '';
-
-    return trimmed === '' ? null : trimmed;
 }
 
 // Read one fact about the document, or settle for not knowing it. Every one of these is optional in the format and
@@ -256,23 +202,45 @@ async function attempt<T>(read : () => Promise<T>, fallback : T) : Promise<T>
     catch { return fallback; }
 }
 
-// Outline entries carry no identity of their own, so one is assigned by position while the nested reply is walked --
-// stable for as long as the document is open, which is as long as anything keys on it.
-function adoptOutline(entries : RawOutlineEntry[], prefix : string) : OutlineEntry[]
-{
-    return entries.map((entry, index) =>
-    {
-        const id = `${ prefix }${ index }`;
+//----------------------------------------------------------------------------------------------------------------------
+// Ready gates
+//----------------------------------------------------------------------------------------------------------------------
 
-        return {
-            id,
-            title: entry.title.trim(),
-            bold: entry.bold,
-            italic: entry.italic,
-            dest: entry.dest,
-            items: adoptOutline(entry.items ?? [], `${ id }.`),
-        };
-    });
+interface ReadyGate<K extends string>
+{
+    isReady() : boolean;
+
+    // Applies now when the gate is open; otherwise parks it, replacing whatever was parked under the same key.
+    run(key : K, apply : () => void) : void;
+    drop(key : K) : void;
+
+    // Opens the gate and applies what was parked, in the gate's key order.
+    open() : void;
+}
+
+function createReadyGate<K extends string>(order : readonly K[]) : ReadyGate<K>
+{
+    let ready = false;
+    const parked = new Map<K, () => void>();
+
+    return {
+        isReady: () => ready,
+        run(key, apply)
+        {
+            if(ready) { apply(); }
+            else { parked.set(key, apply); }
+        },
+        drop(key)
+        {
+            parked.delete(key);
+        },
+        open()
+        {
+            ready = true;
+            for(const key of order) { parked.get(key)?.(); }
+            parked.clear();
+        },
+    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -323,21 +291,17 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
 
     // The viewer initializes asynchronously after setDocument: the annotation editor's UI manager and the page layout
     // each arrive on their own bus events, and assigning a mode, editor params, a scale, a rotation, a page, a layout
-    // mode, or a search before then throws or lands nowhere. Requests that arrive early are parked and applied the
-    // moment the viewer says that layer is ready.
-    let editorReady = false;
+    // mode, or a search before then throws or lands nowhere. Requests that arrive early wait at that layer's gate,
+    // the latest of each kind, until the viewer says the layer is ready. Scale and layout settle before the requests
+    // that scroll to a place in them.
+    const editor = createReadyGate([ 'mode', 'params' ]);
+    const pages = createReadyGate([ 'zoom', 'scroll', 'spread', 'rotation', 'page', 'dest', 'find' ]);
     let uiManager : EditorUIManagerEvent['uiManager'] = null;
-    let pendingMode : AnnotationMode | null = null;
-    let pendingParams : EditorParams | null = null;
 
-    let pagesReady = false;
-    let pendingZoom : string | null = null;
-    let pendingRotation : number | null = null;
-    let pendingPage : number | null = null;
-    let pendingScroll : ScrollModeName | null = null;
-    let pendingSpread : SpreadModeName | null = null;
-    let pendingFind : FindQuery | null = null;
-    let pendingDest : OutlineDestination | null = null;
+    function applyMode(mode : AnnotationMode) : void
+    {
+        pdfViewer.annotationEditorMode = { mode: EDITOR_TYPE[mode] };
+    }
 
     function dispatchParam(type : number, value : string | number | boolean) : void
     {
@@ -375,19 +339,8 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
 
     eventBus.on('annotationeditoruimanager', (event : EditorUIManagerEvent) =>
     {
-        editorReady = true;
         uiManager = event.uiManager;
-
-        if(pendingMode !== null)
-        {
-            pdfViewer.annotationEditorMode = { mode: EDITOR_TYPE[pendingMode] };
-            pendingMode = null;
-        }
-        if(pendingParams !== null)
-        {
-            applyParams(pendingParams);
-            pendingParams = null;
-        }
+        editor.open();
     });
 
     eventBus.on('editingstateschanged', (event : EditingStatesEvent) =>
@@ -395,17 +348,12 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
         callbacks.onEditorHistory(event.details.hasSomethingToUndo ?? false, event.details.hasSomethingToRedo ?? false);
     });
 
+    // The opening scale, until the surface asks for another.
+    pages.run('zoom', () => { pdfViewer.currentScaleValue = DEFAULT_ZOOM; });
+
     eventBus.on('pagesinit', () =>
     {
-        pagesReady = true;
-        pdfViewer.currentScaleValue = pendingZoom ?? DEFAULT_ZOOM;
-        pendingZoom = null;
-        if(pendingScroll !== null) { pdfViewer.scrollMode = SCROLL_MODE[pendingScroll]; pendingScroll = null; }
-        if(pendingSpread !== null) { pdfViewer.spreadMode = SPREAD_MODE[pendingSpread]; pendingSpread = null; }
-        if(pendingRotation !== null) { pdfViewer.pagesRotation = pendingRotation; pendingRotation = null; }
-        if(pendingPage !== null) { pdfViewer.currentPageNumber = pendingPage; pendingPage = null; }
-        if(pendingDest !== null) { linkService.goToDestination(pendingDest); pendingDest = null; }
-        if(pendingFind !== null) { dispatchFind(pendingFind); pendingFind = null; }
+        pages.open();
         callbacks.onPage(pdfViewer.currentPageNumber, pdfViewer.pagesCount);
     });
 
@@ -424,7 +372,7 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
 
     const resizeObserver = new ResizeObserver(() =>
     {
-        if(!pagesReady || container.clientWidth === 0 || container.clientWidth === fittedWidth) { return; }
+        if(!pages.isReady() || container.clientWidth === 0 || container.clientWidth === fittedWidth) { return; }
 
         fittedWidth = container.clientWidth;
 
@@ -472,7 +420,7 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
     //------------------------------------------------------------------------------------------------------------------
 
     const rawOutline = await attempt<RawOutlineEntry[] | null>(() => pdfDocument.getOutline(), null);
-    const outline = adoptOutline(rawOutline ?? [], '');
+    const outline = adoptOutline(rawOutline ?? []);
 
     const rawAttachments = await attempt<Map<string, RawAttachment> | null>(
         () => pdfDocument.getAttachments() as Promise<Map<string, RawAttachment> | null>,
@@ -519,53 +467,39 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
         {
             // A read-only session never gets an editor manager -- mode requests are meaningless and stay no-ops.
             if(readOnly) { return; }
-            if(!editorReady) { pendingMode = mode; return; }
 
-            pdfViewer.annotationEditorMode = { mode: EDITOR_TYPE[mode] };
+            editor.run('mode', () => { applyMode(mode); });
         },
         setZoom(value : string) : void
         {
-            if(!pagesReady) { pendingZoom = value; return; }
-
-            pdfViewer.currentScaleValue = value;
+            pages.run('zoom', () => { pdfViewer.currentScaleValue = value; });
         },
         setRotation(degrees : number) : void
         {
-            if(!pagesReady) { pendingRotation = degrees; return; }
-
-            pdfViewer.pagesRotation = degrees;
+            pages.run('rotation', () => { pdfViewer.pagesRotation = degrees; });
         },
         setPage(page : number) : void
         {
-            if(!pagesReady) { pendingPage = page; return; }
-
-            pdfViewer.currentPageNumber = page;
+            pages.run('page', () => { pdfViewer.currentPageNumber = page; });
         },
         setScrollMode(mode : ScrollModeName) : void
         {
-            if(!pagesReady) { pendingScroll = mode; return; }
-
-            pdfViewer.scrollMode = SCROLL_MODE[mode];
+            pages.run('scroll', () => { pdfViewer.scrollMode = SCROLL_MODE[mode]; });
         },
         setSpreadMode(mode : SpreadModeName) : void
         {
-            if(!pagesReady) { pendingSpread = mode; return; }
-
-            pdfViewer.spreadMode = SPREAD_MODE[mode];
+            pages.run('spread', () => { pdfViewer.spreadMode = SPREAD_MODE[mode]; });
         },
         setParams(params : EditorParams) : void
         {
             // Params only reach editors; a read-only session has none, so they stay no-ops like the mode does.
             if(readOnly) { return; }
-            if(!editorReady) { pendingParams = params; return; }
 
-            applyParams(params);
+            editor.run('params', () => { applyParams(params); });
         },
         goToDestination(dest : OutlineDestination) : void
         {
-            if(!pagesReady) { pendingDest = dest; return; }
-
-            void linkService.goToDestination(dest);
+            pages.run('dest', () => { void linkService.goToDestination(dest); });
         },
 
         // Rasterize one page into a caller-owned canvas at a fixed width, matching the viewer's current rotation so a
@@ -576,7 +510,7 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
             const context = canvas.getContext('2d');
             if(context === null) { return; }
 
-            const rotation = pagesReady ? pdfViewer.pagesRotation : 0;
+            const rotation = pages.isReady() ? pdfViewer.pagesRotation : 0;
             const pageProxy = await pdfDocument.getPage(page);
             const base = pageProxy.getViewport({ scale: 1, rotation });
             const viewport = pageProxy.getViewport({ scale: width / base.width, rotation });
@@ -604,7 +538,7 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
         addImage() : void
         {
             if(readOnly) { return; }
-            if(!editorReady) { pendingMode = 'stamp'; return; }
+            if(!editor.isReady()) { editor.run('mode', () => { applyMode('stamp'); }); return; }
 
             pdfViewer.annotationEditorMode = { mode: AnnotationEditorType.NONE };
             pdfViewer.annotationEditorMode = { mode: AnnotationEditorType.STAMP, isFromKeyboard: true };
@@ -619,13 +553,11 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
         },
         find(query : FindQuery) : void
         {
-            if(!pagesReady) { pendingFind = query; return; }
-
-            dispatchFind(query);
+            pages.run('find', () => { dispatchFind(query); });
         },
         clearFind() : void
         {
-            pendingFind = null;
+            pages.drop('find');
             eventBus.dispatch('findbarclose', { source: pdfViewer });
         },
         // The annotated document as bytes, leaving the unsaved-marks flag exactly where it was. Printing and saving

@@ -30,6 +30,21 @@ export interface AccessToken
     expiresAt : Date | null;
 }
 
+// A freshly minted PAT: the secret, shown this once, and the record it lists as from then on.
+export interface MintedAccessToken
+{
+    token : string;
+    accessToken : AccessToken;
+}
+
+// The media player's short-lived download key.
+export interface MintedPlaybackToken
+{
+    id : string;
+    token : string;
+    expiresAt : Date;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 export const scopeStatements : Record<AccessTokenScope, PermissionStatement> = {

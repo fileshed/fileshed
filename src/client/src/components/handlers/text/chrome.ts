@@ -1,11 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Editor Chrome
 //
-// The app-native surfaces of the editor, kept out of the chosen colorscheme's hands: the structural layout (height,
-// mono font, line height, padding) and the gutter, styled from Nuxt UI's CSS custom properties so it tracks the app's
-// own light/dark mode rather than the theme. It carries no baked color mode -- the variables resolve per mode on their
-// own -- and it must outrank the theme wherever both style the gutter, which the caller arranges with Prec.high. The
-// content area (background, syntax, selection, caret) is left entirely to the chosen theme.
+// The structural layout and the gutter are styled from Nuxt UI's CSS custom properties, so they follow the app's
+// light/dark mode rather than the chosen colorscheme; the content area is left entirely to the theme. This must outrank
+// the theme wherever both style the gutter, which the caller arranges with Prec.high.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { Extension } from '@codemirror/state';

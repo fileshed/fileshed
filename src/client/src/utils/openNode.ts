@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Open Node
 //
-// The one place an open intent becomes an effect. The intent engine decides what opening a node MEANS; this carries
-// that verdict out, so every surface that can open something -- the drive, Shared with me, the search results, the
-// suggestions dropdown -- agrees on what opening does. A folder navigates in place; every file surface opens in a
-// fresh tab, leaving the surface behind it standing.
+// The intent engine decides what opening a node means; this carries it out, so every surface that opens nodes agrees on
+// what opening does.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { useRouter } from 'vue-router';

@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Identity Bar
-  --
-  -- The PDF annotator's contribution to the editor layout header: the file name and what it exposes, a save-state
-  -- readout, and Save (a Read only badge in its place for a viewer). It reads and drives the annotator store. The find
-  -- box, annotation tools, page, zoom, and overflow controls -- which aren't identity -- stay on the toolbar row above
-  -- the render surface.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

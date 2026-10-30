@@ -2,8 +2,7 @@
 // Share Request Codec
 //
 // The status variants are strict objects in a discriminated union: the pending variant pins resolvedAt to null and the
-// resolved variant requires a date. A mismatched status/resolvedAt pairing fails at parse time, not just at the type
-// level.
+// resolved variant requires a date, so a mismatched status/resolvedAt pairing fails at parse time.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';

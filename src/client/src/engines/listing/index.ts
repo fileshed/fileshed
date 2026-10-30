@@ -1,14 +1,20 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Listing Engine
 //
-// Everything a chunked, virtualized listing decides without touching the network: how much of it is worth pulling,
-// what order it reads in once it is whole, and which of its rows a filter admits. Per-domain engines compose into one
-// facade, so a caller reaches for `listing.chunks.isComplete` rather than importing the chunk file directly.
+// Callers reach for `listing.chunks.isComplete` through this facade rather than importing a domain file directly.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Listing
 import { isCapped, isComplete, reachesEnd, shouldPrefetch } from './chunks.ts';
-import { familyOf, filterNodes } from './filter.ts';
+import { familyOf, filterNodes, filterQuery } from './filter.ts';
+import {
+    MODIFIED_PRESET_LABELS,
+    modifiedFilterSummary,
+    modifiedPresets,
+    modifiedRange,
+    ownerChipVisible,
+    ownerFilterSummary,
+} from './filterPresets.ts';
 import { sortNodes } from './order.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -23,6 +29,15 @@ export const listing = {
     filter: {
         familyOf,
         filterNodes,
+        filterQuery,
+    },
+    presets: {
+        MODIFIED_PRESET_LABELS,
+        modifiedPresets,
+        modifiedRange,
+        modifiedFilterSummary,
+        ownerChipVisible,
+        ownerFilterSummary,
     },
     order: {
         sortNodes,
@@ -30,11 +45,8 @@ export const listing = {
 } as const;
 
 //----------------------------------------------------------------------------------------------------------------------
-// Re-exports
-//----------------------------------------------------------------------------------------------------------------------
 
-export { isCapped, isComplete, shouldPrefetch, reachesEnd } from './chunks.ts';
-export { type ListingFilters, familyOf, filterNodes } from './filter.ts';
-export { sortNodes } from './order.ts';
+export type { ListingFilterQuery, ListingFilters } from './filter.ts';
+export type { ModifiedFilter, ModifiedPreset } from './filterPresets.ts';
 
 //----------------------------------------------------------------------------------------------------------------------

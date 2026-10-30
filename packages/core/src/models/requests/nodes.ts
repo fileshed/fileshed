@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node API DTOs
 //
-// Request/response contracts for the /api/nodes endpoints. Wire shapes only -- cross-record legality (parent-edge
-// ownership, link-to-link, quota) is the regulation engine's job, not this boundary's. Dates serialize as ISO strings;
-// ids stay strings throughout.
+// These are wire shapes only: cross-record legality (parent-edge ownership, link-to-link, quota) is judged by the
+// regulation engine on the server.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -118,22 +117,28 @@ export const nodeTypeFamilies
     = [ 'folders', 'documents', 'pdfs', 'images', 'video', 'playlists', 'audio', 'archives', 'links' ] as const;
 export type NodeTypeFamily = typeof nodeTypeFamilies[number];
 
-// The filters ride the query string alongside pagination and sort, AND-combined. `types` is always present (empty =
-// unfiltered); ownerID, name, and the date window are absent when their filter is off. The date bounds are ISO
-// instants: updatedAfter is an inclusive lower bound, updatedBefore an exclusive upper bound (a half-open window).
-// `name` is an EXACT match, not a substring -- it exists so a client can detect an upload name collision correctly
-// under pagination (asking "is there already a child named X?" without paging the whole folder).
-export interface ChildrenQuery
+// The paging, sort, and Type/Modified filters every node listing takes, and all the trash listing takes. The filters
+// ride the query string alongside pagination and sort, AND-combined. `types` is always present (empty = unfiltered);
+// the date window is absent when its filter is off. The date bounds are ISO instants: updatedAfter is an inclusive
+// lower bound, updatedBefore an exclusive upper bound (a half-open window).
+export interface ListingQuery
 {
     limit : number;
     offset : number;
     sortKey : NodeSortKey;
     sortDirection : SortDirection;
     types : NodeTypeFamily[];
-    ownerID ?: string;
-    name ?: string;
     updatedAfter ?: string;
     updatedBefore ?: string;
+}
+
+// A folder listing adds an owner facet and a name match, each absent when off. `name` is an EXACT match, not a
+// substring -- it exists so a client can detect an upload name collision correctly under pagination (asking "is there
+// already a child named X?" without paging the whole folder).
+export interface ChildrenQuery extends ListingQuery
+{
+    ownerID ?: string;
+    name ?: string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -185,7 +190,7 @@ interface NodeResponseBase
     sharing : NodeSharing | null;
 }
 
-interface FileNodeResponse extends NodeResponseBase
+export interface FileNodeResponse extends NodeResponseBase
 {
     type : 'file';
     blobID : string;
@@ -194,13 +199,13 @@ interface FileNodeResponse extends NodeResponseBase
     trashedAt : string | null;
 }
 
-interface FolderNodeResponse extends NodeResponseBase
+export interface FolderNodeResponse extends NodeResponseBase
 {
     type : 'folder';
     trashedAt : string | null;
 }
 
-interface LinkNodeResponse extends NodeResponseBase
+export interface LinkNodeResponse extends NodeResponseBase
 {
     type : 'link';
     targetNodeID : string;

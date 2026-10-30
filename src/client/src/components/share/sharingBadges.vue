@@ -1,11 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Sharing Badges
   --
-  -- What a node currently reaches beyond its owner, as icons: people when someone holds a grant, a globe when a live
-  -- public link stands. A globe rather than a chain, which already marks a link NODE on these same surfaces. The two
-  -- are independent -- "I gave someone access" and "anyone with the URL can fetch this" are different sharings -- so
-  -- both can show at once. Icons only: the tooltip carries the words, since these sit in a tile corner and beside a
-  -- truncating name. A node with nothing to report renders nothing at all.
+  -- A public link shows as a globe rather than a chain, because the chain already marks a link node on the same
+  -- surfaces. Icons only, with the words in the tooltip, since these sit in a tile corner and beside a truncating name.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

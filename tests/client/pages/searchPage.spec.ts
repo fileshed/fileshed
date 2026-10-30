@@ -30,7 +30,7 @@ import { search } from '@client/resource-access/search.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 
 // Support
-import { ME_ID, SCROLL_AREA_STUB, meFixture } from '../support.ts';
+import { ME_ID, SCROLL_AREA_STUB, fileNode, folderNode, linkNode, meFixture } from '../support.ts';
 
 // Under test
 import SearchPage from '@client/pages/searchPage.vue';
@@ -52,35 +52,6 @@ const hardDeleteMock = hardDeleteNode as unknown as Mock;
 const copyMock = copyNode as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-const ISO = '2026-07-01T00:00:00.000Z';
-const BASE = { parentID: null, createdAt: ISO, updatedAt: ISO, role: 'viewer' as const };
-
-function fileNode(id : string, name : string, ownerID : string, mimeType = 'application/octet-stream') : NodeResponse
-{
-    return {
-        ...BASE,
-        id,
-        name,
-        ownerID,
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType,
-        trashedAt: null,
-        sharing: null,
-    };
-}
-
-function textFileNode(id : string, name : string, ownerID = 'owner1') : NodeResponse
-{
-    return fileNode(id, name, ownerID, 'text/plain');
-}
-
-function folderNode(id : string, name : string, ownerID = 'owner1') : NodeResponse
-{
-    return { sharing: null, ...BASE, id, name, ownerID, type: 'folder', trashedAt: null };
-}
 
 // Every hit needs a location, so the default is the plainest one: the caller's own files root, no folders between.
 function envelope(nodes : NodeResponse[], overrides : Partial<SearchResponse> = {}) : SearchResponse
@@ -175,7 +146,9 @@ describe('SearchPage', () =>
 
     it('loads results for the query param on mount', async () =>
     {
-        searchMock.mockResolvedValue(envelope([ fileNode('f1', 'Quarterly-Zephyr.pdf', 'owner1', 'application/pdf') ]));
+        searchMock.mockResolvedValue(envelope([
+            fileNode({ id: 'f1', name: 'Quarterly-Zephyr.pdf', ownerID: 'owner1', mimeType: 'application/pdf' }),
+        ]));
 
         const { wrapper } = await mountSearch('zephyr');
 
@@ -185,12 +158,12 @@ describe('SearchPage', () =>
 
     it('re-queries when a fresh term is pushed while already on the page', async () =>
     {
-        searchMock.mockResolvedValue(envelope([ fileNode('f1', 'alpha-report.txt', 'owner1') ]));
+        searchMock.mockResolvedValue(envelope([ fileNode({ id: 'f1', name: 'alpha-report.txt', ownerID: 'owner1' }) ]));
         const { wrapper, router } = await mountSearch('alpha');
 
         expect(wrapper.text()).toContain('alpha-report.txt');
 
-        searchMock.mockResolvedValue(envelope([ fileNode('f2', 'beta-report.txt', 'owner1') ]));
+        searchMock.mockResolvedValue(envelope([ fileNode({ id: 'f2', name: 'beta-report.txt', ownerID: 'owner1' }) ]));
         await router.push({ path: '/search', query: { q: 'beta' } });
         await flushPromises();
 
@@ -201,9 +174,10 @@ describe('SearchPage', () =>
 
     it('shows the result count line for the active term', async () =>
     {
-        searchMock.mockResolvedValue(envelope(
-            [ fileNode('f1', 'one.txt', 'owner1'), fileNode('f2', 'two.txt', 'owner1') ]
-        ));
+        searchMock.mockResolvedValue(envelope([
+            fileNode({ id: 'f1', name: 'one.txt', ownerID: 'owner1' }),
+            fileNode({ id: 'f2', name: 'two.txt', ownerID: 'owner1' }),
+        ]));
 
         const { wrapper } = await mountSearch('report');
 
@@ -224,7 +198,7 @@ describe('SearchPage', () =>
     it('renders a foreign owner\'s real name and avatar from the owners facet', async () =>
     {
         searchMock.mockResolvedValue(envelope(
-            [ fileNode('f1', 'budget.txt', 'owner7') ],
+            [ fileNode({ id: 'f1', name: 'budget.txt', ownerID: 'owner7' }) ],
             {
                 owners: [
                     { id: 'owner7', name: 'Ada Lovelace', email: 'ada@example.com', image: '/api/avatars/deadbeef' },
@@ -243,7 +217,10 @@ describe('SearchPage', () =>
     it('asks for the whole result set in one request, attributing every owner in it', async () =>
     {
         searchMock.mockResolvedValue(envelope(
-            [ fileNode('f1', 'first-hit.txt', 'owner1'), fileNode('f2', 'second-hit.txt', 'owner2') ],
+            [
+                fileNode({ id: 'f1', name: 'first-hit.txt', ownerID: 'owner1' }),
+                fileNode({ id: 'f2', name: 'second-hit.txt', ownerID: 'owner2' }),
+            ],
             {
                 total: 2,
                 owners: [
@@ -268,7 +245,7 @@ describe('SearchPage', () =>
 
         expect(wrapper.text()).toContain('couldn\'t run that search');
 
-        searchMock.mockResolvedValue(envelope([ fileNode('f1', 'report.txt', 'owner1') ]));
+        searchMock.mockResolvedValue(envelope([ fileNode({ id: 'f1', name: 'report.txt', ownerID: 'owner1' }) ]));
         await wrapper.get('[data-label="Retry"]').trigger('click');
         await flushPromises();
 
@@ -277,7 +254,7 @@ describe('SearchPage', () =>
 
     it('navigates into a folder result when it is opened', async () =>
     {
-        searchMock.mockResolvedValue(envelope([ folderNode('dir1', 'Team') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'dir1', name: 'Team', ownerID: 'owner1' }) ]));
         const { wrapper, router } = await mountSearch('team');
         const push = vi.spyOn(router, 'push');
 
@@ -288,7 +265,7 @@ describe('SearchPage', () =>
 
     it('opens a small text file result in the editor in a new tab', async () =>
     {
-        searchMock.mockResolvedValue(envelope([ textFileNode('f1', 'notes.txt') ]));
+        searchMock.mockResolvedValue(envelope([ fileNode({ id: 'f1', name: 'notes.txt', ownerID: 'owner1' }) ]));
         const { wrapper } = await mountSearch('notes');
         const open = vi.spyOn(window, 'open').mockReturnValue(null);
 
@@ -315,7 +292,7 @@ describe('SearchPage locations', () =>
     // the same way the drive's breadcrumb anchors it.
     it('renders an own-tree hit\'s location under the caller\'s files root', async () =>
     {
-        const node = { ...fileNode('f1', 'budget.txt', 'owner1'), parentID: 'quarter' };
+        const node = fileNode({ id: 'f1', name: 'budget.txt', ownerID: 'owner1', parentID: 'quarter' });
         searchMock.mockResolvedValue(located(node, {
             crumbs: [ { id: 'projects', name: 'Projects' }, { id: 'quarter', name: 'Q3' } ],
             foreign: false,
@@ -332,7 +309,7 @@ describe('SearchPage locations', () =>
     // tell them a file of someone else's lives in their drive.
     it('anchors a foreign hit under Shared with me rather than the caller\'s files root', async () =>
     {
-        const node = { ...fileNode('f1', 'budget.txt', 'owner9'), parentID: 'team' };
+        const node = fileNode({ id: 'f1', name: 'budget.txt', ownerID: 'owner9', parentID: 'team' });
         searchMock.mockResolvedValue(located(node, {
             crumbs: [ { id: 'team', name: 'Team Docs' } ],
             foreign: true,
@@ -349,7 +326,7 @@ describe('SearchPage locations', () =>
     // they went looking for rather than hunting for it again in a full folder.
     it('offers a go-to-folder action targeting the containing folder with the hit selected', async () =>
     {
-        const node = { ...fileNode('f1', 'budget.txt', 'owner1'), parentID: 'quarter' };
+        const node = fileNode({ id: 'f1', name: 'budget.txt', ownerID: 'owner1', parentID: 'quarter' });
         searchMock.mockResolvedValue(located(node, {
             crumbs: [ { id: 'quarter', name: 'Q3' } ],
             foreign: false,
@@ -364,7 +341,7 @@ describe('SearchPage locations', () =>
     // them into a 404.
     it('withholds the action when the containing folder is out of the caller\'s reach', async () =>
     {
-        const node = { ...fileNode('f1', 'budget.txt', 'owner9'), parentID: 'hidden' };
+        const node = fileNode({ id: 'f1', name: 'budget.txt', ownerID: 'owner9', parentID: 'hidden' });
         searchMock.mockResolvedValue(located(node, { crumbs: [], foreign: true }));
 
         const { wrapper } = await mountSearch('budget');
@@ -376,7 +353,7 @@ describe('SearchPage locations', () =>
     // A hit at the caller's own root still has somewhere to go: their files root.
     it('sends a hit at the caller\'s own root to the files root', async () =>
     {
-        searchMock.mockResolvedValue(located(fileNode('f1', 'budget.txt', 'owner1'), {
+        searchMock.mockResolvedValue(located(fileNode({ id: 'f1', name: 'budget.txt', ownerID: 'owner1' }), {
             crumbs: [],
             foreign: false,
         }));
@@ -409,14 +386,17 @@ describe('SearchPage selection', () =>
 
     it('shows no selection bar until something is selected', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', ME_ID) ]);
+        const wrapper = await withResults([ fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }) ]);
 
         expect(wrapper.text()).not.toContain('selected');
     });
 
     it('selects a row on a plain click', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', ME_ID), fileNode('f2', 'b.txt', ME_ID) ]);
+        const wrapper = await withResults([
+            fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }),
+            fileNode({ id: 'f2', name: 'b.txt', ownerID: ME_ID }),
+        ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
 
@@ -426,9 +406,9 @@ describe('SearchPage selection', () =>
     it('replaces the selection on a plain click, and adds on ctrl-click', async () =>
     {
         const wrapper = await withResults([
-            fileNode('f1', 'a.txt', ME_ID),
-            fileNode('f2', 'b.txt', ME_ID),
-            fileNode('f3', 'c.txt', ME_ID),
+            fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }),
+            fileNode({ id: 'f2', name: 'b.txt', ownerID: ME_ID }),
+            fileNode({ id: 'f3', name: 'c.txt', ownerID: ME_ID }),
         ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
@@ -443,9 +423,9 @@ describe('SearchPage selection', () =>
     it('takes a run of rows on shift-click', async () =>
     {
         const wrapper = await withResults([
-            fileNode('f1', 'a.txt', ME_ID),
-            fileNode('f2', 'b.txt', ME_ID),
-            fileNode('f3', 'c.txt', ME_ID),
+            fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }),
+            fileNode({ id: 'f2', name: 'b.txt', ownerID: ME_ID }),
+            fileNode({ id: 'f3', name: 'c.txt', ownerID: ME_ID }),
         ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
@@ -456,7 +436,7 @@ describe('SearchPage selection', () =>
 
     it('clears the selection on Escape', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', ME_ID) ]);
+        const wrapper = await withResults([ fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }) ]);
         await resultRows(wrapper)[0]?.trigger('click');
         expect(wrapper.text()).toContain('1 selected');
 
@@ -468,10 +448,10 @@ describe('SearchPage selection', () =>
 
     it('drops the selection when the term changes', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', ME_ID) ]);
+        const wrapper = await withResults([ fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }) ]);
         await resultRows(wrapper)[0]?.trigger('click');
 
-        searchMock.mockResolvedValue(envelope([ fileNode('f9', 'z.txt', ME_ID) ]));
+        searchMock.mockResolvedValue(envelope([ fileNode({ id: 'f9', name: 'z.txt', ownerID: ME_ID }) ]));
         await mountSearch('other');
         await flushPromises();
 
@@ -480,7 +460,10 @@ describe('SearchPage selection', () =>
 
     it('trashes every selected node and re-runs the search', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', ME_ID), fileNode('f2', 'b.txt', ME_ID) ]);
+        const wrapper = await withResults([
+            fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }),
+            fileNode({ id: 'f2', name: 'b.txt', ownerID: ME_ID }),
+        ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
         await resultRows(wrapper)[1]?.trigger('click', { ctrlKey: true });
@@ -495,7 +478,10 @@ describe('SearchPage selection', () =>
     // action entirely rather than acting on the part of the selection they do own.
     it('withholds Trash when one selected node belongs to somebody else', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', ME_ID), fileNode('f2', 'b.txt', 'someone-else') ]);
+        const wrapper = await withResults([
+            fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }),
+            fileNode({ id: 'f2', name: 'b.txt', ownerID: 'someone-else' }),
+        ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
         await resultRows(wrapper)[1]?.trigger('click', { ctrlKey: true });
@@ -508,7 +494,7 @@ describe('SearchPage selection', () =>
     // is worth showing at all for a foreign hit.
     it('still offers Copy for a file the caller does not own', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', 'someone-else') ]);
+        const wrapper = await withResults([ fileNode({ id: 'f1', name: 'a.txt', ownerID: 'someone-else' }) ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
 
@@ -518,7 +504,7 @@ describe('SearchPage selection', () =>
     // There is no open folder on this surface to copy into, so a copy lands in the caller's own root.
     it('copies into the caller\'s own root', async () =>
     {
-        const wrapper = await withResults([ fileNode('f1', 'a.txt', 'someone-else') ]);
+        const wrapper = await withResults([ fileNode({ id: 'f1', name: 'a.txt', ownerID: 'someone-else' }) ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
         await actionButton(wrapper, 'Copy').trigger('click');
@@ -529,7 +515,7 @@ describe('SearchPage selection', () =>
 
     it('refuses Copy for a folder', async () =>
     {
-        const wrapper = await withResults([ folderNode('d1', 'Archive', ME_ID) ]);
+        const wrapper = await withResults([ folderNode({ id: 'd1', name: 'Archive', ownerID: ME_ID }) ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
 
@@ -543,8 +529,8 @@ describe('SearchPage selection', () =>
         const opened = vi.spyOn(window, 'open').mockReturnValue(null);
 
         const wrapper = await withResults([
-            fileNode('f1', 'a.txt', ME_ID),
-            folderNode('d1', 'Archive', 'someone-else'),
+            fileNode({ id: 'f1', name: 'a.txt', ownerID: ME_ID }),
+            folderNode({ id: 'd1', name: 'Archive', ownerID: 'someone-else' }),
         ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
@@ -564,8 +550,8 @@ describe('SearchPage selection', () =>
     // Links carry no trashed_at, so a links-only selection is removed rather than trashed, and the button says so.
     it('removes a links-only selection instead of trashing it', async () =>
     {
-        const link = { ...fileNode('l1', 'shortcut', ME_ID), type: 'link' as const, targetNodeID: 'f9', target: null };
-        const wrapper = await withResults([ link as unknown as NodeResponse ]);
+        const link = linkNode({ id: 'l1', name: 'shortcut', targetNodeID: 'f9' });
+        const wrapper = await withResults([ link ]);
 
         await resultRows(wrapper)[0]?.trigger('click');
         expect(actionButton(wrapper, 'Remove').exists()).toBe(true);

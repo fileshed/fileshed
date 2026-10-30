@@ -1,8 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Search Resource Access
 //
-// The typed client for GET /api/search -- a name match scoped to the nodes the caller can access, answered with the
-// paginated node envelope plus a location per hit. limit and offset default server-side; a blank query is a 400.
+// A blank query is a 400.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type SearchResponse, searchResponseCodec } from '@fileshed/core';

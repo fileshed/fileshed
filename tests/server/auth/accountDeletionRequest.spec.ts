@@ -24,9 +24,10 @@ import { deleteAccount } from '@server/managers/accountDeletion.ts';
 import { NodeManager } from '@server/managers/node.ts';
 
 // Resource Access
+import { AuthRA } from '@server/resource-access/auth/index.ts';
 import { BlobRA } from '@server/resource-access/blob/index.ts';
-import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { seedDefaultBackend } from '@server/resource-access/blob/seeds.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
 import { UserRA } from '@server/resource-access/users/index.ts';
@@ -35,7 +36,7 @@ import { UserRA } from '@server/resource-access/users/index.ts';
 import { AvatarManager } from '@server/managers/avatar.ts';
 
 // Support
-import { type BootedApp, ORIGIN, bootFullApp, cookieFrom, signIn, signUp } from './support.ts';
+import { type BootedApp, ORIGIN, bootTestApp, cookieFrom, signIn, signUp } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -172,12 +173,16 @@ async function runSweep(days : number) : Promise<{ candidates : number; deleted 
 {
     const nodeRA = new NodeRA(booted.handle);
     const blob = new BlobRA(booted.handle);
-    const nodes = new NodeManager(booted.handle, nodeRA, blob, { defaultQuota: async () => 0 });
+    const nodes = new NodeManager({
+        handle: booted.handle,
+        orphanedBlobs: (tx) => new BlobRA(tx),
+        policy: { defaultQuota: async () => 0 },
+    });
 
     return runAccountDeletionOnce({
         users: new UserRA(booted.handle),
         deleteAccount: (userID) => deleteAccount({
-            auth: booted.auth,
+            auth: new AuthRA(booted.auth, booted.handle),
             nodes: nodeRA,
             shares: new ShareRA(booted.handle),
             purger: nodes,
@@ -204,14 +209,14 @@ describe('POST /api/me/deletion', () =>
 {
     it('refuses an anonymous request with 401', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
 
         expect((await requestDeletion('')).status).toBe(401);
     });
 
     it('answers the date the account is scheduled to be deleted', async () =>
     {
-        booted = await bootFullApp({ ACCOUNT_DELETION_DAYS: 14 });
+        booted = await bootTestApp({ ACCOUNT_DELETION_DAYS: 14 });
         const user = await register('leaving@example.com');
 
         const res = await requestDeletion(user.cookie);
@@ -229,7 +234,7 @@ describe('POST /api/me/deletion', () =>
     // pressing it push the deletion further out than the owner ever agreed to.
     it('leaves the standing schedule alone when asked twice', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const user = await register('twice@example.com');
 
         const first = await (await requestDeletion(user.cookie)).json() as MeResponse;
@@ -244,7 +249,7 @@ describe('POST /api/me/deletion', () =>
     // An instance whose only admin deletes themselves has no way back short of the database.
     it('refuses the only admin', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const admin = await register('root@example.com');
         await promote('root@example.com');
 
@@ -256,7 +261,7 @@ describe('POST /api/me/deletion', () =>
 
     it('lets an admin go once somebody else can administer the instance', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('leaving-admin@example.com');
         await register('staying-admin@example.com');
         await promote('leaving-admin@example.com');
@@ -274,7 +279,7 @@ describe('what the request revokes immediately', () =>
 {
     it('drops every share on the account\'s files', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('granter@example.com');
         const friend = await register('friend@example.com');
 
@@ -295,7 +300,7 @@ describe('what the request revokes immediately', () =>
     // account cannot use it anyway while the window runs.
     it('leaves the shares other people granted it', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('grantee@example.com');
         const friend = await register('grantor@example.com');
 
@@ -313,7 +318,7 @@ describe('what the request revokes immediately', () =>
 
     it('revokes every public link on the account\'s files', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('publisher@example.com');
         const fileID = await makeFile(leaving.id, 'published.bin');
 
@@ -329,7 +334,7 @@ describe('what the request revokes immediately', () =>
 
     it('ends the sessions the account holds, including the one that asked', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('signed-out@example.com');
 
         await requestDeletion(leaving.cookie);
@@ -339,7 +344,7 @@ describe('what the request revokes immediately', () =>
 
     it('leaves the account\'s own files exactly where they are', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('keeps-files@example.com');
         await makeFolder(leaving.cookie, 'Still Mine');
 
@@ -355,7 +360,7 @@ describe('what an account can still do during the window', () =>
 {
     it('signs in, and reads its own profile with the schedule on it', async () =>
     {
-        booted = await bootFullApp({ ACCOUNT_DELETION_DAYS: 7 });
+        booted = await bootTestApp({ ACCOUNT_DELETION_DAYS: 7 });
         const leaving = await register('waiting@example.com');
         await requestDeletion(leaving.cookie);
 
@@ -368,7 +373,7 @@ describe('what an account can still do during the window', () =>
     // script holding a session cannot go on using it while the window runs.
     it('is refused everywhere else', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('locked-out@example.com');
         await requestDeletion(leaving.cookie);
 
@@ -379,9 +384,22 @@ describe('what an account can still do during the window', () =>
         expect((await makeFolder(cookie, 'Nope')).id).toBeUndefined();
     });
 
+    it('is refused a download or an archive of its own files', async () =>
+    {
+        booted = await bootTestApp();
+        const leaving = await register('no-downloads@example.com');
+        const fileID = await makeFile(leaving.id, 'mine.bin');
+        await requestDeletion(leaving.cookie);
+
+        const cookie = await signInAgain(leaving.email);
+
+        expect((await api(`/api/nodes/${ fileID }/download`, cookie)).status).toBe(403);
+        expect((await api(`/api/archives?ids=${ fileID }&format=zip`, cookie)).status).toBe(403);
+    });
+
     it('calls the deletion off', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('changed-mind@example.com');
         await requestDeletion(leaving.cookie);
 
@@ -401,7 +419,7 @@ describe('cancelling', () =>
     // Said plainly in the dialog before the request is made: this brings the account back, not the reach it had.
     it('does not restore the shares and links the request revoked', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('undo@example.com');
         const friend = await register('undo-friend@example.com');
         const fileID = await makeFile(leaving.id, 'was-shared.bin');
@@ -422,7 +440,7 @@ describe('cancelling', () =>
 
     it('leaves the files and folders untouched', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('files-survive@example.com');
         await makeFolder(leaving.cookie, 'Survivor');
 
@@ -440,7 +458,7 @@ describe('the sweep that carries deletions out', () =>
 {
     it('deletes an account whose window has run out', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('due@example.com');
         await makeFolder(leaving.cookie, 'Going With Me');
 
@@ -457,7 +475,7 @@ describe('the sweep that carries deletions out', () =>
 
     it('leaves an account still inside its window alone', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('not-yet@example.com');
 
         await stampRequestedAt(leaving.id, new Date(Date.now() - (2 * MS_PER_DAY)));
@@ -469,7 +487,7 @@ describe('the sweep that carries deletions out', () =>
 
     it('never touches an account that asked for nothing', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const staying = await register('staying@example.com');
         await makeFolder(staying.cookie, 'Mine');
 
@@ -481,7 +499,7 @@ describe('the sweep that carries deletions out', () =>
     // the window spares an account that was about to be taken.
     it('spares an account the window was lengthened past', async () =>
     {
-        booted = await bootFullApp();
+        booted = await bootTestApp();
         const leaving = await register('reprieved@example.com');
 
         await stampRequestedAt(leaving.id, new Date(Date.now() - (31 * MS_PER_DAY)));

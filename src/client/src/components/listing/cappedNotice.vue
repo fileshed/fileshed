@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Capped Notice
-  --
-  -- What a listing says for itself when it is too big to hold whole: it loads as the user scrolls rather than all at
-  -- once, and the surface says so where the listing can be seen rather than letting it feel broken.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

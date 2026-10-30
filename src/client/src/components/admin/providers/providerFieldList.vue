@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Provider Field List
   --
-  -- The rendering shared by every provider component: a list of setting-field descriptors resolved against the
-  -- admin settings store. A key the server does not know simply does not render -- the safe failure for a client
-  -- older than its server.
+  -- A descriptor whose key the server does not list doesn't render, the safe failure for a client newer than its
+  -- server.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

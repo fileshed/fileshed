@@ -1,12 +1,17 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Listing Filters
 //
-// The Type, Owner, and Modified filters applied to a listing the client already holds whole, matching what the server
-// selects when the same filters ride a query. Classification here is the filter's, not the presentation's: a link is a
-// link whatever it points at, where a row borrows its target's icon.
+// These must select what the server selects for the same filters on a query. A link counts as a link whatever it points
+// at, even though its row borrows the target's icon.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { type NodeResponse, type NodeTypeFamily, familyOfMimeType, isPlaylistFile } from '@fileshed/core';
+import {
+    type ChildrenQuery,
+    type NodeResponse,
+    type NodeTypeFamily,
+    familyOfMimeType,
+    isPlaylistFile,
+} from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -19,6 +24,9 @@ export interface ListingFilters
     after : string | null;
     before : string | null;
 }
+
+// The query fields the filters travel in. A trash or shared-with-me listing takes all of them but ownerID.
+export type ListingFilterQuery = Partial<Pick<ChildrenQuery, 'types' | 'ownerID' | 'updatedAfter' | 'updatedBefore'>>;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -49,6 +57,19 @@ function matches(node : NodeResponse, filters : ListingFilters) : boolean
 export function filterNodes(nodes : readonly NodeResponse[], filters : ListingFilters) : NodeResponse[]
 {
     return nodes.filter((node) => matches(node, filters));
+}
+
+// An empty type selection, no owner and an open bound drop out of the query, so the server reads them as unfiltered.
+export function filterQuery(filters : ListingFilters) : ListingFilterQuery
+{
+    const query : ListingFilterQuery = {};
+
+    if(filters.types.length > 0) { query.types = [ ...filters.types ]; }
+    if(filters.ownerID !== null) { query.ownerID = filters.ownerID; }
+    if(filters.after !== null) { query.updatedAfter = filters.after; }
+    if(filters.before !== null) { query.updatedBefore = filters.before; }
+
+    return query;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

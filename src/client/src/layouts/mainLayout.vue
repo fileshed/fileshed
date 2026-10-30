@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Main Layout
   --
-  -- The primary authenticated chrome: the drive sidebar over the shared app shell. Auth pages render outside this
-  -- layout (sibling routes), so it can assume a signed-in user.
+  -- Auth pages are sibling routes outside this layout, so it can assume a signed-in user.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

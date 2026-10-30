@@ -11,6 +11,9 @@
 // Models
 import { ANY_HOST } from '@fileshed/core';
 
+// Engines
+import { normalizeRequestPath, pathWithin } from './requestPath.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 const mutatingMethods = new Set([ 'POST', 'PUT', 'PATCH', 'DELETE' ]);
@@ -46,7 +49,7 @@ function hostOf(origin : string) : string | null
 
 function guardsRequest(method : string, pathname : string) : boolean
 {
-    return mutatingMethods.has(method.toUpperCase()) && (pathname === '/api' || pathname.startsWith('/api/'));
+    return mutatingMethods.has(method.toUpperCase()) && pathWithin(normalizeRequestPath(pathname), '/api');
 }
 
 export function originAllowed(input : OriginCheckInput) : boolean

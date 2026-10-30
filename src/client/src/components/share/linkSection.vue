@@ -1,11 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Link Section
   --
-  -- The share dialog's public-link surface, shown for files only (a folder carries no bytes to serve). It has two
-  -- states: nothing published yet, offering to mint a link; or the live link with its /d/<token> URL, a copy for
-  -- either form -- as it renders, or as a download -- and a revoke. One token backs both forms, so a second link
-  -- would be the same capability twice over and is not offered; revoking the last one returns the section to its
-  -- create state. The listing still handles several, since the API stays free to mint them.
+  -- Shown for files only, since a folder has no bytes to serve. One token backs both the rendered and the download
+  -- form, so a second link would be the same capability twice and is not offered. The listing still handles several,
+  -- since the API can mint them.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

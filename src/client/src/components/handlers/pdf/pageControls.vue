@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Page Controls
-  --
-  -- Step a page at a time, or type one. The box is an editable draft that tracks the scrolled-to page until the reader
-  -- types into it; committing clamps the parse through the store and snaps the draft back to the accepted page.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

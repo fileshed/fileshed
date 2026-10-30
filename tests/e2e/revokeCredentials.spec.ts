@@ -44,7 +44,7 @@ async function signUpAccount(email : string) : Promise<ApiClient>
 async function mintToken(client : ApiClient, name : string) : Promise<string>
 {
     const res = await client.post('/api/me/access-tokens', { name, scopes: [ 'account:read' ] });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
 
     return (await res.json() as CreateAccessTokenResponse).token;
 }

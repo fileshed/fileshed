@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
     describeAccountDeletionRun,
     describeGcRun,
-    describePartialsRun,
+    describeStagedUploadsRun,
     describeSweepRun,
     describeTrashPurgeRun,
 } from '@client/engines/sweepRun.ts';
@@ -72,25 +72,25 @@ describe('describeTrashPurgeRun', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('describePartialsRun', () =>
+describe('describeStagedUploadsRun', () =>
 {
     it('leads with the space the abandoned staging was holding', () =>
     {
-        const line = describePartialsRun({ candidates: 3, reclaimed: 3, failed: 0, bytesFreed: 2_500_000 });
+        const line = describeStagedUploadsRun({ candidates: 3, reclaimed: 3, failed: 0, bytesFreed: 2_500_000 });
 
         expect(line).toBe('2.5 MB reclaimed, 3 of 3 cleared.');
     });
 
     it('says nothing about failures on a sweep that had none', () =>
     {
-        const line = describePartialsRun({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 });
+        const line = describeStagedUploadsRun({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 });
 
         expect(line).toBe('0 B reclaimed, 0 of 0 cleared.');
     });
 
     it('names the staging it could not drop', () =>
     {
-        const line = describePartialsRun({ candidates: 4, reclaimed: 3, failed: 1, bytesFreed: 3072 });
+        const line = describeStagedUploadsRun({ candidates: 4, reclaimed: 3, failed: 1, bytesFreed: 3072 });
 
         expect(line).toContain('1 left behind');
     });
@@ -136,7 +136,7 @@ describe('describeSweepRun', () =>
         });
 
         const reaped = describeSweepRun({
-            sweep: 'partials',
+            sweep: 'stagedUploads',
             ranAt: '2026-08-12T10:00:00.000Z',
             summary: { candidates: 2, reclaimed: 2, failed: 0, bytesFreed: 4096 },
         });

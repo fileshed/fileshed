@@ -15,7 +15,7 @@ import type { PublicLink } from '@fileshed/core';
 
 // Resource Access
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
 
 // Support

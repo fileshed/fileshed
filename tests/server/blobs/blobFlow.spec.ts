@@ -8,7 +8,7 @@
 // exact values.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -18,11 +18,13 @@ import type { ClaimResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
+    ORIGIN,
     answerChallenge,
     blobRowCount,
     bootBlobApp,
@@ -39,13 +41,6 @@ import { folderNode } from '../resource-access/nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
-
 // Just over 1 MiB -- the threshold above which a known blob is challenged rather than re-uploaded.
 function largeFixture() : Buffer
 {
@@ -54,7 +49,7 @@ function largeFixture() : Buffer
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 beforeEach(async () =>
 {
@@ -245,6 +240,50 @@ describe('POST /api/blobs/claim + PUT /api/uploads/:ticket', () =>
 
         expect(putRes.status).toBe(403);
         expect(await blobRowCount(booted.handle, sha256Of(data))).toBe(0);
+    });
+
+    // A ticket is single-use however the two requests interleave. Holding both at the live cap read lines them up at
+    // the same point in the commit, so neither can have spent the ticket before the other looks at it.
+    it('commits a ticket once when two whole-file PUTs race for it', async () =>
+    {
+        await booted.cleanup();
+
+        const gate = Promise.withResolvers<undefined>();
+        let holding = false;
+        booted = await bootBlobApp({ uploadMaxBytes: async () =>
+        {
+            if(holding) { await gate.promise; }
+            return 1024 * 1024;
+        } });
+
+        const user = await makeUser(booted, 'racer@example.com');
+        const data = randomBytes(2048);
+        const claimBody = await (await claim(booted.app, user.cookie, sha256Of(data), data.length))
+            .json() as ClaimResponse;
+        if(claimBody.upload !== true) { throw new Error('expected an upload ticket'); }
+
+        // The declared length is what makes each a whole-file PUT rather than a chunk, and the names differ so a second
+        // commit could not be refused as a name collision instead.
+        const putWhole = async (name : string) : Promise<Response> => booted.app.request(
+            `${ ORIGIN }/api/uploads/${ claimBody.ticket }?name=${ name }&mimeType=application/octet-stream`,
+            {
+                method: 'PUT',
+                headers: { 'cookie': user.cookie, 'content-length': String(data.length) },
+                body: new Uint8Array(data),
+            }
+        );
+
+        holding = true;
+        const first = putWhole('first.bin');
+        const second = putWhole('second.bin');
+        await new Promise((resolve) => { setTimeout(resolve, 20); });
+        gate.resolve(undefined);
+
+        const statuses = (await Promise.all([ first, second ])).map((res) => res.status)
+            .sort();
+
+        expect(statuses).toEqual([ 200, 409 ]);
+        expect(await fileNodesForBlob(booted.handle, sha256Of(data))).toHaveLength(1);
     });
 });
 
@@ -506,8 +545,6 @@ describe('claims at a size the stored blob disagrees with', () =>
         expect(await fileNodesForBlob(booted.handle, knownSha)).toHaveLength(1);
     });
 });
-
-//----------------------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------------------
 // Graveyard resurrection through the claim path.

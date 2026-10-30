@@ -21,10 +21,7 @@
 import { type Kysely, sql } from 'kysely';
 
 // Models
-import { NATURAL_ORDER_COLLATION, NATURAL_ORDER_ICU_LOCALE } from '@fileshed/core';
-
-// Resource Access
-import type { DatabaseKind } from '../database.ts';
+import { type DatabaseKind, NATURAL_ORDER_COLLATION, NATURAL_ORDER_ICU_LOCALE } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 

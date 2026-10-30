@@ -1,14 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Media Player
   --
-  -- The media family's host: the playing surface (video canvas, or the compact audio card centered where a canvas
-  -- would be) beside the playlist, under an identity header that follows the queue. It owns the playlist session --
-  -- opening the routed file into the store on mount, resetting on leave. Players PERSIST across track changes --
-  -- src and playToken flow as reactive props into a living element, so fullscreen and cast sessions survive queue
-  -- advances; only crossing between audio and video swaps the surface (an element type change cannot survive
-  -- anyway). Volume, mute, and rate live on the persistent element and are caught here only to seed a cross-kind
-  -- remount. A queue-driven arrival starts playing on its own, and a track the browser can't decode is skipped
-  -- rather than stalling the queue.
+  -- Players persist across track changes, so fullscreen and cast sessions survive queue advances; only switching
+  -- between audio and video swaps the surface, since the element type changes. Volume, mute, and rate are caught here
+  -- only to seed that remount.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

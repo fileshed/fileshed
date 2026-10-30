@@ -1,18 +1,16 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Media Tags Resource Access
 //
-// Reads the embedded tags (ID3, MP4 atoms, Vorbis comments) of a media node off the same Range-supporting inline
-// download endpoint the players stream from. Tags live at the front of most files, so the fetch is aborted the
-// moment the parser has them -- a read costs header bytes, not the download. Untagged, unparseable, and unreadable
-// files all resolve to null rather than throwing: tags are garnish, and a file that yields none plays under its
-// own name. Artwork is handed out as an object URL; the caller owns its lifetime and releases it through
-// releaseMediaTags when the session ends.
+// Tags sit at the front of most files, so the fetch is aborted the moment the parser has them; a read costs header
+// bytes, not the download. Untagged, unparseable, and unreadable files all resolve to null rather than throwing, since
+// a file without tags plays under its own name. Artwork is handed out as an object URL whose lifetime the caller owns,
+// releasing it through releaseMediaTags when the session ends.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { parseWebStream, selectCover } from 'music-metadata';
 
 // Models
-import { ARTWORK_MIME_TYPES } from '@fileshed/core';
+import { ARTWORK_MIME_TYPES, isOneOf } from '@fileshed/core';
 
 // Resource Access
 import { downloadUrl } from './downloads.ts';
@@ -35,7 +33,7 @@ export interface MediaTags
 function artworkUrlOf(data : Uint8Array<ArrayBuffer>, format : string) : string | null
 {
     const [ media ] = format.toLowerCase().split(';');
-    if(media === undefined || !(ARTWORK_MIME_TYPES as readonly string[]).includes(media.trim())) { return null; }
+    if(media === undefined || !isOneOf(ARTWORK_MIME_TYPES, media.trim())) { return null; }
 
     return URL.createObjectURL(new Blob([ data ], { type: media.trim() }));
 }

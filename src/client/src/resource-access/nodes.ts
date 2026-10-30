@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Resource Access
-//
-// The typed client for the /api/nodes surface: read a node, list a folder's children (or the root, when parentID is
-// null), create folders and links, rename/move via patch, trash and restore, copy, purge a folder's broken links, and
-// permanently delete. Every response is validated against its core codec; a hard delete answers 204 and resolves void.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
@@ -11,6 +7,7 @@ import {
     type CopyNodeRequest,
     type CreateNodeRequest,
     type EmptyTrashResponse,
+    type ListingQuery,
     type NodeListResponse,
     type NodeResponse,
     type PatchNodeRequest,
@@ -34,7 +31,7 @@ export async function getNode(id : string) : Promise<NodeResponse>
 // A folder's children, or the caller's root when parentID is null. Pagination, sort, and the filters all default
 // server-side, so a caller may pass only the fields it cares about. The type families ride one comma-separated param
 // ("images,pdfs"); an empty selection is dropped so the server reads it as unfiltered.
-export async function getChildren(
+export async function listChildren(
     parentID : string | null,
     query : Partial<ChildrenQuery> = {}
 ) : Promise<NodeListResponse>
@@ -52,10 +49,7 @@ export async function getChildren(
 // filters default server-side; the listing is owner-scoped and roots-only, so a trashed folder lists once and its
 // contents ride with it. A trashed folder restored or a node purged simply stops appearing on the next read. The type
 // families ride one comma-separated param, an empty selection dropped so the server reads it as unfiltered.
-export async function getTrash(
-    query : Partial<Pick<ChildrenQuery, 'limit' | 'offset' | 'sortKey' | 'sortDirection'
-        | 'types' | 'updatedAfter' | 'updatedBefore'>> = {}
-) : Promise<NodeListResponse>
+export async function listTrash(query : Partial<ListingQuery> = {}) : Promise<NodeListResponse>
 {
     const { types, ...rest } = query;
     const params : QueryParams = { ...rest };

@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Text Identity Bar
-  --
-  -- The text editor's contribution to the editor layout header: the file name and what it exposes, a save-state
-  -- readout, and Save (a Read only badge in its place for a viewer). It reads and drives the shared editor store for
-  -- the file session. The highlighting mode, colorscheme, and gutter controls -- which aren't identity -- stay on the
-  -- toolbar row beside the editor, not here.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

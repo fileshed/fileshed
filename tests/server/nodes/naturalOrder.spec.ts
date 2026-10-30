@@ -23,7 +23,7 @@ import {
 import { sortNodes } from '@client/engines/listing/order.ts';
 
 // Support
-import { type BootedServeApp, ORIGIN, type TestUser, bootServeApp, makeUser } from '../publicLinks/support.ts';
+import { type BootedStoreApp, ORIGIN, type TestUser, bootStoreApp, makeUser } from '../publicLinks/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -144,7 +144,7 @@ const SHA256 = 'c'.repeat(64);
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 
 async function seed() : Promise<void>
@@ -248,7 +248,7 @@ function positionOf(nodes : readonly NodeResponse[], name : string) : number
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     await seed();
 });

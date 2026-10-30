@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- TikTok Provider Fields
   --
-  -- TikTok's OAuth authenticates with a client KEY rather than a client id -- the pair here is key + secret, and
-  -- the generic id field would be a lie.
+  -- TikTok's OAuth authenticates with a client key rather than a client id, so the pair here is key and secret and the
+  -- generic id field would be wrong.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

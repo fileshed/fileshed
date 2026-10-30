@@ -37,11 +37,11 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
+    // Engines
+    import { zoomPresets } from '../../../engines/pdf/types.ts';
+
     // Stores
     import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
-
-    // Components
-    import { zoomPresets } from './types.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

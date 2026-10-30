@@ -1,15 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Sweep Run Descriptions
-//
-// One sentence per sweep outcome, written once so the card on the Overview and the toast that answers a run-now press
-// can never quote different numbers for the same run. Each sweep counts different things, so each gets its own line
-// rather than a shared vocabulary that would fit none of them.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type {
     AccountDeletionRunSummary,
     GcRunSummary,
-    PartialsRunSummary,
+    StagedUploadsRunSummary,
     SweepRunResponse,
     TrashPurgeRunSummary,
 } from '@fileshed/core';
@@ -48,7 +44,7 @@ export function describeTrashPurgeRun(summary : TrashPurgeRunSummary) : string
 
 // Bytes lead here for the same reason they do on a collection: the staging of an upload nobody finished is space the
 // instance is holding for nothing, and reclaiming it is the whole errand.
-export function describePartialsRun(summary : PartialsRunSummary) : string
+export function describeStagedUploadsRun(summary : StagedUploadsRunSummary) : string
 {
     const parts = [
         `${ formatBytes(summary.bytesFreed) } reclaimed`,
@@ -77,7 +73,7 @@ export function describeSweepRun(run : SweepRunResponse) : string
     {
         case 'gc': return describeGcRun(run.summary);
         case 'trashPurge': return describeTrashPurgeRun(run.summary);
-        case 'partials': return describePartialsRun(run.summary);
+        case 'stagedUploads': return describeStagedUploadsRun(run.summary);
         case 'accountDeletion': return describeAccountDeletionRun(run.summary);
     }
 }

@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Quota Formatting
-//
-// What the storage gauges read: the share of a quota consumed, whether that share has reached the warning band, and
-// the hover line naming it. Display only -- precise accounting stays server-side. The sidebar meter and the account
-// summary both render from these, so the two can never disagree about when a bar turns red.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { QUOTA_WARNING_PERCENT } from '@fileshed/core';

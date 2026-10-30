@@ -6,40 +6,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { LinkTarget, NodeResponse, NodeSharing } from '@fileshed/core';
+import type { NodeResponse } from '@fileshed/core';
 
 import NodeTile from '@client/components/drive/nodeTile.vue';
 
+// Support
+import { fileNode, linkNode } from '../../support.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
-
-const BASE = {
-    id: 'n1',
-    name: 'thing',
-    ownerID: 'u1',
-    parentID: null,
-    createdAt: '2026-07-01T00:00:00.000Z',
-    updatedAt: '2026-07-01T00:00:00.000Z',
-    role: 'owner' as const,
-};
-
-function fileNode(sharing : NodeSharing | null = null) : NodeResponse
-{
-    return {
-        ...BASE,
-        sharing,
-        name: 'notes.txt',
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
-
-function linkNode(target : LinkTarget | null) : NodeResponse
-{
-    return { sharing: null, ...BASE, name: 'a link', type: 'link', targetNodeID: 't1', target };
-}
 
 const STUBS = {
     UContextMenu: { template: '<div><slot /></div>' },
@@ -68,7 +42,7 @@ describe('NodeTile — dead link', () =>
 {
     it('renders a dead link dimmed, with the broken-link glyph and a "Broken link" note', () =>
     {
-        const wrapper = mountTile(linkNode(null));
+        const wrapper = mountTile(linkNode());
 
         expect(wrapper.text()).toContain('Broken link');
         expect(wrapper.find('[data-icon="i-lucide-unlink"]').exists()).toBe(true);
@@ -78,7 +52,7 @@ describe('NodeTile — dead link', () =>
 
     it('does not paint the link badge over a dead link', () =>
     {
-        const wrapper = mountTile(linkNode(null));
+        const wrapper = mountTile(linkNode());
 
         expect(wrapper.find('[data-icon="i-lucide-link"]').exists()).toBe(false);
     });
@@ -90,7 +64,7 @@ describe('NodeTile — live nodes', () =>
 {
     it('badges a resolved link and does not dim it', () =>
     {
-        const wrapper = mountTile(linkNode({ id: 't1', type: 'folder', name: 'shared', ownerID: 'u2' }));
+        const wrapper = mountTile(linkNode({ target: { id: 't1', type: 'folder', name: 'shared', ownerID: 'u2' } }));
 
         expect(wrapper.find('[data-icon="i-lucide-link"]').exists()).toBe(true);
         expect(wrapper.text()).not.toContain('Broken link');
@@ -121,7 +95,7 @@ describe('NodeTile — sharing', () =>
 {
     it('carries the badges for a shared node and none for a private one', () =>
     {
-        const exposed = mountTile(fileNode({ granteeCount: 1, linkUrl: '/d/tok' }));
+        const exposed = mountTile(fileNode({ sharing: { granteeCount: 1, linkUrl: '/d/tok' } }));
         const priv = mountTile(fileNode());
 
         expect(exposed.findAll('.badge').map((badge) => badge.attributes('data-text')))

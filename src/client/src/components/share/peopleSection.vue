@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- People Section
   --
-  -- The share dialog's user-to-user grant surface: resolve an email to a real account before granting (typo safety),
-  -- then grant at a chosen role. Below, the node's current grants -- the owner (shown, never editable) plus each
-  -- grantee, rendered from the summary the shares-list response carries alongside each grant (avatar, name, email),
-  -- with an in-place role select (a re-grant at a new role, which the server upserts) and a revoke.
+  -- An email is resolved to a real account before granting, which catches typos. Changing a grantee's role is a
+  -- re-grant at the new role, which the server upserts.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

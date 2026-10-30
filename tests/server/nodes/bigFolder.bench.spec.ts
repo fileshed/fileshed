@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LISTING_CHUNK_SIZE, type NodeListResponse } from '@fileshed/core';
 
 // Support
-import { type BootedServeApp, ORIGIN, type TestUser, bootServeApp, makeUser } from '../publicLinks/support.ts';
+import { type BootedStoreApp, ORIGIN, type TestUser, bootStoreApp, makeUser } from '../publicLinks/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -29,12 +29,12 @@ const SIZES = [ 500, 10_000 ];
 // directory rather than anywhere clever: this runs on developer machines and on CI, and both have one.
 const REPORT = join(tmpdir(), 'fileshed-listing-bench.txt');
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
 });
 

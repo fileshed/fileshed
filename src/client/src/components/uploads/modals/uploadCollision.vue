@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Upload Collision Modal
-  --
-  -- The prompt shown when an upload's name already exists in the target folder. It reads the head of the upload store's
-  -- prompt queue, so exactly one collision is asked about at a time; the rest wait behind it. Keep both uploads under a
-  -- numbered name, Replace overwrites the existing file, Cancel drops just this upload. Dismissing the dialog (escape or
-  -- backdrop) reads as Cancel.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

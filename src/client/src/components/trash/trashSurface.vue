@@ -1,11 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Trash Surface
-  --
-  -- The body of the Trash view: the loading spinner, the load error with its retry, the "Trash is empty" state, the
-  -- filtered-to-nothing state, and otherwise the caller's trashed roots as a grid of cards or a dense row list, per the
-  -- view toggle. Each item carries Restore and Delete forever behind a kebab; the actions relay up so the page owns
-  -- restore (a direct mutation) and Delete forever (a confirm modal). Reads the trash store for its listing state
-  -- directly, and tells it how far the rendering has reached so a listing past the ceiling keeps loading as it scrolls.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -110,10 +104,8 @@
     import CappedNotice from '../listing/cappedNotice.vue';
     import VirtualScroller from '../listing/virtualScroller.vue';
 
-    // Resource Access
-    import { useListingMetrics } from '../../resource-access/listingMetrics.ts';
-
     // Utils
+    import { useListingMetrics } from '../../utils/listingMetrics.ts';
     import { type NodeTypePresentation, formatBytes, nodePresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------

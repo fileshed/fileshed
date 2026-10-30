@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Access Token List
   --
-  -- The caller's tokens: name, identifying start characters, scopes, and lifecycle dates -- never a value. Revoke is
-  -- two-click: the button arms into a confirm state and disarms on its own, since a revoked credential cannot be
-  -- un-revoked, only re-created.
+  -- Revoke takes two clicks, arming into a confirm state that disarms on its own, since a revoked token can't be
+  -- restored, only re-created.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

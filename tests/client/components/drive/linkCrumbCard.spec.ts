@@ -5,30 +5,14 @@
 import { describe, expect, it } from 'vitest';
 import { type VueWrapper, mount } from '@vue/test-utils';
 
-import type { LinkTarget, NodeResponse, UserSummary } from '@fileshed/core';
+import type { NodeResponse, UserSummary } from '@fileshed/core';
 
 import LinkCrumbCard from '@client/components/drive/linkCrumbCard/linkCrumbCard.vue';
 
+// Support
+import { linkNode } from '../../support.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
-
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function linkNode(target : LinkTarget | null) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'lnk',
-        name: 'Case Test\'s Docs',
-        ownerID: 'recipient',
-        parentID: 'docs',
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'link',
-        targetNodeID: 't1',
-        target,
-    };
-}
 
 function ownerSummary(id : string, name : string) : UserSummary
 {
@@ -54,7 +38,7 @@ describe('LinkCrumbCard', () =>
 {
     it('marks a live folder link with the link badge', () =>
     {
-        const node = linkNode({ id: 't1', type: 'folder', name: 'Documents', ownerID: 'owner' });
+        const node = linkNode({ target: { id: 't1', type: 'folder', name: 'Documents', ownerID: 'owner' } });
 
         const wrapper = mountCard(node, ownerSummary('owner', 'Owner One'));
 
@@ -64,7 +48,7 @@ describe('LinkCrumbCard', () =>
     // A dead link drops the link badge and shows the broken glyph instead -- the same convention the drive rows use.
     it('drops the link badge and shows the broken glyph on a dead link', () =>
     {
-        const wrapper = mountCard(linkNode(null), null);
+        const wrapper = mountCard(linkNode(), null);
 
         expect(wrapper.find('[data-icon="i-lucide-link"]').exists()).toBe(false);
         expect(wrapper.find('[data-icon="i-lucide-unlink"]').exists()).toBe(true);
@@ -72,7 +56,7 @@ describe('LinkCrumbCard', () =>
 
     it('names the target it links to and the target owner in the hover card', () =>
     {
-        const node = linkNode({ id: 't1', type: 'folder', name: 'Quarterly Reports', ownerID: 'owner' });
+        const node = linkNode({ target: { id: 't1', type: 'folder', name: 'Quarterly Reports', ownerID: 'owner' } });
 
         const wrapper = mountCard(node, ownerSummary('owner', 'Bob Smith'));
 
@@ -84,7 +68,7 @@ describe('LinkCrumbCard', () =>
     // The hover card states the broken condition instead of naming a target it can no longer resolve.
     it('states the broken condition and names no target for a dead link', () =>
     {
-        const wrapper = mountCard(linkNode(null), null);
+        const wrapper = mountCard(linkNode(), null);
 
         expect(wrapper.text()).toContain('broken');
         expect(wrapper.text()).not.toContain('Links to');

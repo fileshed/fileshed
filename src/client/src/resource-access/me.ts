@@ -1,9 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Me Resource Access
 //
-// The typed client for the caller's own account: GET /api/me -- their profile and live quota usage, a 401 here being
-// simply "no session" -- and the two self-service deletion calls, which answer the same refreshed profile so the
-// schedule always arrives in the shape the session store already holds.
+// A 401 from GET /api/me means there is no session.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type MeResponse, meResponseCodec } from '@fileshed/core';

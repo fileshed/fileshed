@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Location Line
-  --
-  -- Where a search hit lives, drawn under its name: the same anchor the drive's breadcrumb uses, then the folders the
-  -- caller is allowed to see, with a long chain's middle collapsed. The title carries the chain unabbreviated.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

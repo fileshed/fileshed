@@ -7,7 +7,7 @@
 // are held to the stronger form -- they must never publish at all.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { stat, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -19,8 +19,9 @@ import { type ClaimResponse, type NodeResponse, ORPHAN_GRACE_MS } from '@fileshe
 import { runGcOnce } from '@server/managers/gc.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     blobRowCount,
     bootBlobApp,
     bytesExist,
@@ -37,7 +38,7 @@ import {
 // Long enough that nothing this spec stores is inside it by accident, and short enough that the sweep still has one.
 const GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 beforeEach(async () =>
 {
@@ -50,13 +51,6 @@ afterEach(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
 
 // Bytes just written are inside the reconciler's window on purpose -- a record for them may still be committing. Push
 // what the store holds for this address back past it, the way a real leak ages while nobody looks at it.

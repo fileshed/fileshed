@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Sweep Summary
-  --
-  -- The shared chrome around one background sweep's latest run, and the button that runs it now. A sweep the process
-  -- has not run yet says so rather than showing a timestamp it does not have; the counts line is the caller's, since
-  -- each sweep reports its own.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -50,7 +50,7 @@ async function upload(client : ApiClient, name : string, bytes : Buffer) : Promi
 async function mintPat(scopes : string[], name = 'e2e token') : Promise<CreateAccessTokenResponse>
 {
     const res = await owner.post('/api/me/access-tokens', { name, scopes });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
 
     return await res.json() as CreateAccessTokenResponse;
 }

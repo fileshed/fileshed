@@ -1,20 +1,18 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Account Deletion
 //
-// Two halves of one thing. `deleteAccount` is the act itself, ownerless: everything one account holds, removed in the
-// order that leaves nothing stranded. The manager below is the self-service road to it -- asking, waiting, and
-// changing your mind.
+// `deleteAccount` is the act itself: everything one account holds, removed in the order that leaves nothing stranded.
+// The manager below is the self-service side of it: asking, waiting, and changing your mind.
 //
 // The wait is the point. A deletion the owner asks for takes effect after a window rather than at once, so a stolen
 // session cannot destroy an account's data on the spot -- the person who actually owns it has that long to notice.
 // What the account can still REACH, though, dies the moment it asks: shares, links, tokens, sessions. Cancelling
 // brings the account back and none of that with it, which is said plainly before the request is made.
 //
-// Everything one account holds, removed in the order that leaves nothing stranded. The user row cascades to their
-// nodes, so deleting it first would take the rows and leave the bytes behind them on disk with nothing referencing
-// them and nothing to find them by -- the blob graveyard is fed by the node delete, and a row that vanishes under a
-// cascade feeds it nothing. So the drive goes first, through the same subtree purge the trash sweep uses, and the
-// identity goes last.
+// The user row cascades to their nodes, so deleting it first would take the rows and leave the bytes behind them on
+// disk with nothing referencing them and nothing to find them by -- the blob graveyard is fed by the node delete, and a
+// row that vanishes under a cascade feeds it nothing. So the drive goes first, through the same subtree purge the trash
+// sweep uses, and the identity goes last.
 //
 // Two things standing between those: the avatar, whose bytes are in the same content-addressed store but hang off the
 // user row rather than a node, and the grants they handed out on other people's files, which carry no ON DELETE and
@@ -28,12 +26,13 @@
 import { type AccountDeletionSchedule, BadRequestError, MS_PER_DAY } from '@fileshed/core';
 
 // Resource Access
-import { type Auth, type SessionUser, deleteAccessTokensFor } from '../resource-access/auth.ts';
+import type { AuthRA } from '../resource-access/auth/index.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
-import type { NodeRA } from '../resource-access/nodes/node.ts';
-import type { PublicLinkRA } from '../resource-access/publicLinks/index.ts';
-import type { ShareRA } from '../resource-access/shares/index.ts';
-import type { UserRA } from '../resource-access/users/index.ts';
+import type { NodeRA } from '../resource-access/nodes/index.ts';
+import { PublicLinkRA } from '../resource-access/publicLinks/index.ts';
+import { ShareRA } from '../resource-access/shares/index.ts';
+import { UserRA } from '../resource-access/users/index.ts';
 
 // Managers
 import type { SubtreePurger } from './trashPurge.ts';
@@ -48,7 +47,7 @@ export interface AvatarRemover
 
 export interface AccountDeletionDeps
 {
-    auth : Auth;
+    auth : AuthRA;
     nodes : NodeRA;
     shares : ShareRA;
     purger : SubtreePurger;
@@ -73,27 +72,20 @@ export async function deleteAccount(deps : AccountDeletionDeps, userID : string)
     await deps.avatars.deleteAvatar(userID);
     await deps.shares.deleteSharesCreatedBy(userID);
 
-    // Sessions, accounts, and the row itself. This is what the admin plugin's remove-user endpoint does once it has
-    // decided the caller may -- reached directly because a deletion falling due on a timer has no session to decide
-    // with. The delete fires better-auth's own hooks, which is what takes the account's access tokens with it.
-    const context = await deps.auth.$context;
-
-    await context.internalAdapter.deleteUserSessions(userID);
-    await context.internalAdapter.deleteUser(userID);
+    // Sessions, accounts, and the row itself: what the admin plugin's remove-user endpoint does once it has decided
+    // the caller may, with no session deciding, because a deletion falling due on a timer has none.
+    await deps.auth.deleteUserSessions(userID);
+    await deps.auth.deleteUser(userID);
 }
 
-//----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 // Self-service
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface AccountDeletionManagerDeps
 {
-    auth : Auth;
+    auth : AuthRA;
     handle : DatabaseHandle;
-    users : UserRA;
-    shares : ShareRA;
-    links : PublicLinkRA;
 
     // The window, in days, read at every use rather than remembered: an admin who moves it moves every deletion
     // already waiting, because the due date is derived from the request and never stored.
@@ -104,8 +96,7 @@ export interface AccountDeletionManagerDeps
 
 export class AccountDeletionManager
 {
-    readonly #auth : Auth;
-    readonly #handle : DatabaseHandle;
+    readonly #auth : AuthRA;
     readonly #users : UserRA;
     readonly #shares : ShareRA;
     readonly #links : PublicLinkRA;
@@ -114,10 +105,9 @@ export class AccountDeletionManager
     constructor(deps : AccountDeletionManagerDeps)
     {
         this.#auth = deps.auth;
-        this.#handle = deps.handle;
-        this.#users = deps.users;
-        this.#shares = deps.shares;
-        this.#links = deps.links;
+        this.#users = new UserRA(deps.handle);
+        this.#shares = new ShareRA(deps.handle);
+        this.#links = new PublicLinkRA(deps.handle);
         this.#deletionDays = deps.deletionDays;
     }
 
@@ -135,28 +125,28 @@ export class AccountDeletionManager
     //
     // The last admin is refused: an instance whose only admin deletes themselves has no way back short of the
     // database, and the refusal is not a policy an operator can want turned off.
-    async request(actor : SessionUser) : Promise<AccountDeletionSchedule>
+    async request(user : SessionUser) : Promise<AccountDeletionSchedule>
     {
-        const standing = await this.#users.deletionRequestedAtOf(actor.id);
+        const standing = await this.#users.deletionRequestedAtOf(user.id);
         if(standing !== null) { return this.#scheduleAt(standing); }
 
-        if(actor.role === 'admin' && await this.#users.adminCount() <= 1)
+        if(user.role === 'admin' && await this.#users.adminCount() <= 1)
         {
             throw new BadRequestError('You are the only admin. Promote somebody else before deleting your account.');
         }
 
         const requestedAt = new Date();
-        await this.#users.setDeletionRequestedAt(actor.id, requestedAt);
-        await this.#revokeReach(actor.id);
+        await this.#users.setDeletionRequestedAt(user.id, requestedAt);
+        await this.#revokeReach(user.id);
 
         return this.#scheduleAt(requestedAt);
     }
 
     // Change your mind. The account comes back exactly as it was -- its files, its settings, its quota -- and none of
     // what the request revoked comes back with it.
-    async cancel(actor : SessionUser) : Promise<void>
+    async cancel(user : SessionUser) : Promise<void>
     {
-        await this.#users.setDeletionRequestedAt(actor.id, null);
+        await this.#users.setDeletionRequestedAt(user.id, null);
     }
 
     // Everything this account reaches other people through. Ordered by how much it would cost to be wrong about it:
@@ -168,10 +158,8 @@ export class AccountDeletionManager
         await this.#shares.deleteSharesCreatedBy(userID);
         await this.#links.revokeAllOwnedBy(userID);
 
-        await deleteAccessTokensFor(this.#handle, userID);
-
-        const context = await this.#auth.$context;
-        await context.internalAdapter.deleteUserSessions(userID);
+        await this.#auth.deleteAccessTokens(userID);
+        await this.#auth.deleteUserSessions(userID);
     }
 
     async #scheduleAt(requestedAt : Date) : Promise<AccountDeletionSchedule>

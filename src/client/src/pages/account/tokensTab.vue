@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Tokens Tab
-  --
-  -- The account area's access-token tab: mint above, inventory below. The tab only coordinates the refresh after a
-  -- mint; each section owns its own data and mutation.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

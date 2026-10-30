@@ -51,6 +51,19 @@ describe('judgeQuotaAdmission', () =>
         expect(result.ok ? [] : result.violations.map((violation) => violation.code)).toEqual([ 'quota.exceeded' ]);
     });
 
+    // a shrinking replace is judged by the same sum: it admits once the usage it leaves fits, and not before.
+    it('rejects a shrinking write that leaves an owner over a lowered limit still over it', () =>
+    {
+        const result = judgeQuotaAdmission({
+            ownerID: 'user_owner',
+            usedBytes: 8000,
+            limitBytes: 5000,
+            incomingBytes: -1000,
+        });
+
+        expect(result.ok).toBe(false);
+    });
+
     // a null limit is unlimited and admits any write.
     it('admits any write under an unlimited (null) quota', () =>
     {

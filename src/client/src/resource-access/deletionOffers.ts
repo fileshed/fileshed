@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Deletion Offer Resource Access
-//
-// The typed client for the offeree's surface of the recipients-may-copy flow: list pending offers, accept one into a
-// fresh owned copy (a new node), or decline it. Decline answers 204 and resolves void.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {

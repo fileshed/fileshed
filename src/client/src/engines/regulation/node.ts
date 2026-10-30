@@ -1,11 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Placement Regulation
 //
-// Move legality: which moves are legal given the moving set and the destination path. A folder cannot be moved into
-// itself or into any of its own descendants. The picker only reaches a descendant by first descending through the
-// moving folder, so both rules reduce to one check -- the moving node's id must not appear anywhere on the path from
-// root to the candidate destination. The server re-validates regardless; this just spares the user a round trip and a
-// toast for a move the picker already knows is impossible.
+// A folder cannot move into itself or any of its descendants. The picker only reaches a descendant by descending
+// through the moving folder, so both rules reduce to one check: the moving node's id must not appear on the path from
+// root to the candidate destination. The server re-validates regardless.
 //----------------------------------------------------------------------------------------------------------------------
 
 // The folder ids from root to a candidate destination, inclusive of the destination. My Files's root is the empty path.

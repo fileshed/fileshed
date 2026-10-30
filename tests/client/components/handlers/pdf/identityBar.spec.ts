@@ -12,10 +12,13 @@ import { type VueWrapper, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeResponse, Role } from '@fileshed/core';
+import type { Role } from '@fileshed/core';
 
 // Stores
 import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 // Under test
 import PdfIdentityBar from '@client/components/handlers/pdf/identityBar.vue';
@@ -26,36 +29,11 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     getNode: vi.fn(), getNodeSharing: vi.fn(async () => ({ granteeCount: 0, linkUrl: null })),
 }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
 const HEADER_ID = 'editor-header-center';
-
-function fileNode(role : Role = 'owner') : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'f1',
-        name: 'contract.pdf',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role,
-        type: 'file',
-        blobID: 'b1',
-        size: 2048,
-        mimeType: 'application/pdf',
-        trashedAt: null,
-    };
-}
 
 const UButtonStub = {
     name: 'UButton',
@@ -94,7 +72,8 @@ function header() : HTMLElement
 async function mountBar(options : { role ?: Role; dirty ?: boolean } = {}) : Promise<VueWrapper>
 {
     const store = usePdfAnnotatorStore();
-    store.$patch({ node: fileNode(options.role ?? 'owner'), dirty: options.dirty ?? false });
+    store.$patch({ node: fileNode({ name: 'contract.pdf', role: options.role ?? 'owner' }) });
+    store.setDirty(options.dirty ?? false);
 
     const wrapper = mount(PdfIdentityBar, { global: { stubs } });
     await nextTick();

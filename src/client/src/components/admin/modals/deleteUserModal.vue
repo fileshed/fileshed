@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Delete User Modal
   --
-  -- Opened imperatively for one account. Everything it lists is gone the moment this is confirmed -- there is no
-  -- trash behind it and no window to change your mind in -- so the account's email has to be typed back before the
-  -- button will do anything.
+  -- Deleting an account is immediate, with no trash behind it and no window to change your mind in, so the account's
+  -- email has to be typed back before the button does anything.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

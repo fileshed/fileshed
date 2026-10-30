@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin Resource Access
-//
-// The typed client for the admin surface: list users, set (or clear) a user's quota, read the server status, and
-// read or patch the instance settings, theme, and logo.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';
@@ -10,10 +7,9 @@ import { z } from 'zod';
 import {
     type AdminSettingsResponse,
     type AdminStatusResponse,
+    type AdminUserListQuery,
     type AdminUserPageResponse,
     type AdminUserResponse,
-    type AdminUserSearchField,
-    type AdminUserSortKey,
     type BanUserRequest,
     type InstanceTheme,
     type PatchSettingsRequest,
@@ -39,31 +35,10 @@ import { requestJson, requestUpload, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export interface ListUsersOptions
+// Whatever the caller leaves out takes the server's default.
+export async function listUsers(query : Partial<AdminUserListQuery> = {}) : Promise<AdminUserPageResponse>
 {
-    limit ?: number;
-    offset ?: number;
-    search ?: string;
-    searchField ?: AdminUserSearchField;
-    sortBy ?: AdminUserSortKey;
-    sortDirection ?: 'asc' | 'desc';
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-export async function listUsers(options : ListUsersOptions = {}) : Promise<AdminUserPageResponse>
-{
-    return requestJson('/api/admin/users', {
-        query: {
-            limit: options.limit,
-            offset: options.offset,
-            search: options.search,
-            searchField: options.searchField,
-            sortBy: options.sortBy,
-            sortDirection: options.sortDirection,
-        },
-        codec: adminUserPageResponseCodec,
-    });
+    return requestJson('/api/admin/users', { query: { ...query }, codec: adminUserPageResponseCodec });
 }
 
 export async function setQuota(userID : string, quotaLimit : number | null) : Promise<AdminUserResponse>
@@ -121,7 +96,7 @@ export async function sendTestEmail() : Promise<TestEmailResponse>
     return requestJson('/api/admin/email/test', { method: 'POST', codec: testEmailResponseCodec });
 }
 
-export async function adminStatus() : Promise<AdminStatusResponse>
+export async function getAdminStatus() : Promise<AdminStatusResponse>
 {
     return requestJson('/api/admin/status', { codec: adminStatusResponseCodec });
 }

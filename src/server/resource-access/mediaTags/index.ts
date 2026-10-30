@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Media Tags Resource Access
 //
-// The media_tags rows and the parse that fills them. Tags are facts about CONTENT, keyed by blob sha256: dedup'd
-// copies share one row, replacing a file's bytes re-keys naturally, and GC's cascade reaps tags with their blob.
-// A row's existence means extraction RAN -- all-null is "carries no tags" (or defeated the parser), never "not yet
-// tried" -- which is what lets the backfill sweep terminate instead of chewing the same untagged files forever.
+// Tags are facts about CONTENT, keyed by blob sha256: dedup'd copies share one row, replacing a file's bytes re-keys
+// naturally, and GC's cascade reaps tags with their blob. A row's existence means extraction RAN -- all-null is
+// "carries no tags" (or defeated the parser), never "not yet tried" -- which is what lets the backfill sweep terminate
+// instead of chewing the same untagged files forever.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- inserts name snake_case DB columns (house convention for Kysely) */

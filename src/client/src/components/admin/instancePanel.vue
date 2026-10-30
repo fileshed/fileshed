@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Instance Panel
-  --
-  -- What this deployment *is*, as opposed to what it holds: build, dialect, how long the process has been up, and the
-  -- three switches an operator most often needs to confirm from a distance.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

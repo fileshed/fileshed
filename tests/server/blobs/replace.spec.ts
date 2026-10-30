@@ -8,18 +8,19 @@
 // fixture bytes the way a possessing client would.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaimResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     type TestUser,
     answerReplace,
     blobDeletedAt,
@@ -39,13 +40,6 @@ import { folderNode } from '../resource-access/nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
-
 // Just over 1 MiB: past the threshold where a known blob is proof-challenged rather than re-uploaded.
 function largeFixture() : Buffer
 {
@@ -54,7 +48,7 @@ function largeFixture() : Buffer
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 beforeEach(async () =>
 {
@@ -216,6 +210,39 @@ describe('replace via upload ticket — owner', () =>
 //----------------------------------------------------------------------------------------------------------------------
 // An editor on a shared file may replace its content, and the charge lands on the file's OWNER.
 //----------------------------------------------------------------------------------------------------------------------
+
+// The client writes a replace's response straight back over the row it saved, so the response has to say what the
+// file still shares rather than what a brand-new file would.
+describe('replace response sharing', () =>
+{
+    it('answers the owner with the file\'s real grants after replacing a shared file', async () =>
+    {
+        const owner = await makeUser(booted, 'sharing-owner@example.com', null);
+        const friend = await makeUser(booted, 'sharing-friend@example.com', null);
+        const file = await uploadOwned(owner, randomBytes(2048));
+        await grantShare(booted.handle, file.id, friend.id, 'viewer', owner.id);
+
+        const res = await replaceViaUpload(owner, randomBytes(4096), file.id);
+        const node = await res.json() as NodeResponse;
+
+        expect(res.status).toBe(200);
+        expect(node.sharing).toEqual({ granteeCount: 1, linkUrl: null });
+    });
+
+    it('answers an editor with no sharing at all, since what the file shares is the owner\'s to know', async () =>
+    {
+        const owner = await makeUser(booted, 'sharing-owner2@example.com', null);
+        const editor = await makeUser(booted, 'sharing-editor@example.com', null);
+        const file = await uploadOwned(owner, randomBytes(2048));
+        await grantShare(booted.handle, file.id, editor.id, 'editor', owner.id);
+
+        const res = await replaceViaUpload(editor, randomBytes(4096), file.id);
+        const node = await res.json() as NodeResponse;
+
+        expect(res.status).toBe(200);
+        expect(node.sharing).toBeNull();
+    });
+});
 
 describe('replace by a shared editor — owner-charged quota', () =>
 {

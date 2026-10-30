@@ -19,7 +19,8 @@ See `docs/design/requirements.md` for the full v1 scope and the technical decisi
 
 The decided stack (versions live in `package.json`, not here — don't quote them in prose):
 
-- **Server**: Hono, with `@hono/node-server` and `@hono/zod-validator`
+- **Server**: Hono, with `@hono/node-server` and `hono-openapi` for route docs; request bodies and queries are validated
+  through `clients/http/utils/readJsonBody.ts` and `clients/http/utils/parseQuery.ts`
 - **DB access**: Kysely, one query builder across **both** dialects — Postgres (primary target) and SQLite (supported convenience deployment). Feature parity required; when a tradeoff appears, Postgres wins and SQLite gets the workaround.
 - **Auth**: BetterAuth (`better-auth`) — email/password v1, OAuth providers are config not code
 - **Validation / codecs**: Zod v4
@@ -162,7 +163,7 @@ defines a public type.
 
 The server follows **iDesign methodology** - a layered architecture with strict separation of concerns:
 
-1. **Clients** - External consumers (API routes, CLI, etc.)
+1. **Clients** - External consumers, one folder per protocol under `clients/` (`clients/http/` is the Hono API)
 2. **Managers** - Business logic orchestration (coordinate multiple operations)
 3. **Engines** - Pure business logic (no I/O, stateless, easily testable)
 4. **Resource Access** - Data persistence (database, blob backends, external APIs, all I/O)
@@ -186,45 +187,77 @@ Good candidates for the split: permission resolution (effective role, cycle chec
 
 ```typescript
 //----------------------------------------------------------------------------------------------------------------------
-// Node Manager
+// Folder Manager
 //----------------------------------------------------------------------------------------------------------------------
 
-import { NodeEngine } from '../engines/node.ts';
-import { NodeRA } from '../resource-access/node.ts';
+// Models
+import { BadRequestError, type Node } from '@fileshed/core';
+
+// Engines
+import { validateName } from '../engines/nodeName.ts';
+
+// Resource Access
+import { type DatabaseHandle, inTransaction } from '../resource-access/database/database.ts';
+import { NodeRA } from '../resource-access/nodes/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-class NodeManager
+export interface FolderManagerDeps
 {
-    #engine = new NodeEngine();
-    #ra = new NodeRA();
+    handle : DatabaseHandle;
 
-    async get(id : string) : Promise<Node>
-    {
-        return this.#ra.get(id);
-    }
-
-    async rename(id : string, name : string) : Promise<Node>
-    {
-        // Engine validates/transforms
-        const validated = this.#engine.validateName(name);
-
-        // RA persists
-        return this.#ra.rename(id, validated);
-    }
+    // Read at every use, so an admin moving the setting binds the next request.
+    maxDepth : () => Promise<number>;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export default new NodeManager();
+export class FolderManager
+{
+    readonly #handle : DatabaseHandle;
+    readonly #nodes : NodeRA;
+    readonly #maxDepth : () => Promise<number>;
+
+    constructor(deps : FolderManagerDeps)
+    {
+        this.#handle = deps.handle;
+        this.#nodes = new NodeRA(deps.handle);
+        this.#maxDepth = deps.maxDepth;
+    }
+
+    async create(parentID : string, name : string) : Promise<Node>
+    {
+        const validated = validateName(name);
+        if(await this.#nodes.depthOf(parentID) >= await this.#maxDepth())
+        {
+            throw new BadRequestError('Folders cannot nest any deeper here.');
+        }
+
+        // A write spanning more than one statement builds its RAs over the transaction's handle.
+        return inTransaction(this.#handle, async (tx) =>
+        {
+            const nodes = new NodeRA(tx);
+            await nodes.assertNameFree(parentID, validated);
+
+            return nodes.insertFolder(parentID, validated);
+        });
+    }
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 ```
 
 Class privates are ES `#` fields, never TypeScript's `private` modifier — `#` is real runtime privacy, `private` is
-erased. The module-singleton export above suits stateless managers; managers built around runtime dependencies (a
-database handle, an auth instance) take them via constructor instead and are composed in app.ts — both shapes are
-house style.
+erased. Managers are classes composed in `services.ts`, and their constructors follow these rules:
+
+- A manager takes one `<Name>ManagerDeps` object. A manager whose only dependency is the handle or the auth instance
+  takes it positionally (`new ShareManager(handle)`).
+- A manager that holds the database handle builds its stateless RAs from it and takes none as parameters.
+- Injected: `BlobRA` (it caches backend facades), `AuthRA` (it wraps the one better-auth instance), other managers
+  and the narrow interfaces they satisfy, settings suppliers (`() => Promise<T>`), and an RA a spec substitutes for a
+  manager that holds no handle (`MediaTagManager`).
+- Inside a transaction, RAs are built over the `tx` handle `inTransaction` passes; nothing in the work touches the
+  outer handle (the SQLite driver has one connection, so a query on it inside the transaction hangs).
 
 ## Vue Guidelines
 
@@ -242,8 +275,9 @@ ones `defineExpose` an `open(...)` the page calls.
 
 Logic `.ts` modules never live loose in `components/` — a `.ts` file beside `.vue` files is a smell. The client
 mirrors the iDesign layers: `engines/` for pure logic (no I/O — selection math, move policy, open-intent
-resolution), `resource-access/` for all I/O (the API clients and `localStorage`-backed preferences), `stores/` to
-orchestrate, and `utils/` for genuinely cross-cutting helpers. Utility filenames say what the module does
+resolution), `resource-access/` for all I/O (the API clients at its top level; `localStorage` and dropped-file
+entries under `resource-access/browser/`), `stores/` to orchestrate, and `utils/` for genuinely cross-cutting
+helpers, the DOM ones included (`scrollbarWidth.ts`, `themePreview.ts`). Utility filenames say what the module does
 (`ensureExtension.ts`, `runWithToast.ts`, `formatters/formatBytes.ts`). The `componentName/types.ts` in the structure
 below is the exception to the no-loose-`.ts` rule: a component's own types inside its own directory.
 
@@ -257,6 +291,9 @@ componentName/
 ```
 
 File-type handlers (viewers/editors) live under `components/handlers/<handler>/`, one self-contained family each.
+A family may keep the binding to its renderer beside its components (`pdf/pdfjs.ts`, `text/chrome.ts`,
+`media/mediaElement.ts`) when nothing outside the family imports it. Vocabulary or logic that a store or another area reads lives in `engines/`
+(`engines/pdf/types.ts`, `engines/editorTheme.ts`).
 
 ### Vue File Order
 
@@ -320,6 +357,11 @@ When working with Nuxt UI components, fetch the LLM docs from the URLs above rat
 
 - Tests live in the top-level `tests/` tree, mirroring source: `tests/server/`, `tests/client/`, `tests/core/`
 - Test files are named **`*.spec.ts`** (not `*.test.ts`)
+- Under `tests/server/`, a **layer folder** (`engines/`, `managers/`, `resource-access/`, `utils/`,
+  `clients/http/middleware/`, `clients/http/utils/`) mirrors source: its specs drive the unit at the same path
+  directly. A **feature folder** (`nodes/`, `shares/`, `admin/`, ...) holds HTTP suites that boot the app through
+  that feature's `support.ts`. `clients/http/routes/` holds the HTTP suites for app-wide behavior (route table,
+  OpenAPI contract, body limits, CSP, static serving) and for the routes with no feature folder (health, version).
 - Run with `npm run test`; use Vitest
 - **End-to-end** tests live in `tests/e2e/` and run via `npm run test:e2e` (separate `vitest.e2e.config.ts`, not in `npm test`). Each file spawns the real server as a child process and drives it over real HTTP; suites whose flow touches persistence also assert against the SQLite database, and those that move bytes against the on-disk blob store. Run them before presenting a changeset.
 
@@ -332,25 +374,39 @@ fileshed/
 ├── packages/
 │   └── core/                # @fileshed/core — shared domain vocabulary + API contract
 │       └── src/
-│           └── models/      # Domain type definitions
-│               ├── schemas/     # Zod codecs for the domain types
-│               └── requests/    # API DTO types + schemas (as the API grows)
+│           ├── models/          # Domain type definitions
+│           │   ├── schemas/     # Zod codecs for the domain types
+│           │   └── requests/    # API DTO types, with their codecs in requests/schemas/
+│           ├── constants/       # Every fixed value, grouped by responsibility behind a barrel
+│           ├── utils/           # Pure helpers shared by client and server
+│           └── errors.ts        # Typed errors shared by client and server
 ├── src/
 │   ├── client/              # @fileshed/client — Vue 3 + Nuxt UI v4 frontend
 │   │   └── src/
-│   │       ├── router/      # vue-router setup
-│   │       ├── stores/      # Pinia stores
-│   │       ├── styles/      # Global CSS (Tailwind + Nuxt UI imports)
-│   │       └── pages/       # Route-level pages (<name>Page.vue)
+│   │       ├── pages/           # Route-level pages (<name>Page.vue)
+│   │       ├── layouts/         # Page shells
+│   │       ├── components/      # Components by area; handlers/ holds the file-type viewers and editors
+│   │       ├── stores/          # Pinia stores (orchestration)
+│   │       ├── engines/         # Pure client logic
+│   │       ├── resource-access/ # API clients (all I/O); browser/ holds the localStorage and drop adapters
+│   │       ├── utils/           # Cross-cutting helpers
+│   │       ├── router/          # vue-router setup
+│   │       └── styles/          # Global CSS (Tailwind + Nuxt UI imports)
 │   └── server/              # @fileshed/server — Hono API (files at workspace root, no nested src/)
-│       ├── app.ts               # Hono app definition (default export)
+│       ├── services.ts          # composeServices: the manager graph
+│       ├── boot.ts              # bootApp: config, database, migrations, auth, timers
 │       ├── server.ts            # Node entry point
-│       ├── routes/              # Route handlers (client layer)
-│       ├── managers/            # Business logic orchestration (as they land)
-│       ├── engines/             # Pure logic — permissions, quota (as they land)
-│       ├── resource-access/     # DB + blob backends, all I/O (as they land)
+│       ├── clients/
+│       │   └── http/            # The Hono API
+│       │       ├── app.ts       # createApp: middleware, route mounts, error mapping
+│       │       ├── routes/      # Route handlers and their *.openapi.ts docs
+│       │       ├── middleware/  # Hono middleware
+│       │       └── utils/       # Body and query validation, byte serving, error responses
+│       ├── managers/            # Business logic orchestration
+│       ├── engines/             # Pure logic
+│       ├── resource-access/     # Database, blob backends, auth, mail: all I/O
 │       └── utils/               # Cross-cutting helpers (config, logger)
-├── tests/                   # *.spec.ts mirroring source: server/ client/ core/
+├── tests/                   # *.spec.ts mirroring source: server/ client/ core/, plus e2e/
 ├── docs/                    # Design documents (see docs/design/requirements.md)
 ├── package.json             # Root workspace config
 ├── eslint.config.js         # Code style rules

@@ -1,12 +1,6 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Shared Surface
   --
-  -- The body of the Shared with me view: the loading spinner, the load error with its retry, the "nothing shared yet"
-  -- empty state, the filtered-to-nothing state, and otherwise the caller's incoming grants as a grid of cards or a dense
-  -- row list, per the view toggle. Each item shows the target, the owner's avatar and name, the caller's role, and
-  -- whether it is already placed in their files; a double-click opens it and a kebab offers the recipient actions the
-  -- page builds. Reads the shared store for its listing state directly; open and the per-row menu relay up.
-  --
   -- The listing is one unpaginated read, so every grant is here at once and only the ones in view are mounted.
   --------------------------------------------------------------------------------------------------------------------->
 
@@ -134,10 +128,8 @@
     import SharedTile from './sharedTile.vue';
     import VirtualScroller from '../listing/virtualScroller.vue';
 
-    // Resource Access
-    import { useListingMetrics } from '../../resource-access/listingMetrics.ts';
-
     // Utils
+    import { useListingMetrics } from '../../utils/listingMetrics.ts';
     import { type NodeTypePresentation, formatBytes, sharedTargetPresentation } from '../../utils/formatters/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------

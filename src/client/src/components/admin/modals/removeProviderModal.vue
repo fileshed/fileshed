@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Remove Provider Modal
   --
-  -- Opened imperatively for one provider. Removing deletes every stored override the provider owns in a single
-  -- patch -- credentials included, which is why this confirms first. Values that come from the deployment
-  -- configuration cannot be deleted from here, and the modal says so instead of pretending.
+  -- Removing deletes every stored override the provider owns, credentials included, which is why this confirms first.
+  -- Values from the deployment configuration can't be deleted from here, and the modal says so.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -1,12 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Annotator Toolbar
-  --
-  -- The control row above the render surface: the sidebar switch, an in-page find, the annotation tools with their
-  -- params caret, undo and redo, page stepping, zoom, and the view menu. Identity -- the file name, save state, and
-  -- Save -- lives in the layout header (the PDF identity bar).
-  --
-  -- A read-only session (a viewer) drops the annotation tools, the params caret, and the history controls, and keeps
-  -- everything else: no viewing control harms anything.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -98,8 +91,10 @@
     // Stores
     import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
+    // Engines
+    import type { AnnotationMode } from '../../../engines/pdf/types.ts';
+
     // Components
-    import type { AnnotationMode } from './types.ts';
     import PdfFindBar from './findBar.vue';
     import PdfPageControls from './pageControls.vue';
     import PdfParamsPopover from './paramsPopover.vue';

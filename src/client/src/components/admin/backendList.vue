@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Backend List
   --
-  -- The configured storage backends, default one badged. A row never carries the backend's config blob -- it can hold
-  -- credentials, and the server does not send it.
+  -- A row never shows the backend's config: it can hold credentials, and the server does not send it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

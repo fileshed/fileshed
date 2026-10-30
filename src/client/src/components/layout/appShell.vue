@@ -1,13 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- App Shell
   --
-  -- The chrome every signed-in area is built from: a sidebar, the shared top bar, and the routed content. It is a
-  -- fixed-viewport shell -- the frame is pinned to the viewport (h-screen) and only <main> scrolls, so the sidebar and
-  -- top bar stay put on every page and a route that fills the height gets a real height to bound its own scroller
-  -- against instead of growing the page.
-  --
-  -- The #sidebar slot has two homes: the fixed rail from md up, and a left slideover below it, opened by the top bar's
-  -- hamburger. Both render the same slot, so an area describes its navigation once.
+  -- The frame is pinned to the viewport and only <main> scrolls, so the sidebar and top bar stay put and a route that
+  -- fills the height has a real height to bound its own scroller against. The #sidebar slot renders in two places, the
+  -- fixed rail from md up and a slideover below it, so an area describes its navigation once.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

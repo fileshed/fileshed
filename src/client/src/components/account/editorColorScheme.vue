@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Editor Colorscheme
   --
-  -- The account-page control for the editor's colorscheme, the second surface over the same preference the editor
-  -- toolbar drives. It lists the curated themes from the shared registry and, on a pick, saves it through the session's
-  -- preferences path so an open editor adopts it. The current value resolves through the registry, so a stale stored id
-  -- shows the theme the editor falls back to rather than a blank. Re-choosing the theme in force never hits the wire.
+  -- The current value resolves through the registry, so a stale stored id shows the theme the editor falls back to
+  -- rather than a blank.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -37,8 +35,8 @@
     // Stores
     import { useSessionStore } from '../../stores/session.ts';
 
-    // Components
-    import { editorThemeOptions, resolveEditorTheme } from '../handlers/text/themeRegistry.ts';
+    // Engines
+    import { editorThemeOptions, resolveEditorTheme } from '../../engines/editorTheme.ts';
 
     // Utils
     import { useRunWithToast } from '../../utils/runWithToast.ts';

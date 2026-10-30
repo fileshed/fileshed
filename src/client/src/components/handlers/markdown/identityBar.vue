@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Markdown Identity Bar
-  --
-  -- The markdown handler's contribution to the editor layout header: the file name and what it exposes, a save-state
-  -- readout, the Preview/Source toggle, and Save (a Read only badge in its place for a viewer). It reads and drives the
-  -- shared editor store for the file session; only the view toggle, which the editor owns, is emitted. Formatting lives
-  -- on the fixed toolbar below the header, not here.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

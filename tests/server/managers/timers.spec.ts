@@ -279,6 +279,61 @@ describe('TimerManager.stopTimers', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
+// Stopping the timers leaves a run already under way to finish on its own; whenIdle is how a caller about to close what
+// those runs use waits for them.
+describe('TimerManager.whenIdle', () =>
+{
+    async function isSettled(promise : Promise<unknown>) : Promise<boolean>
+    {
+        let settled = false;
+        void promise.then(() => { settled = true; }, () => { settled = true; });
+        await vi.advanceTimersByTimeAsync(0);
+
+        return settled;
+    }
+
+    it('waits for a run that is still in flight', async () =>
+    {
+        const { promise: release, resolve } = Promise.withResolvers<undefined>();
+        const sweep = countingJob('sweep', true, { answer: () => release });
+        manager.register(sweep.job);
+        manager.startTimers();
+        manager.stopTimers();
+
+        const idle = manager.whenIdle();
+        const settledBeforeRelease = await isSettled(idle);
+        resolve(undefined);
+
+        expect(settledBeforeRelease).toBe(false);
+        expect(await isSettled(idle)).toBe(true);
+    });
+
+    it('resolves once a run in flight rejects, without passing the failure on', async () =>
+    {
+        const { promise: release, reject } = Promise.withResolvers<undefined>();
+        const sweep = countingJob('sweep', true, { answer: () => release });
+        manager.register(sweep.job);
+        manager.startTimers();
+
+        const idle = manager.whenIdle();
+        reject(new Error('the backend went away'));
+
+        await expect(idle).resolves.toBeUndefined();
+    });
+
+    it('resolves at once when no run is in flight', async () =>
+    {
+        const sweep = countingJob('sweep', true);
+        manager.register(sweep.job);
+        manager.startTimers();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(await isSettled(manager.whenIdle())).toBe(true);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
 // Individual control exists so a spec can drive one job without reasoning about the others, which only holds if
 // naming one job leaves the rest exactly as they were.
 describe('TimerManager.startTimer / stopTimer', () =>

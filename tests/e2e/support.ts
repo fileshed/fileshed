@@ -305,9 +305,8 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
 // API client
 //
 // A fetch wrapper with a cookie jar: it captures every Set-Cookie the server sends and replays them, so real session
-// cookies (better-auth's signed token plus its cookie-cache companion) travel like a browser's would. Every request
-// carries an Origin matching the server's BASE_URL -- better-auth's CSRF check trusts that origin, and Node's fetch
-// sends no Origin on its own.
+// cookies travel like a browser's would. Every request carries an Origin matching the server's BASE_URL --
+// better-auth's CSRF check trusts that origin, and Node's fetch sends no Origin on its own.
 //----------------------------------------------------------------------------------------------------------------------
 
 export class ApiClient

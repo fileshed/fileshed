@@ -1,9 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Layout
   --
-  -- The admin-area chrome, mirroring the account layout: a sidebar whose section nav *is* the tab strip, over the
-  -- shared app shell. Reaching here at all is role-gated by the router; the server enforces the real boundary on
-  -- every call.
+  -- The router gates this area by role, but the server enforces the real boundary on every call.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

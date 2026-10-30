@@ -19,7 +19,7 @@ import type { Share, ShareRole } from '@fileshed/core';
 
 // Resource Access
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
 
 // Support

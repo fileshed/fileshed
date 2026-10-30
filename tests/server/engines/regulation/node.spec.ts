@@ -83,7 +83,6 @@ describe('judgeLinkCreation', () =>
     it('rejects a link whose target is another link', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'link_other',
             targetType: 'link',
             creatorRoleOnTarget: 'viewer',
@@ -93,25 +92,10 @@ describe('judgeLinkCreation', () =>
         expect(codes(result)).toContain('link.targetIsLink');
     });
 
-    // a link may not point at itself.
-    it('rejects a link that targets itself', () =>
-    {
-        const result = judgeLinkCreation({
-            linkID: 'node_x',
-            targetNodeID: 'node_x',
-            targetType: 'file',
-            creatorRoleOnTarget: 'owner',
-        });
-
-        expect(result.ok).toBe(false);
-        expect(codes(result)).toContain('link.selfTarget');
-    });
-
     // creating a link requires ownership of or an active share on the target; no access resolves to no role.
     it('rejects a link when the creator has no access to the target', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'file_1',
             targetType: 'file',
             creatorRoleOnTarget: null,
@@ -126,7 +110,6 @@ describe('judgeLinkCreation', () =>
     it('admits a link onto a different node the creator owns', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'file_1',
             targetType: 'file',
             creatorRoleOnTarget: 'owner',
@@ -139,7 +122,6 @@ describe('judgeLinkCreation', () =>
     it('admits a link to a folder the creator holds a viewer share on', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'folder_9',
             targetType: 'folder',
             creatorRoleOnTarget: 'viewer',

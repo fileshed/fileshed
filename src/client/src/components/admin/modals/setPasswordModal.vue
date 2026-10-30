@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Set Password Modal
   --
-  -- Opened imperatively for one account: the no-email password reset. The admin sets it and tells the user out of
-  -- band; existing sessions survive (signing them out everywhere is its own row action).
+  -- The no-email password reset: the admin sets it and tells the user out of band. Existing sessions survive; signing
+  -- them out is a separate row action.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

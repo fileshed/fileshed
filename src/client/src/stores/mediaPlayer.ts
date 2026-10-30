@@ -53,16 +53,15 @@ import {
 
 // Resource Access
 import { mintPlaybackToken } from '../resource-access/accessTokens.ts';
-import { answerChallenge, claimBlob, uploadTicket } from '../resource-access/blobs.ts';
 import { fetchNodeBlob } from '../resource-access/content.ts';
 import { type MediaTags, readMediaTags, releaseMediaTags } from '../resource-access/mediaTags.ts';
-import { getChildren, getNode } from '../resource-access/nodes.ts';
+import { getNode, listChildren } from '../resource-access/nodes.ts';
 
 // Stores
+import { commitFile } from './commitFile.ts';
 import { useSessionStore } from './session.ts';
 
 // Engines
-import { computeProofAnswer } from '../engines/claim.ts';
 import {
     type PlaylistEntry,
     type PlaylistRow,
@@ -71,8 +70,7 @@ import {
 } from '../engines/media/playlistFile.ts';
 
 // Utils
-import { hashFile, readSampleWindows } from '../utils/hashFile.ts';
-import { ensureExtension } from '../utils/formatters/formatExtension.ts';
+import { ensureExtension } from '../utils/ensureExtension.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -103,6 +101,15 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // being removed out from under playback. The host keys the mounted player on this, so editing the rest of the
     // list never remounts (and never restarts) the playing track.
     const playToken = ref(0);
+
+    // Every seat the queue hands out gets its own entry ID, so the same file queued twice is two rows.
+    let entrySequence = 0;
+
+    function nextEntryID() : string
+    {
+        entrySequence += 1;
+        return `entry-${ entrySequence }`;
+    }
 
     // The cast session's playback token: a short-lived download-scoped key the host appends to every drive track's
     // src, so a receiver handed the URL fetches bytes without a cookie jar. Minted when a cast session STARTS and
@@ -206,7 +213,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
 
     function open(node : NodeResponse, kind : MediaKind) : void
     {
-        const opened = trackForPlay(node, kind);
+        const opened = trackForPlay(node, kind, nextEntryID());
         queue.value = queueFromTrack(opened);
         autoplay.value = false;
         playToken.value += 1;
@@ -223,7 +230,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // current without starting it. Whether a seat was taken is the return, so a bulk add can count its catch.
     function add(node : NodeResponse) : boolean
     {
-        const added = trackFromNode(node);
+        const added = trackFromNode(node, nextEntryID());
         if(added === null) { return false; }
 
         queue.value = queue.value === null ? queueFromTrack(added) : appendTrack(queue.value, added);
@@ -243,7 +250,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         {
             if(depth > MEDIA_FOLDER_ADD_MAX_DEPTH) { return; }
 
-            const page = await getChildren(parentID, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
+            const page = await listChildren(parentID, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
 
             for(const child of page.nodes)
             {
@@ -356,7 +363,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
 
         if(advanced === null)
         {
-            if(repeat.value === 'all' && tracks.value.length > 0) { jumpTo(0); }
+            if(repeat.value === 'all') { jumpTo(0); }
 
             return;
         }
@@ -475,14 +482,14 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
             else if(index === segments.length - 1)
             {
                 // eslint-disable-next-line no-await-in-loop -- final segment lookup ends the chain
-                const page = await getChildren(cursor, { name: segment, limit: 2 });
+                const page = await listChildren(cursor, { name: segment, limit: 2 });
 
                 return page.nodes.find((node) => node.type === 'file') ?? null;
             }
             else
             {
                 // eslint-disable-next-line no-await-in-loop -- the walk is a chain; each level needs its parent
-                const page = await getChildren(cursor, { name: segment, types: [ 'folders' ], limit: 1 });
+                const page = await listChildren(cursor, { name: segment, types: [ 'folders' ], limit: 1 });
                 const folder = page.nodes[0];
                 if(folder === undefined || folder.type !== 'folder') { return null; }
 
@@ -501,7 +508,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     {
         if(entry.url !== null)
         {
-            const remote = trackFromUrl(entry.url);
+            const remote = trackFromUrl(entry.url, nextEntryID());
 
             return entry.title === null ? remote : { ...remote, name: entry.title };
         }
@@ -510,7 +517,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         {
             try
             {
-                const resolved = trackFromNode(await getNode(entry.nodeID));
+                const resolved = trackFromNode(await getNode(entry.nodeID), nextEntryID());
                 if(resolved !== null) { return resolved; }
             }
             catch { /* the id is gone or out of reach; the path below is the fallback */ }
@@ -519,11 +526,11 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         if(entry.path !== null)
         {
             const found = await resolvePath(baseFolderID, entry.path).catch(() => null);
-            const resolved = found === null ? null : trackFromNode(found);
+            const resolved = found === null ? null : trackFromNode(found, nextEntryID());
             if(resolved !== null) { return resolved; }
         }
 
-        return brokenTrack(entry.title ?? entry.path ?? 'Unknown entry', String(index));
+        return brokenTrack(entry.title ?? entry.path ?? 'Unknown entry', String(index), nextEntryID());
     }
 
     function seatTracks(list : readonly MediaTrack[], mode : 'replace' | 'append') : void
@@ -660,19 +667,6 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         return rows;
     }
 
-    async function commitPlaylist(file : File, commit : UploadCommitMetadata) : Promise<NodeResponse>
-    {
-        const sha256 = await hashFile(file);
-        const claim = await claimBlob({ sha256, size: file.size });
-
-        if(claim.upload) { return uploadTicket(claim.ticket, file, commit); }
-
-        const windows = await readSampleWindows(file, claim.ranges);
-        const answer = await computeProofAnswer(claim.nonce, windows);
-
-        return answerChallenge(claim.challengeID, { answer, ...commit });
-    }
-
     async function savePlaylistAs(name : string, title : string | null = null) : Promise<void>
     {
         playlistBusy.value = true;
@@ -693,7 +687,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
                 ? { replaceNodeID: adopted.id, mimeType: PLAYLIST_SAVE_MIME }
                 : { name: finalName, parentID, mimeType: PLAYLIST_SAVE_MIME };
 
-            const saved = await commitPlaylist(file, commit);
+            const saved = await commitFile(file, commit);
 
             playlistNode.value = saved;
             playlistTitle.value = finalTitle;
@@ -725,7 +719,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
                 ? { replaceNodeID: target.id, mimeType: PLAYLIST_SAVE_MIME }
                 : { replaceNodeID: target.id, ifBlobID: playlistBlobID, mimeType: PLAYLIST_SAVE_MIME };
 
-            const saved = await commitPlaylist(file, commit);
+            const saved = await commitFile(file, commit);
 
             playlistNode.value = saved;
             playlistBlobID = saved.type === 'file' ? saved.blobID : null;

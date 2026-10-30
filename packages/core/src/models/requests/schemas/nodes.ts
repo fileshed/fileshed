@@ -22,6 +22,7 @@ import {
     type DeleteNodeQuery,
     type EmptyTrashResponse,
     type LinkTarget,
+    type ListingQuery,
     type MoveRequest,
     type NodeListResponse,
     type NodeResponse,
@@ -149,7 +150,7 @@ export const typeFamiliesParam = z.string()
     })
     .pipe(z.array(z.enum(nodeTypeFamilies)));
 
-export const childrenQueryCodec = z.strictObject({
+const listingQueryShape = {
     limit: z.coerce.number()
         .int()
         .min(1)
@@ -162,10 +163,18 @@ export const childrenQueryCodec = z.strictObject({
     sortKey: z.enum(nodeSortKeys).default('name'),
     sortDirection: z.enum(sortDirections).default('asc'),
     types: typeFamiliesParam,
-    ownerID: z.string().optional(),
-    name: nodeNameCodec.optional(),
     updatedAfter: z.iso.datetime().optional(),
     updatedBefore: z.iso.datetime().optional(),
+};
+
+export const listingQueryCodec = z.strictObject(listingQueryShape);
+
+typeAssert<Equals<z.output<typeof listingQueryCodec>, ListingQuery>>();
+
+export const childrenQueryCodec = z.strictObject({
+    ...listingQueryShape,
+    ownerID: z.string().optional(),
+    name: nodeNameCodec.optional(),
 });
 
 typeAssert<Equals<z.output<typeof childrenQueryCodec>, ChildrenQuery>>();

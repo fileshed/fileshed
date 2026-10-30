@@ -8,18 +8,19 @@
 // returns; the node's untouched state on a 409 is asserted against the store, not just the status line.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaimResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     type TestUser,
     answerReplace,
     blobRowCount,
@@ -34,13 +35,6 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
-
 // Just over 1 MiB: past the threshold where a known blob is proof-challenged rather than re-uploaded, so the replace
 // travels the proof-of-possession transport with zero bytes moved.
 function largeFixture() : Buffer
@@ -50,7 +44,7 @@ function largeFixture() : Buffer
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 beforeEach(async () =>
 {

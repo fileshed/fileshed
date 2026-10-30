@@ -1,15 +1,6 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Node Surface
   --
-  -- The switching body of the drive: the loading spinner, the load error with its retry, the two empty states (filtered
-  -- to nothing vs. a genuinely empty folder), and otherwise the grid or list of nodes. Reads the store for the listing
-  -- state directly; selection intents and the list-header sort relay up, and a click that lands on empty space -- the
-  -- surface's own padding or the scroller between items -- clears the selection.
-  --
-  -- The listing owns its scroll, so the header and the filter strip above it stay put however far down a folder the
-  -- user is. How far the rendering has reached goes back to the store, which is what pulls the next chunk of a folder
-  -- too big to hold whole.
-  --
   -- One context menu serves the whole listing rather than one per row: a right-click names the node it landed on, and
   -- the menu is built for that node before the menu itself sees the event. A menu per row would be mounted and thrown
   -- away for every row that scrolls past, which is the most expensive thing a row could carry.

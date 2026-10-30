@@ -8,20 +8,21 @@
 // so many claims at once however small they are.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimResponse } from '@fileshed/core';
 
 // Support
-import { type BootedBlobApp, ORIGIN, bootBlobApp, claim, makeUser, putUpload } from './support.ts';
+import { sha256Of } from '../support/sha256.ts';
+import { type BootedStoreApp, ORIGIN, bootBlobApp, claim, makeUser, putUpload } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const KILOBYTE = 1024;
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 beforeEach(async () =>
 {
@@ -34,13 +35,6 @@ afterEach(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
 
 // A claim for bytes that exist but are never delivered: the hold is what these specs are about, not the upload.
 async function claimBytes(cookie : string, size : number) : Promise<Response>

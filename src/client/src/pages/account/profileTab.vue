@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Profile Tab
-  --
-  -- The account area's public-identity tab: the avatar with its edit button beneath, the name with the email muted
-  -- under it, and the editable display name. The avatar and the "Change avatar" button both open the avatar editor;
-  -- there is no menu on the avatar itself. The name is a plain form field -- Save is live only for a non-empty,
-  -- changed value -- rather than an inline edit. The Admin badge sits beside the name, decoupled from any action.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

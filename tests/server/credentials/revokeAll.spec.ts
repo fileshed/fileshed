@@ -19,13 +19,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { CreateAccessTokenResponse } from '@fileshed/core';
 
 // Resource Access
-import type { AuthMailHooks } from '@server/resource-access/auth.ts';
+import type { AuthMailHooks } from '@server/resource-access/auth/instance.ts';
 
 // Support
 import {
     type BootedApp,
     ORIGIN,
-    bootFullApp,
+    bootTestApp,
     cookieFrom,
     cookieJarFrom,
     signIn,
@@ -96,7 +96,7 @@ async function mintToken(session : string, name : string) : Promise<string>
         body: JSON.stringify({ name, scopes: [ 'account:read' ] }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
 
     return (await res.json() as CreateAccessTokenResponse).token;
 }
@@ -145,7 +145,7 @@ async function tokenCountOf(userID : string) : Promise<number>
 
 beforeEach(async () =>
 {
-    booted = await bootFullApp();
+    booted = await bootTestApp();
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -294,7 +294,7 @@ describe('POST /api/me/revoke-credentials', () =>
     it('cancels a password-reset link that was already on its way', async () =>
     {
         const hooks = new RecordingHooks();
-        booted = await bootFullApp({}, { mail: hooks });
+        booted = await bootTestApp({}, { mail: hooks });
 
         const caller = await makeAccount('panic@example.com');
 

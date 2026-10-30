@@ -1,9 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Create Access Token
   --
-  -- The mint form. Scopes are explicit checkboxes; the preset buttons only tick them, so what is stored is exactly
-  -- what is shown. A successful mint hands the one-time value to the reveal modal and resets the form immediately --
-  -- the secret's whole client-side life happens inside the modal.
+  -- The preset buttons only tick the scope checkboxes, so what is stored is exactly what is shown. A successful mint
+  -- hands the one-time value to the reveal modal and resets the form at once; the secret exists client-side only inside
+  -- that modal.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

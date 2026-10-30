@@ -16,7 +16,7 @@ import {
     ForbiddenError,
     type GcRunSummary,
     NotFoundError,
-    type PartialsRunSummary,
+    type StagedUploadsRunSummary,
     type TrashPurgeRunSummary,
 } from '@fileshed/core';
 
@@ -34,7 +34,7 @@ const MEMBER = testActor({ id: 'member-actor', role: 'user' });
 
 const GC_RECLAIMED : GcRunSummary = { candidates: 5, deleted: 4, kept: 1, bytesFailed: 0, bytesFreed: 8192 };
 const TRASH_PURGED : TrashPurgeRunSummary = { candidates: 3, purged: 3, failed: 0 };
-const PARTIALS_REAPED : PartialsRunSummary = { candidates: 2, reclaimed: 2, failed: 0, bytesFreed: 4096 };
+const STAGED_UPLOADS_REAPED : StagedUploadsRunSummary = { candidates: 2, reclaimed: 2, failed: 0, bytesFreed: 4096 };
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ function fakeSweep<T>() : FakeSweep<T>
 
 let gc : FakeSweep<GcRunSummary>;
 let trashPurge : FakeSweep<TrashPurgeRunSummary>;
-let partials : FakeSweep<PartialsRunSummary>;
+let stagedUploads : FakeSweep<StagedUploadsRunSummary>;
 let accountDeletion : FakeSweep<AccountDeletionRunSummary>;
 let tracker : LastRunTracker;
 let manager : SweepManager;
@@ -114,7 +114,7 @@ beforeEach(() =>
 {
     gc = fakeSweep<GcRunSummary>();
     trashPurge = fakeSweep<TrashPurgeRunSummary>();
-    partials = fakeSweep<PartialsRunSummary>();
+    stagedUploads = fakeSweep<StagedUploadsRunSummary>();
     accountDeletion = fakeSweep<AccountDeletionRunSummary>();
     tracker = new LastRunTracker();
 
@@ -122,7 +122,7 @@ beforeEach(() =>
         runners: {
             gc: gc.run,
             trashPurge: trashPurge.run,
-            partials: partials.run,
+            stagedUploads: stagedUploads.run,
             accountDeletion: accountDeletion.run,
         },
         tracker,
@@ -152,20 +152,20 @@ describe('SweepManager.run', () =>
 
         const outcome = await running;
 
-        expect(tracker.trashPurge?.summary).toEqual(TRASH_PURGED);
-        expect(tracker.trashPurge?.at.toISOString()).toBe(outcome.ranAt);
+        expect(tracker.last('trashPurge')?.summary).toEqual(TRASH_PURGED);
+        expect(tracker.last('trashPurge')?.at.toISOString()).toBe(outcome.ranAt);
     });
 
-    it('answers a partials run with what the reaper reclaimed, and records that run', async () =>
+    it('answers a staged-upload run with what the reaper reclaimed, and records that run', async () =>
     {
-        const running = manager.run(ADMIN, 'partials');
-        partials.release(PARTIALS_REAPED);
+        const running = manager.run(ADMIN, 'stagedUploads');
+        stagedUploads.release(STAGED_UPLOADS_REAPED);
 
         const outcome = await running;
 
-        expect(outcome).toEqual({ sweep: 'partials', ranAt: expect.any(String), summary: PARTIALS_REAPED });
-        expect(tracker.partials?.summary).toEqual(PARTIALS_REAPED);
-        expect(tracker.partials?.at.toISOString()).toBe(outcome.ranAt);
+        expect(outcome).toEqual({ sweep: 'stagedUploads', ranAt: expect.any(String), summary: STAGED_UPLOADS_REAPED });
+        expect(tracker.last('stagedUploads')?.summary).toEqual(STAGED_UPLOADS_REAPED);
+        expect(tracker.last('stagedUploads')?.at.toISOString()).toBe(outcome.ranAt);
     });
 
     it('refuses a second run while the first is still going, without starting the sweep again', async () =>
@@ -221,15 +221,15 @@ describe('SweepManager.run', () =>
     {
         const collecting = manager.run(ADMIN, 'gc');
         const purging = manager.run(ADMIN, 'trashPurge');
-        const reaping = manager.run(ADMIN, 'partials');
+        const reaping = manager.run(ADMIN, 'stagedUploads');
 
         gc.release(GC_RECLAIMED);
         trashPurge.release(TRASH_PURGED);
-        partials.release(PARTIALS_REAPED);
+        stagedUploads.release(STAGED_UPLOADS_REAPED);
 
         await expect(collecting).resolves.toMatchObject({ sweep: 'gc' });
         await expect(purging).resolves.toMatchObject({ sweep: 'trashPurge' });
-        await expect(reaping).resolves.toMatchObject({ sweep: 'partials' });
+        await expect(reaping).resolves.toMatchObject({ sweep: 'stagedUploads' });
     });
 
     it('refuses a caller who is not an admin, and runs nothing', async () =>
@@ -243,7 +243,7 @@ describe('SweepManager.run', () =>
         await expect(manager.run(ADMIN, 'defragment')).rejects.toThrow(NotFoundError);
         expect(gc.entered()).toBe(0);
         expect(trashPurge.entered()).toBe(0);
-        expect(partials.entered()).toBe(0);
+        expect(stagedUploads.entered()).toBe(0);
     });
 
     it('judges authority before the sweep name, so a stranger learns nothing about which sweeps exist', async () =>
@@ -264,7 +264,7 @@ describe('SweepManager.runScheduled', () =>
         await scheduled;
 
         expect(gc.entered()).toBe(1);
-        expect(tracker.gc?.summary).toEqual(GC_RECLAIMED);
+        expect(tracker.last('gc')?.summary).toEqual(GC_RECLAIMED);
     });
 
     it('skips a tick while an admin run is still going, rather than doubling up', async () =>

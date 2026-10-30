@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Access Request Resource Access
-//
-// The typed client for share requests: ask a target's owner for access to a stub, list requests in both directions
-// (incoming to you as an owner, your own outgoing), and grant or decline one as the owner. Grant and decline both
-// answer the resolved request.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {

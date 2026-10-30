@@ -1,12 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Drop Zone
   --
-  -- Wraps a surface and turns a file drag over it into an upload. A drag carrying files raises an overlay naming the
-  -- target folder; a drop emits what it carried for the parent to enqueue -- FileSystemEntry handles when the browser
-  -- offers them (they can name whole folders, and MUST be collected synchronously inside the drop event or they go
-  -- stale) plus the plain File list as the fallback. Dragging over child elements fires a stream of enter/leave
-  -- events, so a depth counter (not a boolean) drives the overlay -- it stays up until the drag has truly left the
-  -- surface, not just crossed onto a child. Only file drags are tracked, so dragging a node selection does nothing.
+  -- FileSystemEntry handles (which can name whole folders) must be collected synchronously inside the drop event or
+  -- they go stale; the plain File list comes along as the fallback. Dragging over child elements fires a stream of
+  -- enter and leave events, so a depth counter rather than a boolean drives the overlay.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

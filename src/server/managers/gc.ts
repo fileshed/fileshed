@@ -66,7 +66,7 @@ async function reclaim(blob : BlobRA, candidate : GcCandidate, cutoff : Date) : 
 
     try
     {
-        await blob.delete({ backendID: candidate.backendID, storageKey: candidate.storageKey });
+        await blob.delete(candidate);
         return { outcome: 'deleted', bytes: candidate.size };
     }
     catch(error)

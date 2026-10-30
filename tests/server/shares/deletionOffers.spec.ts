@@ -13,21 +13,21 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DeletionOfferListResponse, NodeResponse } from '@fileshed/core';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedShareApp,
+    type BootedStoreApp,
     type TestUser,
-    bootShareApp,
+    bootStoreApp,
     createFolder,
     grantShare,
     makeUser,
     request,
-    sha256Of,
     uploadSmallFile,
 } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedShareApp;
+let booted : BootedStoreApp;
 let alice : TestUser;
 let bob : TestUser;
 
@@ -35,7 +35,7 @@ const bytes = randomBytes(2048);
 
 beforeEach(async () =>
 {
-    booted = await bootShareApp();
+    booted = await bootStoreApp();
     alice = await makeUser(booted, 'alice@example.com');
     bob = await makeUser(booted, 'bob@example.com');
 });

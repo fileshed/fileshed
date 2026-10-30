@@ -1,14 +1,10 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Editor Layout
   --
-  -- The file surface's own chrome: a single slim header -- the FileShed mark linking home, a center region the mounted
-  -- handler contributes its identity into, and the user menu -- over a full-viewport region that the handler owns. No
-  -- drive chrome (no sidebar, no New button, no drive nav, no storage gauge, no search): the surface's whole job is one
-  -- file, so it gets the whole screen, and the logo is the only way back out of the tab. The center is a Teleport
-  -- target (#editor-header-center): each family teleports its name + action cluster in, so the header carries the file's
-  -- identity without the layout knowing which handler is mounted. Same fixed-viewport shell as the other layouts -- the
-  -- frame is pinned to the viewport (h-screen) and the header stays put -- but here the main region does not scroll; the
-  -- mounted handler bounds its own scroller against the height this hands it.
+  -- The center region is a Teleport target (#editor-header-center) that each handler family teleports its name and
+  -- actions into, so the header carries the file's identity without the layout knowing which handler is mounted. The
+  -- frame is pinned to the viewport, but unlike the other layouts the main region does not scroll; the mounted handler
+  -- bounds its own scroller against the height this hands it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

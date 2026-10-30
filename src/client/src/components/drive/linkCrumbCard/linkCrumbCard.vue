@@ -1,10 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Link Crumb Card
   --
-  -- A breadcrumb crumb that is a folder link: the label carries the same link-badge marker the drive rows put on a
-  -- link's icon, and the crumb reveals a hover card (mouse or keyboard focus) naming the target it links to, the
-  -- target's owner, and whether the link is broken. The RouterLink is the popover trigger, so focusing the crumb opens
-  -- the card just as hovering does.
+  -- The RouterLink is the popover trigger, so focusing the crumb opens the card just as hovering does.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

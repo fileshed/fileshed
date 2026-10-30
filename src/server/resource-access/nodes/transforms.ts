@@ -1,15 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Row <-> Domain Transforms
 //
-// The boundary between the `node` table's on-disk row (snake_case, nullable columns for every variant's fields) and the
-// canonical Node union of @fileshed/core (a discriminated union where a variant's foreign fields simply don't exist).
-// nodeFromRow reads, rowFromNode writes.
-//
-// The row shape carries every variant's columns as nullable, so a single row could -- structurally -- claim to be a
-// file with a target, or a link with a size. The per-type CHECK of migration 001 makes such a row unrepresentable, so
-// nodeFromRow treats a violation as store corruption and throws a typed error rather than silently coercing it away.
-// rowFromNode goes the other way: it nulls out the columns a variant forbids and serializes timestamps to ISO-8601
-// strings, which both dialects accept on write (see database.ts).
+// The row carries every variant's columns as nullable, so structurally a single row could claim to be a file with a
+// target or a link with a size. The per-type CHECK of migration 001 makes such a row unstorable, so nodeFromRow treats
+// one as store corruption and throws a typed error rather than coercing it away.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- rowFromNode builds snake_case DB rows (house convention for Kysely inserts) */
@@ -17,7 +11,7 @@
 import type { Insertable, Selectable } from 'kysely';
 
 // Models
-import { type Node, NodeRowCorruptionError } from '@fileshed/core';
+import { type Node, RowCorruptionError } from '@fileshed/core';
 
 // Resource Access
 import type { NodeTable } from '../database/database.ts';
@@ -54,7 +48,7 @@ export function nodeFromRow(row : Selectable<NodeTable>) : Node
         {
             if(row.blob_id === null || row.size === null || row.mime_type === null || row.target_node_id !== null)
             {
-                throw new NodeRowCorruptionError(`node ${ row.id }: a file must carry a blob, size and mime type, and `
+                throw new RowCorruptionError('node', row.id, `a file must carry a blob, size and mime type, and `
                     + 'no target');
             }
 
@@ -72,7 +66,7 @@ export function nodeFromRow(row : Selectable<NodeTable>) : Node
         {
             if(row.blob_id !== null || row.size !== null || row.mime_type !== null || row.target_node_id !== null)
             {
-                throw new NodeRowCorruptionError(`node ${ row.id }: a folder must carry no file or link fields`);
+                throw new RowCorruptionError('node', row.id, `a folder must carry no file or link fields`);
             }
 
             return {
@@ -87,7 +81,7 @@ export function nodeFromRow(row : Selectable<NodeTable>) : Node
             if(row.target_node_id === null || row.blob_id !== null || row.size !== null || row.mime_type !== null
                 || row.trashed_at !== null)
             {
-                throw new NodeRowCorruptionError(`node ${ row.id }: a link must carry a target and no file or trash `
+                throw new RowCorruptionError('node', row.id, `a link must carry a target and no file or trash `
                     + 'fields');
             }
 

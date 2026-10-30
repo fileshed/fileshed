@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Trash Page
-  --
-  -- The Trash view: pending deletion offers up top (self-hiding when there are none), a retention banner with the
-  -- Empty trash action, then the caller's trashed roots with per-item Restore and Delete forever. Restore is a direct
-  -- mutation; Delete forever and Empty trash both route through a destructive confirm. This route component owns the
-  -- orchestration -- the store holds the listing and mutations, the child components render each piece.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -77,8 +72,10 @@
     import DeleteForever from '../components/trash/modals/deleteForever.vue';
     import EmptyTrash from '../components/trash/modals/emptyTrash.vue';
 
+    // Engines
+    import type { ModifiedFilter } from '../engines/listing/index.ts';
+
     // Utils
-    import type { ModifiedFilter } from '../utils/filterPresets.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -119,7 +116,7 @@
     {
         if(mode === session.viewMode) { return; }
 
-        session.applyPreferences({ viewMode: mode });
+        session.chooseViewMode(mode);
         void runMutation(() => session.savePreferences({ viewMode: mode }));
     }
 

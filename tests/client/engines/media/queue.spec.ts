@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { NodeResponse } from '@fileshed/core';
+import type { LinkTarget } from '@fileshed/core';
 
 // Engines
 import {
@@ -29,44 +29,15 @@ import {
     withEntryFailed,
 } from '@client/engines/media/queue.ts';
 
+// Support
+import { fileNode, linkNode } from '../../support.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function fileNode(overrides : Partial<{ id : string; name : string; mimeType : string }> = {}) : NodeResponse
+// A fresh target per call, since one spec strips its mime in place.
+function movieTarget() : LinkTarget
 {
-    return {
-        sharing: null,
-        id: overrides.id ?? 'f1',
-        name: overrides.name ?? 'song.mp3',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: overrides.mimeType ?? 'audio/mpeg',
-        trashedAt: null,
-    };
-}
-
-function linkNode() : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'l1',
-        name: 'shared-movie',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'viewer',
-        type: 'link',
-        targetNodeID: 'f9',
-        target: { id: 'f9', type: 'file', name: 'movie.mp4', ownerID: 'u2', mimeType: 'video/mp4', size: 99 },
-    };
+    return { id: 'f9', type: 'file', name: 'movie.mp4', ownerID: 'u2', mimeType: 'video/mp4', size: 99 };
 }
 
 function track(id : string, kind : 'audio' | 'video' = 'audio') : MediaTrack
@@ -101,8 +72,8 @@ describe('trackFromNode', () =>
     {
         const node = fileNode({ id: 'a1', name: 'song.mp3', mimeType: 'audio/mpeg' });
 
-        expect(trackFromNode(node)).toEqual({
-            entryID: expect.any(String),
+        expect(trackFromNode(node, 'seat-1')).toEqual({
+            entryID: 'seat-1',
             nodeID: 'a1',
             name: 'song.mp3',
             mimeType: 'audio/mpeg',
@@ -117,17 +88,19 @@ describe('trackFromNode', () =>
     {
         const node = fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' });
 
-        expect(trackFromNode(node)?.kind).toBe('video');
+        expect(trackFromNode(node, 'seat-1')?.kind).toBe('video');
     });
 
     it('refuses a file whose mime is not media', () =>
     {
-        expect(trackFromNode(fileNode({ mimeType: 'text/plain' }))).toBeNull();
+        expect(trackFromNode(fileNode({ mimeType: 'text/plain' }), 'seat-1')).toBeNull();
     });
 
     it('refuses a link even when its target is media — only concrete files join the queue', () =>
     {
-        expect(trackFromNode(linkNode())).toBeNull();
+        const node = linkNode({ name: 'shared-movie', targetNodeID: 'f9', target: movieTarget() });
+
+        expect(trackFromNode(node, 'seat-1')).toBeNull();
     });
 });
 
@@ -137,8 +110,8 @@ describe('trackForPlay', () =>
     {
         const node = fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' });
 
-        expect(trackForPlay(node, 'video')).toEqual({
-            entryID: expect.any(String),
+        expect(trackForPlay(node, 'video', 'seat-1')).toEqual({
+            entryID: 'seat-1',
             nodeID: 'v1',
             name: 'clip.mp4',
             mimeType: 'video/mp4',
@@ -151,10 +124,11 @@ describe('trackForPlay', () =>
 
     it('plays a link\'s target -- the target\'s id and mime -- under the link\'s own display name', () =>
     {
-        const played = trackForPlay(linkNode(), 'video');
+        const node = linkNode({ name: 'shared-movie', targetNodeID: 'f9', target: movieTarget() });
+        const played = trackForPlay(node, 'video', 'seat-1');
 
         expect(played).toEqual({
-            entryID: expect.any(String),
+            entryID: 'seat-1',
             nodeID: 'f9',
             name: 'shared-movie',
             mimeType: 'video/mp4',
@@ -167,10 +141,10 @@ describe('trackForPlay', () =>
 
     it('leaves the mime unknown when the link target carries none, so the browser sniffs instead of refusing', () =>
     {
-        const node = linkNode();
+        const node = linkNode({ name: 'shared-movie', targetNodeID: 'f9', target: movieTarget() });
         if(node.type === 'link' && node.target !== null) { delete node.target.mimeType; }
 
-        expect(trackForPlay(node, 'audio').mimeType).toBeNull();
+        expect(trackForPlay(node, 'audio', 'seat-1').mimeType).toBeNull();
     });
 });
 
@@ -320,22 +294,6 @@ describe('removeAt', () =>
         const queue = queueOf([ 'a' ], 'b', []);
 
         expect(removeAt(queue, 5)).toBe(queue);
-    });
-});
-
-//----------------------------------------------------------------------------------------------------------------------
-
-describe('entry identity', () =>
-{
-    it('gives the same file a distinct seat every time it joins the queue', () =>
-    {
-        const node = fileNode({ id: 'dup' });
-
-        const first = trackFromNode(node);
-        const second = trackFromNode(node);
-
-        expect(first?.nodeID).toBe(second?.nodeID);
-        expect(first?.entryID).not.toBe(second?.entryID);
     });
 });
 

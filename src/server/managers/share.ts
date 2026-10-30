@@ -1,20 +1,14 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Manager
 //
-// The share and share-request lifecycle: grant, revoke, and leave; the owner's grant list and the recipient's Shared
-// with me; and access requests -- ask, list, grant, decline. Every mutation follows the same shape: gather the facts a
-// judgement needs, run the regulation engine, then act. Grant legality (owner-only, no link, no self-grant) and
-// request-resolution legality (target-owner-only, pending-only) are decided in the pure engine and turned into a typed
-// RegulationError here; all I/O goes through the node and share RAs.
+// Every mutation gathers the facts a judgement needs, runs the regulation engine, then acts.
 //
-// One granting path serves both a direct grant and the grant that resolves a request, so "editors can re-share" (a
-// future toggle) has a single place to relax. Re-granting an existing grantee updates their role rather than
-// conflicting -- the share dialog's role select is the same operation as a first grant.
+// Re-granting an existing grantee updates their role rather than conflicting: the share dialog's role select is the
+// same operation as a first grant.
 //
-// Access requests are for people with NO access: they are scoped to a user who can see an item exists but cannot
-// resolve it. A user who already holds any role is refused, so requestedRole names the level you are asking for as an
-// outsider, not an upgrade a viewer can request. Upgrade requests are post-v1; until then the owner changes a role
-// directly through the share dialog.
+// Access requests are for people with no access, who can see an item exists but cannot resolve it. A user who already
+// holds any role is refused, so requestedRole is the level an outsider asks for, never an upgrade; an owner changes an
+// existing role directly through the share dialog.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createId } from '@paralleldrive/cuid2';
@@ -52,11 +46,11 @@ import {
 import { type RegulationResult, regulation } from '../engines/regulation/index.ts';
 
 // Resource Access
-import type { SessionUser } from '../resource-access/auth.ts';
-import type { DatabaseHandle } from '../resource-access/database/database.ts';
-import { NodeRA } from '../resource-access/nodes/node.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
+import { type DatabaseHandle, inTransaction } from '../resource-access/database/database.ts';
+import { NodeRA } from '../resource-access/nodes/index.ts';
 import { ShareRA, type SharedTargetSummary, type SharedWithMeRow } from '../resource-access/shares/index.ts';
-import type { UserRA } from '../resource-access/users/index.ts';
+import { UserRA } from '../resource-access/users/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -104,12 +98,12 @@ export class ShareManager
     readonly #shares : ShareRA;
     readonly #users : UserRA;
 
-    constructor(handle : DatabaseHandle, nodes : NodeRA, shares : ShareRA, users : UserRA)
+    constructor(handle : DatabaseHandle)
     {
         this.#handle = handle;
-        this.#nodes = nodes;
-        this.#shares = shares;
-        this.#users = users;
+        this.#nodes = new NodeRA(handle);
+        this.#shares = new ShareRA(handle);
+        this.#users = new UserRA(handle);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -118,39 +112,39 @@ export class ShareManager
 
     // POST /api/nodes/:id/shares. Owner-only in v1 (judgeGrant checks it against the loaded node). A grantee who
     // already holds a grant has their role updated rather than a conflict raised.
-    async grant(actor : SessionUser, nodeID : string, request : GrantShareRequest) : Promise<ShareResponse>
+    async grant(user : SessionUser, nodeID : string, request : GrantShareRequest) : Promise<ShareResponse>
     {
         const node = await this.#nodes.get(nodeID);
         if(node === undefined) { throw new NotFoundError(`No node ${ nodeID }.`); }
 
-        const share = await this.#mintGrant(this.#shares, node, actor.id, request.granteeUserID, request.role);
+        const share = await this.#mintGrant(this.#shares, node, user.id, request.granteeUserID, request.role);
 
         return toShareResponse(share);
     }
 
     // DELETE /api/shares/:id. Owner-only: ending someone else's access is the owner's call (a recipient uses leave).
     // The recipient's links go dead and persist as stubs -- correct dangling-symlink behavior, no cleanup here.
-    async revoke(actor : SessionUser, shareID : string) : Promise<void>
+    async revoke(user : SessionUser, shareID : string) : Promise<void>
     {
-        const share = await this.#shares.getShareById(shareID);
+        const share = await this.#shares.getShareByID(shareID);
         if(share === undefined) { throw new NotFoundError(`No share ${ shareID }.`); }
 
         // The share cascades with its node, so a missing node means the share is gone too.
         const node = await this.#nodes.get(share.nodeID);
         if(node === undefined) { throw new NotFoundError(`No share ${ shareID }.`); }
-        if(!isDirectOwner(node, actor.id)) { throw new ForbiddenError('Only the owner may revoke a share.'); }
+        if(!isDirectOwner(node, user.id)) { throw new ForbiddenError('Only the owner may revoke a share.'); }
 
         await this.#shares.deleteShare(shareID);
     }
 
     // POST /api/shares/:id/leave. The recipient removes their own grant. Their links go dead and persist as
     // stubs; cleaning them up is a separate user-initiated action, not this call.
-    async leave(actor : SessionUser, shareID : string) : Promise<void>
+    async leave(user : SessionUser, shareID : string) : Promise<void>
     {
-        const share = await this.#shares.getShareById(shareID);
+        const share = await this.#shares.getShareByID(shareID);
         if(share === undefined) { throw new NotFoundError(`No share ${ shareID }.`); }
 
-        if(share.granteeUserID !== actor.id)
+        if(share.granteeUserID !== user.id)
         {
             throw new ForbiddenError('Only the grantee may leave a share.');
         }
@@ -160,11 +154,11 @@ export class ShareManager
 
     // GET /api/nodes/:id/shares. The owner's view of who a node is shared with, each grant paired with its grantee's
     // summary -- one batched lookup (UserRA.summariesByIDs), never a query per grantee.
-    async listForNode(actor : SessionUser, nodeID : string) : Promise<ShareListResponse>
+    async listForNode(user : SessionUser, nodeID : string) : Promise<ShareListResponse>
     {
         const node = await this.#nodes.get(nodeID);
         if(node === undefined) { throw new NotFoundError(`No node ${ nodeID }.`); }
-        if(!isDirectOwner(node, actor.id))
+        if(!isDirectOwner(node, user.id))
         {
             throw new ForbiddenError('Only the owner may list shares on this node.');
         }
@@ -193,9 +187,9 @@ export class ShareManager
     // client can render "Shared by <name>"), and whether they have placed a link to it. The optional Type/Modified
     // filters narrow the set against each target's own type and modified time before the owner summaries are resolved,
     // so only the survivors' owners are looked up in the one batched lookup.
-    async sharedWithMe(actor : SessionUser, query : SharedWithMeQuery) : Promise<SharedWithMeResponse>
+    async sharedWithMe(user : SessionUser, query : SharedWithMeQuery) : Promise<SharedWithMeResponse>
     {
-        const rows = (await this.#shares.sharedWithMe(actor.id))
+        const rows = (await this.#shares.sharedWithMe(user.id))
             .filter((row) => matchesSharedFilters(row, query));
         const owners = await this.#users.summariesByIDs(rows.map((row) => row.target.ownerID));
 
@@ -222,22 +216,22 @@ export class ShareManager
 
     // POST /api/nodes/:id/access-requests. A user who can see a stub but cannot resolve it asks the target's owner for
     // access. Rejected if they already have any access, or already have a request pending on this node.
-    async requestAccess(actor : SessionUser, nodeID : string, request : CreateAccessRequest)
+    async requestAccess(user : SessionUser, nodeID : string, request : CreateAccessRequest)
     : Promise<AccessRequestResponse>
     {
         const node = await this.#nodes.get(nodeID);
         if(node === undefined) { throw new NotFoundError(`No node ${ nodeID }.`); }
 
-        const role = await this.#shares.effectiveRole(actor.id, nodeID);
+        const role = await this.#shares.effectiveRole(user.id, nodeID);
         if(role !== null) { throw new BadRequestError('You already have access to this node.'); }
 
-        const existing = await this.#shares.findPendingByNodeRequester(nodeID, actor.id);
+        const existing = await this.#shares.getPendingByNodeRequester(nodeID, user.id);
         if(existing !== undefined) { throw new BadRequestError('You already have a pending request for this node.'); }
 
         const pending : PendingShareRequest = {
             id: createId(),
             nodeID,
-            requesterID: actor.id,
+            requesterID: user.id,
             requestedRole: request.requestedRole,
             message: request.message ?? null,
             status: 'pending',
@@ -252,11 +246,11 @@ export class ShareManager
     // GET /api/access-requests. Both directions in one payload: the pending requests routed to the caller as an
     // owner (the actionable "Sharing requests" view, each paired with its requester's summary), and the caller's own
     // requests with their current status.
-    async listAccessRequests(actor : SessionUser) : Promise<AccessRequestListResponse>
+    async listAccessRequests(user : SessionUser) : Promise<AccessRequestListResponse>
     {
         const [ incoming, outgoing ] = await Promise.all([
-            this.#shares.listPendingByOwner(actor.id),
-            this.#shares.listByRequester(actor.id),
+            this.#shares.listPendingByOwner(user.id),
+            this.#shares.listByRequester(user.id),
         ]);
 
         const requesters = await this.#users.summariesByIDs(incoming.map((request) => request.requesterID));
@@ -282,16 +276,15 @@ export class ShareManager
     // POST /api/access-requests/:id/{grant,decline}. Only the target's owner may resolve, and only a pending request
     // (judgeShareRequestResolution). Granting mints a share through the same grant path and resolves the request in one
     // transaction, so a crash can't leave a granted request without its share.
-    async resolveRequest(actor : SessionUser, requestID : string, decision : ResolveDecision)
+    async resolveRequest(user : SessionUser, requestID : string, decision : ResolveDecision)
     : Promise<AccessRequestResponse>
     {
-        const resolved = await this.#handle.db.transaction().execute(async (trx) =>
+        const resolved = await inTransaction(this.#handle, async (tx) =>
         {
-            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
-            const shares = new ShareRA(txHandle);
-            const nodes = new NodeRA(txHandle);
+            const shares = new ShareRA(tx);
+            const nodes = new NodeRA(tx);
 
-            const request = await shares.getRequestById(requestID);
+            const request = await shares.getRequestByID(requestID);
             if(request === undefined) { throw new NotFoundError(`No access request ${ requestID }.`); }
 
             const node = await nodes.get(request.nodeID);
@@ -300,13 +293,13 @@ export class ShareManager
             this.#enforce(regulation.share.resolveRequest({
                 request,
                 targetOwnerID: node.ownerID,
-                actorID: actor.id,
+                actorID: user.id,
             }));
 
             const now = new Date();
             if(decision === 'grant')
             {
-                await this.#mintGrant(shares, node, actor.id, request.requesterID, request.requestedRole);
+                await this.#mintGrant(shares, node, user.id, request.requesterID, request.requestedRole);
             }
             await shares.resolveRequest(request.id, decision === 'grant' ? 'granted' : 'declined', now);
 

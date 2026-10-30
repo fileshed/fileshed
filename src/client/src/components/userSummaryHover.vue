@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- User Summary Hover
   --
-  -- Wraps a trigger (an avatar, a name, whatever the caller slots in) in a focusable button so the summary card opens
-  -- on keyboard focus as well as hover -- callers never have to remember the a11y wiring themselves.
+  -- The trigger is wrapped in a focusable button so the summary card opens on keyboard focus as well as hover, and
+  -- callers don't have to wire that up themselves.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

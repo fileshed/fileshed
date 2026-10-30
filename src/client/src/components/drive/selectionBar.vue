@@ -1,16 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Selection Bar
   --
-  -- The action bar shown while a selection is active, occupying the drive's constant-height idle strip. Move and Trash
-  -- act on the whole selection, each offered only when the caller directly owns EVERY selected node -- one foreign
-  -- node (a contribution, or a node reached through a traversed folder link) drops the action rather than acting on a
-  -- subset. Copy asks only read access, so it stays keyed to node type alone (every selected node a file); Rename and
-  -- Share are ownership-gated too, but only ever apply to a single selected node. Presentational -- each button emits
-  -- its intent and the route component owns the targets and the mutations. The destructive button's label is passed
-  -- in (Trash for files and folders, Remove for a links-only set).
-  --
-  -- Below lg the labels drop to their tooltips and Copy and Rename move into an overflow menu. The threshold is lg,
-  -- not md, because the sidebar returns at md and leaves the content pane narrower there than one breakpoint down.
+  -- Below lg the labels drop to their tooltips and Copy and Rename move into an overflow menu. The threshold is lg
+  -- rather than md because the sidebar returns at md, leaving the content pane narrower there than one breakpoint down.
   -- Both renderings answer to the same caps, so the narrow bar never offers an action the wide one withholds.
   --------------------------------------------------------------------------------------------------------------------->
 

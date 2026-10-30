@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Thumbnail Rail
   --
-  -- One canvas per page, rasterized as it scrolls into view. A thousand-page document must not paint a thousand
-  -- canvases to open its sidebar, so each page is painted on its first appearance and kept; rotating the document
-  -- discards every painting and lets them come back the same way.
+  -- A thousand-page document must not paint a thousand canvases to open its sidebar, so each page is painted on its
+  -- first appearance and kept; rotating the document discards every painting and lets them come back the same way.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -37,11 +36,11 @@
 <script setup lang="ts">
     import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
+    // Engines
+    import { THUMBNAIL_WIDTH } from '../../../../engines/pdf/types.ts';
+
     // Stores
     import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
-
-    // Components
-    import { THUMBNAIL_WIDTH } from '../types.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

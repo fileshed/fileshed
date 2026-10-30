@@ -14,11 +14,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     type TestUser,
     type UploadedFile,
     bodyBytes,
-    bootServeApp,
+    bootStoreApp,
     createFolder,
     getDownload,
     makeUser,
@@ -38,7 +38,7 @@ function sha256Hex(data : Buffer) : string
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let stranger : TestUser;
 let fixture : Buffer;
@@ -46,7 +46,7 @@ let uploaded : UploadedFile;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     stranger = await makeUser(booted, 'stranger@example.com');
     fixture = randomBytes(300);

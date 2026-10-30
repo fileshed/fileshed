@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Session-Lost Announcement — the 401 tripwire in the request primitive
 //
-// Every credentialed request flows through requestJson/requestVoid; a 401 anywhere means the session died, and the
-// primitive announces it as a window event (the router-side listener owns the reaction). Any other failure -- 403,
+// A 401 on any credentialed request means the session died, and the request primitive announces it as a window event
+// (the router-side listener owns the reaction). Any other failure -- 403,
 // 404, 500 -- is that call's own problem and must NOT announce, or a permission refusal would sign people out.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 // Under test
+import { fetchNodeBlob, fetchNodeText } from '@client/resource-access/content.ts';
 import { SESSION_LOST_EVENT, requestJson } from '@client/resource-access/request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -55,6 +56,17 @@ describe('the session-lost announcement', () =>
 
         await expect(requestJson('/api/admin/users', { codec: z.unknown() })).rejects.toThrow('Not yours.');
         expect(fired).toBe(0);
+    });
+
+    // The editor and the PDF annotator read a file's bytes outside the JSON helpers. A session that died while one was
+    // closed has to send the reader to sign-in when they open it, as any other request would.
+    it('fires when an in-app read of a file\'s bytes meets a dead session', async () =>
+    {
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(401, { error: 'No session.' }));
+
+        await expect(fetchNodeText('n1')).rejects.toThrow('No session.');
+        await expect(fetchNodeBlob('n1')).rejects.toThrow('No session.');
+        expect(fired).toBe(2);
     });
 
     it('stays silent on success', async () =>

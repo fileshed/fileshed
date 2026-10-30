@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Me API DTO
-//
-// Response contract for GET /api/me: the caller's own profile plus quota usage and preferences. used is the live
-// charged-usage aggregate, computed fresh per request; preferences is the caller's known-view preferences blob.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

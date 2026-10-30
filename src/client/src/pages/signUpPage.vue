@@ -90,6 +90,9 @@
     // Resource Access
     import { fetchInstance } from '../resource-access/instance.ts';
 
+    // Utils
+    import { describeApiError } from '../utils/runWithToast.ts';
+
     //------------------------------------------------------------------------------------------------------------------
     // Setup
     //------------------------------------------------------------------------------------------------------------------
@@ -136,7 +139,7 @@
         }
         catch(error)
         {
-            errorMessage.value = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+            errorMessage.value = describeApiError(error);
         }
     }
 </script>

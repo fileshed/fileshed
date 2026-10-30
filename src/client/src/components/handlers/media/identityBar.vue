@@ -1,10 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Media Identity Bar
   --
-  -- The media player's contribution to the editor layout header: the current track's title and kind -- the embedded
-  -- tag title with the artist beside it when the file carries them, the filename otherwise -- and its place in the
-  -- queue once there is more than one track, plus what that track exposes. It follows the queue, not the routed node:
-  -- the header names what is playing.
+  -- It follows the queue rather than the routed node, so the header names what is playing.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -213,6 +213,32 @@ describe('useSessionStore', () =>
     });
 
     //------------------------------------------------------------------------------------------------------------------
+    // Refresh
+    //------------------------------------------------------------------------------------------------------------------
+
+    it('adopts the profile a refresh reads', async () =>
+    {
+        fetchMeMock.mockResolvedValueOnce(meFixture()).mockResolvedValueOnce(meFixture({ name: 'Renamed' }));
+        const store = useSessionStore();
+        await store.initialize();
+
+        await store.refreshProfile();
+
+        expect(store.me?.name).toBe('Renamed');
+    });
+
+    it('keeps the profile in hand when a refresh read fails', async () =>
+    {
+        fetchMeMock.mockResolvedValueOnce(meFixture({ name: 'Ada' })).mockRejectedValueOnce(new Error('offline'));
+        const store = useSessionStore();
+        await store.initialize();
+
+        await expect(store.refreshProfile()).resolves.toBeUndefined();
+
+        expect(store.me?.name).toBe('Ada');
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
     // Files-root label
     //------------------------------------------------------------------------------------------------------------------
 

@@ -15,9 +15,9 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { NotFoundError, type SetupRequest, UnauthorizedError } from '@fileshed/core';
 
 // Resource Access
-import type { Auth } from '../resource-access/auth.ts';
+import type { AuthRA } from '../resource-access/auth/index.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
-import type { UserRA } from '../resource-access/users/index.ts';
+import { UserRA } from '../resource-access/users/index.ts';
 
 // Utils
 import { getLogger } from '../utils/logger.ts';
@@ -43,19 +43,17 @@ function tokenMatches(expected : string, presented : string) : boolean
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export interface SetupDeps
+export interface SetupManagerDeps
 {
-    auth : Auth;
+    auth : AuthRA;
     handle : DatabaseHandle;
-    users : UserRA;
     // The operator-chosen automation token, when the environment provides one; null generates-and-prints instead.
     operatorToken : string | null;
 }
 
 export class SetupManager
 {
-    readonly #auth : Auth;
-    readonly #handle : DatabaseHandle;
+    readonly #auth : AuthRA;
     readonly #users : UserRA;
     readonly #token : string;
     readonly #fromEnvironment : boolean;
@@ -63,11 +61,10 @@ export class SetupManager
     // Serializes concurrent completion attempts: the second caller waits, then fails the live zero-user check.
     #completing : Promise<void> | null = null;
 
-    constructor(deps : SetupDeps)
+    constructor(deps : SetupManagerDeps)
     {
         this.#auth = deps.auth;
-        this.#handle = deps.handle;
-        this.#users = deps.users;
+        this.#users = new UserRA(deps.handle);
         this.#fromEnvironment = deps.operatorToken !== null;
         this.#token = deps.operatorToken ?? generateSetupCode();
     }
@@ -115,19 +112,17 @@ export class SetupManager
                 throw new UnauthorizedError('The setup code is not right. It is printed in the server log.');
             }
 
-            const created = await this.#auth.api.signUpEmail({
-                body: { email: request.email, name: request.name, password: request.password },
+            const created = await this.#auth.signUp({
+                email: request.email,
+                name: request.name,
+                password: request.password,
             });
 
-            await this.#handle.db
-                .updateTable('user')
-                .set({ role: 'admin' })
-                .where('id', '=', created.user.id)
-                .execute();
+            await this.#users.setRole(created.id, 'admin');
 
-            logger.info({ email: created.user.email }, 'First-run setup complete; admin created');
+            logger.info({ email: created.email }, 'First-run setup complete; admin created');
 
-            return { email: created.user.email };
+            return { email: created.email };
         }
         finally
         {

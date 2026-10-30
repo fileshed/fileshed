@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // File Byte Reads
 //
-// The two byte-level reads the upload flow makes over a File, both incremental so a multi-gigabyte file never lands in
-// memory whole: the content SHA-256 the claim is keyed on (streamed through hash-wasm, never crypto.subtle.digest --
-// that would buffer the entire file), and the small sampled windows a proof-of-possession answer is computed over when
-// the blob turns out to be one the server already holds.
+// Both reads are incremental, so a multi-gigabyte file never lands in memory whole. The content SHA-256 streams through
+// hash-wasm, never crypto.subtle.digest, which would buffer the entire file.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createSHA256 } from 'hash-wasm';

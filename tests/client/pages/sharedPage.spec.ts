@@ -24,7 +24,7 @@ import SharedTile from '@client/components/shared/sharedTile.vue';
 // Resource Access
 import { copyNode } from '@client/resource-access/nodes.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
-import { leaveShare, sharedWithMe } from '@client/resource-access/shares.ts';
+import { leaveShare, listSharedWithMe } from '@client/resource-access/shares.ts';
 
 // Support
 import { ME_ID, SCROLL_AREA_STUB, meFixture } from '../support.ts';
@@ -35,11 +35,11 @@ import SharedPage from '@client/pages/sharedPage.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ copyNode: vi.fn() }));
-vi.mock('@client/resource-access/shares.ts', () => ({ sharedWithMe: vi.fn(), leaveShare: vi.fn() }));
+vi.mock('@client/resource-access/shares.ts', () => ({ listSharedWithMe: vi.fn(), leaveShare: vi.fn() }));
 vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
-const sharedWithMeMock = sharedWithMe as unknown as Mock;
+const listSharedWithMeMock = listSharedWithMe as unknown as Mock;
 const leaveShareMock = leaveShare as unknown as Mock;
 const copyNodeMock = copyNode as unknown as Mock;
 const updatePreferencesMock = updatePreferences as unknown as Mock;
@@ -117,7 +117,7 @@ async function mountShared(
     me : MeResponse | null = null
 ) : Promise<{ wrapper : VueWrapper; router : Router }>
 {
-    sharedWithMeMock.mockResolvedValue({ entries });
+    listSharedWithMeMock.mockResolvedValue({ entries });
 
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -175,7 +175,7 @@ describe('SharedPage', () =>
     {
         const { wrapper } = await mountShared([ entry(fileTarget('f1', 'report.txt'), 'editor') ]);
 
-        expect(sharedWithMeMock).toHaveBeenCalled();
+        expect(listSharedWithMeMock).toHaveBeenCalled();
         expect(wrapper.text()).toContain('report.txt');
         // The owner's real name from the enrichment, never their raw id.
         expect(wrapper.text()).toContain('Ada Lovelace');
@@ -299,7 +299,7 @@ describe('SharedPage', () =>
         const { wrapper } = await mountShared([ entry(fileTarget('f1', 'report.txt'), 'viewer', false, 's7') ]);
 
         // The refetch after leaving returns the caller's now-shorter set of grants.
-        sharedWithMeMock.mockResolvedValue({ entries: [] });
+        listSharedWithMeMock.mockResolvedValue({ entries: [] });
 
         await clickMenu(wrapper, 'Leave share');
         await flushPromises();
@@ -350,6 +350,32 @@ describe('SharedPage — view toggle', () =>
         expect(updatePreferencesMock).toHaveBeenCalledWith({ viewMode: 'list' });
         expect(wrapper.findComponent(SharedTile).exists()).toBe(false);
         expect(wrapper.find('[aria-label="report.txt"]').exists()).toBe(true);
+    });
+
+    // A view mode chosen on this browser outranks the account's, so a toggle that wrote only the account preference
+    // would leave the surface where it was.
+    it('switches the surface when this browser already holds its own view mode', async () =>
+    {
+        window.localStorage.setItem('fileshed.drive.deviceViewMode', 'grid');
+        updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+
+        try
+        {
+            const { wrapper } = await mountShared(
+                [ entry(fileTarget('f1', 'report.txt')) ],
+                meFixture({ preferences: { viewMode: 'grid' } })
+            );
+
+            await wrapper.find('[aria-label="List view"]').trigger('click');
+            await flushPromises();
+
+            expect(wrapper.findComponent(SharedTile).exists()).toBe(false);
+            expect(wrapper.find('[aria-label="report.txt"]').exists()).toBe(true);
+        }
+        finally
+        {
+            window.localStorage.clear();
+        }
     });
 
     it('leaves the preference untouched when the already-active mode is clicked', async () =>

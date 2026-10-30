@@ -7,25 +7,18 @@
 // resumable-uploads draft, and both must report the live setting rather than anything frozen at boot.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Support
-import { type BootedBlobApp, bootBlobApp, claim, makeUser, putUpload } from './support.ts';
+import { sha256Of } from '../support/sha256.ts';
+import { type BootedStoreApp, bootBlobApp, claim, makeUser, putUpload } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
-
-// The max-size member of an Upload-Limit dictionary, as an integer. The draft's field is a Structured Fields
 // Dictionary whose max-size value is an Integer, so a client reads the number back out of the header text.
 function maxSizeOf(header : string | null) : number | null
 {

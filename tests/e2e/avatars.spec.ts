@@ -158,7 +158,8 @@ describe('avatar delete and the serve gate', () =>
         await client.postBytes('/api/me/avatar', bytes, 'image/png');
 
         const removed = await client.del('/api/me/avatar');
-        expect(removed.status).toBe(204);
+        expect(removed.status).toBe(200);
+        expect((await removed.json()).image).toBeNull();
 
         expect(await avatarShaOf('avatar-delete@example.com')).toBeNull();
         expect((await (await client.get('/api/me')).json()).image).toBeNull();

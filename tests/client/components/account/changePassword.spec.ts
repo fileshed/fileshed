@@ -157,16 +157,19 @@ describe('ChangePassword', () =>
         expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
     });
 
-    it('toasts and keeps the entered values when the change fails', async () =>
+    it('toasts the server\'s reason and keeps the entered values when the change fails', async () =>
     {
-        changePasswordMock.mockResolvedValue({ error: { message: 'Wrong password.' } });
+        changePasswordMock.mockResolvedValue({ error: { status: 400, message: 'Invalid password' } });
         const wrapper = mountControl();
         await fill(wrapper, 'wrong-current', 'new-secret', 'new-secret');
 
         await updateButton(wrapper).trigger('click');
         await flushPromises();
 
-        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ color: 'error' }));
+        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
+            color: 'error',
+            description: 'Invalid password',
+        }));
         const inputs = wrapper.findAll('input.u-input');
         expect((inputs[0]?.element as HTMLInputElement).value).toBe('wrong-current');
         expect((inputs[1]?.element as HTMLInputElement).value).toBe('new-secret');

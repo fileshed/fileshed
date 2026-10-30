@@ -1,14 +1,13 @@
 //----------------------------------------------------------------------------------------------------------------------
 // User Preferences Domain Model
 //
-// A user's preferences ride in a single JSON blob so adding one never needs a migration. This type is the KNOWN view a
-// client of this version understands. Unknown keys are not modelled here on purpose: their survival across writes is a
-// storage property enforced by the key-wise merge on the server, not a shape the app reasons about. rootLabel is the
-// name shown for the files root; timeFormat is the clock style for node timestamps; editorTheme is the id of the
-// editor colorscheme and editorGutter whether its line-number gutter shows; viewMode is the drive's grid-vs-list
-// choice; colorMode is the user's light/dark/system choice (overridden by an instance-forced mode, overriding the
-// instance default); allowRemoteMedia is whether a playlist entry pointing off this instance may be played. Any key
-// absent means the default, which is resolved on the client -- the blob stores only what the user has chosen.
+// A user's preferences ride in a single JSON blob so adding one never needs a migration. This type is the known view a
+// client of this version understands. Unknown keys survive writes through the server's key-wise merge, so they are not
+// modelled here. An absent key means the default, which the client resolves: the blob stores only what the user has
+// chosen.
+//
+// colorMode is overridden by an instance-forced mode and itself overrides the instance default. allowRemoteMedia is
+// whether a playlist entry pointing off this instance may be played.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

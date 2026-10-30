@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Quota Meter
   --
-  -- The sidebar storage gauge, read from the session profile (/api/me): a used-of-limit label, with a progress bar only
-  -- when a limit exists. The cap shown is the effective one -- the instance default already folded in -- because an
-  -- account with no limit of its own is still capped by whatever the instance defaults to. Nearing the cap turns the
-  -- gauge to the warning color.
+  -- The cap shown is the effective one, with the instance default folded in, because an account with no limit of its
+  -- own is still capped by whatever the instance defaults to.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

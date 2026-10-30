@@ -1,19 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Search Page
   --
-  -- Name search across every file and folder the caller can see. The route's `q` query param is the source of truth
-  -- for the active term -- the same pattern the drive uses for its folder param -- so a fresh submission from the top
-  -- bar's search box while already on this page re-queries instead of doing nothing. A blank or missing term shows a
-  -- prompt rather than calling the search endpoint, which would 400 on an empty query anyway.
+  -- The route's `q` query param is the source of truth for the active term, the same way the drive uses its folder
+  -- param, so a fresh submission from the top bar while already on this page re-queries instead of doing nothing. A
+  -- blank or missing term shows a prompt rather than calling the search endpoint, which would 400 on an empty query.
   --
-  -- Selection works here exactly as it does on the drive, down to the engine that decides it, so a set of hits
-  -- scattered across folders can be dealt with where they were found. Two actions, and they are the two that mean
-  -- something when the selection spans folders and owners: Trash, and Copy into the caller's own root. Move needs a
-  -- destination the drive's picker owns, and Rename and Share act on one node in one place -- all three are a
-  -- go-to-folder jump away, which every row offers.
-  --
-  -- The caps come from the same engine the drive's bar answers to, so a viewer's grant withholds Trash here for the
-  -- same reason it does there, and Copy -- which asks only read access -- survives.
+  -- Selection works exactly as it does on the drive, so hits scattered across folders can be dealt with where they were
+  -- found. The two actions are the ones that mean something when the selection spans folders and owners: Trash, and
+  -- Copy into the caller's own root. Move needs a destination the drive's picker owns, and Rename and Share act on one
+  -- node in one place; all three are a go-to-folder jump away, which every row offers.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

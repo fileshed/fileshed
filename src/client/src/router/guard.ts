@@ -1,19 +1,15 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Navigation Guard
 //
-// The global gate. Unauthenticated visitors are sent to /signin with their intended destination preserved for the
-// post-sign-in redirect; already-authenticated visitors bounce off the public auth pages to the drive; /admin
-// additionally requires the admin role. Session restoration is awaited first, so a page reload carrying a valid cookie
-// is resolved before the decision -- a live session is never bounced to /signin.
+// Session restoration is awaited before any decision, so a reload carrying a valid cookie is never bounced to /signin.
 //
-// Two metas, easily confused: `public` marks the anonymous-only auth pages, which a signed-in visitor is bounced off
-// of; `unguarded` marks a route belonging to everyone -- the 404 -- which nobody is redirected away from in either
-// direction.
+// Two metas, easily confused: `public` marks the anonymous-only auth pages, which a signed-in visitor is bounced off;
+// `unguarded` marks a route belonging to everyone (the 404), which nobody is redirected away from.
 //
-// An account that has asked to be deleted gets a third: every route but the one marked `closing` sends them to the
-// interstitial. This is a courtesy rather than a control -- the server refuses that account everywhere else anyway --
-// so the point of it is that they meet a page saying when the account goes and offering to call it off, instead of a
-// drive that answers 403 to everything.
+// An account that has asked to be deleted is sent from every route but the one marked `closing` to the closing page.
+// This is a courtesy rather than a control, since the server refuses that account everywhere else anyway: it lets them
+// meet a page saying when the account goes and offering to call it off, instead of a drive that answers 403 to
+// everything.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { RouteLocationRaw } from 'vue-router';

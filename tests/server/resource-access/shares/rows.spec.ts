@@ -16,7 +16,7 @@ import type { PendingShareRequest, Share, ShareRole } from '@fileshed/core';
 
 // Resource Access
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
 
 // Support
@@ -87,7 +87,7 @@ describe('ShareRA share rows', () =>
         const share = shareOf('s1', 'f', 'grantee', 'viewer');
 
         expect(await shares.upsertShare(share)).toEqual(share);
-        expect(await shares.getShareById('s1')).toEqual(share);
+        expect(await shares.getShareByID('s1')).toEqual(share);
     });
 
     it('finds a grant by (node, grantee) and returns undefined when there is none', async () =>
@@ -112,7 +112,7 @@ describe('ShareRA share rows', () =>
         expect(regranted.id).toBe('s1');
         expect(regranted.role).toBe('editor');
         expect(await shares.listByNode('f')).toHaveLength(1);
-        expect(await shares.getShareById('s2-ignored')).toBeUndefined();
+        expect(await shares.getShareByID('s2-ignored')).toBeUndefined();
     });
 
     it('reports whether a delete removed a row (the revoke 404 signal)', async () =>
@@ -316,7 +316,7 @@ describe('ShareRA share request rows', () =>
         const request = pendingRequest('r1', 'f', 'requester', 'viewer');
         await shares.insertRequest(request);
 
-        expect(await shares.getRequestById('r1')).toEqual(request);
+        expect(await shares.getRequestByID('r1')).toEqual(request);
     });
 
     it('round-trips a requester\'s message through the row<->domain boundary', async () =>
@@ -325,7 +325,7 @@ describe('ShareRA share request rows', () =>
         const request = pendingRequest('r1', 'f', 'requester', 'viewer', 'Could I get viewer access please?');
         await shares.insertRequest(request);
 
-        expect((await shares.getRequestById('r1'))?.message).toBe('Could I get viewer access please?');
+        expect((await shares.getRequestByID('r1'))?.message).toBe('Could I get viewer access please?');
     });
 
     it('resolves a request by stamping status and resolved_at together', async () =>
@@ -336,7 +336,7 @@ describe('ShareRA share request rows', () =>
 
         await shares.resolveRequest('r1', 'granted', resolvedAt);
 
-        const resolved = await shares.getRequestById('r1');
+        const resolved = await shares.getRequestByID('r1');
         expect(resolved?.status).toBe('granted');
         expect(resolved?.resolvedAt).toEqual(resolvedAt);
     });
@@ -367,11 +367,11 @@ describe('ShareRA share request rows', () =>
         await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
         await shares.insertRequest(pendingRequest('r1', 'f', 'requester', 'viewer'));
 
-        expect((await shares.findPendingByNodeRequester('f', 'requester'))?.id).toBe('r1');
+        expect((await shares.getPendingByNodeRequester('f', 'requester'))?.id).toBe('r1');
 
         await shares.resolveRequest('r1', 'granted', new Date('2026-04-01T00:00:00.000Z'));
 
-        expect(await shares.findPendingByNodeRequester('f', 'requester')).toBeUndefined();
+        expect(await shares.getPendingByNodeRequester('f', 'requester')).toBeUndefined();
     });
 
     it('lists a requester\'s own requests across statuses', async () =>

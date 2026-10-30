@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Codec
 //
-// Zod boundary validator for the Node domain type (models/node.ts). Each variant is a strict object, so a field that
-// doesn't belong to that variant (a folder's size or mimeType, a link's blobID or trashedAt) fails validation instead
-// of being silently stripped -- the "type-specific fields" invariant holds at parse time, not just at the type level.
+// Each variant is a strict object, so a field that doesn't belong to that variant (a folder's size or mimeType, a
+// link's blobID or trashedAt) fails validation instead of being silently stripped.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';

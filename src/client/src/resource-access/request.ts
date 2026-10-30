@@ -1,11 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // API Request Helper
 //
-// The one credentialed-fetch primitive every resource-access module is built on: a same-origin fetch that always sends
-// the session cookie, throws a typed ApiError on any non-2xx, and validates the 2xx JSON body against the endpoint's
-// core codec at the boundary. The codec check is the client's half of the wire contract -- the server hand-builds its
-// responses and never re-parses them on the way out, so this is the only place drift between the two is caught, and it
-// runs in every build, not just dev; a JSON parse costs nothing against a network round trip.
+// The 2xx body is validated against the endpoint's core codec in every build, not just dev: the server never re-parses
+// its responses on the way out, so this is the only place drift between the two is caught, and a parse costs nothing
+// next to a network round trip.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { ZodType } from 'zod';
@@ -76,14 +74,20 @@ export function buildUrl(path : string, query ?: QueryParams) : string
     return encoded === '' ? path : `${ path }?${ encoded }`;
 }
 
-async function apiFetch(url : string, init : FetchInit) : Promise<Response>
+// Every credentialed transport calls this with a failed request's status. A 401 means the session the request rode is
+// dead -- revoked, banned, or expired. The shell listens for the event and bounces to sign-in; announcing it on the
+// window keeps resource access router-ignorant.
+export function announceIfSessionLost(status : number) : void
+{
+    if(status === 401) { window.dispatchEvent(new CustomEvent(SESSION_LOST_EVENT)); }
+}
+
+export async function apiFetch(url : string, init : FetchInit = {}) : Promise<Response>
 {
     const response = await fetch(url, { ...init, credentials: 'include' });
     if(!response.ok)
     {
-        // A 401 means the session this fetch rode is dead -- revoked, banned, or expired. The shell listens for
-        // this and bounces to sign-in; announcing it as a window event keeps resource access router-ignorant.
-        if(response.status === 401) { window.dispatchEvent(new CustomEvent(SESSION_LOST_EVENT)); }
+        announceIfSessionLost(response.status);
 
         throw await apiErrorFromResponse(response);
     }

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { NodeResponse } from '@fileshed/core';
+import type { FileNodeResponse, FolderNodeResponse, LinkNodeResponse, NodeResponse } from '@fileshed/core';
 
 import {
     applyClick,
@@ -18,6 +18,9 @@ import {
     planTrash,
     reconcile,
 } from '@client/engines/intent/selection.ts';
+
+// Support
+import { fileNode, folderNode, linkNode } from '../../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Selection Model
@@ -235,48 +238,21 @@ describe('reconcile', () =>
 // Selection Actions
 //----------------------------------------------------------------------------------------------------------------------
 
-const BASE = {
-    name: 'thing',
-    ownerID: 'u1',
-    parentID: null,
-    createdAt: '2026-07-01T00:00:00.000Z',
-    updatedAt: '2026-07-01T00:00:00.000Z',
-    role: 'owner' as const,
-};
-
 type Overrides = Partial<Pick<NodeResponse, 'ownerID' | 'role'>>;
 
-function file(id : string, overrides : Overrides = {}) : NodeResponse
+function file(id : string, overrides : Overrides = {}) : FileNodeResponse
 {
-    return {
-        ...BASE,
-        id,
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: 'text/plain',
-        trashedAt: null,
-        ...overrides,
-        sharing: null,
-    };
+    return fileNode({ id, ...overrides });
 }
 
-function folder(id : string, overrides : Overrides = {}) : NodeResponse
+function folder(id : string, overrides : Overrides = {}) : FolderNodeResponse
 {
-    return { sharing: null, ...BASE, id, type: 'folder', trashedAt: null, ...overrides };
+    return folderNode({ id, ...overrides });
 }
 
-function link(id : string, overrides : Overrides = {}) : NodeResponse
+function link(id : string, overrides : Overrides = {}) : LinkNodeResponse
 {
-    return {
-        sharing: null,
-        ...BASE,
-        id,
-        type: 'link',
-        targetNodeID: 't1',
-        target: { id: 't1', type: 'file', name: 'x', ownerID: 'u1' },
-        ...overrides,
-    };
+    return linkNode({ id, ...overrides });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

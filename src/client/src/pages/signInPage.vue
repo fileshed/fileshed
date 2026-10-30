@@ -108,11 +108,13 @@
     import { useSessionStore } from '../stores/session.ts';
 
     // Resource Access
+    import { apiErrorFromAuth } from '../resource-access/apiError.ts';
     import { authClient } from '../resource-access/authClient.ts';
     import { fetchInstance } from '../resource-access/instance.ts';
 
     // Utils
     import { providerIcon, providerLabel } from '../utils/formatters/index.ts';
+    import { describeApiError } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
     // Setup
@@ -178,12 +180,14 @@
         return null;
     });
 
-    // Only same-origin absolute paths are honoured, so a crafted ?redirect can't bounce a fresh sign-in off-site.
+    // Only same-origin absolute paths are honoured, so a crafted ?redirect can't bounce a fresh sign-in off-site. A
+    // browser reads a second slash, or a backslash, after the first as a protocol-relative URL naming another host.
     function redirectTarget() : string
     {
         const target = route.query.redirect;
+        if(typeof target !== 'string' || !target.startsWith('/')) { return '/'; }
 
-        return typeof target === 'string' && target.startsWith('/') ? target : '/';
+        return target.startsWith('//') || target.startsWith('/\\') ? '/' : target;
     }
 
     // A fresh instance has no accounts to sign into -- the visitor belongs at the first-run wizard instead.
@@ -213,11 +217,11 @@
                 provider,
                 callbackURL: `${ window.location.origin }${ redirectTarget() }`,
             });
-            if(error) { throw new Error(error.message ?? `Unable to sign in with ${ provider }.`); }
+            if(error) { throw apiErrorFromAuth(error, `Unable to sign in with ${ provider }.`); }
         }
         catch(error)
         {
-            errorMessage.value = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+            errorMessage.value = describeApiError(error);
             socialPending.value = null;
         }
     }
@@ -237,7 +241,7 @@
         }
         catch(error)
         {
-            errorMessage.value = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+            errorMessage.value = describeApiError(error);
         }
     }
 </script>

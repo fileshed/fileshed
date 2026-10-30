@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Brand Color Field
   --
-  -- One brand color as a picker, a hex field, preset chips, and the generated eleven-shade ramp -- the admin sees
-  -- the palette they just made, plus a contrast readout against white text because that is the mistake everyone
-  -- makes. Null means the stock build-time color; the field never invents a value until the admin picks one.
+  -- The contrast readout is against white text because that is the mistake everyone makes. Null means the stock
+  -- build-time color; the field never invents a value until the admin picks one.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -77,11 +76,11 @@
 
     import { type ColorRamp, colorRamp, contrastRatio, parseHexColor, shadeKeys } from '@fileshed/core';
 
+    // Engines
+    import { stockHexFor, stockRampFor } from '../../../engines/stockTheme.ts';
+
     // Components
     import BrandingField from './brandingField.vue';
-
-    // Utils
-    import { stockHexFor, stockRampFor } from '../../../utils/stockTheme.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

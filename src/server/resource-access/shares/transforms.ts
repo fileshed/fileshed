@@ -1,10 +1,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Row <-> Domain Transforms
 //
-// The boundary between the `share` / `share_request` table rows (snake_case, stored timestamps) and the canonical
-// domain types of @fileshed/core. shareFromRow / shareRequestFromRow read; the insert builders write ISO-string
-// timestamps, which both dialects accept (see database.ts).
-//
 // A share request is a discriminated union on status where resolvedAt exists exactly when the request is resolved. The
 // paired CHECK of migration 001 makes any other pairing unstorable, so a resolved row with a null resolved_at is store
 // corruption, surfaced as a typed error rather than silently coerced to the epoch.
@@ -15,7 +11,7 @@
 import type { Insertable, Selectable } from 'kysely';
 
 // Models
-import type { PendingShareRequest, Share, ShareRequest } from '@fileshed/core';
+import { type PendingShareRequest, RowCorruptionError, type Share, type ShareRequest } from '@fileshed/core';
 
 // Resource Access
 import type { ShareRequestTable, ShareTable } from '../database/database.ts';
@@ -80,7 +76,7 @@ export function shareRequestFromRow(row : Selectable<ShareRequestTable>) : Share
     // constraint was bypassed out from under us, so we refuse to fabricate an epoch resolvedAt.
     if(row.resolved_at === null)
     {
-        throw new Error(`share_request ${ row.id }: a ${ row.status } request must carry a resolved_at`);
+        throw new RowCorruptionError('share_request', row.id, `a ${ row.status } request must carry a resolved_at`);
     }
 
     return { ...base, status: row.status, resolvedAt: toDate(row.resolved_at) };

@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Instance Resource Access
-//
-// The anonymous pre-auth handshake and the first-run setup action. Both exist before any session can: the sign-in
-// and setup pages decide which of them the visitor should see from fetchInstance's answer.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {

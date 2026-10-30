@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Document Properties
   --
-  -- What the file says about itself. Every field in a PDF's info dictionary is optional, so an absent one is shown as
-  -- a dash rather than dropped: a reader looking for the author wants an answer, and "not recorded" is one.
+  -- Every field in a PDF's info dictionary is optional, so an absent one shows as a dash rather than being dropped: a
+  -- reader looking for the author wants an answer, and "not recorded" is one.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

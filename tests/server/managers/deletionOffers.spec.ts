@@ -17,7 +17,7 @@ import { type DeletionOffer, ForbiddenError, NotFoundError, RegulationError } fr
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { DeletionOfferRA } from '@server/resource-access/deletionOffers/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
 import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
@@ -51,8 +51,12 @@ beforeEach(async () =>
     handle = await createTestDatabase();
     ra = new NodeRA(handle);
     offerRA = new DeletionOfferRA(handle);
-    nodes = new NodeManager(handle, ra, new BlobRA(handle), testNodePolicy({ offerGraceMs: async () => GRACE_MS }));
-    offers = new DeletionOfferManager(handle, nodes);
+    nodes = new NodeManager({
+        handle,
+        orphanedBlobs: (tx) => new BlobRA(tx),
+        policy: testNodePolicy({ offerGraceMs: async () => GRACE_MS }),
+    });
+    offers = new DeletionOfferManager({ handle, materializer: nodes });
 
     await seedUser(handle.db, 'alice');
     await seedUser(handle.db, 'bob');

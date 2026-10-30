@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Time Format
-  --
-  -- The account-page control for the clock style of node timestamps. A segmented 12-hour / 24-hour toggle; the active
-  -- segment reflects the current preference. Choosing the other option saves it through the same preferences PATCH, so
-  -- the drive's dates re-render at once.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

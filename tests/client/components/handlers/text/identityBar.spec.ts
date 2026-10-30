@@ -12,10 +12,13 @@ import { type VueWrapper, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeResponse, Role } from '@fileshed/core';
+import type { Role } from '@fileshed/core';
 
 // Stores
 import { useEditorStore } from '@client/stores/editor.ts';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 // Under test
 import TextIdentityBar from '@client/components/handlers/text/identityBar.vue';
@@ -26,27 +29,7 @@ vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
 const HEADER_ID = 'editor-header-center';
-
-function fileNode(role : Role = 'owner') : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'f1',
-        name: 'report.txt',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role,
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
 
 const UButtonStub = {
     name: 'UButton',
@@ -85,7 +68,10 @@ function header() : HTMLElement
 async function mountBar(options : { role ?: Role; buffer ?: string } = {}) : Promise<VueWrapper>
 {
     const store = useEditorStore();
-    store.$patch({ node: fileNode(options.role ?? 'owner'), buffer: options.buffer ?? '' });
+    store.$patch({
+        node: fileNode({ name: 'report.txt', role: options.role ?? 'owner' }),
+        buffer: options.buffer ?? '',
+    });
 
     const wrapper = mount(TextIdentityBar, { global: { stubs } });
     await nextTick();

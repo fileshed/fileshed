@@ -11,10 +11,10 @@
 import type { Kysely } from 'kysely';
 
 // Models
-import type { FileNode, FolderNode, LinkNode } from '@fileshed/core';
+import type { DatabaseKind, FileNode, FolderNode, LinkNode } from '@fileshed/core';
 
 // Resource Access
-import type { Database, DatabaseHandle, DatabaseKind } from '@server/resource-access/database/database.ts';
+import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { migrateToLatest } from '@server/resource-access/database/migrator.ts';
 import {
     bigIntType,

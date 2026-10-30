@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Account Layout
-  --
-  -- The account-area chrome: a sidebar whose section nav (Profile, Account, Access tokens, Settings) *is* the tab
-  -- strip, over the shared app shell. No drive chrome here -- no New button, no drive nav, no storage gauge -- so the
-  -- account tabs stand on their own.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Resource Access
 import { ApiError, ConflictApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
+import { SESSION_LOST_EVENT } from '@client/resource-access/request.ts';
 import { uploadWithProgress } from '@client/resource-access/uploadWithProgress.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -240,6 +241,25 @@ describe('uploadWithProgress', () =>
 
         await expect(promise).rejects.toMatchObject({ status: 413, message: 'That file is too large.' });
         await expect(promise).rejects.toBeInstanceOf(ApiError);
+    });
+
+    // An upload rides the same session as every other request, so its 401 has to send the reader to sign-in too.
+    it('announces a dead session on a 401 and still rejects with the ApiError', async () =>
+    {
+        const lost = vi.fn();
+        window.addEventListener(SESSION_LOST_EVENT, lost);
+
+        const promise = uploadWithProgress({
+            ticket: 'TKT',
+            body: new Blob([ 'x' ]),
+            commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
+        });
+
+        lastRequest().complete(401, JSON.stringify({ error: 'No session.' }));
+
+        await expect(promise).rejects.toMatchObject({ status: 401, message: 'No session.' });
+        expect(lost).toHaveBeenCalledTimes(1);
+        window.removeEventListener(SESSION_LOST_EVENT, lost);
     });
 
     // A size refusal names the ceiling it measured against. The transport keeps the parsed body on the error so a

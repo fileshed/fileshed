@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Logo Field
   --
-  -- The instance mark: shown in every sidebar and as the favicon. Upload applies immediately (identity is
-  -- per-field like the instance name, not part of the theme draft), Remove returns to the stock mark, and the
-  -- preview always shows what visitors currently get.
+  -- Upload applies at once rather than joining the theme draft: the logo is identity, saved per field like the instance
+  -- name.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

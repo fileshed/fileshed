@@ -1,8 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob Resource Access
 //
-// The one blob surface every manager consumes: the `blob` table's records and the bytes those records pin, behind a
-// single RA, with storage backends (fs now; db/s3/azure later) as lazily-built facades no layer above ever names.
+// Storage backends are lazily built facades inside this RA; no layer above it ever names one.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- insert values and update sets name snake_case DB columns (house convention) */
@@ -16,29 +15,15 @@ import {
     BackendNotFoundError,
     NoDefaultBackendError,
     ORPHAN_LOOKUP_BATCH,
+    RowCorruptionError,
     type StorageBackendKind,
     UnsupportedBackendError,
-    storageBackendKinds,
 } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
-import { type BlobBackend, type BlobRange, type StagedSweep } from '../interfaces/blob.ts';
+import { type BlobBackend, type BlobRange, type StagedSweep } from './backend.ts';
 import { FsBackend, parseFsBackendConfig } from './fsBackend.ts';
-
-// The blob error vocabulary and the backend contract, re-exported here so a consumer branches on a failure or types a
-// backend without a second import from core.
-export {
-    BackendNotFoundError,
-    BlobBackendError,
-    BlobNotFoundError,
-    HashMismatchError,
-    InvalidSha256Error,
-    NoDefaultBackendError,
-    SizeMismatchError,
-    UnsupportedBackendError,
-} from '@fileshed/core';
-export type { BlobBackend, StagedSweep } from '../interfaces/blob.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Types
@@ -53,33 +38,21 @@ export interface BlobLocation
 }
 
 // The fields needed to write a blob record; created_at and the (cleared) deleted_at are set by the write itself.
-export interface BlobRowInsert
+export interface BlobRowInsert extends BlobLocation
 {
     sha256 : string;
     size : number;
-    backendID : string;
-    storageKey : string;
 }
 
 // A stored blob record as the flow reads it back. deletedAt is the GC graveyard marker: null means live.
-export interface BlobRow
+export interface BlobRow extends BlobRowInsert
 {
-    sha256 : string;
-    size : number;
-    backendID : string;
-    storageKey : string;
     deletedAt : Date | null;
 }
 
 // Enough of a graveyarded record for GC to delete its bytes and route to the right backend (records pin their
 // backend), plus the size it reclaims by doing so -- read here because the row is gone by the time the bytes go.
-export interface GcCandidate
-{
-    sha256 : string;
-    size : number;
-    backendID : string;
-    storageKey : string;
-}
+export type GcCandidate = BlobRowInsert;
 
 // A configured backend as the admin status readout names it: identity, kind, and default flag -- never the config
 // blob, which can hold credentials.
@@ -96,6 +69,12 @@ export interface BackendListing
 function toNullableDate(value : Date | string | null) : Date | null
 {
     return value === null ? null : new Date(value);
+}
+
+function decodeConfig(backendID : string, stored : string) : unknown
+{
+    try { return JSON.parse(stored) as unknown; }
+    catch { throw new RowCorruptionError('storage_backend', backendID, 'the config is not JSON'); }
 }
 
 // Cut a stream of addresses into fixed-size groups, so what is walked lazily can still be asked about in one query.
@@ -116,15 +95,6 @@ async function *batched(source : AsyncIterable<string>, size : number) : AsyncIt
 
     if(batch.length > 0) { yield batch; }
 }
-
-// Narrows the storage_backend.kind text column to the domain enum. The column is app-written, so an unknown value is
-// corruption, not an expected input -- listBackends refuses it rather than widening the status readout's kind.
-function isStorageBackendKind(value : string) : value is StorageBackendKind
-{
-    return (storageBackendKinds as readonly string[]).includes(value);
-}
-
-//----------------------------------------------------------------------------------------------------------------------
 
 export class BlobRA
 {
@@ -186,28 +156,28 @@ export class BlobRA
     }
 
     // Verify the staged bytes against the claim and publish them, answering the pin the blob record stores.
-    async commitChunked(uploadID : string, sha256 : string, size : number) : Promise<BlobLocation>
+    async commitStaged(uploadID : string, sha256 : string, size : number) : Promise<BlobLocation>
     {
         const backendID = await this.#defaultBackend();
         const backend = await this.#facade(backendID);
 
-        await backend.commitChunked(uploadID, sha256, size);
+        await backend.commitStaged(uploadID, sha256, size);
 
         return { backendID, storageKey: sha256 };
     }
 
-    async discardChunked(uploadID : string) : Promise<void>
+    async discardStaged(uploadID : string) : Promise<void>
     {
         const backend = await this.#facade(await this.#defaultBackend());
 
-        await backend.discardChunked(uploadID);
+        await backend.discardStaged(uploadID);
     }
 
-    async sweepChunked(cutoff : Date) : Promise<StagedSweep>
+    async sweepStaged(cutoff : Date) : Promise<StagedSweep>
     {
         const backend = await this.#facade(await this.#defaultBackend());
 
-        return backend.sweepChunked(cutoff);
+        return backend.sweepStaged(cutoff);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -221,7 +191,7 @@ export class BlobRA
     // Stored bytes with no record pointing at them, last written before the cutoff. The cutoff is what separates an
     // orphan from a blob whose record is committing right now, so it must clear a whole commit transaction.
     //
-    // A stored address IS a sha256 here -- both put and commitChunked key by the hash -- which is what lets a stored
+    // A stored address IS a sha256 here -- both put and commitStaged key by the hash -- which is what lets a stored
     // blob be looked up among the records at all. Addresses are checked in batches, so a store of any size costs one
     // small query at a time, and only the ones the records cannot account for are measured on disk.
     async *orphans(cutoff : Date) : AsyncIterable<GcCandidate>
@@ -335,15 +305,7 @@ export class BlobRA
             .select([ 'id', 'kind', 'is_default' ])
             .execute();
 
-        return rows.map((row) =>
-        {
-            if(!isStorageBackendKind(row.kind))
-            {
-                throw new Error(`storage backend ${ row.id } has an unknown kind ${ row.kind }`);
-            }
-
-            return { id: row.id, kind: row.kind, isDefault: Boolean(row.is_default) };
-        });
+        return rows.map((row) => ({ id: row.id, kind: row.kind, isDefault: Boolean(row.is_default) }));
     }
 
     // Live bytes are the deduplicated footprint actually on disk -- every live record, including the avatar and
@@ -409,16 +371,30 @@ export class BlobRA
 
     // Graveyard every listed sha256 whose last reference is gone (ref count is derived, never a stored counter). A blob
     // is referenced by any file node pointing at it OR by any user whose avatar it is -- both keep it live, so both are
-    // checked. One statement, so a concurrent claim that adds a reference either lands before this -- a NOT EXISTS then
+    // checked. One UPDATE, so a concurrent claim that adds a reference either lands before this -- a NOT EXISTS then
     // sees it and the record is left live -- or after, on an already-graveyarded record it resurrects. The
-    // `deleted_at IS NULL` guard keeps a re-sweep from resetting an already-graveyarded record's grace clock. Accepts
-    // an executor so a caller can run this in the same transaction as the delete that orphaned the blobs (the node
-    // manager's hard delete, an avatar replace); defaults to the handle's connection.
-    async graveyardUnreferenced(shas : string[], executor : DatabaseHandle['db'] = this.#db) : Promise<void>
+    // `deleted_at IS NULL` guard keeps a re-sweep from resetting an already-graveyarded record's grace clock.
+    async graveyardUnreferenced(shas : string[]) : Promise<void>
     {
         if(shas.length === 0) { return; }
 
-        await executor
+        // Two open transactions that each removed one of a blob's last two references would otherwise both read the
+        // other's reference as still there, and neither would graveyard it. Taking the UPDATE's own row lock in an
+        // earlier statement makes the second wait for the first to commit, and its UPDATE then reads a snapshot
+        // that has the first one's delete. Sorted so two callers with overlapping lists take their locks in the same
+        // order. SQLite runs one writer at a time, so it never sees the interleaving.
+        if(this.#kind === 'postgres')
+        {
+            await this.#db
+                .selectFrom('blob')
+                .select('sha256')
+                .where('sha256', 'in', shas)
+                .orderBy('sha256')
+                .forNoKeyUpdate()
+                .execute();
+        }
+
+        await this.#db
             .updateTable('blob')
             .set({ deleted_at: new Date().toISOString() })
             .where('sha256', 'in', shas)
@@ -481,7 +457,7 @@ export class BlobRA
 
         if(row === undefined) { throw new BackendNotFoundError(backendID); }
 
-        const facade = this.#build(row.kind, row.config);
+        const facade = this.#build(backendID, row.kind, row.config);
         this.#facades.set(backendID, facade);
         return facade;
     }
@@ -502,12 +478,12 @@ export class BlobRA
         return row.id;
     }
 
-    #build(kind : string, config : string) : BlobBackend
+    #build(backendID : string, kind : StorageBackendKind, config : string) : BlobBackend
     {
         switch (kind)
         {
             case 'fs':
-                return new FsBackend(parseFsBackendConfig(JSON.parse(config)));
+                return new FsBackend(parseFsBackendConfig(decodeConfig(backendID, config)));
 
             default:
                 throw new UnsupportedBackendError(kind);

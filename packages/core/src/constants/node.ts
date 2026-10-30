@@ -36,17 +36,3 @@ export const MAX_ARCHIVE_NODES = 200;
 export const ARCHIVE_SKIPPED_MANIFEST = 'SKIPPED.txt';
 
 //----------------------------------------------------------------------------------------------------------------------
-
-// RFC 9110 media-type: `type/subtype` of tokens, then any number of `;name=value` parameters whose values are tokens
-// or quoted strings. Every character the grammar admits is printable ASCII, which is what makes a value that passes
-// safe to emit -- CR, LF, DEL and everything above U+007F are outside it.
-const TOKEN = String.raw`[A-Za-z0-9!#$%&'*+.^_\`|~-]+`;
-const QUOTED = String.raw`"[\x20\x21\x23-\x5b\x5d-\x7e]*"`;
-const MEDIA_TYPE = new RegExp(`^${ TOKEN }/${ TOKEN }(?:[ \t]*;[ \t]*${ TOKEN }=(?:${ TOKEN }|${ QUOTED }))*$`);
-
-export function isValidMimeType(value : string) : boolean
-{
-    return value.length <= MIME_TYPE_MAX_LENGTH && MEDIA_TYPE.test(value);
-}
-
-//----------------------------------------------------------------------------------------------------------------------

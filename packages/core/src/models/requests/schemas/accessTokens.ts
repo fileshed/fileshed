@@ -12,7 +12,12 @@ import {
 } from '../../../constants/accessToken.ts';
 
 // Models
-import { type AccessToken, accessTokenScopes } from '../../accessToken.ts';
+import {
+    type AccessToken,
+    type MintedAccessToken,
+    type MintedPlaybackToken,
+    accessTokenScopes,
+} from '../../accessToken.ts';
 
 // Requests
 import {
@@ -113,6 +118,16 @@ export function toAccessTokenResponse(token : AccessToken) : AccessTokenResponse
 export function toAccessTokenListResponse(tokens : readonly AccessToken[]) : AccessTokenListResponse
 {
     return { accessTokens: tokens.map(toAccessTokenResponse) };
+}
+
+export function toCreateAccessTokenResponse(minted : MintedAccessToken) : CreateAccessTokenResponse
+{
+    return { token: minted.token, accessToken: toAccessTokenResponse(minted.accessToken) };
+}
+
+export function toPlaybackTokenResponse(minted : MintedPlaybackToken) : PlaybackTokenResponse
+{
+    return { id: minted.id, token: minted.token, expiresAt: minted.expiresAt.toISOString() };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

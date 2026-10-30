@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Session Store
 //
-// The current user's session: the /api/me profile (identity, role, live quota) plus the sign-in / sign-up / sign-out
-// actions that drive better-auth. Identity and quota come from our own /api/me rather than better-auth's client
-// session -- the auth client's inferred user carries neither the app role nor the quota, and /api/me is the app's
-// authoritative profile. A valid cookie yields the profile; a missing or expired one 401s to signed-out.
+// Identity and quota come from /api/me rather than better-auth's client session, because the auth client's user carries
+// neither the app role nor the quota.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -26,10 +24,10 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '../resource-access/apiError.ts';
+import { ApiError, apiErrorFromAuth } from '../resource-access/apiError.ts';
 import { authClient } from '../resource-access/authClient.ts';
 import { deleteAvatar, uploadAvatar } from '../resource-access/avatar.ts';
-import { readDeviceViewMode, writeDeviceViewMode } from '../resource-access/deviceViewMode.ts';
+import { readDeviceViewMode, writeDeviceViewMode } from '../resource-access/browser/deviceViewMode.ts';
 import { fetchMe } from '../resource-access/me.ts';
 import { updatePreferences } from '../resource-access/preferences.ts';
 import { fetchVersion } from '../resource-access/version.ts';
@@ -130,7 +128,7 @@ export const useSessionStore = defineStore('session', () =>
         try
         {
             const { error } = await authClient.signIn.email({ email, password });
-            if(error) { throw new Error(error.message ?? 'Unable to sign in. Check your email and password.'); }
+            if(error) { throw apiErrorFromAuth(error, 'Unable to sign in. Check your email and password.'); }
 
             me.value = await fetchMe();
             initialized.value = true;
@@ -144,7 +142,7 @@ export const useSessionStore = defineStore('session', () =>
         try
         {
             const { error } = await authClient.signUp.email({ name, email, password });
-            if(error) { throw new Error(error.message ?? 'Unable to create your account.'); }
+            if(error) { throw apiErrorFromAuth(error, 'Unable to create your account.'); }
 
             me.value = await fetchMe();
             initialized.value = true;
@@ -164,10 +162,12 @@ export const useSessionStore = defineStore('session', () =>
     }
 
     // Re-adopt the profile after something outside this store changed what it reports -- an upload or permanent
-    // delete moving the quota gauge. Failures propagate to the caller, who usually fires-and-forgets this.
+    // delete moving the quota gauge. A failed read leaves the profile as it was until the next refresh, so this never
+    // throws: no caller has anything to do about a gauge that is briefly stale.
     async function refreshProfile() : Promise<void>
     {
-        me.value = await fetchMe();
+        try { me.value = await fetchMe(); }
+        catch { /* the profile in hand stands */ }
     }
 
     async function loadVersion() : Promise<void>
@@ -196,7 +196,7 @@ export const useSessionStore = defineStore('session', () =>
     async function updateName(name : string) : Promise<void>
     {
         const { error } = await authClient.updateUser({ name });
-        if(error) { throw new Error(error.message ?? 'Unable to update your name.'); }
+        if(error) { throw apiErrorFromAuth(error, 'Unable to update your name.'); }
 
         me.value = await fetchMe();
     }
@@ -211,7 +211,7 @@ export const useSessionStore = defineStore('session', () =>
     ) : Promise<void>
     {
         const { error } = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions });
-        if(error) { throw new Error(error.message ?? 'Unable to change your password.'); }
+        if(error) { throw apiErrorFromAuth(error, 'Unable to change your password.'); }
     }
 
     // Upload a new avatar and adopt the refreshed profile the server returns, so the new image URL propagates to the
@@ -221,12 +221,11 @@ export const useSessionStore = defineStore('session', () =>
         me.value = await uploadAvatar(file);
     }
 
-    // Remove the avatar, then refetch the profile (the DELETE answers 204, not the refreshed shape) so the image URL
-    // clears everywhere. Failures propagate to the caller to toast.
+    // Remove the avatar and adopt the refreshed profile, so the image URL clears everywhere. Failures propagate to the
+    // caller to toast.
     async function removeAvatar() : Promise<void>
     {
-        await deleteAvatar();
-        me.value = await fetchMe();
+        me.value = await deleteAvatar();
     }
 
     // Merge a view preference into the in-memory profile at once, without a write, so the surface reflects a pick the

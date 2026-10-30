@@ -13,8 +13,11 @@ import { type Migration, type MigrationProvider, Migrator, NO_MIGRATIONS } from 
 
 import type { Kysely } from 'kysely';
 
+// Models
+import type { DatabaseKind } from '@fileshed/core';
+
 // Database
-import type { Database, DatabaseKind } from './database.ts';
+import type { Database } from './database.ts';
 
 // Migrations
 import * as initial001 from './migrations/001_initial.ts';

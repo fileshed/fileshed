@@ -206,18 +206,18 @@ describe('Admin UsersTab', () =>
         await joined.trigger('click');
         await flushPromises();
         expect(listUsersMock).toHaveBeenLastCalledWith(
-            expect.objectContaining({ sortBy: 'createdAt', sortDirection: 'asc' })
+            expect.objectContaining({ sortKey: 'createdAt', sortDirection: 'asc' })
         );
 
         await joined.trigger('click');
         await flushPromises();
         expect(listUsersMock).toHaveBeenLastCalledWith(
-            expect.objectContaining({ sortBy: 'createdAt', sortDirection: 'desc' })
+            expect.objectContaining({ sortKey: 'createdAt', sortDirection: 'desc' })
         );
 
         await joined.trigger('click');
         await flushPromises();
-        expect(listUsersMock).toHaveBeenLastCalledWith(expect.not.objectContaining({ sortBy: 'createdAt' }));
+        expect(listUsersMock).toHaveBeenLastCalledWith(expect.not.objectContaining({ sortKey: 'createdAt' }));
     });
 
     it('merges an action\'s refreshed row in place without refetching', async () =>

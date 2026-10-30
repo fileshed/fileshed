@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Regulation
-//
-// Cross-record legality for permission grants: who may create a share and on what, plus the authority to resolve a
-// share request. Pure -- the manager gathers ownership facts, the engine judges.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

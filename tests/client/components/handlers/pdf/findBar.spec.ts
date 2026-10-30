@@ -21,11 +21,6 @@ import PdfFindBar from '@client/components/handlers/pdf/findBar.vue';
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------

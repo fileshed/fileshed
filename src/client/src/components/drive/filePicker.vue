@@ -1,16 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- File Picker
   --
-  -- A read-only browse-and-pick over the caller's own drive: drill into folders, pick a single file. Folders are always
-  -- navigable; files are selectable only when they match the `accept` list, in the HTML accept attribute's own
-  -- vocabulary -- an exact mime, a whole family via `type/*`, a bare `*` for any file at all (its own entry, since
-  -- the mime forms cannot express it: `*/*` would ask for a mime beginning with `*`), or a `.ext` name suffix
-  -- (playlist files travel under too many mimes to enumerate) -- so a caller can constrain the pick without
-  -- re-implementing the navigation. Selecting
-  -- a file emits it; the host decides what to do with it, including leaving the picker open to pick again. A host
-  -- picking repeatedly can mark rows already taken (pickedIDs draws a check, rows stay pickable) and offer whole
-  -- folders (folderAddable puts an Add-all on folder rows; the row itself still navigates). Links are omitted --
-  -- this picks concrete files, not indirections.
+  -- `accept` follows the HTML accept attribute (an exact mime, a `type/*` family, or a `.ext` name suffix, which
+  -- playlist files need because they travel under too many mimes to enumerate), plus a bare `*` for any file, since
+  -- `*/*` would ask for a mime beginning with `*`. Links are omitted, because this picks concrete files.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -118,7 +111,7 @@
     import { useSessionStore } from '../../stores/session.ts';
 
     // Resource Access
-    import { getChildren } from '../../resource-access/nodes.ts';
+    import { listChildren } from '../../resource-access/nodes.ts';
 
     // Utils
     import { nodePresentation } from '../../utils/formatters/index.ts';
@@ -206,7 +199,7 @@
 
         try
         {
-            const page = await getChildren(currentID.value, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
+            const page = await listChildren(currentID.value, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
             nodes.value = page.nodes;
         }
         catch

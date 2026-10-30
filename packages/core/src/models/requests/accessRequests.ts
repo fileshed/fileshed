@@ -1,12 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Access Request API DTOs
 //
-// Request/response contracts for share requests: a user who can see a stub but cannot resolve it asks the target's
-// owner for access. The create body names only the desired ShareRole -- the node is the path parameter and 'owner' is
-// unrepresentable. GET /api/access-requests answers both directions in one payload: requests incoming to the caller as
-// an owner, each paired with the requester's summary (the requester announced themselves to the owner by asking, so
-// disclosing them here discloses no one who didn't already disclose themselves), and the caller's own outgoing
-// requests, plain. Dates are ISO strings.
+// Incoming requests carry the requester's summary. The requester announced themselves to the owner by asking, so
+// disclosing them here discloses no one who did not already disclose themselves.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

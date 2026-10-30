@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Save Playlist As Modal
-  --
-  -- Names the queue and writes it as a .m3u8 into the folder the session came from (the open playlist's folder, or
-  -- the routed file's). The extension is ensured, never demanded; the optional title travels as the standard
-  -- #PLAYLIST directive, so it survives into any other player. Imperative: the playlist panel opens it via the
-  -- exposed open(), prefilled with the adopted playlist's name and title when there is one.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -14,7 +14,7 @@
 import { serve } from '@hono/node-server';
 
 // App
-import { bootApp } from './app.ts';
+import { bootApp } from './boot.ts';
 
 // Utils
 import { getLogger } from './utils/logger.ts';
@@ -22,14 +22,14 @@ import { getLogger } from './utils/logger.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 // The Vite dev server re-executes this module in the same process when server files change. Each boot starts the
-// sweep timers, so the previous boot's must be stopped first -- otherwise every reload leaks a ticking set and the
-// sweeps fire at fractions of their interval.
-type BootGlobal = typeof globalThis & { __fileshedShutdown ?: () => void };
+// sweep timers and opens a database handle, so the previous boot's must be shut down first -- otherwise every reload
+// leaks a ticking set of sweeps and a connection.
+type BootGlobal = typeof globalThis & { __fileshedShutdown ?: () => Promise<void> };
 const bootGlobal = globalThis as BootGlobal;
 
 const apiReference = process.argv.includes('--api-reference');
 
-bootGlobal.__fileshedShutdown?.();
+await bootGlobal.__fileshedShutdown?.();
 const { app, config, shutdown } = await bootApp({ apiReference });
 bootGlobal.__fileshedShutdown = shutdown;
 

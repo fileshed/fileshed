@@ -1,23 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Annotator
   --
-  -- The root of the PDF handler family and its single mount point: the host mounts exactly this, and everything below
-  -- it (toolbar, sidebar, render surface, modals, the byte-save store, the pdf.js binding) is internal. It plays the
-  -- same role for a PDF that filePage plays for the text editor -- load the file, frame loading/error, own the card
-  -- that contains the chrome, own the keyboard map, and reset on leave -- but folds that role into one component so a
-  -- host can drop `<PdfAnnotator :node-id="id" />` in without knowing the family's internals.
-  --
-  -- pdf.js is an annotator, not a content editor: it lays free text, ink, highlight and image marks over the page and
-  -- fills AcroForm fields, then saveDocument serializes those as an incremental update to the original bytes. It never
-  -- rewrites existing page content.
-  --
-  -- Mount contract:
-  --   prop  nodeID : string   The file node to open for annotation. Opened on mount and re-opened when it changes, so
-  --                           one mounted instance can follow a deep-link swap. An over-cap or non-PDF-file node is
-  --                           refused gracefully with an inline error rather than mounting a renderer over it.
-  -- The host provides nothing else: the identity chrome teleports into the layout header (the PDF identity bar), and
-  -- annotation, navigation, saving, and conflict resolution all live in the store; a viewer lands here too and gets the
-  -- same surface, read-only. There is no Back button -- the header logo is the way out of the tab.
+  -- The PDF family's single mount point. Everything under it is internal, so a host mounts `<PdfAnnotator :node-id="id"
+  -- />` without knowing the family's parts.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

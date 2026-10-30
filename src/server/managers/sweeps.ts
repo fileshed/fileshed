@@ -15,23 +15,22 @@
 
 // Models
 import {
-    type AccountDeletionRunSummary,
     ConflictError,
-    ForbiddenError,
-    type GcRunSummary,
     NotFoundError,
-    type PartialsRunSummary,
     type SweepKind,
     type SweepRunResponse,
-    type TrashPurgeRunSummary,
+    isOneOf,
     sweepKinds,
 } from '@fileshed/core';
 
 // Managers
-import type { LastRunTracker } from './lastRun.ts';
+import type { LastRunTracker, SweepSummaries } from './lastRun.ts';
+
+// Engines
+import { assertAdmin } from '../engines/adminAccess.ts';
 
 // Resource Access
-import type { SessionUser } from '../resource-access/auth.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
 
 // Utils
 import { getLogger } from '../utils/logger.ts';
@@ -43,22 +42,18 @@ const logger = getLogger('sweeps');
 const sweepLabels : Record<SweepKind, string> = {
     gc: 'garbage collection',
     trashPurge: 'trash purge',
-    partials: 'abandoned upload',
+    stagedUploads: 'abandoned upload',
     accountDeletion: 'account deletion',
 };
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// The sweeps themselves, already bound to their dependencies by the composition root. Each answers its own summary --
-// there is no shape common to all of them, and flattening them into one would throw away the counts an admin is
-// asking for.
-export interface SweepRunners
-{
-    gc : () => Promise<GcRunSummary>;
-    trashPurge : () => Promise<TrashPurgeRunSummary>;
-    partials : () => Promise<PartialsRunSummary>;
-    accountDeletion : () => Promise<AccountDeletionRunSummary>;
-}
+// The sweeps themselves, already bound to their dependencies by the composition root, each answering its own summary.
+export type SweepRunners = { [K in SweepKind] : () => Promise<SweepSummaries[K]> };
+
+// The SweepRunResponse variant for the kind a run was started for.
+type SweepRunResponseFor<K extends SweepKind>
+    = { [P in K] : { sweep : P; ranAt : string; summary : SweepSummaries[P] } }[K];
 
 export interface SweepManagerDeps
 {
@@ -82,12 +77,9 @@ export class SweepManager
 
     // Run one sweep now and answer with what it reclaimed. The gate order matters: a caller who is not an admin is
     // refused before the sweep name is judged, so a 404 never confirms which sweeps this instance has.
-    async run(actor : SessionUser, sweep : string) : Promise<SweepRunResponse>
+    async run(user : SessionUser, sweep : string) : Promise<SweepRunResponse>
     {
-        if(actor.role !== 'admin')
-        {
-            throw new ForbiddenError('Admin access is required.');
-        }
+        assertAdmin(user);
 
         const kind = this.#asSweepKind(sweep);
 
@@ -99,7 +91,7 @@ export class SweepManager
             );
         }
 
-        logger.info({ sweep: kind, actorID: actor.id }, 'Sweep requested by an admin');
+        logger.info({ sweep: kind, userID: user.id }, 'Sweep requested by an admin');
 
         return this.#start(kind);
     }
@@ -136,48 +128,18 @@ export class SweepManager
         return run;
     }
 
-    async #execute(kind : SweepKind) : Promise<SweepRunResponse>
+    async #execute<K extends SweepKind>(kind : K) : Promise<SweepRunResponseFor<K>>
     {
-        switch (kind)
-        {
-            case 'gc':
-            {
-                const last = this.#tracker.recordGc(await this.#runners.gc());
+        const last = this.#tracker.record(kind, await this.#runners[kind]());
 
-                return { sweep: 'gc', ranAt: last.at.toISOString(), summary: last.summary };
-            }
-
-            case 'trashPurge':
-            {
-                const last = this.#tracker.recordTrashPurge(await this.#runners.trashPurge());
-
-                return { sweep: 'trashPurge', ranAt: last.at.toISOString(), summary: last.summary };
-            }
-
-            case 'partials':
-            {
-                const last = this.#tracker.recordPartials(await this.#runners.partials());
-
-                return { sweep: 'partials', ranAt: last.at.toISOString(), summary: last.summary };
-            }
-
-            case 'accountDeletion':
-            {
-                const last = this.#tracker.recordAccountDeletion(await this.#runners.accountDeletion());
-
-                return { sweep: 'accountDeletion', ranAt: last.at.toISOString(), summary: last.summary };
-            }
-        }
+        return { sweep: kind, ranAt: last.at.toISOString(), summary: last.summary };
     }
 
     #asSweepKind(sweep : string) : SweepKind
     {
-        if(!(sweepKinds as readonly string[]).includes(sweep))
-        {
-            throw new NotFoundError(`No sweep named "${ sweep }".`);
-        }
+        if(!isOneOf(sweepKinds, sweep)) { throw new NotFoundError(`No sweep named "${ sweep }".`); }
 
-        return sweep as SweepKind;
+        return sweep;
     }
 }
 

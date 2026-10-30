@@ -1,13 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Shared With Me Page
   --
-  -- The virtual listing of everything shared with the caller: each active incoming grant, its target rendered like a
-  -- drive row, with owner attribution and the caller's role. It is a read-only surface over items the caller does not
-  -- own -- there is no move, trash, or rename here; the kebab offers only what a recipient may do (open, save a copy of
-  -- a file, add a link to their own files, leave the share). Opening resolves the same way the drive does: a folder
-  -- navigates in (the server's effective-role machinery permits the read), a file follows the handler seam. This route
-  -- component owns the open action, the mutations, and the per-row menu; the store holds the listing and the surface
-  -- renders it.
+  -- The caller owns none of these items, so there is no move, trash, or rename; the menu offers only what a recipient
+  -- may do.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -62,9 +57,10 @@
 
     // Engines
     import { intent } from '../engines/intent/index.ts';
+    import type { ModifiedFilter } from '../engines/listing/index.ts';
 
     // Utils
-    import type { ModifiedFilter } from '../utils/filterPresets.ts';
+    import { openActionIcon } from '../utils/formatters/index.ts';
     import { useOpenNode } from '../utils/openNode.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
 
@@ -91,7 +87,7 @@
     {
         if(mode === session.viewMode) { return; }
 
-        session.applyPreferences({ viewMode: mode });
+        session.chooseViewMode(mode);
         void runMutation(() => session.savePreferences({ viewMode: mode }));
     }
 
@@ -124,21 +120,6 @@
     function download(nodeID : string) : void
     {
         perform({ kind: 'download', nodeID });
-    }
-
-    function openIcon(entry : SharedWithMeEntry) : string
-    {
-        switch (intent.handlers.resolveSharedOpen(entry.target).kind)
-        {
-            case 'navigate': return 'i-lucide-folder-open';
-            case 'edit': return 'i-lucide-file-pen';
-            case 'annotate': return 'i-lucide-pen-tool';
-            case 'play': return 'i-lucide-play';
-            case 'play-playlist': return 'i-lucide-list-music';
-            case 'view': return 'i-lucide-external-link';
-            case 'download': return 'i-lucide-download';
-            case 'none': return 'i-lucide-external-link';
-        }
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -188,9 +169,11 @@
 
     function buildMenu(entry : SharedWithMeEntry) : DropdownMenuItem[][]
     {
-        const actions : DropdownMenuItem[] = [
-            { label: 'Open', icon: openIcon(entry), onSelect: () => onOpen(entry) },
-        ];
+        const actions : DropdownMenuItem[] = [ {
+            label: 'Open',
+            icon: openActionIcon(intent.handlers.resolveSharedOpen(entry.target)),
+            onSelect: () => onOpen(entry),
+        } ];
 
         const downloadID = intent.handlers.resolveSharedDownload(entry.target);
         if(downloadID !== null)

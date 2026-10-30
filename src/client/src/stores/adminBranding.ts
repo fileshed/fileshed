@@ -1,11 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin Branding Store
 //
-// The Branding tab's draft brain: `saved` is the server's document, `draft` is what the knobs edit, and every
-// knob change repaints the app immediately through the preview variables. Save sends ONLY the keys that differ
-// and adopts the merged document the server answers; Revert restores the draft and wipes the preview. Custom CSS
-// deliberately never previews -- a half-typed selector must not wreck the admin mid-keystroke; it applies
-// through the stylesheet after Save, which is also why Save cache-busts the branding.css link.
+// Custom CSS never previews, since a half-typed selector must not break the page mid-keystroke; it applies through the
+// stylesheet after Save, which is why Save cache-busts the branding.css link.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';

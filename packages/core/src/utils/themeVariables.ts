@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Theme Variables
 //
-// One InstanceTheme becomes the CSS custom properties Nuxt UI's tokens read, shared by the two consumers that
-// must never disagree: the server renders them into /api/branding.css, the admin's live preview writes them
-// straight onto the document element. Only set knobs emit anything -- a stock theme produces an empty map, and
-// the build-time look stays untouched.
+// Two consumers read these properties and must never disagree: the server renders them into /api/branding.css, and the
+// admin's live preview writes them onto the document element. Only set knobs emit anything, so a stock theme produces
+// an empty map.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

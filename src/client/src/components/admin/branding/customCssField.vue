@@ -1,9 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Custom CSS Field
   --
-  -- The escape hatch. Deliberately NOT live-previewed: a half-typed selector must not wreck the admin
-  -- mid-keystroke, so it applies through the stylesheet after Save -- and the rescue hatch gets spelled out
-  -- right here, because the person who needs it will be staring at this field.
+  -- Not live-previewed: a half-typed selector must not break the page mid-keystroke, so the CSS applies through the
+  -- stylesheet after Save. The ?safe-theme rescue is spelled out here because the admin who needs it will be looking at
+  -- this field.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

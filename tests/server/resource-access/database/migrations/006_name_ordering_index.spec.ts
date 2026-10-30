@@ -17,10 +17,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CompiledQuery, type Expression, type Kysely, type SqlBool, sql } from 'kysely';
 
 // Models
-import { SEARCH_CANDIDATE_LIMIT } from '@fileshed/core';
+import { type DatabaseKind, SEARCH_CANDIDATE_LIMIT } from '@fileshed/core';
 
 // Resource Access
-import type { Database, DatabaseHandle, DatabaseKind } from '@server/resource-access/database/database.ts';
+import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { down } from '@server/resource-access/database/migrations/006_name_ordering_index.ts';
 
 // Support

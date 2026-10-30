@@ -11,15 +11,16 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Support
 import { createTestDatabase, fileNode, seedBackend, seedUser } from '../nodes/support.ts';
+import { testDatabaseKind } from '../../support/database.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -87,6 +88,69 @@ describe('BlobRA.graveyardUnreferenced', () =>
         await ra.graveyardUnreferenced([ 'sha-old' ]);
 
         expect((await deletedAtOf('sha-old'))?.toISOString()).toBe(PAST);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+function sleep(ms : number) : Promise<void>
+{
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function anyBackendWaitsOnLock() : Promise<boolean>
+{
+    const { rows } = await sql<{ waiting : number }>`
+        select count(*)::int as waiting from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock'
+    `.execute(db);
+
+    return (rows[0]?.waiting ?? 0) > 0;
+}
+
+// Returns once `work` has settled or some transaction in this database is blocked on a row lock, whichever comes
+// first -- so the caller knows the statement behind `work` has started either way.
+async function settledOrBlocked(work : Promise<unknown>) : Promise<void>
+{
+    let settled = false;
+    work.then(() => { settled = true; }, () => { settled = true; });
+
+    const poll = async () : Promise<void> =>
+    {
+        if(settled || await anyBackendWaitsOnLock()) { return; }
+
+        await sleep(10);
+
+        return poll();
+    };
+
+    await poll();
+}
+
+// SQLite allows one writer at a time, so two purges cannot both be mid-transaction there.
+describe.runIf(testDatabaseKind() === 'postgres')('BlobRA.graveyardUnreferenced across concurrent transactions', () =>
+{
+    it('graveyards a blob when two open transactions each remove one of its last two references', async () =>
+    {
+        await seedBlobRow('sha-shared', null);
+        const nodes = new NodeRA(handle);
+        await nodes.insert(fileNode({ id: 'n1', ownerID: 'u1', blobID: 'sha-shared' }));
+        await nodes.insert(fileNode({ id: 'n2', ownerID: 'u1', blobID: 'sha-shared' }));
+        const first = await db.startTransaction().execute();
+        const second = await db.startTransaction().execute();
+        const firstTx = { db: first, kind: handle.kind };
+        const secondTx = { db: second, kind: handle.kind };
+        await new NodeRA(firstTx).hardDelete('n1');
+        await new NodeRA(secondTx).hardDelete('n2');
+
+        await new BlobRA(firstTx).graveyardUnreferenced([ 'sha-shared' ]);
+        const secondGraveyard = new BlobRA(secondTx).graveyardUnreferenced([ 'sha-shared' ]);
+        await settledOrBlocked(secondGraveyard);
+        await first.commit().execute();
+        await secondGraveyard;
+        await second.commit().execute();
+
+        expect(await deletedAtOf('sha-shared')).not.toBeNull();
     });
 });
 

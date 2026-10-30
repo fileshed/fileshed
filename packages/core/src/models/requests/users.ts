@@ -1,10 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // User Lookup API DTO
 //
-// Request contract for GET /api/users/lookup: resolve an EXACT email address to a UserSummary so a sharer can confirm
-// who they are about to grant before granting. Exact match only -- no prefix or substring search -- so the endpoint
-// cannot enumerate accounts. The response reuses UserSummary (models/requests/nodes.ts); there is no bespoke response
-// shape here.
+// The lookup matches an exact email only, with no prefix or substring search, so it cannot enumerate accounts.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface UserLookupQuery

@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Not Found Page
   --
-  -- Where every unmatched URL lands. It stands alone rather than inside the drive shell: the catch-all is reachable
-  -- signed in or not, and the shell's chrome assumes a session.
+  -- It stands alone rather than inside the drive shell: the catch-all is reachable signed in or not, and the shell's
+  -- chrome assumes a session.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -19,7 +19,7 @@ import {
 
 // Support
 import { testDatabaseKind } from '../support/database.ts';
-import { type BootedServeApp, ORIGIN, type TestUser, bootServeApp, makeUser } from '../publicLinks/support.ts';
+import { type BootedStoreApp, ORIGIN, type TestUser, bootStoreApp, makeUser } from '../publicLinks/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ const SHA256 = 'd'.repeat(64);
 // seeds. 5,000 rows was 60,000 parameters and only worked by the grace of whichever SQLite the runtime shipped.
 const INSERT_BATCH = 1000;
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -140,7 +140,7 @@ async function probeOrder(limit : number = LISTING_CHUNK_SIZE) : Promise<string[
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
 });
 

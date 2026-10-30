@@ -2,8 +2,6 @@
 // Drive Store
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHmac } from 'node:crypto';
-
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -14,7 +12,6 @@ import {
     MAX_COMPLETE_LISTING,
     type NodeListResponse,
     type NodeResponse,
-    type NodeSharing,
     type UserSummary,
 } from '@fileshed/core';
 
@@ -23,19 +20,19 @@ import { ApiError, RegulationApiError } from '@client/resource-access/apiError.t
 import {
     copyNode,
     createNode,
-    getChildren,
     getNode,
     hardDeleteNode,
+    listChildren,
     patchNode,
     trashNode,
 } from '@client/resource-access/nodes.ts';
-import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
 
 // Stores
+import { commitFile } from '@client/stores/commitFile.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 
 // Support
-import { ME_ID, meFixture } from '../support.ts';
+import { fileNode, folderNode, linkNode, meFixture } from '../support.ts';
 
 // Under test
 import { useDriveStore } from '@client/stores/drive.ts';
@@ -43,7 +40,7 @@ import { useDriveStore } from '@client/stores/drive.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getChildren: vi.fn(),
+    listChildren: vi.fn(),
     getNode: vi.fn(),
     getNodeSharing: vi.fn(),
     createNode: vi.fn(),
@@ -53,86 +50,20 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     hardDeleteNode: vi.fn(),
 }));
 
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(),
-    uploadTicket: vi.fn(),
-    answerChallenge: vi.fn(),
-}));
+vi.mock('@client/stores/commitFile.ts', () => ({ commitFile: vi.fn() }));
 
-const getChildrenMock = getChildren as unknown as Mock;
+const listChildrenMock = listChildren as unknown as Mock;
 const getNodeMock = getNode as unknown as Mock;
 const createNodeMock = createNode as unknown as Mock;
 const patchNodeMock = patchNode as unknown as Mock;
 const trashNodeMock = trashNode as unknown as Mock;
 const copyNodeMock = copyNode as unknown as Mock;
 const hardDeleteNodeMock = hardDeleteNode as unknown as Mock;
-const claimBlobMock = claimBlob as unknown as Mock;
-const uploadTicketMock = uploadTicket as unknown as Mock;
-const answerChallengeMock = answerChallenge as unknown as Mock;
-
-// The SHA-256 of zero bytes -- the digest every empty file claims.
-const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+const commitMock = commitFile as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function folderNode(id : string, parentID : string | null = null, name : string = id) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name,
-        ownerID: ME_ID,
-        parentID,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'folder',
-        trashedAt: null,
-    };
-}
-
-function fileNode(
-    id : string,
-    name : string = id,
-    sharing : NodeSharing | null = null,
-    mimeType = 'text/plain'
-) : NodeResponse
-{
-    return {
-        sharing,
-        id,
-        name,
-        ownerID: ME_ID,
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType,
-        trashedAt: null,
-    };
-}
-
-function linkNode(id : string, parentID : string | null, name : string, targetNodeID : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name,
-        ownerID: ME_ID,
-        parentID,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'link',
-        targetNodeID,
-        target: null,
-    };
-}
+const DOCS_LINK = { id: 'lnk', parentID: 'docs', name: 'Case Test\'s Docs', targetNodeID: 'far' };
 
 function page(
     nodes : NodeResponse[],
@@ -152,7 +83,7 @@ function ownerSummary(id : string) : UserSummary
 // and the folder's whole count beside them. Names are zero-padded so the display order is the seeded order.
 function servesFolder(size : number) : void
 {
-    getChildrenMock.mockImplementation((_parentID : string | null, query : Partial<ChildrenQuery>) =>
+    listChildrenMock.mockImplementation((_parentID : string | null, query : Partial<ChildrenQuery>) =>
     {
         const offset = query.offset ?? 0;
         const limit = query.limit ?? LISTING_CHUNK_SIZE;
@@ -161,7 +92,7 @@ function servesFolder(size : number) : void
         const nodes = Array.from({ length: count }, (_unused, index) =>
         {
             const at = offset + index;
-            return fileNode(`f${ at }`, `file-${ String(at).padStart(6, '0') }`);
+            return fileNode({ id: `f${ at }`, name: `file-${ String(at).padStart(6, '0') }` });
         });
 
         return Promise.resolve(page(nodes, size));
@@ -186,7 +117,7 @@ describe('useDriveStore', () =>
     // arrives file-first is shown folder-first.
     it('populates children and total from the root listing, folders leading', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1'), folderNode('d1') ], 2));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1' }), folderNode({ id: 'd1' }) ], 2));
         const store = useDriveStore();
 
         await store.load(null);
@@ -209,8 +140,8 @@ describe('useDriveStore', () =>
 
         await store.load(null);
 
-        expect(getChildrenMock).toHaveBeenCalledTimes(1);
-        expect(getChildrenMock).toHaveBeenCalledWith(
+        expect(listChildrenMock).toHaveBeenCalledTimes(1);
+        expect(listChildrenMock).toHaveBeenCalledWith(
             null,
             expect.objectContaining({ limit: LISTING_CHUNK_SIZE, offset: 0 })
         );
@@ -225,7 +156,7 @@ describe('useDriveStore', () =>
 
         await store.load(null);
 
-        const offsets = getChildrenMock.mock.calls.map((call) => (call[1] as Partial<ChildrenQuery>).offset);
+        const offsets = listChildrenMock.mock.calls.map((call) => (call[1] as Partial<ChildrenQuery>).offset);
         expect(offsets).toEqual([ 0, 1000, 2000 ]);
         expect(store.children).toHaveLength(2500);
         expect(store.complete).toBe(true);
@@ -239,7 +170,7 @@ describe('useDriveStore', () =>
 
         await store.load(null);
 
-        expect(getChildrenMock).toHaveBeenCalledTimes(1);
+        expect(listChildrenMock).toHaveBeenCalledTimes(1);
         expect(store.children).toHaveLength(LISTING_CHUNK_SIZE);
         expect(store.capped).toBe(true);
         expect(store.complete).toBe(false);
@@ -255,7 +186,7 @@ describe('useDriveStore', () =>
         await flushPromises();
 
         expect(store.children).toHaveLength(2 * LISTING_CHUNK_SIZE);
-        expect(getChildrenMock).toHaveBeenLastCalledWith(
+        expect(listChildrenMock).toHaveBeenLastCalledWith(
             null,
             expect.objectContaining({ offset: LISTING_CHUNK_SIZE })
         );
@@ -266,12 +197,12 @@ describe('useDriveStore', () =>
         servesFolder(MAX_COMPLETE_LISTING + 1);
         const store = useDriveStore();
         await store.load(null);
-        getChildrenMock.mockClear();
+        listChildrenMock.mockClear();
 
         store.reachedIndex(20);
         await flushPromises();
 
-        expect(getChildrenMock).not.toHaveBeenCalled();
+        expect(listChildrenMock).not.toHaveBeenCalled();
         expect(store.children).toHaveLength(LISTING_CHUNK_SIZE);
     });
 
@@ -281,11 +212,11 @@ describe('useDriveStore', () =>
 
     it('walks parentID to build the breadcrumb from My Files down to the open folder', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        listChildrenMock.mockResolvedValue(page([]));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'c') { return Promise.resolve(folderNode('c', 'b', 'Reports')); }
-            if(id === 'b') { return Promise.resolve(folderNode('b', null, 'Work')); }
+            if(id === 'c') { return Promise.resolve(folderNode({ id: 'c', parentID: 'b', name: 'Reports' })); }
+            if(id === 'b') { return Promise.resolve(folderNode({ id: 'b', parentID: null, name: 'Work' })); }
 
             return Promise.reject(new ApiError(404, 'not found'));
         });
@@ -298,15 +229,18 @@ describe('useDriveStore', () =>
 
     it('reuses cached ancestors so a listed subfolder builds its crumb without refetching nodes', async () =>
     {
-        getChildrenMock.mockImplementation((parentID : string | null) =>
+        listChildrenMock.mockImplementation((parentID : string | null) =>
         {
-            if(parentID === 'b') { return Promise.resolve(page([ folderNode('c', 'b', 'Reports') ])); }
+            if(parentID === 'b')
+            {
+                return Promise.resolve(page([ folderNode({ id: 'c', parentID: 'b', name: 'Reports' }) ]));
+            }
 
             return Promise.resolve(page([]));
         });
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'b') { return Promise.resolve(folderNode('b', null, 'Work')); }
+            if(id === 'b') { return Promise.resolve(folderNode({ id: 'b', parentID: null, name: 'Work' })); }
 
             return Promise.reject(new ApiError(404, 'should not be asked'));
         });
@@ -322,10 +256,10 @@ describe('useDriveStore', () =>
 
     it('tops out the breadcrumb at an unresolvable ancestor instead of failing the load', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1') ]));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1' }) ]));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'x') { return Promise.resolve(folderNode('x', 'p', 'Shared')); }
+            if(id === 'x') { return Promise.resolve(folderNode({ id: 'x', parentID: 'p', name: 'Shared' })); }
 
             return Promise.reject(new ApiError(404, 'no access'));
         });
@@ -346,11 +280,11 @@ describe('useDriveStore', () =>
 
     it('walks the link\'s own parent chain, ending on the link\'s name, when the open id is a folder link', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        listChildrenMock.mockResolvedValue(page([]));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
-            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+            if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
+            if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
             return Promise.reject(new ApiError(404, 'out of reach'));
         });
@@ -368,16 +302,19 @@ describe('useDriveStore', () =>
         // The link lists its target's physical children; 'sub' physically lives under 'far' (the target), whose
         // ancestry the caller cannot reach -- so a physical walk from 'sub' would clip to just 'sub'. The descent must
         // instead carry the on-screen chain forward.
-        getChildrenMock.mockImplementation((parentID : string | null) =>
+        listChildrenMock.mockImplementation((parentID : string | null) =>
         {
-            if(parentID === 'lnk') { return Promise.resolve(page([ folderNode('sub', 'far', 'Reports') ])); }
+            if(parentID === 'lnk')
+            {
+                return Promise.resolve(page([ folderNode({ id: 'sub', parentID: 'far', name: 'Reports' }) ]));
+            }
 
             return Promise.resolve(page([]));
         });
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
-            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+            if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
+            if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
             return Promise.reject(new ApiError(404, 'out of reach'));
         });
@@ -392,16 +329,19 @@ describe('useDriveStore', () =>
 
     it('keeps the seeded logical chain across a same-folder reload from a filter change', async () =>
     {
-        getChildrenMock.mockImplementation((parentID : string | null) =>
+        listChildrenMock.mockImplementation((parentID : string | null) =>
         {
-            if(parentID === 'lnk') { return Promise.resolve(page([ folderNode('sub', 'far', 'Reports') ])); }
+            if(parentID === 'lnk')
+            {
+                return Promise.resolve(page([ folderNode({ id: 'sub', parentID: 'far', name: 'Reports' }) ]));
+            }
 
             return Promise.resolve(page([]));
         });
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
-            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+            if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
+            if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
             return Promise.reject(new ApiError(404, 'out of reach'));
         });
@@ -418,10 +358,10 @@ describe('useDriveStore', () =>
     // back to the physical parent walk and clips at the first unreachable ancestor -- the accepted limitation.
     it('falls back to the clipped physical walk on a cold load of a deep physical child', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        listChildrenMock.mockResolvedValue(page([]));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'sub') { return Promise.resolve(folderNode('sub', 'far', 'Reports')); }
+            if(id === 'sub') { return Promise.resolve(folderNode({ id: 'sub', parentID: 'far', name: 'Reports' })); }
 
             return Promise.reject(new ApiError(404, 'out of reach'));
         });
@@ -439,11 +379,11 @@ describe('useDriveStore', () =>
 
     it('anchors the breadcrumb own-tree when the physical walk reaches a null-parent node the caller owns', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        listChildrenMock.mockResolvedValue(page([]));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'c') { return Promise.resolve(folderNode('c', 'b', 'Reports')); }
-            if(id === 'b') { return Promise.resolve(folderNode('b', null, 'Work')); }
+            if(id === 'c') { return Promise.resolve(folderNode({ id: 'c', parentID: 'b', name: 'Reports' })); }
+            if(id === 'b') { return Promise.resolve(folderNode({ id: 'b', parentID: null, name: 'Work' })); }
 
             return Promise.reject(new ApiError(404, 'not found'));
         });
@@ -457,10 +397,10 @@ describe('useDriveStore', () =>
 
     it('flags the breadcrumb foreign when the physical walk tops out at an unresolvable ancestor', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1') ]));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1' }) ]));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'x') { return Promise.resolve(folderNode('x', 'p', 'Shared')); }
+            if(id === 'x') { return Promise.resolve(folderNode({ id: 'x', parentID: 'p', name: 'Shared' })); }
 
             return Promise.reject(new ApiError(404, 'no access'));
         });
@@ -474,11 +414,17 @@ describe('useDriveStore', () =>
 
     it('flags the breadcrumb foreign when the walk reaches a null-parent node owned by someone else', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        listChildrenMock.mockResolvedValue(page([]));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'g') { return Promise.resolve({ ...folderNode('g', 'r', 'Reports'), ownerID: 'bob' }); }
-            if(id === 'r') { return Promise.resolve({ ...folderNode('r', null, 'Shared Root'), ownerID: 'bob' }); }
+            if(id === 'g')
+            {
+                return Promise.resolve(folderNode({ id: 'g', parentID: 'r', name: 'Reports', ownerID: 'bob' }));
+            }
+            if(id === 'r')
+            {
+                return Promise.resolve(folderNode({ id: 'r', parentID: null, name: 'Shared Root', ownerID: 'bob' }));
+            }
 
             return Promise.reject(new ApiError(404, 'not found'));
         });
@@ -492,19 +438,21 @@ describe('useDriveStore', () =>
 
     it('keeps an own-tree chain anchored across a seeded descent, regardless of the child\'s owner', async () =>
     {
-        getChildrenMock.mockImplementation((parentID : string | null) =>
+        listChildrenMock.mockImplementation((parentID : string | null) =>
         {
             if(parentID === 'lnk')
             {
-                return Promise.resolve(page([ { ...folderNode('sub', 'far', 'Reports'), ownerID: 'far-owner' } ]));
+                return Promise.resolve(page([
+                    folderNode({ id: 'sub', parentID: 'far', name: 'Reports', ownerID: 'far-owner' }),
+                ]));
             }
 
             return Promise.resolve(page([]));
         });
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'lnk') { return Promise.resolve(linkNode('lnk', 'docs', 'Case Test\'s Docs', 'far')); }
-            if(id === 'docs') { return Promise.resolve(folderNode('docs', null, 'Documents')); }
+            if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
+            if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
             return Promise.reject(new ApiError(404, 'out of reach'));
         });
@@ -519,15 +467,21 @@ describe('useDriveStore', () =>
 
     it('keeps a foreign chain foreign across a seeded descent', async () =>
     {
-        getChildrenMock.mockImplementation((parentID : string | null) =>
+        listChildrenMock.mockImplementation((parentID : string | null) =>
         {
-            if(parentID === 'g') { return Promise.resolve(page([ folderNode('h', 'g', 'Deeper') ])); }
+            if(parentID === 'g')
+            {
+                return Promise.resolve(page([ folderNode({ id: 'h', parentID: 'g', name: 'Deeper' }) ]));
+            }
 
-            return Promise.resolve(page([ fileNode('f1') ]));
+            return Promise.resolve(page([ fileNode({ id: 'f1' }) ]));
         });
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'g') { return Promise.resolve({ ...folderNode('g', 'r', 'Reports'), ownerID: 'bob' }); }
+            if(id === 'g')
+            {
+                return Promise.resolve(folderNode({ id: 'g', parentID: 'r', name: 'Reports', ownerID: 'bob' }));
+            }
 
             return Promise.reject(new ApiError(404, 'no access'));
         });
@@ -549,17 +503,21 @@ describe('useDriveStore', () =>
     // request and moves no scrollbar.
     it('re-orders a folder in hand without asking the server', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('a'), fileNode('b'), fileNode('c') ], 3));
+        listChildrenMock.mockResolvedValue(page([
+            fileNode({ id: 'a' }),
+            fileNode({ id: 'b' }),
+            fileNode({ id: 'c' }),
+        ], 3));
         const store = useDriveStore();
         await store.load(null);
-        getChildrenMock.mockClear();
+        listChildrenMock.mockClear();
 
         await store.reSort('name', 'desc');
 
         expect(store.sortKey).toBe('name');
         expect(store.sortDirection).toBe('desc');
         expect(store.children.map((node) => node.id)).toEqual([ 'c', 'b', 'a' ]);
-        expect(getChildrenMock).not.toHaveBeenCalled();
+        expect(listChildrenMock).not.toHaveBeenCalled();
     });
 
     // Past the ceiling the client has never seen most of the folder, so only the server can order it.
@@ -568,12 +526,12 @@ describe('useDriveStore', () =>
         servesFolder(MAX_COMPLETE_LISTING + 1);
         const store = useDriveStore();
         await store.load(null);
-        getChildrenMock.mockClear();
+        listChildrenMock.mockClear();
 
         await store.reSort('size', 'desc');
 
         expect(store.sortKey).toBe('size');
-        expect(getChildrenMock).toHaveBeenCalledWith(
+        expect(listChildrenMock).toHaveBeenCalledWith(
             null,
             expect.objectContaining({ sortKey: 'size', sortDirection: 'desc', offset: 0 })
         );
@@ -586,7 +544,7 @@ describe('useDriveStore', () =>
     it('populates the owner facet from the listing envelope', async () =>
     {
         const owners = [ ownerSummary('u1'), ownerSummary('u2') ];
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1') ], 1, owners));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1' }) ], 1, owners));
         const store = useDriveStore();
 
         await store.load(null);
@@ -598,9 +556,9 @@ describe('useDriveStore', () =>
     // target owner's summary after the user descends past the link into a folder whose own facet never names them.
     it('accumulates owner summaries across listings and retains one a later facet drops', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('f1') ], 1, [ ownerSummary('bob') ]))
-            .mockResolvedValueOnce(page([ fileNode('f2') ], 1, []));
+        listChildrenMock
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1' }) ], 1, [ ownerSummary('bob') ]))
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f2' }) ], 1, []));
         getNodeMock.mockRejectedValue(new ApiError(404, 'no crumb'));
         const store = useDriveStore();
         await store.load('a');
@@ -615,13 +573,13 @@ describe('useDriveStore', () =>
     // nothing either.
     it('narrows a folder in hand by type without asking the server, and widens it back on clear', async () =>
     {
-        getChildrenMock.mockResolvedValue(page(
-            [ fileNode('doc', 'doc', null, 'text/plain'), fileNode('pic', 'pic', null, 'image/png') ],
+        listChildrenMock.mockResolvedValue(page(
+            [ fileNode({ id: 'doc', mimeType: 'text/plain' }), fileNode({ id: 'pic', mimeType: 'image/png' }) ],
             2
         ));
         const store = useDriveStore();
         await store.load(null);
-        getChildrenMock.mockClear();
+        listChildrenMock.mockClear();
 
         await store.setTypeFamilies([ 'images' ]);
 
@@ -632,37 +590,37 @@ describe('useDriveStore', () =>
         await store.clearFilters();
 
         expect(store.children.map((node) => node.id)).toEqual([ 'doc', 'pic' ]);
-        expect(getChildrenMock).not.toHaveBeenCalled();
+        expect(listChildrenMock).not.toHaveBeenCalled();
     });
 
     it('narrows a folder in hand by owner without asking the server', async () =>
     {
-        const mine = fileNode('mine');
-        const theirs = { ...fileNode('theirs'), ownerID: 'u2' };
-        getChildrenMock.mockResolvedValue(page([ mine, theirs ], 2));
+        const mine = fileNode({ id: 'mine' });
+        const theirs = fileNode({ id: 'theirs', ownerID: 'u2' });
+        listChildrenMock.mockResolvedValue(page([ mine, theirs ], 2));
         const store = useDriveStore();
         await store.load(null);
-        getChildrenMock.mockClear();
+        listChildrenMock.mockClear();
 
         await store.setOwner(ownerSummary('u2'));
 
         expect(store.owner?.id).toBe('u2');
         expect(store.children.map((node) => node.id)).toEqual([ 'theirs' ]);
-        expect(getChildrenMock).not.toHaveBeenCalled();
+        expect(listChildrenMock).not.toHaveBeenCalled();
     });
 
     it('narrows a folder in hand by modified date without asking the server', async () =>
     {
-        const recent = { ...fileNode('recent'), updatedAt: new Date().toISOString() };
-        getChildrenMock.mockResolvedValue(page([ fileNode('ancient'), recent ], 2));
+        const recent = fileNode({ id: 'recent', updatedAt: new Date().toISOString() });
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'ancient' }), recent ], 2));
         const store = useDriveStore();
         await store.load(null);
-        getChildrenMock.mockClear();
+        listChildrenMock.mockClear();
 
         await store.setModified({ kind: 'preset', preset: 'last7' });
 
         expect(store.children.map((node) => node.id)).toEqual([ 'recent' ]);
-        expect(getChildrenMock).not.toHaveBeenCalled();
+        expect(listChildrenMock).not.toHaveBeenCalled();
     });
 
     // Past the ceiling the client holds only a slice, so the filter is the server's to apply -- and clearing it has
@@ -670,9 +628,9 @@ describe('useDriveStore', () =>
     it('sends the filter to the server for a folder past the ceiling, and reads unfiltered again on clear', async () =>
     {
         servesFolder(MAX_COMPLETE_LISTING + 1);
-        const filteredPage = page([ fileNode('pic', 'pic', null, 'image/png') ], 1);
-        const unfiltered = getChildrenMock.getMockImplementation();
-        getChildrenMock.mockImplementation((parentID : string | null, query : Partial<ChildrenQuery>) =>
+        const filteredPage = page([ fileNode({ id: 'pic', mimeType: 'image/png' }) ], 1);
+        const unfiltered = listChildrenMock.getMockImplementation();
+        listChildrenMock.mockImplementation((parentID : string | null, query : Partial<ChildrenQuery>) =>
         {
             return query.types === undefined ? unfiltered?.(parentID, query) : Promise.resolve(filteredPage);
         });
@@ -681,7 +639,7 @@ describe('useDriveStore', () =>
 
         await store.setTypeFamilies([ 'images' ]);
 
-        expect(getChildrenMock).toHaveBeenLastCalledWith(
+        expect(listChildrenMock).toHaveBeenLastCalledWith(
             null,
             expect.objectContaining({ types: [ 'images' ], offset: 0 })
         );
@@ -690,14 +648,14 @@ describe('useDriveStore', () =>
         await store.clearFilters();
 
         expect(store.hasActiveFilters).toBe(false);
-        expect(getChildrenMock.mock.calls.at(-1)?.[1]).not.toHaveProperty('types');
+        expect(listChildrenMock.mock.calls.at(-1)?.[1]).not.toHaveProperty('types');
         expect(store.capped).toBe(true);
     });
 
     // An empty result WITH an active filter is a distinct surface state from a truly empty folder.
     it('reports filteredEmpty only when a filter is active and the result is empty', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([], 0));
+        listChildrenMock.mockResolvedValue(page([], 0));
         const store = useDriveStore();
         await store.load(null);
 
@@ -711,7 +669,7 @@ describe('useDriveStore', () =>
 
     it('resets the filters when navigating to a different folder', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
+        listChildrenMock.mockResolvedValue(page([]));
         getNodeMock.mockRejectedValue(new ApiError(404, 'no crumb'));
         const store = useDriveStore();
         await store.load('a');
@@ -730,10 +688,10 @@ describe('useDriveStore', () =>
 
     it('creates a folder under the open folder, then refetches', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('f1') ], 1))
-            .mockResolvedValueOnce(page([ fileNode('f1'), folderNode('new') ], 2));
-        createNodeMock.mockResolvedValue(folderNode('new'));
+        listChildrenMock
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1' }) ], 1))
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1' }), folderNode({ id: 'new' }) ], 2));
+        createNodeMock.mockResolvedValue(folderNode({ id: 'new' }));
         const store = useDriveStore();
         await store.load(null);
 
@@ -745,10 +703,10 @@ describe('useDriveStore', () =>
 
     it('renames via patch, then refetches', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('f1', 'old') ]))
-            .mockResolvedValueOnce(page([ fileNode('f1', 'new') ]));
-        patchNodeMock.mockResolvedValue(fileNode('f1', 'new'));
+        listChildrenMock
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1', name: 'old' }) ]))
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1', name: 'new' }) ]));
+        patchNodeMock.mockResolvedValue(fileNode({ id: 'f1', name: 'new' }));
         const store = useDriveStore();
         await store.load(null);
 
@@ -760,10 +718,10 @@ describe('useDriveStore', () =>
 
     it('moves via a parent patch, then refetches', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('f1') ]))
+        listChildrenMock
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1' }) ]))
             .mockResolvedValueOnce(page([]));
-        patchNodeMock.mockResolvedValue(fileNode('f1'));
+        patchNodeMock.mockResolvedValue(fileNode({ id: 'f1' }));
         const store = useDriveStore();
         await store.load(null);
 
@@ -775,10 +733,10 @@ describe('useDriveStore', () =>
 
     it('trashes, then refetches', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('f1') ]))
+        listChildrenMock
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1' }) ]))
             .mockResolvedValueOnce(page([]));
-        trashNodeMock.mockResolvedValue(fileNode('f1'));
+        trashNodeMock.mockResolvedValue(fileNode({ id: 'f1' }));
         const store = useDriveStore();
         await store.load(null);
 
@@ -790,9 +748,9 @@ describe('useDriveStore', () =>
 
     it('copies a file into the open folder by default, then refetches', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1') ]));
-        getNodeMock.mockResolvedValue(folderNode('here', null, 'Here'));
-        copyNodeMock.mockResolvedValue(fileNode('copy'));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1' }) ]));
+        getNodeMock.mockResolvedValue(folderNode({ id: 'here', parentID: null, name: 'Here' }));
+        copyNodeMock.mockResolvedValue(fileNode({ id: 'copy' }));
         const store = useDriveStore();
         await store.load('here');
 
@@ -801,50 +759,28 @@ describe('useDriveStore', () =>
         expect(copyNodeMock).toHaveBeenCalledWith('f1', { parentID: 'here' });
     });
 
-    it('creates an empty file by uploading zero bytes against the claim ticket, then refetches', async () =>
+    it('creates an empty file in the open folder, then refetches', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([]));
-        getNodeMock.mockResolvedValue(folderNode('here', null, 'Here'));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TICKET' });
-        uploadTicketMock.mockResolvedValue(fileNode('doc'));
+        listChildrenMock.mockResolvedValue(page([]));
+        getNodeMock.mockResolvedValue(folderNode({ id: 'here', parentID: null, name: 'Here' }));
+        commitMock.mockResolvedValue(fileNode({ id: 'doc' }));
         const store = useDriveStore();
         await store.load('here');
+        const listingsBefore = listChildrenMock.mock.calls.length;
 
-        await store.createEmptyFile('notes.md', 'text/markdown');
+        const created = await store.createEmptyFile('notes.md', 'text/markdown');
 
-        expect(claimBlobMock).toHaveBeenCalledWith({ sha256: EMPTY_SHA256, size: 0 });
-        const [ ticket, body, metadata ] = uploadTicketMock.mock.calls[0] ?? [];
-        expect(ticket).toBe('TICKET');
-        expect(body).toBeInstanceOf(Uint8Array);
-        expect((body as Uint8Array).byteLength).toBe(0);
-        expect(metadata).toEqual({ name: 'notes.md', parentID: 'here', mimeType: 'text/markdown' });
-        expect(answerChallengeMock).not.toHaveBeenCalled();
-    });
-
-    it('answers a claim challenge with the empty-content proof when the blob is already known', async () =>
-    {
-        getChildrenMock.mockResolvedValue(page([]));
-        claimBlobMock.mockResolvedValue({ upload: false, challengeID: 'CH', nonce: 'a1b2c3d4', ranges: [] });
-        answerChallengeMock.mockResolvedValue(fileNode('doc'));
-        const store = useDriveStore();
-        await store.load(null);
-
-        await store.createEmptyFile('Untitled.txt', 'text/plain');
-
-        const expectedAnswer = createHmac('sha256', 'a1b2c3d4').digest('hex');
-        expect(answerChallengeMock).toHaveBeenCalledWith('CH', {
-            answer: expectedAnswer,
-            name: 'Untitled.txt',
-            parentID: null,
-            mimeType: 'text/plain',
-        });
-        expect(uploadTicketMock).not.toHaveBeenCalled();
+        const [ file, placement ] = commitMock.mock.calls[0] ?? [];
+        expect((file as File).size).toBe(0);
+        expect(placement).toEqual({ name: 'notes.md', parentID: 'here', mimeType: 'text/markdown' });
+        expect(created.id).toBe('doc');
+        expect(listChildrenMock.mock.calls.length).toBeGreaterThan(listingsBefore);
     });
 
     it('hard-deletes a dead link, then refetches', async () =>
     {
-        getChildrenMock
-            .mockResolvedValueOnce(page([ fileNode('f1') ]))
+        listChildrenMock
+            .mockResolvedValueOnce(page([ fileNode({ id: 'f1' }) ]))
             .mockResolvedValueOnce(page([]));
         hardDeleteNodeMock.mockResolvedValue(undefined);
         const store = useDriveStore();
@@ -862,7 +798,7 @@ describe('useDriveStore', () =>
 
     it('lands a failed listing in error with an empty, non-empty-state surface', async () =>
     {
-        getChildrenMock.mockRejectedValue(new ApiError(500, 'boom'));
+        listChildrenMock.mockRejectedValue(new ApiError(500, 'boom'));
         const store = useDriveStore();
 
         await store.load(null);
@@ -879,9 +815,9 @@ describe('useDriveStore', () =>
 
     it('keeps each listed node\'s own sharing', async () =>
     {
-        const shared = fileNode('f1', 'f1', { granteeCount: 2, linkUrl: '/d/tok' });
-        const theirs = fileNode('f2');
-        getChildrenMock.mockResolvedValue(page([ shared, theirs ], 2));
+        const shared = fileNode({ id: 'f1', sharing: { granteeCount: 2, linkUrl: '/d/tok' } });
+        const theirs = fileNode({ id: 'f2' });
+        listChildrenMock.mockResolvedValue(page([ shared, theirs ], 2));
         const store = useDriveStore();
 
         await store.load(null);
@@ -894,10 +830,10 @@ describe('useDriveStore', () =>
     // than the whole folder, and takes the server's answer rather than guessing at the new state.
     it('re-reads one node without disturbing the rest', async () =>
     {
-        const first = fileNode('f1', 'f1', { granteeCount: 1, linkUrl: null });
-        const second = fileNode('f2', 'f2', { granteeCount: 0, linkUrl: '/d/other' });
-        getChildrenMock.mockResolvedValue(page([ first, second ], 2));
-        getNodeMock.mockResolvedValue(fileNode('f1', 'f1', { granteeCount: 1, linkUrl: '/d/fresh' }));
+        const first = fileNode({ id: 'f1', sharing: { granteeCount: 1, linkUrl: null } });
+        const second = fileNode({ id: 'f2', sharing: { granteeCount: 0, linkUrl: '/d/other' } });
+        listChildrenMock.mockResolvedValue(page([ first, second ], 2));
+        getNodeMock.mockResolvedValue(fileNode({ id: 'f1', sharing: { granteeCount: 1, linkUrl: '/d/fresh' } }));
         const store = useDriveStore();
         await store.load(null);
 
@@ -912,8 +848,10 @@ describe('useDriveStore', () =>
     // the badges and the copy-link menu read as nothing to offer. It is not the same as the null a stranger gets.
     it('reports zeros once the last grant and link are revoked', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1', 'f1', { granteeCount: 1, linkUrl: '/d/tok' }) ], 1));
-        getNodeMock.mockResolvedValue(fileNode('f1', 'f1', { granteeCount: 0, linkUrl: null }));
+        listChildrenMock.mockResolvedValue(page([
+            fileNode({ id: 'f1', sharing: { granteeCount: 1, linkUrl: '/d/tok' } }),
+        ], 1));
+        getNodeMock.mockResolvedValue(fileNode({ id: 'f1', sharing: { granteeCount: 0, linkUrl: null } }));
         const store = useDriveStore();
         await store.load(null);
 
@@ -924,7 +862,7 @@ describe('useDriveStore', () =>
 
     it('propagates a regulation rejection from a mutation to the caller', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1') ]));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1' }) ]));
         patchNodeMock.mockRejectedValue(new RegulationApiError(
             422,
             'blocked',

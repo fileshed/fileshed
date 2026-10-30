@@ -13,12 +13,12 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { NodeListResponse } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
-import { readDroppedPayload } from '@client/resource-access/droppedEntries.ts';
-import { createNode, getChildren } from '@client/resource-access/nodes.ts';
+import { ApiError, apiErrorFromBody } from '@client/resource-access/apiError.ts';
+import { readDroppedPayload } from '@client/resource-access/browser/droppedEntries.ts';
+import { createNode, listChildren } from '@client/resource-access/nodes.ts';
 import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
 import { uploadChunked } from '@client/resource-access/chunkedUpload.ts';
 import { fetchMe } from '@client/resource-access/me.ts';
@@ -30,15 +30,15 @@ import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
 import { useAppStore } from '@client/stores/app.ts';
 import { useDriveStore } from '@client/stores/drive.ts';
 import { useSessionStore } from '@client/stores/session.ts';
-import { useUploadsStore } from '@client/stores/uploads.ts';
+import { type FileUploadItem, type UploadItem, useUploadsStore } from '@client/stores/uploads.ts';
 
 // Support
-import { meFixture } from '../support.ts';
+import { fileNode, folderNode, meFixture } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getChildren: vi.fn(),
+    listChildren: vi.fn(),
     getNode: vi.fn(),
     createNode: vi.fn(),
     patchNode: vi.fn(),
@@ -47,15 +47,11 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     hardDeleteNode: vi.fn(),
 }));
 
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(),
-    answerChallenge: vi.fn(),
-    uploadTicket: vi.fn(),
-}));
+vi.mock('@client/resource-access/blobs.ts', () => ({ claimBlob: vi.fn(), answerChallenge: vi.fn() }));
 
 vi.mock('@client/resource-access/chunkedUpload.ts', () => ({ uploadChunked: vi.fn() }));
 
-vi.mock('@client/resource-access/droppedEntries.ts', () => ({ readDroppedPayload: vi.fn() }));
+vi.mock('@client/resource-access/browser/droppedEntries.ts', () => ({ readDroppedPayload: vi.fn() }));
 
 vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 
@@ -63,7 +59,7 @@ vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
 
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
-const getChildrenMock = getChildren as unknown as Mock;
+const listChildrenMock = listChildren as unknown as Mock;
 const createNodeMock = createNode as unknown as Mock;
 const readDroppedPayloadMock = readDroppedPayload as unknown as Mock;
 const claimBlobMock = claimBlob as unknown as Mock;
@@ -75,36 +71,15 @@ const fetchMeMock = fetchMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
 // The chunk size a claim answers with. Deliberately not the compiled default: the store must carry whatever the server
 // said to the transport, and a value that happened to match the constant would prove nothing.
 const CHUNK_BYTES = 2 * 1024 * 1024;
-
-function fileNode(id : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name: id,
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
 
 // A children-listing envelope with the given total; a non-empty one carries a single existing node as the collision
 // (and Replace) target.
 function listing(total : number, targetID = 'existing') : NodeListResponse
 {
-    return { nodes: total > 0 ? [ fileNode(targetID) ] : [], total, limit: 1, offset: 0, owners: [] };
+    return { nodes: total > 0 ? [ fileNode({ id: targetID }) ] : [], total, limit: 1, offset: 0, owners: [] };
 }
 
 function uploadFile(name : string, size = 3, type = 'text/plain') : File
@@ -112,29 +87,21 @@ function uploadFile(name : string, size = 3, type = 'text/plain') : File
     return new File([ new Uint8Array(size) ], name, { type });
 }
 
-function folderNode(id : string, name : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name,
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'folder',
-        trashedAt: null,
-    };
-}
-
 // The standard happy-path pipeline mocks: fresh blob, no collisions, ticket upload lands.
 function mockHappyPipeline() : void
 {
     hashFileMock.mockResolvedValue('sha-1');
-    getChildrenMock.mockResolvedValue(listing(0));
+    listChildrenMock.mockResolvedValue(listing(0));
     claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-    uploadMock.mockResolvedValue(fileNode('n1'));
+    uploadMock.mockResolvedValue(fileNode({ id: 'n1' }));
+}
+
+// The row as a file's, failing the test when it is a folder's or missing.
+function fileRow(item : UploadItem | undefined) : FileUploadItem
+{
+    if(item?.kind !== 'file') { throw new Error('expected a file row'); }
+
+    return item;
 }
 
 // Polling is bounded by a wall clock, not a turn count: the proof-of-possession answer goes through real WebCrypto,
@@ -176,9 +143,9 @@ describe('useUploadsStore', () =>
     it('runs a new file through hash, claim, and ticket upload to done', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockResolvedValue(fileNode('n1'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'n1' }));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], 'folder1');
@@ -188,7 +155,7 @@ describe('useUploadsStore', () =>
         const call = uploadMock.mock.calls[0]?.[0];
         expect(call.ticket).toBe('TKT');
         expect(call.commit).toEqual({ name: 'report.txt', parentID: 'folder1', mimeType: 'text/plain' });
-        expect(store.items[0]?.result?.id).toBe('n1');
+        expect(fileRow(store.items[0]).result?.id).toBe('n1');
     });
 
     // The chunk size belongs to the instance, and the claim is where the client is told it. The store's only job with
@@ -207,9 +174,9 @@ describe('useUploadsStore', () =>
     it('refreshes the drive listing when the upload lands in the folder on screen', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockResolvedValue(fileNode('n1'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'n1' }));
 
         const drive = useDriveStore();
         drive.folderID = 'folder1';
@@ -239,9 +206,9 @@ describe('useUploadsStore', () =>
     it('does not refresh the drive when the upload lands in a different folder', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockResolvedValue(fileNode('n1'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'n1' }));
 
         const drive = useDriveStore();
         drive.folderID = 'somewhere-else';
@@ -276,7 +243,7 @@ describe('useUploadsStore', () =>
     it('drops a previous batch\'s error rows too -- they are history once a new batch begins', async () =>
     {
         hashFileMock.mockResolvedValueOnce('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockRejectedValueOnce(new ApiError(403, 'You are over your storage quota.'));
         const store = useUploadsStore();
@@ -285,7 +252,7 @@ describe('useUploadsStore', () =>
         await waitFor(() => store.items[0]?.status === 'error', 'error');
 
         hashFileMock.mockResolvedValue('sha-2');
-        uploadMock.mockResolvedValue(fileNode('n2'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'n2' }));
         store.enqueue([ uploadFile('fits.txt') ], null);
         await waitFor(() => store.items.every((item) => item.status === 'done'), 'second done');
 
@@ -313,12 +280,12 @@ describe('useUploadsStore', () =>
     it('keeps both by probing numbered names until one is free', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock
+        listChildrenMock
             .mockResolvedValueOnce(listing(1)) // report.txt collides
             .mockResolvedValueOnce(listing(1)) // report (1).txt taken
             .mockResolvedValueOnce(listing(0)); // report (2).txt free
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockResolvedValue(fileNode('n1'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'n1' }));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -330,12 +297,27 @@ describe('useUploadsStore', () =>
         expect(uploadMock.mock.calls[0]?.[0].commit.name).toBe('report (2).txt');
     });
 
+    it('fails the row with the reason when keeping both finds every numbered name taken', async () =>
+    {
+        hashFileMock.mockResolvedValue('sha-1');
+        listChildrenMock.mockResolvedValue(listing(1));
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('report.txt') ], null);
+        await waitFor(() => store.currentPrompt !== null, 'prompt');
+        store.resolveCollision('keep-both');
+        await waitFor(() => store.items[0]?.status === 'error', 'error');
+
+        expect(fileRow(store.items[0]).error).toMatch(/available name/);
+        expect(claimBlobMock).not.toHaveBeenCalled();
+    });
+
     it('replaces by committing against the existing node id', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(1, 'target-9'));
+        listChildrenMock.mockResolvedValue(listing(1, 'target-9'));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockResolvedValue(fileNode('target-9'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'target-9' }));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -349,7 +331,7 @@ describe('useUploadsStore', () =>
     it('cancels just the colliding item when the user declines', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(1));
+        listChildrenMock.mockResolvedValue(listing(1));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -364,9 +346,9 @@ describe('useUploadsStore', () =>
     it('asks about one collision at a time', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(1));
+        listChildrenMock.mockResolvedValue(listing(1));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockResolvedValue(fileNode('n1'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'n1' }));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('a.txt'), uploadFile('b.txt') ], null);
@@ -388,10 +370,10 @@ describe('useUploadsStore', () =>
     it('answers a challenge for a known blob with a proof over the sampled windows', async () =>
     {
         hashFileMock.mockResolvedValue('sha-known');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: false, challengeID: 'CH', nonce: 'NONCE', ranges: [ [ 0, 4 ] ] });
         readWindowsMock.mockResolvedValue([ new Uint8Array([ 1, 2, 3, 4 ]).buffer ]);
-        answerChallengeMock.mockResolvedValue(fileNode('n2'));
+        answerChallengeMock.mockResolvedValue(fileNode({ id: 'n2' }));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -415,7 +397,7 @@ describe('useUploadsStore', () =>
     it('lands a quota rejection on the item as an error with the server message', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockRejectedValue(new ApiError(403, 'You are over your storage quota.'));
         const store = useUploadsStore();
@@ -431,9 +413,9 @@ describe('useUploadsStore', () =>
     it('shows the limit on a row the server refused as too large', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockRejectedValue(new ApiError(413, 'Upload exceeds the maximum allowed size.', {
+        uploadMock.mockRejectedValue(apiErrorFromBody(413, 'Payload Too Large', {
             error: 'Upload exceeds the maximum allowed size.',
             maxBytes: 5_368_709_120,
         }));
@@ -450,9 +432,9 @@ describe('useUploadsStore', () =>
     it('shows a size refusal that carries no limit as the message alone', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockRejectedValue(new ApiError(413, 'Request Entity Too Large', null));
+        uploadMock.mockRejectedValue(apiErrorFromBody(413, 'Request Entity Too Large', '<html>413</html>'));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -464,9 +446,9 @@ describe('useUploadsStore', () =>
     it('re-queues a failed item on retry and can then succeed', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockRejectedValueOnce(new ApiError(503, 'Try again')).mockResolvedValue(fileNode('n1'));
+        uploadMock.mockRejectedValueOnce(new ApiError(503, 'Try again')).mockResolvedValue(fileNode({ id: 'n1' }));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -486,9 +468,9 @@ describe('useUploadsStore', () =>
     {
         const releases : ((sha : string) => void)[] = [];
         hashFileMock.mockImplementation(() => new Promise<string>((resolve) => { releases.push(resolve); }));
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockResolvedValue(fileNode('n1'));
+        uploadMock.mockResolvedValue(fileNode({ id: 'n1' }));
         const store = useUploadsStore();
 
         store.enqueue(
@@ -526,7 +508,7 @@ describe('useUploadsStore', () =>
     it('aborts the in-flight upload when a running item is cancelled', async () =>
     {
         hashFileMock.mockResolvedValue('sha-1');
-        getChildrenMock.mockResolvedValue(listing(0));
+        listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
         uploadMock.mockImplementation((options : { signal ?: AbortSignal }) => new Promise((_resolve, reject) =>
         {
@@ -543,6 +525,25 @@ describe('useUploadsStore', () =>
         expect(store.items[0]?.status).toBe('cancelled');
     });
 
+    it('commits nothing for a known blob cancelled while its claim is answering', async () =>
+    {
+        let answerClaim : (claim : unknown) => void = () => undefined;
+        hashFileMock.mockResolvedValue('sha-known');
+        listChildrenMock.mockResolvedValue(listing(0));
+        claimBlobMock.mockImplementation(() => new Promise((resolve) => { answerClaim = resolve; }));
+        const store = useUploadsStore();
+
+        store.enqueue([ uploadFile('report.txt') ], null);
+        await waitFor(() => store.items[0]?.status === 'claiming', 'claiming');
+
+        store.cancel(store.items[0]?.id ?? '');
+        answerClaim({ upload: false, challengeID: 'CH', nonce: 'NONCE', ranges: [ [ 0, 3 ] ] });
+        await waitFor(() => store.items[0]?.status === 'cancelled', 'cancelled');
+
+        expect(answerChallengeMock).not.toHaveBeenCalled();
+        expect(fileRow(store.items[0]).result).toBeNull();
+    });
+
     //------------------------------------------------------------------------------------------------------------------
     // Folder uploads -- each folder is created (or merged into a same-named sibling) before its files enqueue, and a
     // folder that can't be created surfaces as an error row instead of vanishing.
@@ -552,8 +553,8 @@ describe('useUploadsStore', () =>
     {
         mockHappyPipeline();
         createNodeMock
-            .mockResolvedValueOnce(folderNode('dir-music', 'Music'))
-            .mockResolvedValueOnce(folderNode('dir-albums', 'Albums'));
+            .mockResolvedValueOnce(folderNode({ id: 'dir-music', name: 'Music' }))
+            .mockResolvedValueOnce(folderNode({ id: 'dir-albums', name: 'Albums' }));
 
         const store = useUploadsStore();
         await store.enqueuePayload({
@@ -569,7 +570,7 @@ describe('useUploadsStore', () =>
         expect(createNodeMock).toHaveBeenCalledWith({ type: 'folder', name: 'Music', parentID: 'root-folder' });
         expect(createNodeMock).toHaveBeenCalledWith({ type: 'folder', name: 'Albums', parentID: 'dir-music' });
 
-        const placements = store.items.map((item) => [ item.name, item.folderID ]);
+        const placements = store.items.map((item) => [ item.name, fileRow(item).folderID ]);
         expect(placements).toEqual([
             [ 'loose.txt', 'root-folder' ],
             [ 'one.mp3', 'dir-music' ],
@@ -580,10 +581,11 @@ describe('useUploadsStore', () =>
     it('merges into an existing same-named folder instead of minting a duplicate', async () =>
     {
         mockHappyPipeline();
-        getChildrenMock.mockImplementation((parentID : string | null, query : { name ?: string } = {}) =>
+        const existing = folderNode({ id: 'dir-existing', name: 'Music' });
+        listChildrenMock.mockImplementation((parentID : string | null, query : { name ?: string } = {}) =>
         {
             return Promise.resolve(query.name === 'Music'
-                ? { nodes: [ folderNode('dir-existing', 'Music') ], total: 1, limit: 1, offset: 0, owners: [] }
+                ? { nodes: [ existing ], total: 1, limit: 1, offset: 0, owners: [] }
                 : listing(0));
         });
 
@@ -594,7 +596,7 @@ describe('useUploadsStore', () =>
         }, null);
         await waitFor(() => store.items[0]?.status === 'done', 'done');
 
-        expect(store.items[0]?.folderID).toBe('dir-existing');
+        expect(fileRow(store.items[0]).folderID).toBe('dir-existing');
         expect(createNodeMock).not.toHaveBeenCalled();
     });
 
@@ -615,6 +617,25 @@ describe('useUploadsStore', () =>
         expect(store.items[0]?.error).toContain('nothing inside it was uploaded');
     });
 
+    // What failed was the folder, and none of its files were queued, so there is nothing a retry could send.
+    it('leaves an uncreatable folder\'s row failed when it is retried, uploading nothing', async () =>
+    {
+        mockHappyPipeline();
+        createNodeMock.mockRejectedValue(new ApiError(403, 'read only'));
+        const store = useUploadsStore();
+        await store.enqueuePayload({
+            files: [],
+            folders: [ { name: 'Music', files: [ uploadFile('one.mp3') ], folders: [] } ],
+        }, null);
+
+        store.retry(store.items[0]?.id ?? '');
+        await flushPromises();
+
+        expect(store.items[0]?.status).toBe('error');
+        expect(claimBlobMock).not.toHaveBeenCalled();
+        expect(uploadMock).not.toHaveBeenCalled();
+    });
+
     it('falls back to a plain multi-file enqueue when a drop carries no entry handles', async () =>
     {
         mockHappyPipeline();
@@ -624,13 +645,13 @@ describe('useUploadsStore', () =>
         await waitFor(() => store.items[0]?.status === 'done', 'done');
 
         expect(readDroppedPayloadMock).not.toHaveBeenCalled();
-        expect(store.items[0]?.folderID).toBe('folder1');
+        expect(fileRow(store.items[0]).folderID).toBe('folder1');
     });
 
     it('routes a drop with entry handles through traversal into the folder pipeline', async () =>
     {
         mockHappyPipeline();
-        createNodeMock.mockResolvedValue(folderNode('dir-music', 'Music'));
+        createNodeMock.mockResolvedValue(folderNode({ id: 'dir-music', name: 'Music' }));
         readDroppedPayloadMock.mockResolvedValue({
             files: [],
             folders: [ { name: 'Music', files: [ uploadFile('one.mp3') ], folders: [] } ],
@@ -641,7 +662,7 @@ describe('useUploadsStore', () =>
         await waitFor(() => store.items[0]?.status === 'done', 'done');
 
         expect(store.items[0]?.name).toBe('one.mp3');
-        expect(store.items[0]?.folderID).toBe('dir-music');
+        expect(fileRow(store.items[0]).folderID).toBe('dir-music');
     });
 
     //------------------------------------------------------------------------------------------------------------------
@@ -696,7 +717,7 @@ describe('useUploadsStore', () =>
     it('refuses an oversized file inside a dropped folder as well', async () =>
     {
         mockHappyPipeline();
-        createNodeMock.mockResolvedValue(folderNode('dir-1', 'Clips'));
+        createNodeMock.mockResolvedValue(folderNode({ id: 'dir-1', name: 'Clips' }));
         capUploadsAt(1000);
 
         const store = useUploadsStore();

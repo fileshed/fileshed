@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Trash Tile
-  --
-  -- One card in the Trash grid: the trashed root's type icon, its name, its size for a file, and a corner kebab
-  -- carrying Restore and Delete forever -- the same actions the trash row offers, laid out as a card that matches the
-  -- drive's grid tiles. Presentational only: the menu items arrive as a prop, so the page still owns restore and the
-  -- delete confirm.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

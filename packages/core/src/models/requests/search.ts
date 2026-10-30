@@ -1,9 +1,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Search API DTOs
 //
-// Request and response contract for GET /api/search. v1 search is a name match scoped to the nodes the caller can
-// access, answered with the paginated node envelope plus a location per hit.
-//
 // A location is the ancestor chain the CALLER may see, cut at the first ancestor they cannot resolve -- so a hit
 // reached through a share names the share root and nothing of the owner's tree above it. `foreign` records where the
 // surviving chain roots: false when it reaches a null parent the caller owns (their own files root), true when the

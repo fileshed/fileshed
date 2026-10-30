@@ -1,9 +1,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Archive API DTOs
 //
-// Request contract for GET /api/archives -- a selection of nodes served back as one archive, built and streamed as it
-// goes rather than assembled anywhere first.
-//
 // The ids ride the query string because the browser downloads by navigation: a fetch would have to hold the whole
 // archive in memory before it could be saved, which is the thing this endpoint exists to avoid. That puts a real
 // ceiling on how many ids one request can name, hence MAX_ARCHIVE_NODES -- it bounds the SELECTION, not the archive:

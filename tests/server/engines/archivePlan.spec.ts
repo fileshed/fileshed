@@ -146,7 +146,8 @@ describe('planArchive', () =>
     // What is left out, and what the manifest says about it
     //------------------------------------------------------------------------------------------------------------------
 
-    it('omits a node the caller cannot read, naming it', () =>
+    // A selected node the caller cannot read is somebody else's, and its name is not theirs to learn from a manifest.
+    it('leaves out a selected node the caller cannot read as though no walk had returned it', () =>
     {
         const nodes = [
             fileNode({ id: 'f1', name: 'mine.txt', ownerID: OWNER, blobID: 'sha-1' }),
@@ -156,7 +157,33 @@ describe('planArchive', () =>
         const result = plan([ 'f1', 'f2' ], nodes, readable(nodes, { f2: null }));
 
         expect(result.files.map((entry) => entry.path)).toEqual([ 'mine.txt' ]);
-        expect(result.omissions).toEqual([ { path: 'theirs.txt', reason: OMITTED_UNREADABLE } ]);
+        expect(result.omissions).toEqual([]);
+    });
+
+    it('lays out a readable selected node on its own when the selected folder above it is unreadable', () =>
+    {
+        const nodes = [
+            folderNode({ id: 'd1', name: 'theirs', ownerID: 'someone-else' }),
+            fileNode({ id: 'f1', name: 'lent.txt', ownerID: 'someone-else', parentID: 'd1', blobID: 'sha-1' }),
+        ];
+
+        const result = plan([ 'd1', 'f1' ], nodes, readable(nodes, { d1: null }));
+
+        expect(result.files.map((entry) => entry.path)).toEqual([ 'lent.txt' ]);
+        expect(result.directories).toEqual([]);
+        expect(result.omissions).toEqual([]);
+    });
+
+    it('omits a node beneath a readable folder that the caller cannot read, naming it', () =>
+    {
+        const nodes = [
+            folderNode({ id: 'd1', name: 'docs', ownerID: OWNER }),
+            fileNode({ id: 'f1', name: 'odd.txt', ownerID: OWNER, parentID: 'd1', blobID: 'sha-1' }),
+        ];
+
+        const result = plan([ 'd1' ], nodes, readable(nodes, { f1: null }));
+
+        expect(result.omissions).toEqual([ { path: 'docs/odd.txt', reason: OMITTED_UNREADABLE } ]);
     });
 
     // Trashing a folder stamps its whole subtree, so a trashed node under a live folder is one somebody threw away

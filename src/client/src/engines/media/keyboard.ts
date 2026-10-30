@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Media Keyboard Engine
-//
-// Resolves a keydown into a transport action for the video and audio players: space toggles play, the horizontal
-// arrows seek, the vertical arrows adjust volume. Anything else resolves to no action, so a listener can call this on
-// every keydown without keeping an allowlist of its own.
 //----------------------------------------------------------------------------------------------------------------------
 
 const SEEK_STEP_SECONDS = 5;

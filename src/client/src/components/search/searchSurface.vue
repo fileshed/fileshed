@@ -1,17 +1,10 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Search Surface
   --
-  -- The body of the Search view: the loading spinner, the load error with its retry, "No files match" when the query
-  -- resolved to nothing, and otherwise the result count line plus a dense row per hit -- name with its sharing, plus
-  -- owner, size, modified, and type, the same facts the drive's list view shows. The name outranks the metadata
-  -- columns, which leave as the surface narrows until only the name and the go-to-folder jump remain. Opening relays up
-  -- so the page runs the shared open intent. Selection relays up the same way, with the drive's gestures exactly --
-  -- click, ctrl/cmd-click, shift-click -- so cleaning up hits scattered across folders needs no folder visits. There
-  -- is no per-row menu: the actions live on the selection bar, where they can be judged against the whole selection.
-  -- Reads the search store for its listing state directly.
-  --
-  -- One request answers a search in full, so the rows are all here at once and only the ones in view are mounted. The
-  -- column header sits outside the scroller, so it pads itself by the scrollbar the scroller always reserves.
+  -- There is no per-row menu: the actions live on the selection bar, where they can be judged against the whole
+  -- selection. One request answers a search in full, so every row is here at once and only the ones in view are
+  -- mounted. The column header sits outside the scroller, so it pads itself by the scrollbar width the scroller always
+  -- reserves.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -157,11 +150,9 @@
     // Engines
     import { containingFolderRoute } from '../../engines/location.ts';
 
-    // Resource Access
-    import { useListingMetrics } from '../../resource-access/listingMetrics.ts';
-    import { scrollbarWidth } from '../../resource-access/scrollbarWidth.ts';
-
     // Utils
+    import { useListingMetrics } from '../../utils/listingMetrics.ts';
+    import { scrollbarWidth } from '../../utils/scrollbarWidth.ts';
     import {
         type NodeTypePresentation,
         formatBytes,

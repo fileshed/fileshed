@@ -10,7 +10,7 @@ import { type VueWrapper, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { AnnotationMode } from '@client/components/handlers/pdf/types.ts';
+import type { AnnotationMode } from '@client/engines/pdf/types.ts';
 
 // Stores
 import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
@@ -22,11 +22,6 @@ import PdfParamsPopover from '@client/components/handlers/pdf/paramsPopover.vue'
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------

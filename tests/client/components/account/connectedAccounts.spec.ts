@@ -10,11 +10,12 @@
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 
-import type { InstanceResponse } from '@fileshed/core';
-
 // Resource Access
 import { authClient } from '@client/resource-access/authClient.ts';
 import { fetchInstance } from '@client/resource-access/instance.ts';
+
+// Support
+import { instanceFixture } from '../../support.ts';
 
 // Under test
 import ConnectedAccounts from '@client/components/account/connectedAccounts.vue';
@@ -29,25 +30,15 @@ vi.mock('@client/resource-access/authClient.ts', () => ({
     },
 }));
 vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn() }));
-vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
+
+const toastAdd = vi.fn();
+vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
 const listAccountsMock = authClient.listAccounts as unknown as Mock;
 const unlinkMock = authClient.unlinkAccount as unknown as Mock;
 const fetchInstanceMock = fetchInstance as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function instanceFixture(providers : InstanceResponse['providers']) : InstanceResponse
-{
-    return {
-        limits: { skippedUploadNames: [], uploadMaxBytes: 5_368_709_120, avatarMaxBytes: 2_097_152 },
-        needsSetup: false,
-        signUpEnabled: true,
-        emailEnabled: false,
-        providers,
-        branding: { instanceName: 'FileShed', mode: 'system', forcedMode: false, logo: null },
-    };
-}
 
 // listAccounts hands back rows, and a row's own id is what unlinking names -- so the fixture carries one, the way
 // the real response does.
@@ -87,7 +78,7 @@ describe('ConnectedAccounts', () =>
     it('lists the credential method and offers a connect for each configured provider', async () =>
     {
         listAccountsMock.mockResolvedValue(accountsFixture([ 'credential' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture([ 'github' ]));
+        fetchInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
         const wrapper = mountAccounts();
         await flushPromises();
 
@@ -101,7 +92,7 @@ describe('ConnectedAccounts', () =>
     it('keeps a linked provider visible and disconnectable even when no longer offered', async () =>
     {
         listAccountsMock.mockResolvedValue(accountsFixture([ 'credential', 'github' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture([]));
+        fetchInstanceMock.mockResolvedValue(instanceFixture());
         const wrapper = mountAccounts();
         await flushPromises();
 
@@ -114,7 +105,7 @@ describe('ConnectedAccounts', () =>
         listAccountsMock
             .mockResolvedValueOnce(accountsFixture([ 'credential', 'github' ]))
             .mockResolvedValueOnce(accountsFixture([ 'credential' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture([]));
+        fetchInstanceMock.mockResolvedValue(instanceFixture());
         unlinkMock.mockResolvedValue({ data: {}, error: null });
         const wrapper = mountAccounts();
         await flushPromises();
@@ -126,10 +117,31 @@ describe('ConnectedAccounts', () =>
         expect(wrapper.find('.btn-disconnect').exists()).toBe(false);
     });
 
+    it('toasts the server\'s refusal to disconnect in its own words', async () =>
+    {
+        listAccountsMock.mockResolvedValue(accountsFixture([ 'github' ]));
+        fetchInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
+        unlinkMock.mockResolvedValue({
+            data: null,
+            error: { status: 400, message: 'You can\'t unlink your last account' },
+        });
+        const wrapper = mountAccounts();
+        await flushPromises();
+
+        await wrapper.find('.btn-disconnect').trigger('click');
+        await flushPromises();
+
+        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
+            color: 'error',
+            description: 'You can\'t unlink your last account',
+        }));
+        expect(wrapper.find('.btn-disconnect').exists()).toBe(true);
+    });
+
     it('never offers a disconnect for the credential method', async () =>
     {
         listAccountsMock.mockResolvedValue(accountsFixture([ 'credential' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture([]));
+        fetchInstanceMock.mockResolvedValue(instanceFixture());
         const wrapper = mountAccounts();
         await flushPromises();
 
@@ -140,7 +152,7 @@ describe('ConnectedAccounts', () =>
     it('shows the retry state when the methods cannot load', async () =>
     {
         listAccountsMock.mockRejectedValue(new Error('offline'));
-        fetchInstanceMock.mockResolvedValue(instanceFixture([]));
+        fetchInstanceMock.mockResolvedValue(instanceFixture());
         const wrapper = mountAccounts();
         await flushPromises();
 

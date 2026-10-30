@@ -19,12 +19,12 @@ import { FALLBACK_MIME_TYPE } from '@fileshed/core';
 
 // Support
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
     type UploadedFile,
     bodyBytes,
-    bootServeApp,
+    bootStoreApp,
     createLink,
     forceMimeType,
     getDirect,
@@ -47,7 +47,7 @@ function sha256Hex(data : Buffer) : string
         .digest('hex');
 }
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let editor : TestUser;
 let fixture : Buffer;
@@ -55,7 +55,7 @@ let uploaded : UploadedFile;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     editor = await makeUser(booted, 'editor@example.com');
     fixture = randomBytes(256);

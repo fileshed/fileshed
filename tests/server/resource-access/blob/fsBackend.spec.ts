@@ -7,8 +7,8 @@
 // the code.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -17,26 +17,17 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
-import {
-    BlobNotFoundError,
-    HashMismatchError,
-    InvalidSha256Error,
-    SizeMismatchError,
-} from '@fileshed/core';
+import { BlobNotFoundError, HashMismatchError, InvalidSha256Error, SizeMismatchError } from '@fileshed/core';
 
 // Resource Access (under test)
 import { FsBackend, resolveStorageRoot } from '@server/resource-access/blob/fsBackend.ts';
 
+// Support
+import { sha256Of } from '../../support/sha256.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 // Helpers
 //----------------------------------------------------------------------------------------------------------------------
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
 
 function streamOf(...chunks : Buffer[]) : Readable
 {
@@ -215,7 +206,7 @@ describe('FsBackend chunked uploads', () =>
 
         await store.appendChunk('upload-1', streamOf(head), 0);
         await store.appendChunk('upload-1', streamOf(tail), head.length);
-        await store.commitChunked('upload-1', sha256, whole.length);
+        await store.commitStaged('upload-1', sha256, whole.length);
 
         expect(await collect(await store.getStream(sha256))).toEqual(whole);
     });
@@ -242,7 +233,7 @@ describe('FsBackend chunked uploads', () =>
         await store.appendChunk('upload-3', streamOf(Buffer.from('chunk tw')), head.length);
         await store.appendChunk('upload-3', streamOf(tail), head.length);
 
-        await store.commitChunked('upload-3', sha256, whole.length);
+        await store.commitStaged('upload-3', sha256, whole.length);
 
         expect(await collect(await store.getStream(sha256))).toEqual(whole);
     });
@@ -254,7 +245,7 @@ describe('FsBackend chunked uploads', () =>
 
         await store.appendChunk('upload-4', streamOf(bytes), 0);
 
-        await expect(store.commitChunked('upload-4', claimed, bytes.length))
+        await expect(store.commitStaged('upload-4', claimed, bytes.length))
             .rejects
             .toBeInstanceOf(HashMismatchError);
 
@@ -269,7 +260,7 @@ describe('FsBackend chunked uploads', () =>
 
         await store.appendChunk('upload-5', streamOf(bytes), 0);
 
-        await expect(store.commitChunked('upload-5', sha256, bytes.length + 10))
+        await expect(store.commitStaged('upload-5', sha256, bytes.length + 10))
             .rejects
             .toBeInstanceOf(SizeMismatchError);
 
@@ -282,17 +273,17 @@ describe('FsBackend chunked uploads', () =>
         const bytes = Buffer.from('published bytes');
 
         await store.appendChunk('upload-6', streamOf(bytes), 0);
-        await store.commitChunked('upload-6', sha256Of(bytes), bytes.length);
+        await store.commitStaged('upload-6', sha256Of(bytes), bytes.length);
 
         await store.appendChunk('upload-7', streamOf(Buffer.from('abandoned bytes')), 0);
-        await store.discardChunked('upload-7');
+        await store.discardStaged('upload-7');
 
         expect(await readdir(join(root, '.partials'))).toEqual([]);
     });
 
     it('treats discarding an upload that staged nothing as a no-op', async () =>
     {
-        await expect(store.discardChunked('upload-that-never-was')).resolves.toBeUndefined();
+        await expect(store.discardStaged('upload-that-never-was')).resolves.toBeUndefined();
     });
 
     it('sweeps staging left by abandoned uploads and leaves the ones still being written', async () =>
@@ -301,19 +292,45 @@ describe('FsBackend chunked uploads', () =>
         await store.appendChunk('upload-8', streamOf(staged), 0);
 
         // Nothing has aged past a cutoff in the past, so a sweep with one reclaims nothing and counts no candidate.
-        expect(await store.sweepChunked(new Date(Date.now() - 60_000)))
+        expect(await store.sweepStaged(new Date(Date.now() - 60_000)))
             .toEqual({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 });
         expect(await readdir(join(root, '.partials'))).toHaveLength(1);
 
-        expect(await store.sweepChunked(new Date(Date.now() + 60_000)))
+        expect(await store.sweepStaged(new Date(Date.now() + 60_000)))
             .toEqual({ candidates: 1, reclaimed: 1, failed: 0, bytesFreed: staged.length });
         expect(await readdir(join(root, '.partials'))).toEqual([]);
     });
 
     it('sweeps a store where no chunked upload ever ran without complaining', async () =>
     {
-        expect(await store.sweepChunked(new Date()))
+        expect(await store.sweepStaged(new Date()))
             .toEqual({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 });
+    });
+
+    it('fails the sweep when the staging directory is there but cannot be read', async () =>
+    {
+        await store.appendChunk('upload-11', streamOf(Buffer.from('stuck')), 0);
+        const partials = join(root, '.partials');
+        await chmod(partials, 0o000);
+
+        const sweep = store.sweepStaged(new Date(Date.now() + 60_000));
+
+        try { await expect(sweep).rejects.toMatchObject({ code: 'EACCES' }); }
+        finally { await chmod(partials, 0o755); }
+    });
+
+    it('counts a staging file it cannot measure as a failure rather than passing over it', async () =>
+    {
+        await store.appendChunk('upload-12', streamOf(Buffer.from('stuck')), 0);
+        const partials = join(root, '.partials');
+        await chmod(partials, 0o444);
+
+        try
+        {
+            expect(await store.sweepStaged(new Date(Date.now() + 60_000)))
+                .toEqual({ candidates: 1, reclaimed: 0, failed: 1, bytesFreed: 0 });
+        }
+        finally { await chmod(partials, 0o755); }
     });
 
     it('keeps one upload\'s staged bytes out of another\'s', async () =>
@@ -324,8 +341,8 @@ describe('FsBackend chunked uploads', () =>
         await store.appendChunk('upload-9', streamOf(mine), 0);
         await store.appendChunk('upload-10', streamOf(yours), 0);
 
-        await store.commitChunked('upload-9', sha256Of(mine), mine.length);
-        await store.commitChunked('upload-10', sha256Of(yours), yours.length);
+        await store.commitStaged('upload-9', sha256Of(mine), mine.length);
+        await store.commitStaged('upload-10', sha256Of(yours), yours.length);
 
         expect(await collect(await store.getStream(sha256Of(mine)))).toEqual(mine);
         expect(await collect(await store.getStream(sha256Of(yours)))).toEqual(yours);
@@ -369,6 +386,19 @@ describe('FsBackend reconciliation', () =>
         await writeFile(join(root, 'loose.txt'), 'text');
 
         expect(await storedAddresses()).toEqual([]);
+    });
+
+    // A directory that is there but will not open hides whatever it holds, so the walk fails rather than report it
+    // as holding nothing.
+    it('fails the walk when a shard directory cannot be read', async () =>
+    {
+        const data = Buffer.from('locked away');
+        await store.put(sha256Of(data), streamOf(data), data.length);
+        const shard = join(root, sha256Of(data).slice(0, 2), sha256Of(data).slice(2, 4));
+        await chmod(shard, 0o000);
+
+        try { await expect(storedAddresses()).rejects.toMatchObject({ code: 'EACCES' }); }
+        finally { await chmod(shard, 0o755); }
     });
 
     it('measures a stored blob, and answers nothing for an address it does not hold', async () =>

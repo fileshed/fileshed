@@ -1,9 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Quota Regulation
 //
-// Admission control for a write against the owner's storage quota. Pure -- the manager gathers
-// the charged usage and limit, the engine judges the numbers it is handed. Dedup and trashed-vs-live semantics are
-// already baked into `usedBytes` upstream; this layer only compares.
+// Dedup and trashed-vs-live semantics are already applied to `usedBytes` upstream; this layer only compares.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Regulation

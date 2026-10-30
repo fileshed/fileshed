@@ -10,13 +10,14 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeResponse } from '@fileshed/core';
-
 // Engines
 import { brokenTrack, queueFromTrack, trackFromUrl } from '@client/engines/media/queue.ts';
 
 // Stores
 import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 // Under test
 import MediaIdentityBar from '@client/components/handlers/media/identityBar.vue';
@@ -32,27 +33,8 @@ vi.mock('@client/resource-access/mediaTags.ts', () => ({
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
+const AUDIO = { mimeType: 'audio/mpeg' };
 const HEADER_ID = 'editor-header-center';
-
-function fileNode(overrides : Partial<{ id : string; name : string; mimeType : string }> = {}) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'f1',
-        name: overrides.name ?? 'song.mp3',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: overrides.mimeType ?? 'audio/mpeg',
-        trashedAt: null,
-    };
-}
 
 const stubs = {
     UIcon: { props: [ 'name' ], template: '<i :data-icon="name" />' },
@@ -95,7 +77,7 @@ describe('MediaIdentityBar', () =>
     it('names the current track with its kind icon, and follows the queue as it advances', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
         store.add(fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' }));
 
         mountBar();
@@ -120,7 +102,7 @@ describe('MediaIdentityBar', () =>
             artworkUrl: null,
         });
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
 
         mountBar();
         await flushPromises();
@@ -133,13 +115,13 @@ describe('MediaIdentityBar', () =>
     it('shows the queue position only once more than one track is queued', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         mountBar();
         await nextTick();
         expect(header().textContent).not.toContain('1 of 1');
 
-        store.add(fileNode({ id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.next();
         await nextTick();
 
@@ -149,7 +131,7 @@ describe('MediaIdentityBar', () =>
     it('points the download at the playing track, not the routed one, as the queue advances', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
         store.add(fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' }));
 
         mountBar();
@@ -170,7 +152,7 @@ describe('MediaIdentityBar', () =>
     it('offers no download for a remote stream', async () =>
     {
         const store = useMediaPlayerStore();
-        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3'));
+        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3', 'seat-1'));
 
         mountBar();
         await nextTick();
@@ -181,7 +163,7 @@ describe('MediaIdentityBar', () =>
     it('offers no download for a broken playlist entry', async () =>
     {
         const store = useMediaPlayerStore();
-        store.queue = queueFromTrack(brokenTrack('Ghost', '0'));
+        store.queue = queueFromTrack(brokenTrack('Ghost', '0', 'seat-1'));
 
         mountBar();
         await nextTick();

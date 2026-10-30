@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // NodeManager — logic the HTTP surface can't cleanly show
 //
-// Drives the manager directly against a real NodeRA over in-memory SQLite (zero mocks below the RA seam), with only the
-// blob-graveyard collaborator as a recording double. Covers what the route specs can't stage without the upload flow:
-// quota usage over seeded file nodes, and the orphaned-blob handoff a hard delete performs.
+// Drives the manager directly against a real NodeRA over in-memory SQLite (zero mocks below the RA), with only the
+// blob-graveyard collaborator as a recording double. Covers what the route specs can't stage without the upload flow,
+// such as the orphaned-blob handoff a hard delete performs.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- the share seed builds a snake_case DB row (house convention for Kysely inserts) */
@@ -15,7 +15,7 @@ import { type ChildrenQuery, MAX_PLACEMENT_DEPTH, NotFoundError } from '@fileshe
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
 import { NodeManager, type OrphanedBlobs } from '@server/managers/node.ts';
@@ -29,7 +29,6 @@ import {
     seedBackend,
     seedBlob,
     seedUser,
-    setUserQuota,
 } from '../resource-access/nodes/support.ts';
 import {
     RecordingOrphanedBlobs,
@@ -68,72 +67,6 @@ afterEach(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('NodeManager.me', () =>
-{
-    it('charges owned file nodes including trashed, excluding folders and links', async () =>
-    {
-        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
-        await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', blobID: 'sha-a', size: 500, trashedAt: new Date() }));
-        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
-        await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'dir' }));
-
-        await setUserQuota(handle.db, 'alice', 1_000_000);
-
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const me = await manager.me(testActor({ id: 'alice', email: 'alice@example.com' }));
-
-        expect(me.quota.used).toBe(1500);
-        expect(me.quota.limit).toBe(1_000_000);
-    });
-
-    // The profile is what the client renders the quota meter from, so it must agree with what the next upload will
-    // actually be judged against -- a cap read from a session snapshot would keep showing the old number after an
-    // admin moved it.
-    it('reports a cap changed since sign-in, not the one the session was issued with', async () =>
-    {
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const actor = testActor({ id: 'alice' });
-
-        await setUserQuota(handle.db, 'alice', 4096);
-
-        expect((await manager.me(actor)).quota).toEqual({ used: 0, effective: 4096, limit: 4096 });
-    });
-
-    // 0 is the account's own "no cap", which is what pins a user above a tightened instance default; null would
-    // inherit that default instead. The raw value travels verbatim so the client can tell the two states apart.
-    it('pins an explicitly-unlimited account above a tightened instance default', async () =>
-    {
-        await setUserQuota(handle.db, 'alice', 0);
-
-        const policy = testNodePolicy({ defaultQuota: async () => 4096 });
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), policy);
-        const me = await manager.me(testActor({ id: 'alice' }));
-
-        expect(me.quota).toEqual({ used: 0, effective: null, limit: 0 });
-    });
-
-    // The client renders retention copy from this value, so it must be the deployment's configured number -- never a
-    // shipped default a deployment has overridden.
-    it('reports the configured trash retention, not the shipped default', async () =>
-    {
-        const policy = testNodePolicy({ trashRetentionDays: async () => 2 });
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), policy);
-        const me = await manager.me(testActor({ id: 'alice' }));
-
-        expect(me.limits).toEqual({ trashRetentionDays: 2, accountDeletionDays: 30 });
-    });
-
-    it('falls back to the default trash retention when none is configured', async () =>
-    {
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
-        const me = await manager.me(testActor({ id: 'alice' }));
-
-        expect(me.limits).toEqual({ trashRetentionDays: 30, accountDeletionDays: 30 });
-    });
-});
-
-//----------------------------------------------------------------------------------------------------------------------
-
 describe('NodeManager.hardDelete', () =>
 {
     it('hands the subtree\'s file blob shas to the graveyard after deleting', async () =>
@@ -143,7 +76,7 @@ describe('NodeManager.hardDelete', () =>
         await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', blobID: 'sha-b', parentID: 'dir' }));
 
         const orphaned = new RecordingOrphanedBlobs();
-        const manager = new NodeManager(handle, ra, orphaned, testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: () => orphaned, policy: testNodePolicy() });
 
         await manager.hardDelete(testActor({ id: 'alice' }), 'dir');
 
@@ -158,7 +91,7 @@ describe('NodeManager.hardDelete', () =>
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'target' }));
 
         const orphaned = new RecordingOrphanedBlobs();
-        const manager = new NodeManager(handle, ra, orphaned, testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: () => orphaned, policy: testNodePolicy() });
 
         await manager.hardDelete(testActor({ id: 'alice' }), 'lnk');
 
@@ -172,7 +105,11 @@ describe('NodeManager.hardDelete', () =>
         await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', blobID: 'sha-a', parentID: 'dir' }));
 
-        const manager = new NodeManager(handle, ra, throwingOrphanedBlobs, testNodePolicy());
+        const manager = new NodeManager({
+            handle,
+            orphanedBlobs: () => throwingOrphanedBlobs,
+            policy: testNodePolicy(),
+        });
 
         await expect(manager.hardDelete(testActor({ id: 'alice' }), 'dir')).rejects.toThrow();
 
@@ -207,7 +144,7 @@ describe('NodeManager trashed visibility', () =>
     it('reads a trashed shared folder as absent for the recipient, but not for its owner', async () =>
     {
         await seedTrashedSharedFolder();
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         await expect(manager.get(testSession({ id: 'bob' }), 'dir')).rejects.toThrow(NotFoundError);
 
@@ -218,7 +155,7 @@ describe('NodeManager trashed visibility', () =>
     it('lists a trashed folder\'s children only for its owner', async () =>
     {
         await seedTrashedSharedFolder();
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const query : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         await expect(manager.children(testSession({ id: 'bob' }), 'dir', query)).rejects.toThrow(NotFoundError);
@@ -239,7 +176,7 @@ describe('NodeManager.children owner facet', () =>
         await ra.insert(fileNode({ id: 'mine', ownerID: 'alice', blobID: 'sha-a', parentID: 'p' }));
         await ra.insert(fileNode({ id: 'theirs', ownerID: 'bob', blobID: 'sha-a', parentID: 'p' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const unfiltered = await manager.children(testSession({ id: 'alice' }), 'p', base);
@@ -277,7 +214,7 @@ describe('NodeManager.children — link row owner attribution', () =>
             .execute();
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p', base);
@@ -297,7 +234,7 @@ describe('NodeManager.children — link row owner attribution', () =>
         await ra.insert(folderNode({ id: 'unreachable', ownerID: 'dave' }));
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', parentID: 'p2', targetNodeID: 'unreachable' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p2', base);
@@ -330,7 +267,7 @@ describe('NodeManager.children owner facet — link targets', () =>
             .execute();
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p', base);
@@ -347,7 +284,7 @@ describe('NodeManager.children owner facet — link targets', () =>
         await ra.insert(folderNode({ id: 'unreachable', ownerID: 'dave' }));
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', parentID: 'p2', targetNodeID: 'unreachable' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p2', base);
@@ -374,7 +311,7 @@ describe('NodeManager.children owner facet — link targets', () =>
             .execute();
         await ra.insert(linkNode({ id: 'lnk2', ownerID: 'alice', parentID: 'p3', targetNodeID: 'bobTarget' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const base : ChildrenQuery = { limit: 50, offset: 0, sortKey: 'name', sortDirection: 'asc', types: [] };
 
         const result = await manager.children(testSession({ id: 'alice' }), 'p3', base);
@@ -420,7 +357,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('reports', 'alice', 'editor', 'bob');
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'docs' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         const throughLink = await manager.children(testSession({ id: 'alice' }), 'lnk', base);
         const direct = await manager.children(testSession({ id: 'alice' }), 'docs', base);
@@ -444,7 +381,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('empty', 'alice', 'viewer', 'bob');
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'empty' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         const result = await manager.children(testSession({ id: 'alice' }), 'lnk', base);
 
@@ -463,7 +400,7 @@ describe('NodeManager.children through a folder link', () =>
         await ra.insert(folderNode({ id: 'inside', ownerID: 'dave', parentID: 'far' }));
         await ra.insert(linkNode({ id: 'deadlnk', ownerID: 'alice', targetNodeID: 'far' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         await expect(manager.children(testSession({ id: 'alice' }), 'deadlnk', base)).rejects.toThrow(NotFoundError);
     });
@@ -478,7 +415,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('ct', 'alice', 'viewer', 'carol');
         await ra.insert(linkNode({ id: 'trlnk', ownerID: 'alice', targetNodeID: 'ct' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         await expect(manager.children(testSession({ id: 'alice' }), 'trlnk', base)).rejects.toThrow(NotFoundError);
     });
@@ -493,7 +430,7 @@ describe('NodeManager.children through a folder link', () =>
         await seedShare('docs', 'alice', 'viewer', 'bob');
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'docs', name: 'Case Test\'s Docs' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         const node = await manager.get(testSession({ id: 'alice' }), 'lnk');
 
@@ -541,7 +478,7 @@ describe('NodeManager placement depth', () =>
     it('creates a folder at the deepest rung placement allows', async () =>
     {
         await seedChain(MAX_PLACEMENT_DEPTH + 1);
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         const created = await manager.createFolder(testActor({ id: 'alice' }), {
             type: 'folder',
@@ -555,7 +492,7 @@ describe('NodeManager placement depth', () =>
     it('refuses a create that would place a node past the depth the resolver walks', async () =>
     {
         await seedChain(MAX_PLACEMENT_DEPTH + 1);
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 
         const attempt = manager.createFolder(testActor({ id: 'alice' }), {
             type: 'folder',
@@ -577,7 +514,7 @@ describe('NodeManager placement depth', () =>
         await ra.insert(folderNode({ id: 'tall-mid', ownerID: 'alice', parentID: 'tall' }));
         await ra.insert(fileNode({ id: 'tall-leaf', ownerID: 'alice', parentID: 'tall-mid', blobID: 'sha-a' }));
 
-        const manager = new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+        const manager = new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
         const alice = testSession({ id: 'alice' });
 
         // 'tall' reaches two rungs below itself, so the deepest parent that can hold it is two rungs shallower.

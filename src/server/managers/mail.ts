@@ -8,10 +8,13 @@
 // test-send throws the real reason, transport errors included, because the admin is there to fix them.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { BadRequestError, DEFAULT_SMTP_PORT, ForbiddenError } from '@fileshed/core';
+import { BadRequestError, DEFAULT_SMTP_PORT } from '@fileshed/core';
+
+// Engines
+import { assertAdmin } from '../engines/adminAccess.ts';
 
 // Resource Access
-import type { SessionUser } from '../resource-access/auth.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
 import type { MailRA } from '../resource-access/mail/index.ts';
 
 // Managers
@@ -58,14 +61,6 @@ export class MailManager
     {
         this.#settings = deps.settings;
         this.#mail = deps.mail;
-    }
-
-    // Resolved per send, like every other mail knob: renaming the instance renames the next email, no restart.
-    async #instanceName() : Promise<string>
-    {
-        const name = await this.#settings.value('INSTANCE_NAME');
-
-        return typeof name === 'string' && name !== '' ? name : 'FileShed';
     }
 
     // The effective SMTP values at this moment, or null while mail is off (no host or no from address).
@@ -125,7 +120,8 @@ export class MailManager
         compose : (name : string) => { subject : string; text : string }
     ) : void
     {
-        this.#instanceName()
+        // Resolved per send, like every other mail knob: renaming the instance renames the next email, no restart.
+        this.#settings.instanceName()
             .then((name) =>
             {
                 const { subject, text } = compose(name);
@@ -155,16 +151,16 @@ export class MailManager
 
     // The admin's plumbing check: sends to the admin's own address and lets every failure -- unconfigured SMTP or a
     // transport refusal -- surface with its real message, because the admin is the one person who can act on it.
-    async sendTest(actor : SessionUser) : Promise<{ to : string }>
+    async sendTest(user : SessionUser) : Promise<{ to : string }>
     {
-        if(actor.role !== 'admin') { throw new ForbiddenError('Admin access is required.'); }
+        assertAdmin(user);
 
-        const name = await this.#instanceName();
+        const name = await this.#settings.instanceName();
 
         try
         {
             await this.#send(
-                actor.email,
+                user.email,
                 `${ name } test email`,
                 `This is a test email from ${ name }. If you are reading it, outgoing email works.`
             );
@@ -177,7 +173,7 @@ export class MailManager
             throw new BadRequestError(`The SMTP server refused the send: ${ reason }`);
         }
 
-        return { to: actor.email };
+        return { to: user.email };
     }
 }
 

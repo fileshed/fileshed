@@ -19,11 +19,11 @@ import {
 
 // Support
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
     type UploadedFile,
-    bootServeApp,
+    bootStoreApp,
     createFolder,
     createLink,
     listLinks,
@@ -34,14 +34,14 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let stranger : TestUser;
 let uploaded : UploadedFile;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     stranger = await makeUser(booted, 'stranger@example.com');
     uploaded = await uploadFile(booted, owner, randomBytes(64), { name: 'report.pdf', mimeType: 'application/pdf' });

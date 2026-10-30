@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Byte Formatting
 //
-// Decimal units (1 kB = 1000 B) match the storage figures cloud drives present to users, and the requirements quote
-// quota sizes the same way ("4 GB blob"). The symbols are SI: a lowercase kilo (uppercase K is kelvin) and an
-// uppercase B for bytes, since a lowercase b would be bits. Precise binary sizing stays server-side; display only.
+// Decimal units (1 kB = 1000 B), matching the storage figures cloud drives present. The symbols are SI: a lowercase k
+// (uppercase K is kelvin) and an uppercase B, since a lowercase b would be bits.
 //----------------------------------------------------------------------------------------------------------------------
 
 const BYTE_UNITS = [ 'B', 'kB', 'MB', 'GB', 'TB', 'PB' ] as const;

@@ -176,6 +176,21 @@ describe('GET /api/trash — Type and Modified filters', () =>
         expect(future.nodes).toEqual([]);
         expect(past.nodes.map((node) => node.id)).toEqual([ folder ]);
     });
+
+    // The trash is already the caller's own and a name match is upload-collision detection, so neither facet means
+    // anything here; taking one and ignoring it would answer a question the caller did not ask.
+    it('refuses the owner and name facets a folder listing takes', async () =>
+    {
+        const booted = await bootTestApp();
+        const app = composeNodeApp(booted);
+        const cookie = await signedUp(app, 'a@example.com');
+
+        const byOwner = await request(app, 'GET', '/api/trash?ownerID=someone', cookie);
+        const byName = await request(app, 'GET', '/api/trash?name=report.pdf', cookie);
+
+        expect(byOwner.status).toBe(400);
+        expect(byName.status).toBe(400);
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

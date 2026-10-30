@@ -6,49 +6,47 @@
 // object -- keys this version does not know survive untouched, which is what lets a future theme package or a
 // newer client coexist with an older server.
 //
-// The logo rides the avatar pattern, not the document: bytes in the content-addressed blob store, referenced by
-// the BRANDING_LOGO_SHA row that graveyardUnreferenced counts, replaced-and-graveyarded in one transaction. Its
-// serve gate is the route shape itself -- /api/branding/logo serves only the CURRENT logo, so the anonymous
-// endpoint can never become an oracle for other blobs.
+// The logo is a referenced image (managers/referencedImages.ts), not part of the document: its reference is the
+// BRANDING_LOGO_SHA row that graveyardUnreferenced counts.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash } from 'node:crypto';
-import { Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 
 // Models
 import {
-    BadRequestError,
-    type BrandingImageMimeType,
-    ForbiddenError,
     type InstanceTheme,
-    PayloadTooLargeError,
+    NotFoundError,
     type UpdateBrandingRequest,
     brandingImageMimeTypes,
     toInstanceTheme,
 } from '@fileshed/core';
 
 // Engines
+import { assertAdmin } from '../engines/adminAccess.ts';
 import { renderBrandingCSS } from '../engines/branding.ts';
-import { mimeMatchesBytes } from '../engines/imageFormat.ts';
+
+// Managers
+import { ReferencedImages, type ServedImage } from './referencedImages.ts';
 
 // Resource Access
-import { BlobRA } from '../resource-access/blob/index.ts';
+import type { BlobRA } from '../resource-access/blob/index.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
-import type { SessionUser } from '../resource-access/auth.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
 import { SettingsRA } from '../resource-access/settings/index.ts';
 
 // Utils
-import { collectCapped, mediaType } from '../utils/uploadBody.ts';
+import { getLogger } from '../utils/logger.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
+
+const logger = getLogger('branding');
 
 const BRANDING_KEY = 'BRANDING';
 const LOGO_SHA_KEY = 'BRANDING_LOGO_SHA';
 const LOGO_TYPE_KEY = 'BRANDING_LOGO_TYPE';
 
-export interface BrandingDeps
+export interface BrandingManagerDeps
 {
-    settings : SettingsRA;
     handle : DatabaseHandle;
     blob : BlobRA;
 
@@ -56,16 +54,9 @@ export interface BrandingDeps
     maxBytes : () => Promise<number>;
 }
 
-export interface ServedLogo
+function shaFrom(stored : unknown) : string | null
 {
-    stream : Readable;
-    mime : string;
-    size : number;
-}
-
-function isBrandingImageMime(value : string | null) : value is BrandingImageMimeType
-{
-    return value !== null && (brandingImageMimeTypes as readonly string[]).includes(value);
+    return typeof stored === 'string' && stored !== '' ? stored : null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -73,15 +64,13 @@ function isBrandingImageMime(value : string | null) : value is BrandingImageMime
 export class BrandingManager
 {
     readonly #ra : SettingsRA;
-    readonly #handle : DatabaseHandle;
-    readonly #blob : BlobRA;
+    readonly #images : ReferencedImages;
     readonly #maxBytes : () => Promise<number>;
 
-    constructor(deps : BrandingDeps)
+    constructor(deps : BrandingManagerDeps)
     {
-        this.#ra = deps.settings;
-        this.#handle = deps.handle;
-        this.#blob = deps.blob;
+        this.#ra = new SettingsRA(deps.handle);
+        this.#images = new ReferencedImages(deps.handle, deps.blob);
         this.#maxBytes = deps.maxBytes;
     }
 
@@ -94,29 +83,25 @@ export class BrandingManager
             : {};
     }
 
-    #requireAdmin(actor : SessionUser) : void
-    {
-        if(actor.role !== 'admin') { throw new ForbiddenError('Admin access required.'); }
-    }
-
     async theme() : Promise<InstanceTheme>
     {
         return toInstanceTheme(await this.#raw());
     }
 
-    async view(actor : SessionUser) : Promise<InstanceTheme>
+    async view(user : SessionUser) : Promise<InstanceTheme>
     {
-        this.#requireAdmin(actor);
+        assertAdmin(user);
 
         return this.theme();
     }
 
-    async update(actor : SessionUser, patch : UpdateBrandingRequest) : Promise<InstanceTheme>
+    async update(user : SessionUser, patch : UpdateBrandingRequest) : Promise<InstanceTheme>
     {
-        this.#requireAdmin(actor);
+        assertAdmin(user);
 
         const merged = { ...await this.#raw(), ...patch };
         await this.#ra.upsert(BRANDING_KEY, merged);
+        logger.info({ userID: user.id, fields: Object.keys(patch) }, 'Admin changed the branding');
 
         return toInstanceTheme(merged);
     }
@@ -132,112 +117,66 @@ export class BrandingManager
 
     async logoSha() : Promise<string | null>
     {
-        const stored = await this.#ra.get(LOGO_SHA_KEY);
-
-        return typeof stored === 'string' && stored !== '' ? stored : null;
+        return shaFrom(await this.#ra.get(LOGO_SHA_KEY));
     }
 
-    // Store an uploaded logo and point the instance at it: mime and cap checked before anything is written, the
-    // bytes hashed and stored content-addressed, then the reference rows move and the replaced blob (if any, and
-    // if now unreferenced) is graveyarded -- all in one transaction, mirroring the avatar lifecycle.
+    // Store an uploaded logo and point the instance at it, graveyarding the one it replaced.
     async setLogo(
-        actor : SessionUser,
+        user : SessionUser,
         source : Readable,
-        contentType : string | undefined,
+        mediaType : string | null,
         declaredLength : number | undefined
     ) : Promise<void>
     {
-        this.#requireAdmin(actor);
+        assertAdmin(user);
 
-        const media = mediaType(contentType);
-        if(!isBrandingImageMime(media))
+        const rules = {
+            accepts: brandingImageMimeTypes,
+            maxBytes: await this.#maxBytes(),
+            notAccepted: 'The logo must be a PNG, JPEG, WebP, GIF, SVG, or ICO image.',
+            tooLarge: 'The logo exceeds the maximum size.',
+        };
+
+        const stored = await this.#images.store({ source, mediaType, declaredLength }, rules, async (image, tx) =>
         {
-            throw new BadRequestError('The logo must be a PNG, JPEG, WebP, GIF, SVG, or ICO image.');
-        }
+            const settings = new SettingsRA(tx);
+            const replaced = shaFrom(await settings.get(LOGO_SHA_KEY));
 
-        const maxBytes = await this.#maxBytes();
-        if(declaredLength !== undefined && declaredLength > maxBytes)
-        {
-            throw new PayloadTooLargeError('The logo exceeds the maximum size.', maxBytes);
-        }
+            await settings.upsert(LOGO_SHA_KEY, image.sha256);
+            await settings.upsert(LOGO_TYPE_KEY, image.media);
 
-        const bytes = await collectCapped(source, maxBytes, 'The logo exceeds the maximum size.');
-
-        // Same reasoning as the avatar: the bytes go into the shared content-addressed store and come back out under
-        // the declared type, so the declaration has to be true. SVG passes as a container check only -- what an SVG may
-        // contain is why this format is admin-only.
-        if(!mimeMatchesBytes(media, bytes))
-        {
-            throw new BadRequestError(`Those bytes are not a ${ media } image.`);
-        }
-
-        const sha256 = createHash('sha256')
-            .update(bytes)
-            .digest('hex');
-
-        const location = await this.#blob.put(sha256, Readable.from(bytes), bytes.length);
-
-        await this.#handle.db.transaction().execute(async (trx) =>
-        {
-            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
-            const blob = new BlobRA(txHandle);
-            const settings = new SettingsRA(txHandle);
-
-            const oldSha = await settings.get(LOGO_SHA_KEY);
-
-            await blob.insertOrResurrect({
-                sha256,
-                size: bytes.length,
-                backendID: location.backendID,
-                storageKey: location.storageKey,
-            });
-            await settings.upsert(LOGO_SHA_KEY, sha256);
-            await settings.upsert(LOGO_TYPE_KEY, media);
-
-            if(typeof oldSha === 'string' && oldSha !== '' && oldSha !== sha256)
-            {
-                await blob.graveyardUnreferenced([ oldSha ], trx);
-            }
+            return replaced;
         });
+        logger.info({ userID: user.id, sha256: stored.sha256 }, 'Admin set the logo');
     }
 
-    // Drop the logo and graveyard the blob it held (when nothing else references it). Idempotent.
-    async deleteLogo(actor : SessionUser) : Promise<void>
+    // Idempotent.
+    async deleteLogo(user : SessionUser) : Promise<void>
     {
-        this.#requireAdmin(actor);
+        assertAdmin(user);
 
-        await this.#handle.db.transaction().execute(async (trx) =>
+        await this.#images.clear(async (tx) =>
         {
-            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
-            const blob = new BlobRA(txHandle);
-            const settings = new SettingsRA(txHandle);
-
-            const oldSha = await settings.get(LOGO_SHA_KEY);
+            const settings = new SettingsRA(tx);
+            const held = shaFrom(await settings.get(LOGO_SHA_KEY));
 
             await settings.remove(LOGO_SHA_KEY);
             await settings.remove(LOGO_TYPE_KEY);
 
-            if(typeof oldSha === 'string' && oldSha !== '')
-            {
-                await blob.graveyardUnreferenced([ oldSha ], trx);
-            }
+            return held;
         });
+        logger.info({ userID: user.id }, 'Admin removed the logo');
     }
 
-    // The bytes of the CURRENT logo, or null while none is set. Serving only the referenced hash is the gate
-    // that keeps the anonymous route from exfiltrating arbitrary blobs.
-    async serveLogo() : Promise<ServedLogo | null>
+    // Only the CURRENT logo is served, which is what keeps the anonymous route from serving any other blob.
+    async serveLogo() : Promise<ServedImage>
     {
         const [ sha, storedType ] = await Promise.all([ this.logoSha(), this.#ra.get(LOGO_TYPE_KEY) ]);
-        if(sha === null) { return null; }
+        if(sha === null) { throw new NotFoundError('No logo is set.'); }
 
-        const row = await this.#blob.get(sha);
-        if(row === undefined) { return null; }
-
-        const stream = await this.#blob.getStream({ backendID: row.backendID, storageKey: row.storageKey });
         const mime = typeof storedType === 'string' && storedType !== '' ? storedType : 'application/octet-stream';
 
-        return { stream, mime, size: row.size };
+        return this.#images.serve(sha, mime, 'No logo is set.');
     }
 }
 

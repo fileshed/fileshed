@@ -13,11 +13,14 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { createNode, getChildren, getNode } from '@client/resource-access/nodes.ts';
+import { createNode, getNode, listChildren } from '@client/resource-access/nodes.ts';
 
 // Stores
 import { useDriveStore } from '@client/stores/drive.ts';
 import { useNewItemStore } from '@client/stores/newItem.ts';
+
+// Support
+import { fileNode, folderNode } from '../../../support.ts';
 
 // Under test
 import NewLink from '@client/components/drive/modals/newLink.vue';
@@ -28,34 +31,21 @@ const toastAdd = vi.hoisted(() => vi.fn());
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
     createNode: vi.fn(),
-    getChildren: vi.fn(),
+    listChildren: vi.fn(),
     getNode: vi.fn(),
 }));
 
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
 const createNodeMock = createNode as unknown as Mock;
-const getChildrenMock = getChildren as unknown as Mock;
+const listChildrenMock = listChildren as unknown as Mock;
 const getNodeMock = getNode as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-const BASE = { sharing: null, ownerID: 'u1', parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
-
 function emptyPage() : NodeListResponse
 {
     return { nodes: [], total: 0, limit: 50, offset: 0, owners: [] };
-}
-
-function folderNode(id : string) : NodeResponse
-{
-    return { ...BASE, id, name: id, type: 'folder', trashedAt: null };
-}
-
-function fileNode(id : string) : NodeResponse
-{
-    return { ...BASE, id, name: id, type: 'file', blobID: 'b1', size: 10, mimeType: 'text/plain', trashedAt: null };
 }
 
 // The picker is exercised on its own; here it only has to report what the host asked of it and hand back a pick.
@@ -108,9 +98,9 @@ describe('NewLink modal', () =>
     {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        getChildrenMock.mockResolvedValue(emptyPage());
-        getNodeMock.mockResolvedValue(folderNode('parent1'));
-        createNodeMock.mockResolvedValue(fileNode('new'));
+        listChildrenMock.mockResolvedValue(emptyPage());
+        getNodeMock.mockResolvedValue(folderNode({ id: 'parent1' }));
+        createNodeMock.mockResolvedValue(fileNode({ id: 'new' }));
     });
 
     it('opens when a link request arrives', async () =>
@@ -155,7 +145,7 @@ describe('NewLink modal', () =>
 
         useNewItemStore().requestNew('link');
         await flushPromises();
-        await pick(wrapper, 'select', fileNode('f1'));
+        await pick(wrapper, 'select', fileNode({ id: 'f1' }));
 
         expect(createNodeMock).toHaveBeenCalledWith({ type: 'link', targetNodeID: 'f1', parentID: 'parent1' });
         expect(isOpen(wrapper)).toBe('false');
@@ -169,7 +159,7 @@ describe('NewLink modal', () =>
 
         useNewItemStore().requestNew('link');
         await flushPromises();
-        await pick(wrapper, 'select-folder', folderNode('d1'));
+        await pick(wrapper, 'select-folder', folderNode({ id: 'd1' }));
 
         expect(createNodeMock).toHaveBeenCalledWith({ type: 'link', targetNodeID: 'd1', parentID: 'parent1' });
     });
@@ -180,7 +170,7 @@ describe('NewLink modal', () =>
         const wrapper = mountModal();
         useNewItemStore().requestNew('link');
         await flushPromises();
-        await pick(wrapper, 'select', fileNode('f1'));
+        await pick(wrapper, 'select', fileNode({ id: 'f1' }));
 
         expect(createNodeMock.mock.calls[0]?.[0]).not.toHaveProperty('name');
     });
@@ -192,7 +182,7 @@ describe('NewLink modal', () =>
 
         useNewItemStore().requestNew('link');
         await flushPromises();
-        await pick(wrapper, 'select', fileNode('f1'));
+        await pick(wrapper, 'select', fileNode({ id: 'f1' }));
 
         expect(isOpen(wrapper)).toBe('true');
         expect(toastAdd).toHaveBeenCalled();

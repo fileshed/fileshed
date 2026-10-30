@@ -1,15 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Upload Status Presentation
 //
-// The single source of how an upload item's status reads on screen: per-status label, lucide icon, and Tailwind
-// text-colour. The upload panel's rows draw from this one table, so a status looks the same wherever it appears. The
-// in-flight statuses share the moving-file glyph in the primary colour; the three terminal states each get their own
-// glyph and colour. Purely how a status is displayed -- which statuses are still active is the pipeline's call
-// (isActiveStatus), not this table's.
+// Which statuses are still active is the pipeline's call (isActiveStatus), not this table's.
 //----------------------------------------------------------------------------------------------------------------------
 
-// Stores
-import type { UploadStatus } from '../../stores/uploads.ts';
+// Engines
+import type { UploadStatus } from '../../engines/uploads/status.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 

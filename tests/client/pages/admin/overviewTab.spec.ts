@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminOverview, AdminStatusResponse } from '@fileshed/core';
 
 // Resource Access
-import { adminStatus, fetchAdminSettings, runSweep } from '@client/resource-access/admin.ts';
+import { fetchAdminSettings, getAdminStatus, runSweep } from '@client/resource-access/admin.ts';
 
 // Under test
 import OverviewTab from '@client/pages/admin/overviewTab.vue';
@@ -22,7 +22,7 @@ import OverviewTab from '@client/pages/admin/overviewTab.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    adminStatus: vi.fn(),
+    getAdminStatus: vi.fn(),
     fetchAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
     runSweep: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock('@nuxt/ui/composables', () => ({
     useToast: () => ({ add: (toast : { description ?: string }) => { toasts.push(toast); } }),
 }));
 
-const statusMock = adminStatus as unknown as Mock;
+const statusMock = getAdminStatus as unknown as Mock;
 const settingsMock = fetchAdminSettings as unknown as Mock;
 const runSweepMock = runSweep as unknown as Mock;
 
@@ -78,7 +78,7 @@ function statusFixture(overrides : Partial<AdminStatusResponse> = {}) : AdminSta
             summary: { candidates: 4, deleted: 3, kept: 1, bytesFailed: 0, bytesFreed: 250_000 },
         },
         trashPurge: null,
-        partials: {
+        stagedUploads: {
             ranAt: '2026-07-28T10:30:00.000Z',
             summary: { candidates: 5, reclaimed: 5, failed: 0, bytesFreed: 120_000 },
         },
@@ -267,7 +267,7 @@ describe('Admin OverviewTab', () =>
         expect(toasts[0]?.description).toBe('2 of 2 purged.');
 
         runSweepMock.mockResolvedValue({
-            sweep: 'partials',
+            sweep: 'stagedUploads',
             ranAt: '2026-07-28T11:05:00.000Z',
             summary: { candidates: 3, reclaimed: 3, failed: 0, bytesFreed: 90_000 },
         });
@@ -275,7 +275,7 @@ describe('Admin OverviewTab', () =>
         await wrapper.findAll('.run')[2]?.trigger('click');
         await flushPromises();
 
-        expect(runSweepMock).toHaveBeenCalledWith('partials');
+        expect(runSweepMock).toHaveBeenCalledWith('stagedUploads');
         expect(toasts[1]?.description).toBe('90 kB reclaimed, 3 of 3 cleared.');
     });
 

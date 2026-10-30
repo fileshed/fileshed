@@ -1,12 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Type Presentation
 //
-// The single source of how a node type reads on screen: per-family label, lucide icon, and Tailwind text-colour. The
-// grid tiles, the list rows, and the Type filter dropdown all draw from this one table, so a family looks the same
-// wherever it appears. A file classifies through core's familyOfMimeType (the same map the server filters by),
-// except playlists, which core's isPlaylistFile carves out of the audio family so they read as their own kind; a
-// folder is the folders family; a link borrows its target's presentation; an unclassified file gets a neutral glyph
-// and a dead link the dimmed broken glyph.
+// A file classifies through core's familyOfMimeType, the same map the server filters by, except playlists, which
+// isPlaylistFile carves out of the audio family so they read as their own kind.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {

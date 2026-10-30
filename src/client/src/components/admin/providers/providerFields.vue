@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Provider Fields
-  --
-  -- The one component the Authentication tab mounts per provider: it takes the provider id and switches to the
-  -- component that fits -- a specific one where the provider's OAuth contract wants more than a credential pair,
-  -- the generic two-field one everywhere else. Adding provider-specific handling is adding a component to the map,
-  -- nothing more.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

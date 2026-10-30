@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Outline Branch
   --
-  -- Recursive: an outline nests arbitrarily, so a branch renders itself for each child. An entry with no destination
-  -- is a heading -- it expands, but there is nowhere to go.
+  -- An outline entry with no destination is a heading: it expands, but there is nowhere to go.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -44,11 +43,11 @@
 <script setup lang="ts">
     import { computed, ref } from 'vue';
 
+    // Engines
+    import type { OutlineEntry } from '../../../../engines/pdf/types.ts';
+
     // Stores
     import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
-
-    // Components
-    import type { OutlineEntry } from '../types.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

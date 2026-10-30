@@ -1,32 +1,23 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Avatar Manager
 //
-// The lifecycle of a user's avatar: upload (store bytes, point the user at them, graveyard the one they replaced),
-// delete (drop the reference, graveyard the orphan), and serve (bytes for a hash, but ONLY one an avatar references).
-//
-// Avatars share the content-addressed blob store with file content but never a node, so they charge no quota and carry
-// their mime on the user row. Upload has no claim/proof-of-possession dance: there is no client-supplied hash to
-// prove, so the server hashes the bytes it receives and stores them content-addressed. The reference move and the old
-// blob's graveyard-check run in one transaction, mirroring a content replace -- the sweep re-derives each blob's
-// reference count, so a hash still referenced by another user's avatar or any file node survives.
+// Upload has no claim/proof-of-possession dance: there is no client-supplied hash to prove, so the server hashes the
+// bytes it receives. A hash still referenced by another user's avatar or any file node survives a replace, because the
+// graveyard re-derives each blob's reference count.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash } from 'node:crypto';
-import { Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 
 // Models
-import { type AvatarMimeType, BadRequestError, PayloadTooLargeError, avatarMimeTypes } from '@fileshed/core';
+import { NotFoundError, avatarMimeTypes } from '@fileshed/core';
 
-// Engines
-import { mimeMatchesBytes } from '../engines/imageFormat.ts';
+// Managers
+import { ReferencedImages, type ServedImage } from './referencedImages.ts';
 
 // Resource Access
-import { BlobRA } from '../resource-access/blob/index.ts';
+import type { BlobRA } from '../resource-access/blob/index.ts';
 import type { DatabaseHandle } from '../resource-access/database/database.ts';
 import { UserRA } from '../resource-access/users/index.ts';
-
-// Utils
-import { collectCapped, mediaType } from '../utils/uploadBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -39,138 +30,68 @@ export interface AvatarManagerDeps
     avatarMaxBytes : () => Promise<number>;
 }
 
-// The bytes and metadata to serve for a GET, or null when the hash is not any user's avatar (the serve gate).
-export interface ServedAvatar
-{
-    stream : Readable;
-    mime : string;
-    size : number;
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-function isAvatarMime(value : string | null) : value is AvatarMimeType
-{
-    return value !== null && (avatarMimeTypes as readonly string[]).includes(value);
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 
 export class AvatarManager
 {
-    readonly #handle : DatabaseHandle;
-    readonly #blob : BlobRA;
+    readonly #images : ReferencedImages;
     readonly #users : UserRA;
     readonly #maxBytes : () => Promise<number>;
 
     constructor(deps : AvatarManagerDeps)
     {
-        this.#handle = deps.handle;
-        this.#blob = deps.blob;
+        this.#images = new ReferencedImages(deps.handle, deps.blob);
         this.#users = new UserRA(deps.handle);
         this.#maxBytes = deps.avatarMaxBytes;
     }
 
-    // Store an uploaded avatar and point the caller at it. The mime is validated against the whitelist and the bytes
-    // against the byte cap before anything is written; the bytes are hashed and stored content-addressed, then the user
-    // row is repointed and the blob they replaced (if any, and if now unreferenced) is graveyarded -- all in one
-    // transaction, so a crash never leaves the row and the graveyard disagreeing.
+    // Store an uploaded avatar and point the caller at it, graveyarding the one it replaced.
     async setAvatar(
         userID : string,
         source : Readable,
-        contentType : string | undefined,
+        mediaType : string | null,
         declaredLength : number | undefined
     ) : Promise<void>
     {
-        const media = mediaType(contentType);
-        if(!isAvatarMime(media))
+        const rules = {
+            accepts: avatarMimeTypes,
+            maxBytes: await this.#maxBytes(),
+            notAccepted: 'Avatar must be a PNG, JPEG, WebP, GIF, or BMP image.',
+            tooLarge: 'Avatar exceeds the maximum size.',
+        };
+
+        await this.#images.store({ source, mediaType, declaredLength }, rules, async (image, tx) =>
         {
-            throw new BadRequestError('Avatar must be a PNG, JPEG, WebP, GIF, or BMP image.');
-        }
+            const users = new UserRA(tx);
+            const replaced = await users.avatarSha256Of(userID);
 
-        // Resolved once, so the declared-length check and the streaming cap judge the same request by the same number.
-        const maxBytes = await this.#maxBytes();
+            await users.setAvatar(userID, image.sha256, image.media);
 
-        if(declaredLength !== undefined && declaredLength > maxBytes)
-        {
-            throw new PayloadTooLargeError('Avatar exceeds the maximum size.', maxBytes);
-        }
-
-        const bytes = await collectCapped(source, maxBytes, 'Avatar exceeds the maximum size.');
-
-        // The header is a claim; the bytes are the fact. They are served back under the declared type, and the store
-        // they land in is content-addressed and shared with file content, so a claim nothing checks means holding
-        // whatever the uploader sent under a name that says otherwise.
-        if(!mimeMatchesBytes(media, bytes))
-        {
-            throw new BadRequestError(`Those bytes are not a ${ media } image.`);
-        }
-
-        const sha256 = createHash('sha256')
-            .update(bytes)
-            .digest('hex');
-
-        // Bytes first, outside the transaction (the store verifies them against the hash while writing); the record and
-        // the reference move commit together below. A transaction that refuses therefore leaves the bytes behind with
-        // no record naming them -- which is what the GC sweep's reconciling pass exists to find and reclaim.
-        const location = await this.#blob.put(sha256, Readable.from(bytes), bytes.length);
-
-        await this.#handle.db.transaction().execute(async (trx) =>
-        {
-            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
-            const blob = new BlobRA(txHandle);
-            const users = new UserRA(txHandle);
-
-            const oldSha256 = await users.avatarSha256Of(userID);
-
-            await blob.insertOrResurrect({
-                sha256,
-                size: bytes.length,
-                backendID: location.backendID,
-                storageKey: location.storageKey,
-            });
-            await users.setAvatar(userID, sha256, media);
-
-            // Graveyard the replaced blob once the reference has moved off it. Skipped when the avatar is unchanged
-            // (the row still points at the same hash, so the sweep would find it referenced anyway).
-            if(oldSha256 !== null && oldSha256 !== sha256)
-            {
-                await blob.graveyardUnreferenced([ oldSha256 ], trx);
-            }
+            return replaced;
         });
     }
 
-    // Drop the caller's avatar and graveyard the blob they held (when nothing else references it). Idempotent: an
-    // account with no avatar clears nothing and graveyards nothing.
+    // Idempotent: an account with no avatar clears nothing and graveyards nothing.
     async deleteAvatar(userID : string) : Promise<void>
     {
-        await this.#handle.db.transaction().execute(async (trx) =>
+        await this.#images.clear(async (tx) =>
         {
-            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
-            const blob = new BlobRA(txHandle);
-            const users = new UserRA(txHandle);
+            const users = new UserRA(tx);
+            const held = await users.avatarSha256Of(userID);
 
-            const oldSha256 = await users.avatarSha256Of(userID);
-            if(oldSha256 === null) { return; }
+            if(held !== null) { await users.clearAvatar(userID); }
 
-            await users.clearAvatar(userID);
-            await blob.graveyardUnreferenced([ oldSha256 ], trx);
+            return held;
         });
     }
 
-    // The bytes to serve for an avatar hash, or null when NO user's avatar references it. The reference check is the
-    // security gate: the dedup store holds private file content by hash, so serving a hash no avatar points at would
-    // turn this route into an oracle for exfiltrating any blob by its hash.
-    async serveAvatar(sha256 : string) : Promise<ServedAvatar | null>
+    // Only a hash some user's avatar references is served.
+    async serveAvatar(sha256 : string) : Promise<ServedImage>
     {
         const mime = await this.#users.avatarMimeForSha(sha256);
-        if(mime === null) { return null; }
+        if(mime === null) { throw new NotFoundError('No avatar at this hash.'); }
 
-        const row = await this.#blob.get(sha256);
-        if(row === undefined) { return null; }
-
-        const stream = await this.#blob.getStream({ backendID: row.backendID, storageKey: row.storageKey });
-        return { stream, mime, size: row.size };
+        return this.#images.serve(sha256, mime, 'No avatar at this hash.');
     }
 }
 

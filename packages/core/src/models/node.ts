@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Domain Model
-//
-// Canonical domain type for a node -- a file, folder, or link in a user's tree (their "My Drive"). Modeled as a
-// discriminated union on `type` rather than one interface with a pile of nullables, so that a variant's exclusive
-// fields (blobID, size, mimeType, targetNodeID, trashedAt) simply don't exist on the wrong shape.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const nodeTypes = [ 'file', 'folder', 'link' ] as const;
@@ -64,6 +60,14 @@ export type Node = FileNode | FolderNode | LinkNode;
 export function isDirectOwner(node : Node, userID : string) : boolean
 {
     return node.ownerID === userID;
+}
+
+// Whether a node is in the trash and `userID` is not the one whose trash it is. Such a node reads as absent: a
+// recipient gets a 404, not a reply that confirms the node still exists, while its direct owner keeps seeing it in
+// their trash. A link is never trashed on its own account.
+export function isHiddenTrash(node : Node, userID : string) : boolean
+{
+    return node.type !== 'link' && node.trashedAt !== null && !isDirectOwner(node, userID);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

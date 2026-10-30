@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Access Token Resource Access
 //
-// The typed client for the token surfaces. The create response is the only time a PAT's full value crosses the wire;
-// the playback mint is the media player's own short-lived credential, never shown to anyone.
+// The create response is the only time a PAT's full value crosses the wire; the playback mint is the media player's own
+// short-lived credential, never shown to anyone.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {

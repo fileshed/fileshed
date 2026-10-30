@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Folder Picker
   --
-  -- The destination browser inside the Move dialog: start at My Files, drill into folders, and confirm the current
-  -- location as the move target. It only ever lists folders. The moving folder itself is not enterable and no location
-  -- inside its own subtree can be confirmed (regulation.node), so an illegal move can't be expressed here -- the server
-  -- still re-checks, but the picker won't waste a round trip on a move it already knows is impossible.
+  -- No location inside a moving folder's own subtree can be confirmed (regulation.node), so the picker never spends a
+  -- round trip on a move it knows is illegal; the server still re-checks.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -93,7 +91,7 @@
     import { useSessionStore } from '../../stores/session.ts';
 
     // Resource Access
-    import { getChildren } from '../../resource-access/nodes.ts';
+    import { listChildren } from '../../resource-access/nodes.ts';
 
     // Engines
     import { regulation } from '../../engines/regulation/index.ts';
@@ -138,7 +136,7 @@
 
         try
         {
-            const page = await getChildren(currentID.value, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
+            const page = await listChildren(currentID.value, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
             folders.value = page.nodes.filter((node) => node.type === 'folder');
         }
         catch

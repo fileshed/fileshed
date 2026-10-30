@@ -1,7 +1,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 // ShareManager.sharedWithMe — Type and Modified filters
 //
-// Drives the manager directly against real Node/Share/User RAs over in-memory SQLite (zero mocks below the RA seam).
 // The behavior under test: the caller's shared-with-me listing narrows to the target's own type family and its
 // last-modified window, with the same Type and Modified semantics the drive listing applies, and the cross-user scoping
 // the listing already guarantees survives every filter -- a filter never widens the set to another grantee's shares.
@@ -13,15 +12,21 @@ import type { Share, SharedWithMeQuery } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
 import { ShareManager } from '@server/managers/share.ts';
 
 // Support
-import { createTestDatabase, fileNode, folderNode, seedBackend, seedBlob, seedUser } from
+import {
+    createTestDatabase,
+    fileNode,
+    folderNode,
+    seedBackend,
+    seedBlob,
+    seedUser,
+} from
     '../resource-access/nodes/support.ts';
 import { testActor } from '../nodes/support.ts';
 
@@ -37,9 +42,8 @@ const grantee = testActor({ id: 'grantee' });
 beforeEach(async () =>
 {
     handle = await createTestDatabase();
-    const nodes = new NodeRA(handle);
     shares = new ShareRA(handle);
-    manager = new ShareManager(handle, nodes, shares, new UserRA(handle));
+    manager = new ShareManager(handle);
 
     await seedUser(handle.db, 'owner');
     await seedUser(handle.db, 'grantee');

@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Resource Access
 //
-// The query surface over the `share` and `share_request` tables, and -- the point of the whole layer -- the permission
-// resolver every authenticated request leans on: effectiveRole(user, node) as the max of ownership, a direct grant, and
-// any inherited grant, in one recursive walk. A batch variant resolves a page of nodes in a single round trip so
-// children listings never fan out into N+1 queries.
+// The permission resolver every authenticated request depends on lives here: effectiveRole(user, node) is the max of
+// ownership, a direct grant, and any inherited grant, in one recursive walk. effectiveRoles resolves a page of nodes in
+// a single round trip so children listings never fan out into N+1 queries.
 //
 // The resolver walks parent edges only, never target_node_id, so a link never conducts permission: a share on a folder
 // that contains a link grants nothing on that link's target, because the target is resolved against its OWN real
@@ -247,7 +246,7 @@ export class ShareRA
         return shareFromRow(row);
     }
 
-    async getShareById(id : string) : Promise<Share | undefined>
+    async getShareByID(id : string) : Promise<Share | undefined>
     {
         const row = await this.#db
             .selectFrom('share')
@@ -394,7 +393,7 @@ export class ShareRA
             .execute();
     }
 
-    async getRequestById(id : string) : Promise<ShareRequest | undefined>
+    async getRequestByID(id : string) : Promise<ShareRequest | undefined>
     {
         const row = await this.#db
             .selectFrom('share_request')
@@ -458,7 +457,7 @@ export class ShareRA
 
     // The caller's outstanding request on a node, if any -- the manager's guard against a duplicate pending request per
     // (node, requester) (the partial-unique constraint was deferred, so this is manager-enforced).
-    async findPendingByNodeRequester(nodeID : string, requesterID : string) : Promise<ShareRequest | undefined>
+    async getPendingByNodeRequester(nodeID : string, requesterID : string) : Promise<ShareRequest | undefined>
     {
         const row = await this.#db
             .selectFrom('share_request')

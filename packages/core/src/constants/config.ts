@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Config Defaults
 //
-// The fallback values behind the env-driven config schema. The schema (src/server/utils/config.ts) owns which values
-// are tunable and how they validate; these are only what applies when the environment says nothing.
+// The config schema in src/server/utils/config.ts owns which values are tunable and how they validate; these apply only
+// when the environment says nothing.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const DEFAULT_HOST = '0.0.0.0';

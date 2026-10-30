@@ -1,18 +1,18 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Request/Response Wire Primitives
 //
-// DTOs are JSON: every Date field crossing the API boundary serializes as an ISO 8601 string, never a JS Date
-// instance. isoDateTimeCodec is the one definition every request/response schema reuses, so the wire
-// format for timestamps can't drift between endpoints.
-//
-// The name and mime-type codecs are here for the same reason: a node's name arrives through six endpoints and its mime
-// type through four, and a bound applied at five of them is not a bound.
+// Every request/response schema reuses these codecs, so the wire format for timestamps (ISO 8601 strings, never a JS
+// Date) and the bounds on a node's name and mime type cannot drift between endpoints. A node's name arrives through
+// several endpoints, and a bound applied at all but one of them is not a bound.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';
 
 // Constants
-import { MIME_TYPE_MAX_LENGTH, NODE_NAME_MAX_LENGTH, isValidMimeType } from '../../../constants/node.ts';
+import { MIME_TYPE_MAX_LENGTH, NODE_NAME_MAX_LENGTH } from '../../../constants/node.ts';
+
+// Utils
+import { isValidMimeType } from '../../../utils/mimeType.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 

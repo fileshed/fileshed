@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Annotation Params
-  --
-  -- The parameter panel behind the active tool's caret: the colors, thicknesses, sizes, and toggles pdf.js exposes for
-  -- the armed annotation editor. It shows only the controls that belong to the current mode -- highlight (color,
-  -- thickness, show-all), text (color, size), or ink (color, thickness, opacity) -- and writes each change into the
-  -- annotator store, which the render surface forwards to pdf.js. `none` has no params and renders nothing.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -144,10 +139,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
-
-    // Components
+    // Engines
     import {
         type AnnotationMode,
         drawColors,
@@ -156,7 +148,10 @@
         inkOpacityRange,
         inkThicknessRange,
         textSizeRange,
-    } from './types.ts';
+    } from '../../../engines/pdf/types.ts';
+
+    // Stores
+    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

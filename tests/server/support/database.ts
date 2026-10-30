@@ -38,7 +38,7 @@ export function testDatabaseKind() : Config['DATABASE_KIND']
 export interface TestDatabase
 {
     // The config the database was actually opened with. On a Postgres run this is the caller's config with the dialect
-    // fields rewritten, so whatever the caller hands to createAuth/composeFullApp describes the live connection.
+    // fields rewritten, so whatever the caller hands to createAuth/composeTestApp describes the live connection.
     config : Config;
     handle : DatabaseHandle;
     dispose : () => Promise<void>;

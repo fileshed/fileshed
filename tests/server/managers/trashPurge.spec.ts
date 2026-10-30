@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
 import { NodeManager } from '@server/managers/node.ts';
@@ -45,7 +45,7 @@ beforeEach(async () =>
 {
     handle = await createTestDatabase();
     ra = new NodeRA(handle);
-    nodes = new NodeManager(handle, ra, new BlobRA(handle), testNodePolicy());
+    nodes = new NodeManager({ handle, orphanedBlobs: (tx) => new BlobRA(tx), policy: testNodePolicy() });
 
     await seedUser(handle.db, 'alice');
     await seedUser(handle.db, 'bob');

@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Provider Presentation
 //
-// Display facts for the social providers. Labels and icons derive mechanically -- capitalize the id, follow the
-// simple-icons naming -- with override maps only where the rule gets it wrong. Console URLs cannot derive and are
-// curated outright. Every miss fails soft: an unknown icon renders as empty space and a provider without a console
-// entry renders no link, so a gap in this file never blocks a working provider.
+// Labels and icons derive mechanically (capitalize the id, follow the simple-icons naming), with override maps only
+// where the rule gets it wrong. Console URLs cannot derive and are curated outright. Every miss fails soft: an unknown
+// icon renders as empty space and a provider without a console entry renders no link, so a gap in this file never
+// blocks a working provider.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { SocialProviderID } from '@fileshed/core';

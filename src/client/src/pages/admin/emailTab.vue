@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Email Tab
   --
-  -- Outgoing mail: the SMTP settings (every one applies to the next email, no restart -- the password is
-  -- write-only and stored sealed), the boot-frozen verification requirement, and the test-send that proves the
-  -- plumbing against the settings as they stand right now.
+  -- The SMTP settings apply to the next email with no restart, and the password is write-only and stored sealed. The
+  -- verification requirement is read once at boot.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

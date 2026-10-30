@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { emptyTrash, getTrash } from '@client/resource-access/nodes.ts';
+import { emptyTrash, listTrash } from '@client/resource-access/nodes.ts';
 import { fetchMe } from '@client/resource-access/me.ts';
 
 // Stores
@@ -22,12 +22,12 @@ import { useSessionStore } from '@client/stores/session.ts';
 import { useTrashStore } from '@client/stores/trash.ts';
 
 // Support
-import { meFixture } from '../support.ts';
+import { fileNode, folderNode, meFixture } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getTrash: vi.fn(),
+    listTrash: vi.fn(),
     restoreNode: vi.fn(),
     hardDeleteNode: vi.fn(),
     emptyTrash: vi.fn(),
@@ -35,48 +35,14 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
 
 vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
 
-const getTrashMock = getTrash as unknown as Mock;
+const listTrashMock = listTrash as unknown as Mock;
 const emptyTrashMock = emptyTrash as unknown as Mock;
 const fetchMeMock = fetchMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const ISO = '2026-07-01T00:00:00.000Z';
-
-function folder(id : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name: id,
-        type: 'folder',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        trashedAt: ISO,
-    };
-}
-
-function trashedFile(id : string, mimeType : string) : NodeResponse
-{
-    return {
-        id,
-        name: id,
-        type: 'file',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        trashedAt: ISO,
-        blobID: 'b1',
-        size: 100,
-        mimeType,
-        sharing: null,
-    };
-}
+const TRASHED = { trashedAt: ISO };
 
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
@@ -96,7 +62,10 @@ describe('useTrashStore.emptyAll', () =>
     it('purges every trashed root and resets the listing to empty', async () =>
     {
         const store = useTrashStore();
-        getTrashMock.mockResolvedValue(page([ folder('a'), folder('b') ]));
+        listTrashMock.mockResolvedValue(page([
+            folderNode({ ...TRASHED, id: 'a' }),
+            folderNode({ ...TRASHED, id: 'b' }),
+        ]));
         await store.load();
 
         emptyTrashMock.mockResolvedValue({ purged: 2 });
@@ -111,7 +80,7 @@ describe('useTrashStore.emptyAll', () =>
     it('leaves the listing untouched when the purge itself fails', async () =>
     {
         const store = useTrashStore();
-        getTrashMock.mockResolvedValue(page([ folder('a') ]));
+        listTrashMock.mockResolvedValue(page([ folderNode({ ...TRASHED, id: 'a' }) ]));
         await store.load();
 
         emptyTrashMock.mockRejectedValue(new Error('boom'));
@@ -128,7 +97,7 @@ describe('useTrashStore.emptyAll', () =>
         fetchMeMock.mockResolvedValue(refreshedProfile);
 
         const store = useTrashStore();
-        getTrashMock.mockResolvedValue(page([ folder('a') ]));
+        listTrashMock.mockResolvedValue(page([ folderNode({ ...TRASHED, id: 'a' }) ]));
         await store.load();
 
         emptyTrashMock.mockResolvedValue({ purged: 1 });
@@ -152,36 +121,42 @@ describe('useTrashStore — filters', () =>
     // for a narrower read.
     it('narrows the listing in hand by type without asking the server', async () =>
     {
-        getTrashMock.mockResolvedValue(page([ trashedFile('doc', 'text/plain'), trashedFile('pic', 'image/png') ]));
+        listTrashMock.mockResolvedValue(page([
+            fileNode({ ...TRASHED, id: 'doc', mimeType: 'text/plain' }),
+            fileNode({ ...TRASHED, id: 'pic', mimeType: 'image/png' }),
+        ]));
         const store = useTrashStore();
         await store.load();
-        getTrashMock.mockClear();
+        listTrashMock.mockClear();
 
         await store.setTypeFamilies([ 'images' ]);
 
         expect(store.typeFamilies).toEqual([ 'images' ]);
         expect(store.hasActiveFilters).toBe(true);
         expect(store.items.map((node) => node.id)).toEqual([ 'pic' ]);
-        expect(getTrashMock).not.toHaveBeenCalled();
+        expect(listTrashMock).not.toHaveBeenCalled();
     });
 
     it('narrows the listing in hand by modified date without asking the server', async () =>
     {
-        const recent = { ...trashedFile('recent', 'text/plain'), updatedAt: new Date().toISOString() };
-        getTrashMock.mockResolvedValue(page([ trashedFile('ancient', 'text/plain'), recent ]));
+        const recent = fileNode({ ...TRASHED, id: 'recent', updatedAt: new Date().toISOString() });
+        listTrashMock.mockResolvedValue(page([ fileNode({ ...TRASHED, id: 'ancient' }), recent ]));
         const store = useTrashStore();
         await store.load();
-        getTrashMock.mockClear();
+        listTrashMock.mockClear();
 
         await store.setModified({ kind: 'preset', preset: 'last7' });
 
         expect(store.items.map((node) => node.id)).toEqual([ 'recent' ]);
-        expect(getTrashMock).not.toHaveBeenCalled();
+        expect(listTrashMock).not.toHaveBeenCalled();
     });
 
     it('brings back every filtered-out row on clearFilters', async () =>
     {
-        getTrashMock.mockResolvedValue(page([ trashedFile('doc', 'text/plain'), trashedFile('pic', 'image/png') ]));
+        listTrashMock.mockResolvedValue(page([
+            fileNode({ ...TRASHED, id: 'doc', mimeType: 'text/plain' }),
+            fileNode({ ...TRASHED, id: 'pic', mimeType: 'image/png' }),
+        ]));
         const store = useTrashStore();
         await store.load();
         await store.setTypeFamilies([ 'images' ]);
@@ -196,7 +171,7 @@ describe('useTrashStore — filters', () =>
     // An empty result WITH an active filter is a distinct surface state from a genuinely empty trash.
     it('reports filteredEmpty only when a filter is active and the result is empty', async () =>
     {
-        getTrashMock.mockResolvedValue(page([]));
+        listTrashMock.mockResolvedValue(page([]));
         const store = useTrashStore();
         await store.load();
 
@@ -211,7 +186,7 @@ describe('useTrashStore — filters', () =>
     // Filters are per-page-visit: revisiting the trash (a fresh load) starts unfiltered.
     it('resets the filters on a fresh load', async () =>
     {
-        getTrashMock.mockResolvedValue(page([]));
+        listTrashMock.mockResolvedValue(page([]));
         const store = useTrashStore();
         await store.load();
         await store.setTypeFamilies([ 'images' ]);
@@ -221,7 +196,7 @@ describe('useTrashStore — filters', () =>
 
         expect(store.typeFamilies).toEqual([]);
         expect(store.hasActiveFilters).toBe(false);
-        expect(getTrashMock.mock.calls.at(-1)?.[0] ?? {}).not.toHaveProperty('types');
+        expect(listTrashMock.mock.calls.at(-1)?.[0] ?? {}).not.toHaveProperty('types');
     });
 });
 

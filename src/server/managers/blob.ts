@@ -1,11 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob Manager
 //
-// The claim / proof-of-possession / upload flow. A claim is admitted against the owner's quota -- what their files
-// already hold plus what their outstanding claims have yet to deliver -- and then routed: an unknown blob gets a
-// single-use upload ticket; a known blob (graveyarded or not) that is worth the round trip gets a proof-of-possession
-// challenge instead of re-uploading the bytes. Answering a challenge or completing an upload creates the caller's file
-// node -- for a known blob, resurrecting the record if it was graveyarded -- in one transaction.
+// A claim is admitted against the owner's quota -- what their files already hold plus what their outstanding claims
+// have yet to deliver -- and then routed: an unknown blob gets a single-use upload ticket; a known blob (graveyarded or
+// not) that is worth the round trip gets a proof-of-possession challenge instead of re-uploading the bytes. Answering a
+// challenge or completing an upload creates the caller's file node -- for a known blob, resurrecting the record if it
+// was graveyarded -- in one transaction.
 //
 // Upload bytes travel as one stream or as a sequence of chunks against the same ticket, which carries how far the
 // upload has got between requests -- the chunk holding the last byte is the one that verifies and commits.
@@ -40,6 +40,7 @@ import {
     MIN_CHALLENGE_RANGES,
     NONCE_BYTES,
     type Node,
+    type NodeResponse,
     NotFoundError,
     OffsetConflictError,
     PayloadTooLargeError,
@@ -52,19 +53,22 @@ import {
     type UploadChunkAccepted,
     type UploadCommitCreate,
     type UploadCommitMetadata,
-    isDirectOwner,
+    isHiddenTrash,
     isSkippedName,
 } from '@fileshed/core';
 
 // Engines
-import { effectiveQuota } from '../engines/quota.ts';
 import { regulation } from '../engines/regulation/index.ts';
 
+// Managers
+import { NodeAdmission } from './nodeAdmission.ts';
+import type { Actor } from './session.ts';
+
 // Resource Access
-import type { SessionUser } from '../resource-access/auth.ts';
-import type { DatabaseHandle } from '../resource-access/database/database.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
+import { type DatabaseHandle, inTransaction } from '../resource-access/database/database.ts';
 import { type BlobLocation, BlobRA } from '../resource-access/blob/index.ts';
-import { NodeRA } from '../resource-access/nodes/node.ts';
+import { NodeRA } from '../resource-access/nodes/index.ts';
 import { ShareRA } from '../resource-access/shares/index.ts';
 import { UserRA } from '../resource-access/users/index.ts';
 
@@ -96,9 +100,8 @@ interface Ticket
     spent : boolean;
 
     // What the commit answered, once it did. Verifying and hashing an assembled file is seconds of work on a large
-    // one, and a connection torn anywhere in that window used to leave the retry meeting a ticket that no longer
-    // existed -- a 404 carrying no position, about a file that was very likely stored. A settled ticket answers the
-    // retry with the node instead, for as long as the ticket would have lived anyway.
+    // one, and a connection torn in that window leaves the client retrying a commit that very likely stored its file.
+    // A settled ticket answers that retry with the stored node, until the ticket expires.
     settled ?: CommittedNode;
 }
 
@@ -172,8 +175,8 @@ class TicketStore
         return { count, bytes };
     }
 
-    // Hand the ticket to a commit. Single-use is enforced from here on -- a second request reads it as gone, exactly
-    // as it would have read a closed one -- while the hold on the owner survives until the commit settles, so a client
+    // Hand the ticket to a commit. Single-use is enforced from here on -- a second request is refused with
+    // upload.chunkInFlight until the commit settles -- while the hold on the owner survives until then too, so a client
     // cannot free its own claim by starting the upload and claiming again while the bytes are in flight.
     spend(ticket : Ticket) : void
     {
@@ -195,9 +198,9 @@ class TicketStore
     }
 
     // Move the upload forward and push the expiry out: an upload still delivering bytes is alive, however long the
-    // whole file takes, and the partial-staging sweep reads the same window from the other side.
+    // whole file takes, and the staged-upload sweep reads the same window from the other side.
     //
-    // Renewed by bytes landing, never by a request arriving. The partials reaper reclaims staging that has sat
+    // Renewed by bytes landing, never by a request arriving. The staged-upload sweep reclaims staging that has sat
     // untouched for a whole ticket lifetime, on the rule that a live ticket always has fresh staging -- and a
     // zero-length append writes nothing, so it leaves the file's mtime where it was. Renewing on one would push the
     // ticket past its own staging, and a client repeating it every few minutes would outlive the bytes entirely.
@@ -372,10 +375,6 @@ function proofMatches(expected : string, provided : string) : boolean
     return timingSafeEqual(expectedBytes, providedBytes);
 }
 
-// Caps the streamed byte count at what the claim still has room for while an upload is in flight: a client that
-// streams more than it claimed is aborted at the first excess byte, which rejects the pipeline and cleans its staging
-// file, so a size lie can never push gigabytes onto disk. Exceeding the claimed size is the same size mismatch the
-// store would catch after the fact (400), so the limiter raises it as one.
 // The store's integrity refusals are the client's fault -- bytes that disagree with what it claimed -- so they travel
 // as 400s carrying the typed code. Anything else passes through untouched.
 function asIntegrityRejection(error : unknown) : unknown
@@ -403,6 +402,10 @@ function staleBlobConflict() : ConflictError
     );
 }
 
+// Caps the streamed byte count at what the claim still has room for while an upload is in flight: a client that
+// streams more than it claimed is aborted at the first excess byte, which rejects the pipeline and cleans its staging
+// file, so a size lie can never push gigabytes onto disk. Exceeding the claimed size is the same size mismatch the
+// store would catch after the fact (400), so the limiter raises it as one.
 function byteLimiter(maxBytes : number) : Transform
 {
     let seen = 0;
@@ -452,12 +455,26 @@ export interface BlobManagerDeps
 
     // The instance-wide quota every account with no limit of its own inherits, likewise read per use.
     defaultQuota : () => Promise<number>;
+
+    // What a commit answers with and sets going: the node manager's single-node response, and tag extraction.
+    responder : NodeResponder;
+    tags : TagEnricher;
 }
 
-// A committed file node with the caller's effective role on it, so the route stamps the real role rather than
+export interface NodeResponder
+{
+    respond(actor : Actor, node : Node, role : Role) : Promise<NodeResponse>;
+}
+
+export interface TagEnricher
+{
+    enrichInBackground(blobID : string, mimeType : string | null) : void;
+}
+
+// A committed file node with the caller's effective role on it, so the response carries the real role rather than
 // assuming ownership: a create is always the caller's own ('owner'), but a replace may be run by an editor on a file
 // shared to them, whose response must carry 'editor'.
-export interface CommittedNode
+interface CommittedNode
 {
     node : FileNode;
     role : Role;
@@ -470,12 +487,26 @@ export interface UploadAccepted extends UploadChunkAccepted
     committed : false;
 }
 
-export interface UploadCommitted extends CommittedNode
+export interface UploadCommitted
 {
     committed : true;
+    node : NodeResponse;
 }
 
 export type UploadOutcome = UploadAccepted | UploadCommitted;
+
+// The same two outcomes before the committed node is answered for.
+type ReceivedCommit = CommittedNode & { committed : true };
+type ReceivedUpload = UploadAccepted | ReceivedCommit;
+
+// What one upload request carries: its bytes, the length it declared (undefined when it declared none), and where in
+// the claimed file the first of those bytes belongs.
+export interface UploadBytes
+{
+    stream : Readable;
+    contentLength : number | undefined;
+    offset : number;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -486,11 +517,12 @@ export class BlobManager
     readonly #uploadMaxBytes : () => Promise<number>;
     readonly #skippedUploadNames : () => Promise<string[]>;
     readonly #uploadChunkBytes : number;
-    readonly #defaultQuota : () => Promise<number>;
+    readonly #responder : NodeResponder;
+    readonly #tags : TagEnricher;
 
     readonly #nodes : NodeRA;
     readonly #shares : ShareRA;
-    readonly #users : UserRA;
+    readonly #admission : NodeAdmission;
 
     readonly #tickets = new TicketStore();
     readonly #challenges = new ChallengeStore();
@@ -505,11 +537,17 @@ export class BlobManager
         this.#uploadMaxBytes = deps.uploadMaxBytes;
         this.#skippedUploadNames = deps.skippedUploadNames;
         this.#uploadChunkBytes = deps.uploadChunkBytes;
-        this.#defaultQuota = deps.defaultQuota;
+        this.#responder = deps.responder;
+        this.#tags = deps.tags;
 
         this.#nodes = new NodeRA(deps.handle);
         this.#shares = new ShareRA(deps.handle);
-        this.#users = new UserRA(deps.handle);
+        this.#admission = new NodeAdmission({
+            nodes: this.#nodes,
+            shares: this.#shares,
+            users: new UserRA(deps.handle),
+            defaultQuota: deps.defaultQuota,
+        });
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -519,7 +557,7 @@ export class BlobManager
     // POST /api/blobs/claim. The blob is resolved first so quota and the ticket/challenge routing decide against the
     // authoritative size, not a size the client invented: unknown -> upload ticket; known and large ->
     // proof-of-possession challenge; known but small -> ticket (round trips cost more than the bytes).
-    async claim(caller : SessionUser, request : ClaimRequest) : Promise<ClaimResponse>
+    async claim(user : SessionUser, request : ClaimRequest) : Promise<ClaimResponse>
     {
         const stored = await this.#blob.get(request.sha256);
 
@@ -540,14 +578,14 @@ export class BlobManager
         // ticket that records the hold there must be no await: two claims arriving together would otherwise be judged
         // against the same outstanding total and both admitted, and one quota would have covered them twice.
         const [ limitBytes, usedBytes, maxBytes ] = await Promise.all([
-            this.#resolveLimit(caller.id),
-            this.#nodes.ownedBytes(caller.id),
+            this.#admission.resolveLimit(user.id),
+            this.#nodes.ownedBytes(user.id),
             this.#uploadMaxBytes(),
         ]);
 
-        const outstanding = this.#tickets.outstanding(caller.id);
+        const outstanding = this.#tickets.outstanding(user.id);
 
-        this.#enforceQuota(caller.id, usedBytes + outstanding.bytes, size, limitBytes);
+        this.#admission.enforceQuota(user.id, usedBytes + outstanding.bytes, size, limitBytes);
 
         if(known === undefined)
         {
@@ -555,12 +593,12 @@ export class BlobManager
             {
                 throw new PayloadTooLargeError('File exceeds the maximum upload size.', maxBytes);
             }
-            return this.#ticketFor(request.sha256, size, caller.id, outstanding.count);
+            return this.#ticketFor(request.sha256, size, user.id, outstanding.count);
         }
 
         if(size < SMALL_FILE_THRESHOLD_BYTES)
         {
-            return this.#ticketFor(request.sha256, size, caller.id, outstanding.count);
+            return this.#ticketFor(request.sha256, size, user.id, outstanding.count);
         }
 
         const nonce = randomBytes(NONCE_BYTES).toString('hex');
@@ -568,10 +606,10 @@ export class BlobManager
         const challenge = this.#challenges.issue({
             sha256: request.sha256,
             size,
-            ownerID: caller.id,
+            ownerID: user.id,
             nonce,
             ranges,
-            location: { backendID: known.backendID, storageKey: known.storageKey },
+            location: known,
         });
 
         return { upload: false, challengeID: challenge.id, nonce, ranges };
@@ -607,17 +645,23 @@ export class BlobManager
     // and on success commit (resurrecting a graveyarded blob) with zero bytes moved -- creating the caller's node, or
     // replacing an existing file's content in place. A failed proof is logged and counted toward the per-user rate
     // limit (a failure is probing), and is gated ahead of the target resolution so a probe learns nothing about it.
-    async answerChallenge(caller : SessionUser, challengeID : string, answer : string, metadata : UploadCommitMetadata)
+    async answerChallenge(actor : Actor, challengeID : string, answer : string, metadata : UploadCommitMetadata)
+    : Promise<NodeResponse>
+    {
+        return this.#respond(actor, await this.#proveAndCommit(actor.user, challengeID, answer, metadata));
+    }
+
+    async #proveAndCommit(user : SessionUser, challengeID : string, answer : string, metadata : UploadCommitMetadata)
     : Promise<CommittedNode>
     {
-        if(this.#failedProofs.isLimited(caller.id))
+        if(this.#failedProofs.isLimited(user.id))
         {
             throw new TooManyRequestsError('Too many failed proofs; try again later.');
         }
 
         const challenge = this.#challenges.consume(challengeID);
         if(challenge === undefined) { throw new NotFoundError('Challenge not found or expired.'); }
-        if(challenge.ownerID !== caller.id) { throw new ForbiddenError('This challenge belongs to another user.'); }
+        if(challenge.ownerID !== user.id) { throw new ForbiddenError('This challenge belongs to another user.'); }
 
         let expected : string;
         try
@@ -631,7 +675,7 @@ export class BlobManager
             // The blob is simply gone; the client must re-claim.
             if(error instanceof BlobNotFoundError)
             {
-                this.#logger.info({ userID: caller.id, sha256: challenge.sha256 }, 'Challenge blob vanished mid-proof');
+                this.#logger.info({ userID: user.id, sha256: challenge.sha256 }, 'Challenge blob vanished mid-proof');
                 throw new NotFoundError('The blob is no longer available; re-claim to upload.');
             }
             throw error;
@@ -639,8 +683,8 @@ export class BlobManager
 
         if(!proofMatches(expected, answer))
         {
-            this.#failedProofs.record(caller.id);
-            this.#logger.warn({ userID: caller.id, sha256: challenge.sha256 }, 'Failed proof-of-possession');
+            this.#failedProofs.record(user.id);
+            this.#logger.warn({ userID: user.id, sha256: challenge.sha256 }, 'Failed proof-of-possession');
             throw new ForbiddenError('Proof of possession failed.');
         }
 
@@ -652,7 +696,7 @@ export class BlobManager
 
         if('replaceNodeID' in metadata)
         {
-            const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
+            const { target, role } = await this.#prepareReplace(user, metadata.replaceNodeID);
             return this.#commitReplace(
                 target,
                 role,
@@ -664,8 +708,8 @@ export class BlobManager
             );
         }
 
-        await this.#assertParentEdge(caller.id, metadata.parentID);
-        const node = await this.#commitFileNode(caller, challenge.sha256, challenge.size, metadata, persistBlob);
+        await this.#assertParentEdge(user.id, metadata.parentID);
+        const node = await this.#commitFileNode(user, challenge.sha256, challenge.size, metadata, persistBlob);
 
         return { node, role: 'owner' };
     }
@@ -684,17 +728,43 @@ export class BlobManager
     // byte verifies the assembled file and commits it. Only that final chunk retires the ticket, so a chunk that fails
     // in flight is retried alone rather than restarting the upload.
     async commitUpload(
-        caller : SessionUser,
+        actor : Actor,
         ticketID : string,
-        body : Readable,
-        metadata : UploadCommitMetadata,
-        contentLength : number | undefined,
-        offset : number
+        bytes : UploadBytes,
+        metadata : UploadCommitMetadata
     ) : Promise<UploadOutcome>
+    {
+        const received = await this.#receive(actor.user, ticketID, bytes, metadata);
+        if(!received.committed) { return received; }
+
+        return { committed: true, node: await this.#respond(actor, received) };
+    }
+
+    // A dedup claim usually lands on an already-extracted blob; ensureFor's existence check makes the extraction a
+    // no-op then, and covers the first-claim-after-resurrection case when it is not.
+    async #respond(actor : Actor, committed : CommittedNode) : Promise<NodeResponse>
+    {
+        this.#tags.enrichInBackground(committed.node.blobID, committed.node.mimeType);
+
+        return this.#responder.respond(actor, committed.node, committed.role);
+    }
+
+    async #receive(
+        user : SessionUser,
+        ticketID : string,
+        bytes : UploadBytes,
+        metadata : UploadCommitMetadata
+    ) : Promise<ReceivedUpload>
     {
         const ticket = this.#tickets.open(ticketID);
         if(ticket === undefined) { throw new NotFoundError('Upload ticket not found or expired.'); }
-        if(ticket.ownerID !== caller.id) { throw new ForbiddenError('This ticket belongs to another user.'); }
+        if(ticket.ownerID !== user.id) { throw new ForbiddenError('This ticket belongs to another user.'); }
+
+        // Read live, so an admin lowering the cap stops an upload already in flight against the old one. Both reads
+        // come before the ticket's state is judged: nothing may await between that judgement and the spend (or the
+        // in-flight mark) that records it, or a second request arriving in the gap passes the same checks.
+        const maxBytes = await this.#uploadMaxBytes();
+        await this.#assertNameAccepted(metadata);
 
         // The bytes are already stored. Answering with the node rather than reading the body makes the retry of a
         // request whose reply never arrived land on the same file instead of a refusal.
@@ -707,39 +777,31 @@ export class BlobManager
             throw new ConflictError('upload.chunkInFlight', 'This upload is being committed.');
         }
 
-        // Read live, so an admin lowering the cap stops an upload already in flight against the old one.
-        const maxBytes = await this.#uploadMaxBytes();
         if(ticket.size > maxBytes)
         {
             throw new PayloadTooLargeError('Upload exceeds the maximum allowed size.', maxBytes);
         }
 
-        await this.#assertNameAccepted(metadata);
-
-        if(offset === 0 && contentLength === ticket.size)
+        if(bytes.offset === 0 && bytes.contentLength === ticket.size)
         {
-            this.#tickets.spend(ticket);
-
-            try
+            // A chunk still appending to staging would go on to commit the same ticket a second time.
+            if(ticket.inFlight)
             {
-                const committed = await this.#commitContent(caller, ticket, metadata, () =>
-                    this.#putBytes(ticket.sha256, ticket.size, body));
-
-                this.#tickets.settle(ticket, committed);
-
-                return { committed: true, ...committed };
+                throw new ConflictError(
+                    'upload.chunkInFlight',
+                    'Another chunk of this upload is still being received.'
+                );
             }
-            catch(error)
-            {
-                // Nothing was stored, so there is nothing a retry could be handed and no bytes to resume from. The
-                // claim that restarts the upload is a round trip the client already knows how to make.
-                this.#tickets.close(ticketID);
 
-                throw error;
-            }
+            return this.#commitTicket(
+                user,
+                ticket,
+                metadata,
+                () => this.#putBytes(ticket.sha256, ticket.size, bytes.stream)
+            );
         }
 
-        return this.#acceptChunk(caller, ticket, body, metadata, contentLength, offset);
+        return this.#acceptChunk(user, ticket, bytes, metadata);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -751,14 +813,14 @@ export class BlobManager
     // refused with the position it should have carried rather than silently corrupting the file. The chunk that brings
     // the staged bytes up to the claimed size verifies and commits them.
     async #acceptChunk(
-        caller : SessionUser,
+        user : SessionUser,
         ticket : Ticket,
-        body : Readable,
-        metadata : UploadCommitMetadata,
-        contentLength : number | undefined,
-        offset : number
-    ) : Promise<UploadOutcome>
+        bytes : UploadBytes,
+        metadata : UploadCommitMetadata
+    ) : Promise<ReceivedUpload>
     {
+        const { stream, contentLength, offset } = bytes;
+
         this.#assertChunkFits(ticket, contentLength, offset);
 
         // Two appends to one staging file would interleave their bytes. The refusal carries the transient code: the
@@ -775,7 +837,7 @@ export class BlobManager
             // corrected to what actually survived before the refusal travels, so a retry meets a position the
             // upload can be resumed from rather than the one that just failed.
             let written : number;
-            try { written = await this.#appendChunk(ticket, body, offset); }
+            try { written = await this.#appendChunk(ticket, stream, offset); }
             catch(error)
             {
                 if(error instanceof OffsetConflictError) { this.#tickets.advance(ticket, error.receivedBytes); }
@@ -790,34 +852,39 @@ export class BlobManager
                 return { committed: false, receivedBytes: ticket.receivedBytes, totalBytes: ticket.size };
             }
 
-            // The file is whole. Its ticket and its staging are spent either way -- a rejected commit leaves no bytes
-            // to resume from, and the claim that would restart the upload is a round trip the client already knows how
-            // to make. The ticket's hold on the owner outlives the ticket itself, right up to the commit settling.
-            this.#tickets.spend(ticket);
-
-            try
-            {
-                const committed = await this.#commitContent(caller, ticket, metadata, () =>
-                    this.#publishStaged(ticket));
-
-                this.#tickets.settle(ticket, committed);
-
-                return { committed: true, ...committed };
-            }
-            catch(error)
-            {
-                this.#tickets.close(ticket.id);
-
-                throw error;
-            }
-            finally
-            {
-                await this.#blob.discardChunked(ticket.id);
-            }
+            // The file is whole, and its staging is spent whichever way the commit goes.
+            try { return await this.#commitTicket(user, ticket, metadata, () => this.#publishStaged(ticket)); }
+            finally { await this.#blob.discardStaged(ticket.id); }
         }
         finally
         {
             ticket.inFlight = false;
+        }
+    }
+
+    // Spend the ticket on one commit: settle it with the answer, or close it when the commit fails. A failed commit
+    // leaves no bytes to resume from, and the claim that restarts the upload is a round trip the client already knows
+    // how to make. The ticket's hold on the owner outlives the ticket itself, right up to the commit settling.
+    async #commitTicket(
+        user : SessionUser,
+        ticket : Ticket,
+        metadata : UploadCommitMetadata,
+        putBytes : () => Promise<BlobLocation>
+    ) : Promise<ReceivedCommit>
+    {
+        this.#tickets.spend(ticket);
+
+        try
+        {
+            const committed = await this.#commitContent(user, ticket, metadata, putBytes);
+            this.#tickets.settle(ticket, committed);
+
+            return { committed: true, ...committed };
+        }
+        catch(error)
+        {
+            this.#tickets.close(ticket.id);
+            throw error;
         }
     }
 
@@ -879,7 +946,7 @@ export class BlobManager
     {
         try
         {
-            return await this.#blob.commitChunked(ticket.id, ticket.sha256, ticket.size);
+            return await this.#blob.commitStaged(ticket.id, ticket.sha256, ticket.size);
         }
         catch(error)
         {
@@ -893,7 +960,8 @@ export class BlobManager
 
     // Prune expired tickets, challenges, and stale failed-proof counts. Correctness never depends on this -- an expired
     // entry is refused on use whether it has been pruned or not -- it bounds what the process holds in memory. The
-    // staging bytes an expired ticket leaves on disk are the partials sweep's to reclaim, on its own registered timer.
+    // staging bytes an expired ticket leaves on disk are the staged-upload sweep's to reclaim, on its own registered
+    // timer.
     pruneExpired() : void
     {
         this.#tickets.sweep();
@@ -909,45 +977,7 @@ export class BlobManager
     // bytes landed on. A proven dedup uses resurrect instead -- there are no fresh bytes, so the pin already stands.
     #insertOrResurrect(sha256 : string, size : number, location : BlobLocation) : (blob : BlobRA) => Promise<void>
     {
-        return (blob) => blob.insertOrResurrect({
-            sha256,
-            size,
-            backendID: location.backendID,
-            storageKey: location.storageKey,
-        });
-    }
-
-    // The cap an owner is held to right now: their quota_limit read from their user row, with the instance default
-    // folded in. Both halves are read live, never taken from the caller's session -- the session cookie cache carries
-    // a snapshot of the user row for its whole window, so enforcing against it would judge a write by a limit an
-    // admin has already replaced.
-    //
-    // Always called BEFORE a transaction opens: it reads the user row and the settings row, and SQLite serializes
-    // writes, so a read issued from inside an open write transaction on the same handle deadlocks the commit. The
-    // resolved limit is then carried into the transaction as a plain number.
-    async #resolveLimit(ownerID : string) : Promise<number | null>
-    {
-        const [ userLimit, instanceDefault ] = await Promise.all([
-            this.#users.quotaLimitOf(ownerID),
-            this.#defaultQuota(),
-        ]);
-
-        return effectiveQuota(userLimit, instanceDefault);
-    }
-
-    // Judge one write against an owner's quota and throw the quota message on refusal. Keyed by ownerID and an already-
-    // resolved limit so it serves both the caller-charged create paths (caller is the owner) and the owner-charged
-    // replace path (an editor's write is charged to the file's owner). usedBytes is passed in so the caller controls
-    // whether it was read outside the commit (the early gate) or inside it (the authoritative re-check). incomingBytes
-    // is the DELTA for a replace, which may be negative.
-    #enforceQuota(ownerID : string, usedBytes : number, incomingBytes : number, limitBytes : number | null) : void
-    {
-        const verdict = regulation.quota.admit({ ownerID, usedBytes, limitBytes, incomingBytes });
-
-        if(!verdict.ok)
-        {
-            throw new ForbiddenError(verdict.violations[0]?.message ?? 'This write would exceed the storage quota.');
-        }
+        return (blob) => blob.insertOrResurrect({ sha256, size, ...location });
     }
 
     // Commit an upload's bytes as the caller's file node, or onto an existing one. Every refusal that can be reached
@@ -955,7 +985,7 @@ export class BlobManager
     // another writer has already moved on -- and the record write that follows is an insert-or-resurrect pinned to the
     // backend the bytes landed on.
     async #commitContent(
-        caller : SessionUser,
+        user : SessionUser,
         ticket : Ticket,
         metadata : UploadCommitMetadata,
         putBytes : () => Promise<BlobLocation>
@@ -965,7 +995,7 @@ export class BlobManager
 
         if('replaceNodeID' in metadata)
         {
-            const { target, role } = await this.#prepareReplace(caller, metadata.replaceNodeID);
+            const { target, role } = await this.#prepareReplace(user, metadata.replaceNodeID);
 
             // The stale-edit refusal, judged twice: here against the target as it was resolved, so a caller editing
             // from a version somebody else has already replaced never publishes bytes at all, and again inside the
@@ -977,10 +1007,10 @@ export class BlobManager
             return this.#commitReplace(target, role, sha256, size, metadata.mimeType, metadata.ifBlobID, persist);
         }
 
-        await this.#assertParentEdge(caller.id, metadata.parentID);
+        await this.#assertParentEdge(user.id, metadata.parentID);
         const persist = this.#insertOrResurrect(sha256, size, await putBytes());
 
-        return { node: await this.#commitFileNode(caller, sha256, size, metadata, persist), role: 'owner' };
+        return { node: await this.#commitFileNode(user, sha256, size, metadata, persist), role: 'owner' };
     }
 
     // Stream the body through the storage RA (onto the default backend), capping the byte count at the claimed size in
@@ -998,38 +1028,24 @@ export class BlobManager
         }
     }
 
-    // Parent-edge legality, decided by the shared regulation judge rather than a private rule, so the upload
-    // and node-creation paths reject the same placements: a non-folder parent, a trashed parent, or a parent the caller
-    // has no editor+ role on. The share resolver supplies the real role, so an editor on a folder shared to them may
-    // upload into it -- the created file is owned by the uploader and charged to their quota.
+    // The parent-edge judgement node creation applies, so an upload is refused the same parents: a non-folder, a
+    // trashed one, or one the caller has no editor+ role on. The share resolver supplies the real role, so an editor on
+    // a folder shared to them may upload into it -- the created file is owned by the uploader and charged to their
+    // quota. Depth is not judged: placement stops folders one rung short of the walk bound precisely so the deepest
+    // one can still hold a file.
     async #assertParentEdge(ownerID : string, parentID : string | null) : Promise<void>
     {
-        const parent = await this.#gatherParent(parentID);
-
-        const verdict = regulation.node.parentEdge({
-            creatorID: ownerID,
-            parent,
-            creatorRoleOnParent: parent === null ? null : await this.#shares.effectiveRole(ownerID, parent.id),
-        });
+        const parent = await this.#admission.gatherParent(parentID);
+        const verdict = await this.#admission.judgeParentEdge(ownerID, parent);
 
         if(!verdict.ok) { throw new RegulationError(verdict.violations); }
     }
 
-    async #gatherParent(parentID : string | null) : Promise<Node | null>
-    {
-        if(parentID === null) { return null; }
-
-        const parent = await this.#nodes.get(parentID);
-        if(parent === undefined) { throw new NotFoundError(`No parent node ${ parentID }.`); }
-
-        return parent;
-    }
-
     // One transaction: persist the blob record (insert-or-resurrect for an upload, resurrect for a proven dedup) and
-    // insert the file node, so the reference and any resurrection commit together. The tx-bound RA instances
-    // share the transaction's executor; persistBlob is the record write the caller's path dictates.
+    // insert the file node, so the reference and any resurrection commit together. persistBlob is the record write the
+    // caller's path dictates, made through the transaction's BlobRA.
     async #commitFileNode(
-        caller : SessionUser,
+        user : SessionUser,
         sha256 : string,
         size : number,
         metadata : UploadCommitCreate,
@@ -1041,7 +1057,7 @@ export class BlobManager
             type: 'file',
             id: createId(),
             name: metadata.name,
-            ownerID: caller.id,
+            ownerID: user.id,
             parentID: metadata.parentID,
             blobID: sha256,
             size,
@@ -1051,19 +1067,18 @@ export class BlobManager
             trashedAt: null,
         };
 
-        const limitBytes = await this.#resolveLimit(caller.id);
+        const limitBytes = await this.#admission.resolveLimit(user.id);
 
-        await this.#handle.db.transaction().execute(async (trx) =>
+        await inTransaction(this.#handle, async (tx) =>
         {
-            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
-            const blob = new BlobRA(txHandle);
-            const nodes = new NodeRA(txHandle);
+            const blob = new BlobRA(tx);
+            const nodes = new NodeRA(tx);
 
             // Re-judge quota against usage read inside the transaction. The claim-time gate admits each claim in
             // isolation, so a batch of concurrent claims could jointly overshoot; this is the authoritative check. On
             // SQLite (serialized writes) it closes the window; on Postgres READ COMMITTED it narrows it to concurrent
             // uncommitted claims -- full serialization (row locks / SERIALIZABLE) is out of v1 scope.
-            this.#enforceQuota(caller.id, await nodes.ownedBytes(caller.id), size, limitBytes);
+            this.#admission.enforceQuota(user.id, await nodes.ownedBytes(user.id), size, limitBytes);
 
             await persistBlob(blob);
             await nodes.insert(node);
@@ -1080,15 +1095,15 @@ export class BlobManager
     // better: a target they cannot resolve (missing, no access, or trashed-and-not-theirs) reads as absent (404), and
     // a non-file or a viewer is the typed regulation rejection. A trashed file reads as absent to non-owners, but its
     // OWNER may replace their own trashed file (it stays trashed) -- the same read-as-absent doctrine copy applies.
-    async #prepareReplace(caller : SessionUser, replaceNodeID : string) : Promise<{ target : FileNode; role : Role }>
+    async #prepareReplace(user : SessionUser, replaceNodeID : string) : Promise<{ target : FileNode; role : Role }>
     {
         const node = await this.#nodes.get(replaceNodeID);
         if(node === undefined) { throw new NotFoundError(`No node ${ replaceNodeID }.`); }
 
-        const role = await this.#shares.effectiveRole(caller.id, node.id);
+        const role = await this.#shares.effectiveRole(user.id, node.id);
         if(role === null) { throw new NotFoundError(`No node ${ replaceNodeID }.`); }
 
-        if(node.type !== 'link' && node.trashedAt !== null && !isDirectOwner(node, caller.id))
+        if(isHiddenTrash(node, user.id))
         {
             throw new NotFoundError(`No node ${ replaceNodeID }.`);
         }
@@ -1123,8 +1138,8 @@ export class BlobManager
     // new state. Name, parent, owner, and trash state never change, so the node keeps its id and every link and share
     // pointing at it stays valid.
     //
-    // Quota is charged to the OWNER, not the acting editor, so the delta (new size - old size; negative always admits)
-    // is judged against the owner's usage and their limit from their user row. The claim-time gate charged the ACTOR
+    // Quota is charged to the OWNER, not the acting editor, so the delta (new size - old size, possibly negative) is
+    // judged against the owner's usage and their limit from their user row. The claim-time gate charged the ACTOR
     // (the claim never knew the target); the in-transaction re-judge here is the authoritative one against the owner.
     async #commitReplace(
         target : FileNode,
@@ -1139,25 +1154,25 @@ export class BlobManager
         const oldBlobID = target.blobID;
         const delta = size - target.size;
         const resolvedMime = mimeType ?? target.mimeType;
-        const ownerLimit = await this.#resolveLimit(target.ownerID);
+        const ownerLimit = await this.#admission.resolveLimit(target.ownerID);
         const now = new Date();
 
         // Early gate against the owner's quota before a write is opened; the in-transaction re-judge below is
-        // authoritative (see #commitFileNode). A negative delta always admits -- it only lowers usage.
-        this.#enforceQuota(target.ownerID, await this.#nodes.ownedBytes(target.ownerID), delta, ownerLimit);
+        // authoritative (see #commitFileNode). A negative delta admits whenever the usage it leaves fits the limit,
+        // so an owner an admin left over a lowered limit stays refused until a shrink brings them back under it.
+        this.#admission.enforceQuota(target.ownerID, await this.#nodes.ownedBytes(target.ownerID), delta, ownerLimit);
 
-        await this.#handle.db.transaction().execute(async (trx) =>
+        await inTransaction(this.#handle, async (tx) =>
         {
-            const txHandle : DatabaseHandle = { db: trx, kind: this.#handle.kind };
-            const blob = new BlobRA(txHandle);
-            const nodes = new NodeRA(txHandle);
+            const blob = new BlobRA(tx);
+            const nodes = new NodeRA(tx);
 
             // Optimistic-concurrency guard, judged against the authoritative current row inside the transaction
             // (not the target snapshot taken before the bytes streamed): if the caller pinned the blob they edited
             // from and it has moved on since, someone else saved first -- refuse rather than clobber their edit.
             if(ifBlobID !== undefined) { await this.#assertBlobUnchanged(nodes, target.id, ifBlobID); }
 
-            this.#enforceQuota(target.ownerID, await nodes.ownedBytes(target.ownerID), delta, ownerLimit);
+            this.#admission.enforceQuota(target.ownerID, await nodes.ownedBytes(target.ownerID), delta, ownerLimit);
 
             await persistBlob(blob);
             await nodes.replaceContent(target.id, sha256, size, resolvedMime, now);

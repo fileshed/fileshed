@@ -103,7 +103,11 @@
     import { useAppStore } from '../stores/app.ts';
 
     // Resource Access
+    import { apiErrorFromAuth } from '../resource-access/apiError.ts';
     import { authClient } from '../resource-access/authClient.ts';
+
+    // Utils
+    import { describeApiError } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -146,15 +150,13 @@
                 newPassword: event.data.password,
                 token: token.value,
             });
-            if(error) { throw new Error(error.message ?? 'Unable to reset the password. Try a fresh link.'); }
+            if(error) { throw apiErrorFromAuth(error, 'Unable to reset the password. Try a fresh link.'); }
 
             done.value = true;
         }
         catch(error)
         {
-            errorMessage.value = error instanceof Error
-                ? error.message
-                : 'Unable to reset the password. Try a fresh link.';
+            errorMessage.value = describeApiError(error);
         }
         finally
         {

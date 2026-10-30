@@ -16,7 +16,7 @@ import { type NodeResponse, SEARCH_CANDIDATE_LIMIT, type SearchResponse } from '
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
 import { NodeManager } from '@server/managers/node.ts';
@@ -74,7 +74,7 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
 
 function manager() : NodeManager
 {
-    return new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+    return new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 }
 
 function search(actorID : string, term : string, limit = 50, offset = 0) : Promise<SearchResponse>

@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Color Mode Preference
   --
-  -- The account-page control for light/dark/system. Saving persists the choice in the preferences blob (it roams
-  -- across devices) and the root component applies it at once. When the instance forces a mode, the control says
-  -- so instead of offering a choice that would not apply.
+  -- Saving only writes the preferences blob, which follows the user across devices; the root component applies the
+  -- mode.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

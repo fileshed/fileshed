@@ -1,14 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Handler Resolution
 //
-// The handler-resolution engine: given a node, which handler opens it -- edit (text/markdown editors), annotate (the
-// PDF annotator), play (the media players), native view (the browser's own inline renderer), or download. It is the
-// registry the components/handlers/ families plug into: each family's handler gets first refusal at a file, and
-// whatever no handler claims falls through to the browser's native open -- the permanent fallback, where an
-// inline-renderable type previews in a new tab and the rest download. Folders navigate; a link to a folder navigates
-// to the LINK's own id (so its logical placement shows, not the target's ancestry), a link to a file follows the
-// target under the file rules, and a dead link opens to nothing. resolveOpen returns the intent rather than performing
-// it, so the effectful half (router push, window.open) stays in the caller.
+// Whatever no handler claims falls through to the browser's native open: an inline-renderable type previews in a new
+// tab and the rest download. A link to a folder navigates to the link's own id, so the link's placement shows rather
+// than the target's ancestry.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {

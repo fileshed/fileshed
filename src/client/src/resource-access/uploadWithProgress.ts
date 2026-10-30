@@ -1,12 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Upload With Progress
 //
-// The one byte-moving request fetch can't make: a PUT that reports upload progress. fetch exposes no upload-progress
-// event, so the upload manager's progress bar rides an XMLHttpRequest instead. Everything else mirrors the fetch
-// wrappers -- credentialed, the commit target on the query string (a fresh node's name/parent/mime, or a replaced
-// node's id alone), a codec-validated body on success, and the same typed ApiError (regulation errors upgraded
-// included) on any non-2xx, built from the shared body mapping rather than a second copy of it. An AbortSignal cancels
-// a transfer in flight.
+// fetch exposes no upload-progress event, so this uses XMLHttpRequest. Otherwise it behaves like the fetch wrappers:
+// credentialed, codec-validated on success, and throwing the same typed ApiError on any non-2xx.
 //
 // The body is one chunk of a file, or all of it. A chunk that leaves the file incomplete comes back 202 with the
 // upload's position; the chunk that completes it comes back with the committed node.
@@ -22,7 +18,7 @@ import {
 // Resource Access
 import { ApiError, apiErrorFromBody } from './apiError.ts';
 import { commitQuery } from './blobs.ts';
-import { buildUrl } from './request.ts';
+import { announceIfSessionLost, buildUrl } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -104,6 +100,7 @@ export function uploadWithProgress(options : UploadWithProgressOptions) : Promis
                 return;
             }
 
+            announceIfSessionLost(xhr.status);
             reject(apiErrorFromBody(xhr.status, xhr.statusText, parsed));
         });
 

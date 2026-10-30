@@ -1,114 +1,23 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Avatar Spec Support
-//
-// Boots the real avatar slice end to end: a fresh in-memory database (real factory + migrations + admin bootstrap), a
-// real BlobRA over an fs facade under a per-run temp directory, the real AvatarManager and NodeManager, and a Hono app
-// mounting the real auth handler alongside the avatar and me routes. onError routes through mapManagerError, the same
-// translation the integrated app uses -- so specs drive the flow with app.request and read state through the real
-// handle and storage RA, zero mocks.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- reads/writes name snake_case DB columns (house convention for Kysely) */
 
-import { createHash } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 
 // Models
-import { UNLIMITED_QUOTA } from '@fileshed/core';
+import { BlobNotFoundError } from '@fileshed/core';
 
-// Resource Access
-import { type Auth, authOptions, createAuth } from '@server/resource-access/auth.ts';
-import { BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
-import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
-import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { initialize } from '@server/resource-access/boot.ts';
-
-// Managers
-import { AvatarManager } from '@server/managers/avatar.ts';
-import { NodeManager } from '@server/managers/node.ts';
-import { SessionManager } from '@server/managers/session.ts';
-import { mapManagerError } from '@server/managers/errors.ts';
-
-// Routes
-import { createAvatarRoutes } from '@server/routes/avatars.ts';
-import { createMeRoutes } from '@server/routes/me.ts';
-
-// Auth support (real sign-up/sign-in over the same app)
-import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
-import { accountDeletionsFor } from '../support/accountDeletions.ts';
-import { openTestDatabase } from '../support/database.ts';
+// Support
+import { sha256Of } from '../support/sha256.ts';
+import { ORIGIN, cookieFrom, signIn, signUp } from '../auth/support.ts';
+import type { BootedStoreApp } from '../support/storeApp.ts';
 
 export { ORIGIN } from '../auth/support.ts';
-
-//----------------------------------------------------------------------------------------------------------------------
-
-export interface BootedAvatarApp
-{
-    app : Hono;
-    handle : DatabaseHandle;
-    auth : Auth;
-    blob : BlobRA;
-    backendID : string;
-    avatars : AvatarManager;
-    storageRoot : string;
-    cleanup : () => Promise<void>;
-}
-
-function composeApp(auth : Auth, handle : DatabaseHandle, avatars : AvatarManager, nodes : NodeManager) : Hono
-{
-    const app = new Hono();
-    const sessions = new SessionManager(auth);
-
-    app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-    app.route('/api', createAvatarRoutes(sessions, avatars, nodes));
-    app.route('/api', createMeRoutes(sessions, nodes, accountDeletionsFor(auth, handle)));
-
-    app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
-    app.onError((error, ctx) =>
-    {
-        const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
-        return ctx.json({ error: 'Internal Server Error' }, 500);
-    });
-
-    return app;
-}
-
-export async function bootAvatarApp(avatarMaxBytes ?: number) : Promise<BootedAvatarApp>
-{
-    const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-avatar-'));
-    const overrides = avatarMaxBytes === undefined ? {} : { AVATAR_MAX_BYTES: avatarMaxBytes };
-    const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot, ...overrides }));
-
-    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
-
-    const backendID = await seedDefaultBackend(handle, config);
-    const blob = new BlobRA(handle);
-    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes: async () => config.AVATAR_MAX_BYTES });
-    const nodes = new NodeManager(handle, new NodeRA(handle), blob, { defaultQuota: async () => UNLIMITED_QUOTA });
-
-    return {
-        app: composeApp(auth, handle, avatars, nodes),
-        handle,
-        auth,
-        blob,
-        backendID,
-        avatars,
-        storageRoot,
-        cleanup: async () =>
-        {
-            await dispose();
-            await rm(storageRoot, { recursive: true, force: true });
-        },
-    };
-}
+export { type BootedStoreApp, bootStoreApp } from '../support/storeApp.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Users
@@ -121,7 +30,7 @@ export interface TestUser
     email : string;
 }
 
-export async function makeUser(booted : BootedAvatarApp, email : string) : Promise<TestUser>
+export async function makeUser(booted : BootedStoreApp, email : string) : Promise<TestUser>
 {
     const password = 'correct-horse-battery';
     await signUp(booted.app, email, password);
@@ -166,16 +75,9 @@ export async function getMe(app : Hono, cookie : string) : Promise<Response>
 // Fixtures + state readers
 //----------------------------------------------------------------------------------------------------------------------
 
-export function sha256Of(bytes : Buffer) : string
-{
-    return createHash('sha256')
-        .update(bytes)
-        .digest('hex');
-}
-
 // Store bytes through the real RA and record their blob row, with no avatar or node pointing at them. The seam the
 // serve-gate spec needs: a blob that genuinely exists in the dedup store yet is nobody's avatar.
-export async function seedUnreferencedBlob(booted : BootedAvatarApp, bytes : Buffer) : Promise<string>
+export async function seedUnreferencedBlob(booted : BootedStoreApp, bytes : Buffer) : Promise<string>
 {
     const sha256 = sha256Of(bytes);
     const location = await booted.blob.put(sha256, Readable.from(bytes), bytes.length);
@@ -201,7 +103,7 @@ export interface AvatarRow
     avatar_mime : string | null;
 }
 
-export async function avatarRow(booted : BootedAvatarApp, userID : string) : Promise<AvatarRow>
+export async function avatarRow(booted : BootedStoreApp, userID : string) : Promise<AvatarRow>
 {
     return booted.handle.db
         .selectFrom('user')
@@ -217,7 +119,7 @@ async function collect(stream : Readable) : Promise<Buffer>
     return Buffer.concat(chunks);
 }
 
-export async function bytesExist(booted : BootedAvatarApp, sha256 : string) : Promise<boolean>
+export async function bytesExist(booted : BootedStoreApp, sha256 : string) : Promise<boolean>
 {
     try
     {
@@ -232,7 +134,7 @@ export async function bytesExist(booted : BootedAvatarApp, sha256 : string) : Pr
 }
 
 // The GC graveyard marker for a blob: null when live, a timestamp once its last reference is gone.
-export async function blobDeletedAt(booted : BootedAvatarApp, sha256 : string) : Promise<Date | string | null>
+export async function blobDeletedAt(booted : BootedStoreApp, sha256 : string) : Promise<Date | string | null>
 {
     const row = await booted.handle.db
         .selectFrom('blob')
@@ -242,7 +144,7 @@ export async function blobDeletedAt(booted : BootedAvatarApp, sha256 : string) :
     return row.deleted_at;
 }
 
-export async function blobRowExists(booted : BootedAvatarApp, sha256 : string) : Promise<boolean>
+export async function blobRowExists(booted : BootedStoreApp, sha256 : string) : Promise<boolean>
 {
     const row = await booted.handle.db
         .selectFrom('blob')

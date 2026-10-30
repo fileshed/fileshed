@@ -28,26 +28,26 @@ import {
 // Support
 import { makeAdmin } from '../auth/support.ts';
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
     type UploadedFile,
     bodyBytes,
-    bootServeApp,
+    bootStoreApp,
     makeUser,
     uploadFile,
 } from '../publicLinks/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let fixture : Buffer;
 let uploaded : UploadedFile;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     fixture = randomBytes(300);
     uploaded = await uploadFile(booted, owner, fixture, { name: 'track.mp3', mimeType: 'audio/mpeg' });
@@ -74,7 +74,7 @@ async function mintPat(
         body: JSON.stringify({ name, scopes }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     return await res.json() as CreateAccessTokenResponse;
 }
 

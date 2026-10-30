@@ -7,7 +7,7 @@
 // does NOT arm autoplay (editing the list is not a request to start sound); reset empties the session. A folder
 // add queues the folder's media files first and then each subfolder's, depth-capped, counting what it seated.
 // Embedded tags are read once per node as tracks join the queue, missing tags leave rows on their filenames, and
-// reset releases any artwork object URLs. Only the RA boundary (tags reads, folder listings) is mocked.
+// reset releases any artwork object URLs. Only the RA boundary (tags reads, folder listings) and commitFile are mocked.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,29 +24,25 @@ import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 
 // Support
-import { meFixture } from '../support.ts';
+import { fileNode, folderNode, meFixture } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const {
     readMediaTagsMock,
     releaseMediaTagsMock,
-    getChildrenMock,
+    listChildrenMock,
     getNodeMock,
     fetchNodeBlobMock,
-    claimBlobMock,
-    uploadTicketMock,
-    hashFileMock,
+    commitFileMock,
     mintPlaybackTokenMock,
 } = vi.hoisted(() => ({
     readMediaTagsMock: vi.fn(),
     releaseMediaTagsMock: vi.fn(),
-    getChildrenMock: vi.fn(),
+    listChildrenMock: vi.fn(),
     getNodeMock: vi.fn(),
     fetchNodeBlobMock: vi.fn(),
-    claimBlobMock: vi.fn(),
-    uploadTicketMock: vi.fn(),
-    hashFileMock: vi.fn(),
+    commitFileMock: vi.fn(),
     mintPlaybackTokenMock: vi.fn(),
 }));
 
@@ -55,14 +51,9 @@ vi.mock('@client/resource-access/mediaTags.ts', () => ({
     releaseMediaTags: releaseMediaTagsMock,
 }));
 
-vi.mock('@client/resource-access/nodes.ts', () => ({ getChildren: getChildrenMock, getNode: getNodeMock }));
+vi.mock('@client/resource-access/nodes.ts', () => ({ listChildren: listChildrenMock, getNode: getNodeMock }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: fetchNodeBlobMock }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: claimBlobMock,
-    uploadTicket: uploadTicketMock,
-    answerChallenge: vi.fn(),
-}));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: hashFileMock, readSampleWindows: vi.fn() }));
+vi.mock('@client/stores/commitFile.ts', () => ({ commitFile: commitFileMock }));
 vi.mock('@client/resource-access/accessTokens.ts', () => ({ mintPlaybackToken: mintPlaybackTokenMock }));
 
 function someTags(overrides : Partial<MediaTags> = {}) : MediaTags
@@ -78,44 +69,7 @@ function someTags(overrides : Partial<MediaTags> = {}) : MediaTags
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function fileNode(
-    overrides : Partial<{ id : string; name : string; mimeType : string; parentID : string | null }> = {}
-) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'f1',
-        name: overrides.name ?? 'song.mp3',
-        ownerID: 'u1',
-        parentID: overrides.parentID ?? null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: overrides.mimeType ?? 'audio/mpeg',
-        trashedAt: null,
-    };
-}
-
-function folderNode(overrides : Partial<{ id : string; name : string; parentID : string | null }> = {}) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'd1',
-        name: overrides.name ?? 'Music',
-        ownerID: 'u1',
-        parentID: overrides.parentID ?? null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'folder',
-        trashedAt: null,
-    };
-}
+const AUDIO = { mimeType: 'audio/mpeg' };
 
 function listing(nodes : NodeResponse[]) : NodeListResponse
 {
@@ -141,7 +95,7 @@ describe('MediaPlayerStore.open', () =>
     {
         const store = useMediaPlayerStore();
 
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
 
         expect(store.track?.nodeID).toBe('a1');
         expect(store.tracks.map((entry) => entry.nodeID)).toEqual([ 'a1' ]);
@@ -154,8 +108,8 @@ describe('MediaPlayerStore.open', () =>
     it('replaces the whole session when called again for a different file', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
 
         store.open(fileNode({ id: 'v1', mimeType: 'video/mp4' }), 'video');
 
@@ -169,9 +123,9 @@ describe('MediaPlayerStore.add', () =>
     it('appends to the end without moving the current track or arming autoplay', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
-        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
 
         expect(store.tracks.map((entry) => entry.nodeID)).toEqual([ 'a1', 'a2' ]);
         expect(store.track?.nodeID).toBe('a1');
@@ -182,7 +136,7 @@ describe('MediaPlayerStore.add', () =>
     it('drops a non-media node instead of seating it', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         store.add(folderNode());
         store.add(fileNode({ id: 't1', mimeType: 'text/plain' }));
@@ -190,13 +144,25 @@ describe('MediaPlayerStore.add', () =>
         expect(store.tracks.map((entry) => entry.nodeID)).toEqual([ 'a1' ]);
     });
 
+    it('gives the same file a distinct seat each time it joins the queue', () =>
+    {
+        const store = useMediaPlayerStore();
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+
+        store.add(fileNode({ ...AUDIO, id: 'a1' }));
+
+        const [ first, second ] = store.tracks;
+        expect(first?.nodeID).toBe(second?.nodeID);
+        expect(first?.entryID).not.toBe(second?.entryID);
+    });
+
     it('seats the added track as current — without autoplay — when the playlist was emptied', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         store.removeTrack(0);
 
-        store.add(fileNode({ id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
 
         expect(store.track?.nodeID).toBe('a2');
         expect(store.autoplay).toBe(false);
@@ -208,9 +174,9 @@ describe('MediaPlayerStore.select', () =>
     it('jumps to the clicked row and arms autoplay', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
-        store.add(fileNode({ id: 'a3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a3' }));
 
         store.select(2);
 
@@ -222,7 +188,7 @@ describe('MediaPlayerStore.select', () =>
     it('leaves autoplay unarmed when the clicked row is already current — no restart', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         store.select(0);
 
@@ -235,8 +201,8 @@ describe('MediaPlayerStore.next / previous', () =>
     it('moves through the queue arming autoplay each step', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
 
         store.next();
         expect(store.track?.nodeID).toBe('a2');
@@ -249,7 +215,7 @@ describe('MediaPlayerStore.next / previous', () =>
     it('does nothing at the queue boundaries', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         store.next();
         store.previous();
@@ -264,8 +230,8 @@ describe('MediaPlayerStore.removeTrack', () =>
     it('promotes the successor when the current track is removed, without arming autoplay', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
 
         store.removeTrack(0);
 
@@ -276,9 +242,9 @@ describe('MediaPlayerStore.removeTrack', () =>
     it('removes a non-current row without disturbing playback state', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
-        store.add(fileNode({ id: 'a3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a3' }));
         store.select(1);
 
         store.removeTrack(2);
@@ -290,7 +256,7 @@ describe('MediaPlayerStore.removeTrack', () =>
     it('empties the playlist when the only track is removed', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         store.removeTrack(0);
 
@@ -318,8 +284,8 @@ describe('MediaPlayerStore repeat', () =>
     it('replays the ended track under repeat-one, remounting it playing', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.cycleRepeat();
         store.cycleRepeat();
 
@@ -334,8 +300,8 @@ describe('MediaPlayerStore repeat', () =>
     it('wraps from the tail back to the first track under repeat-all', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.cycleRepeat();
         store.next();
 
@@ -348,8 +314,8 @@ describe('MediaPlayerStore repeat', () =>
     it('stops at the tail under repeat-off — an ended last track changes nothing', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.next();
 
         const playing = store.playToken;
@@ -362,8 +328,8 @@ describe('MediaPlayerStore repeat', () =>
     it('keeps Next alive at the tail once repeat-all can wrap around', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.next();
 
         expect(store.hasNext).toBe(false);
@@ -378,9 +344,9 @@ describe('MediaPlayerStore shuffle', () =>
     {
         const random = vi.spyOn(Math, 'random').mockReturnValue(0);
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
-        store.add(fileNode({ id: 'a3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a3' }));
         store.toggleShuffle();
 
         store.advance();
@@ -402,8 +368,8 @@ describe('MediaPlayerStore shuffle', () =>
     {
         const random = vi.spyOn(Math, 'random').mockReturnValue(0);
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.toggleShuffle();
         store.cycleRepeat();
 
@@ -421,8 +387,8 @@ describe('MediaPlayerStore shuffle', () =>
     {
         const random = vi.spyOn(Math, 'random').mockReturnValue(0);
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.toggleShuffle();
 
         store.next();
@@ -438,8 +404,8 @@ describe('MediaPlayerStore shuffle', () =>
     it('keeps Next alive at the tail while shuffle can jump elsewhere', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.next();
 
         expect(store.hasNext).toBe(false);
@@ -453,13 +419,13 @@ describe('MediaPlayerStore.playToken', () =>
     it('moves only when playback intent changes -- editing the rest of the list never remounts the player', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
-        store.add(fileNode({ id: 'a3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a3' }));
         store.select(2);
 
         const playing = store.playToken;
-        store.add(fileNode({ id: 'a4' }));
+        store.add(fileNode({ ...AUDIO, id: 'a4' }));
         store.removeTrack(0);
 
         expect(store.track?.nodeID).toBe('a3');
@@ -470,10 +436,10 @@ describe('MediaPlayerStore.playToken', () =>
     {
         const store = useMediaPlayerStore();
 
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         const opened = store.playToken;
 
-        store.add(fileNode({ id: 'a2' }));
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.next();
         expect(store.playToken).toBe(opened + 1);
 
@@ -512,12 +478,15 @@ describe('MediaPlayerStore playlist files', () =>
 
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'a1') { return Promise.resolve(fileNode({ id: 'a1', name: 'one.mp3', parentID: 'dir' })); }
+            if(id === 'a1')
+            {
+                return Promise.resolve(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3', parentID: 'dir' }));
+            }
 
             return Promise.reject(new Error('gone'));
         });
 
-        getChildrenMock.mockImplementation((parentID : string | null, query : { name ?: string } = {}) =>
+        listChildrenMock.mockImplementation((parentID : string | null, query : { name ?: string } = {}) =>
         {
             if(parentID === 'dir' && query.name === 'Music')
             {
@@ -526,7 +495,9 @@ describe('MediaPlayerStore playlist files', () =>
 
             if(parentID === 'dir-music' && query.name === 'two.mp3')
             {
-                return Promise.resolve(listing([ fileNode({ id: 'a2', name: 'two.mp3', parentID: 'dir-music' }) ]));
+                return Promise.resolve(listing([
+                    fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3', parentID: 'dir-music' }),
+                ]));
             }
 
             return Promise.resolve(listing([]));
@@ -583,7 +554,7 @@ describe('MediaPlayerStore playlist files', () =>
         fetchNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#FILESHED:node=a1\none.mp3\n' ]));
 
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a0', name: 'zero.mp3' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a0', name: 'zero.mp3' }), 'audio');
 
         await store.openPlaylistNode(fileNode({ id: 'pl', name: 'mix.m3u8' }), 'append');
 
@@ -593,26 +564,29 @@ describe('MediaPlayerStore playlist files', () =>
 
     it('Save As writes the dialect with paths relative to the browsed folder and adopts the new file', async () =>
     {
-        hashFileMock.mockResolvedValue('sha-pl');
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
-        uploadTicketMock.mockResolvedValue(fileNode({ id: 'pl-new', name: 'mix.m3u8', parentID: 'dir' }));
+        commitFileMock.mockResolvedValue(fileNode({ id: 'pl-new', name: 'mix.m3u8', parentID: 'dir' }));
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'a1') { return Promise.resolve(fileNode({ id: 'a1', name: 'one.mp3', parentID: 'dir' })); }
-            if(id === 'a2') { return Promise.resolve(fileNode({ id: 'a2', name: 'two.mp3', parentID: 'dir-music' })); }
+            if(id === 'a1')
+            {
+                return Promise.resolve(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3', parentID: 'dir' }));
+            }
+            if(id === 'a2')
+            {
+                return Promise.resolve(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3', parentID: 'dir-music' }));
+            }
             if(id === 'dir') { return Promise.resolve(folderNode({ id: 'dir', name: 'Stuff', parentID: null })); }
 
             return Promise.resolve(folderNode({ id: 'dir-music', name: 'Music', parentID: 'dir' }));
         });
 
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3', parentID: 'dir' }), 'audio');
-        store.add(fileNode({ id: 'a2', name: 'two.mp3', parentID: 'dir-music' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3', parentID: 'dir' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3', parentID: 'dir-music' }));
 
         await store.savePlaylistAs('mix', 'Fresh Mix');
 
-        const [ ticket, body, commit ] = uploadTicketMock.mock.calls[0] ?? [];
-        expect(ticket).toBe('TKT');
+        const [ body, commit ] = commitFileMock.mock.calls[0] ?? [];
         expect(commit).toEqual({ name: 'mix.m3u8', parentID: 'dir', mimeType: 'audio/x-mpegurl' });
 
         const text = await (body as File).text();
@@ -630,23 +604,24 @@ describe('MediaPlayerStore playlist files', () =>
     {
         mockPlaylistWorld();
         fetchNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#FILESHED:node=a1\none.mp3\n' ]));
-        hashFileMock.mockResolvedValue('sha-pl');
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
-        uploadTicketMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
+        commitFileMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
 
         const store = useMediaPlayerStore();
         await store.openPlaylistNode(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }), 'replace');
 
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'a1') { return Promise.resolve(fileNode({ id: 'a1', name: 'one.mp3', parentID: 'dir' })); }
+            if(id === 'a1')
+            {
+                return Promise.resolve(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3', parentID: 'dir' }));
+            }
 
             return Promise.resolve(folderNode({ id: 'dir', name: 'Stuff', parentID: null }));
         });
 
         await store.savePlaylistAs('mix.m3u8');
 
-        const [ , , commit ] = uploadTicketMock.mock.calls[0] ?? [];
+        const [ , commit ] = commitFileMock.mock.calls[0] ?? [];
         expect(commit).toEqual({ replaceNodeID: 'pl', mimeType: 'audio/x-mpegurl' });
     });
 
@@ -654,16 +629,17 @@ describe('MediaPlayerStore playlist files', () =>
     {
         mockPlaylistWorld();
         fetchNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#PLAYLIST:Old Title\n#FILESHED:node=a1\none.mp3\n' ]));
-        hashFileMock.mockResolvedValue('sha-pl');
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
-        uploadTicketMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
+        commitFileMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
 
         const store = useMediaPlayerStore();
         await store.openPlaylistNode(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }), 'replace');
 
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'a1') { return Promise.resolve(fileNode({ id: 'a1', name: 'one.mp3', parentID: 'dir' })); }
+            if(id === 'a1')
+            {
+                return Promise.resolve(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3', parentID: 'dir' }));
+            }
 
             return Promise.resolve(folderNode({ id: 'dir', name: 'Stuff', parentID: null }));
         });
@@ -671,10 +647,10 @@ describe('MediaPlayerStore playlist files', () =>
         await store.retitlePlaylist('New Title');
 
         expect(store.playlistTitle).toBe('New Title');
-        const [ , body ] = uploadTicketMock.mock.calls[0] ?? [];
+        const [ body ] = commitFileMock.mock.calls[0] ?? [];
         expect(await (body as File).text()).toContain('#PLAYLIST:New Title');
 
-        uploadTicketMock.mockRejectedValue(new Error('offline'));
+        commitFileMock.mockRejectedValue(new Error('offline'));
         await expect(store.retitlePlaylist('Doomed Title')).rejects.toThrow('offline');
         expect(store.playlistTitle).toBe('New Title');
     });
@@ -685,23 +661,24 @@ describe('MediaPlayerStore playlist files', () =>
         fetchNodeBlobMock.mockResolvedValue(
             new Blob([ '#EXTM3U\n#PLAYLIST:Keeper\n#FILESHED:node=a1\none.mp3\n' ])
         );
-        hashFileMock.mockResolvedValue('sha-pl');
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT' });
-        uploadTicketMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
+        commitFileMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
 
         const store = useMediaPlayerStore();
         await store.openPlaylistNode(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }), 'replace');
 
         getNodeMock.mockImplementation((id : string) =>
         {
-            if(id === 'a1') { return Promise.resolve(fileNode({ id: 'a1', name: 'one.mp3', parentID: 'dir' })); }
+            if(id === 'a1')
+            {
+                return Promise.resolve(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3', parentID: 'dir' }));
+            }
 
             return Promise.resolve(folderNode({ id: 'dir', name: 'Stuff', parentID: null }));
         });
 
         await store.savePlaylist();
 
-        const [ , body, commit ] = uploadTicketMock.mock.calls[0] ?? [];
+        const [ body, commit ] = commitFileMock.mock.calls[0] ?? [];
         expect(commit).toEqual({ replaceNodeID: 'pl', ifBlobID: 'b1', mimeType: 'audio/x-mpegurl' });
         expect(await (body as File).text()).toContain('#PLAYLIST:Keeper');
     });
@@ -712,8 +689,8 @@ describe('MediaPlayerStore.reset', () =>
     it('clears the session back to empty', () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
         store.select(1);
 
         store.reset();
@@ -728,13 +705,13 @@ describe('MediaPlayerStore.addFolder', () =>
 {
     it('queues a folder\'s media in listing order, then each subfolder\'s, skipping non-media', async () =>
     {
-        getChildrenMock.mockImplementation((parentID : string) =>
+        listChildrenMock.mockImplementation((parentID : string) =>
         {
             if(parentID === 'dir')
             {
                 return Promise.resolve(listing([
                     folderNode({ id: 'sub', name: 'Albums' }),
-                    fileNode({ id: 'a1', name: 'one.mp3' }),
+                    fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }),
                     fileNode({ id: 't1', name: 'notes.txt', mimeType: 'text/plain' }),
                 ]));
             }
@@ -743,7 +720,7 @@ describe('MediaPlayerStore.addFolder', () =>
         });
 
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a0' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a0' }), 'audio');
 
         const seated = await store.addFolder('dir');
 
@@ -753,18 +730,18 @@ describe('MediaPlayerStore.addFolder', () =>
 
     it('stops descending at the depth cap instead of walking a pathological tree', async () =>
     {
-        getChildrenMock.mockImplementation((parentID : string) =>
+        listChildrenMock.mockImplementation((parentID : string) =>
         {
             const level = Number(parentID.slice(1));
 
             return Promise.resolve(listing([
-                fileNode({ id: `a${ level }`, name: `track-${ level }.mp3` }),
+                fileNode({ ...AUDIO, id: `a${ level }`, name: `track-${ level }.mp3` }),
                 folderNode({ id: `d${ level + 1 }` }),
             ]));
         });
 
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'root' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'root' }), 'audio');
 
         const seated = await store.addFolder('d0');
 
@@ -773,9 +750,9 @@ describe('MediaPlayerStore.addFolder', () =>
 
     it('propagates a listing failure so the caller can surface it', async () =>
     {
-        getChildrenMock.mockRejectedValue(new Error('boom'));
+        listChildrenMock.mockRejectedValue(new Error('boom'));
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a0' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a0' }), 'audio');
 
         await expect(store.addFolder('dir')).rejects.toThrow('boom');
         expect(store.tracks.map((entry) => entry.nodeID)).toEqual([ 'a0' ]);
@@ -789,7 +766,7 @@ describe('MediaPlayerStore tags', () =>
         readMediaTagsMock.mockResolvedValue(someTags());
         const store = useMediaPlayerStore();
 
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         await flushPromises();
 
         expect(store.tagsFor('a1')?.title).toBe('Neon Skyline');
@@ -799,10 +776,10 @@ describe('MediaPlayerStore tags', () =>
     it('reads each node once, even when it is queued twice', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a1' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a1' }));
         await flushPromises();
-        store.add(fileNode({ id: 'a1' }));
+        store.add(fileNode({ ...AUDIO, id: 'a1' }));
         await flushPromises();
 
         expect(readMediaTagsMock).toHaveBeenCalledTimes(1);
@@ -811,7 +788,7 @@ describe('MediaPlayerStore tags', () =>
     it('leaves an untagged file on its filename — tagsFor answers null', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         await flushPromises();
 
         expect(store.tagsFor('a1')).toBeNull();
@@ -822,7 +799,7 @@ describe('MediaPlayerStore tags', () =>
         const withArt = someTags();
         readMediaTagsMock.mockResolvedValue(withArt);
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         await flushPromises();
 
         store.reset();
@@ -854,7 +831,7 @@ describe('MediaPlayerStore playback token', () =>
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
 
-        store.open(fileNode(), 'audio');
+        store.open(fileNode(AUDIO), 'audio');
         await flushPromises();
 
         expect(mintPlaybackTokenMock).not.toHaveBeenCalled();
@@ -865,8 +842,8 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'f1' }), 'audio');
-        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
 
         store.select(1);
         await flushPromises();
@@ -879,7 +856,7 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
-        store.open(fileNode(), 'audio');
+        store.open(fileNode(AUDIO), 'audio');
 
         await store.beginCasting();
 
@@ -892,7 +869,7 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
-        store.open(fileNode(), 'audio');
+        store.open(fileNode(AUDIO), 'audio');
 
         await store.beginCasting();
         await store.beginCasting();
@@ -904,7 +881,7 @@ describe('MediaPlayerStore playback token', () =>
     {
         const store = useMediaPlayerStore();
 
-        store.open(fileNode(), 'audio');
+        store.open(fileNode(AUDIO), 'audio');
         await store.beginCasting();
 
         expect(store.playbackToken).toBeNull();
@@ -915,12 +892,12 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 10 * 60 * 1000));
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'f1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
         await store.beginCasting();
         expect(store.playbackToken?.id).toBe('k1');
 
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k2', 5 * HOUR_MS));
-        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
         store.select(1);
         await flushPromises();
 
@@ -932,10 +909,10 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'f1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
         await store.beginCasting();
 
-        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
         store.select(1);
         await flushPromises();
 
@@ -947,9 +924,9 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', -1000));
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'f1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
         await store.beginCasting();
-        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
         const mountsBefore = store.playToken;
 
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k2', 5 * HOUR_MS));
@@ -966,9 +943,9 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'f1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
         await store.beginCasting();
-        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
 
         store.handleTrackError();
 
@@ -980,9 +957,9 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'f1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
         await flushPromises();
-        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
         store.handleTrackError();
         expect(store.tracks[0]?.failed).toBe(true);
 
@@ -996,9 +973,9 @@ describe('MediaPlayerStore playback token', () =>
     it('reorders seats without remounting or arming playback', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'f1' }), 'audio');
-        store.add(fileNode({ id: 'f2', name: 'second.mp3' }));
-        store.add(fileNode({ id: 'f3', name: 'third.mp3' }));
+        store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'f3', name: 'third.mp3' }));
         const mountsBefore = store.playToken;
 
         store.move(2, 0);
@@ -1014,7 +991,7 @@ describe('MediaPlayerStore playback token', () =>
     {
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k1', 5 * HOUR_MS));
         const store = useMediaPlayerStore();
-        store.open(fileNode(), 'audio');
+        store.open(fileNode(AUDIO), 'audio');
         await flushPromises();
 
         store.reset();

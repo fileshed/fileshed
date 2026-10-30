@@ -1,15 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Session Manager
 //
-// The one identity seam: every authenticated route resolves "who is asking" through this manager rather than
-// reaching into the auth resource directly (iDesign layering).
-//
-// Two credential planes resolve here. requireUser is the session-only plane -- routes with no business accepting
-// anything but a signed-in browser (admin, account security, token management itself) stay on it, and tokens simply
-// do not exist for them. resolveActor is the wider plane for routes that opted into access tokens: it tries the
-// session first (a browser on the media page sends both its cookie and a tokened src URL -- the session wins), then
-// a bearer header, then a route-supplied URL token. The credential union's bare-token arm exists for consumers that
-// have no Headers at all -- a future FTP/SFTP/WebDAV gateway hands the password field straight in.
+// Every authenticated route resolves who is asking through this manager, on one of two credential planes. requireUser
+// is the session-only plane -- routes with no business accepting anything but a signed-in browser (admin, account
+// security, token management itself) stay on it, and tokens simply do not exist for them. resolveActor is the wider
+// plane for routes that opted into access tokens: it tries the session first (a browser on the media page sends both
+// its cookie and a tokened src URL -- the session wins), then a bearer header, then a route-supplied URL token.
 //
 // An account whose owner has asked for it to be deleted is refused here too, everywhere but the two surfaces that
 // exist for it: reading its own profile, and calling the deletion off. Sign-in stays open on purpose -- the person
@@ -37,7 +33,8 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import type { Auth, SessionUser } from '../resource-access/auth.ts';
+import type { AuthRA } from '../resource-access/auth/index.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -55,7 +52,7 @@ export type Actor
 // config before it can look anything up; without a configId it demands a config literally named 'default', which
 // this deployment deliberately lacks). A recognized prefix routes the lookup; anything else is not our credential
 // and fails closed before touching the database.
-function configIdFor(token : string) : string | null
+function configIDFor(token : string) : string | null
 {
     if(token.startsWith(ACCESS_TOKEN_PREFIX)) { return ACCESS_TOKEN_CONFIG_PAT; }
     if(token.startsWith(PLAYBACK_TOKEN_PREFIX)) { return ACCESS_TOKEN_CONFIG_PLAYBACK; }
@@ -88,7 +85,7 @@ function assertNotClosing(user : SessionUser, options : ActorOptions) : void
 {
     if(options.allowClosing === true) { return; }
 
-    if((user as SessionUser & { deletionRequestedAt ?: Date | null }).deletionRequestedAt)
+    if(user.deletionRequestedAt)
     {
         throw new ForbiddenError('This account is scheduled for deletion. Cancel the deletion to use it again.');
     }
@@ -98,22 +95,16 @@ function assertNotClosing(user : SessionUser, options : ActorOptions) : void
 
 export class SessionManager
 {
-    readonly #auth : Auth;
+    readonly #auth : AuthRA;
 
-    constructor(auth : Auth)
+    constructor(auth : AuthRA)
     {
         this.#auth = auth;
     }
 
-    async getUser(headers : Headers) : Promise<SessionUser | null>
-    {
-        const session = await this.#auth.api.getSession({ headers });
-        return session?.user ?? null;
-    }
-
     async requireUser(headers : Headers, options : ActorOptions = {}) : Promise<SessionUser>
     {
-        const user = await this.getUser(headers);
+        const user = await this.#auth.sessionUser(headers);
         if(!user) { throw new UnauthorizedError('Sign-in required.'); }
 
         assertNotClosing(user, options);
@@ -125,21 +116,30 @@ export class SessionManager
     // token (the download route) build the request credential themselves.
     async requireActor(headers : Headers, required : PermissionStatement, options : ActorOptions = {}) : Promise<Actor>
     {
-        const actor = await this.resolveActor({ kind: 'request', headers }, required);
+        return this.resolveActor({ kind: 'request', headers }, required, options);
+    }
+
+    async resolveActor(
+        credential : Credential,
+        required ?: PermissionStatement,
+        options : ActorOptions = {}
+    ) : Promise<Actor>
+    {
+        const actor = await this.#identify(credential, required);
 
         assertNotClosing(actor.user, options);
 
         return actor;
     }
 
-    async resolveActor(credential : Credential, required ?: PermissionStatement) : Promise<Actor>
+    async #identify(credential : Credential, required ?: PermissionStatement) : Promise<Actor>
     {
         if(credential.kind === 'token')
         {
             return this.#tokenActor(credential.value, required);
         }
 
-        const user = await this.getUser(credential.headers);
+        const user = await this.#auth.sessionUser(credential.headers);
         if(user) { return { kind: 'session', user }; }
 
         const token = bearerToken(credential.headers) ?? credential.urlToken ?? null;
@@ -150,37 +150,18 @@ export class SessionManager
 
     async #tokenActor(token : string, required ?: PermissionStatement) : Promise<Actor>
     {
-        const configId = configIdFor(token);
-        if(configId === null) { throw new UnauthorizedError('Invalid access token.'); }
+        const configID = configIDFor(token);
+        if(configID === null) { throw new UnauthorizedError('Invalid access token.'); }
 
-        // The plugin throws its own APIError for anything it dislikes about the verify call; every failure shape
-        // collapses into the same 401 rather than leaking as a 500 or an oracle.
-        let result;
-        try
-        {
-            result = await this.#auth.api.verifyApiKey({
-                body: { key: token, configId, ...(required ? { permissions: required } : {}) },
-            });
-        }
-        catch
-        {
-            throw new UnauthorizedError('Invalid access token.');
-        }
+        // A 5xx from the plugin, or any other throw, is storage failing underneath it and surfaces as the 500 a
+        // caller holding a good token is owed -- not a claim that the token is bad.
+        const verified = await this.#auth.verifyKey(token, configID, required);
+        if(verified === null) { throw new UnauthorizedError('Invalid access token.'); }
 
-        if(!result.valid || !result.key)
-        {
-            throw new UnauthorizedError('Invalid access token.');
-        }
+        const user = await this.#auth.findUser(verified.userID);
+        if(user === null || user.banned === true) { throw new UnauthorizedError('Invalid access token.'); }
 
-        const context = await this.#auth.$context;
-        const user = await context.internalAdapter.findUserById(result.key.referenceId);
-
-        if(!user || (user as SessionUser).banned === true)
-        {
-            throw new UnauthorizedError('Invalid access token.');
-        }
-
-        return { kind: 'token', user: user as SessionUser, permissions: result.key.permissions ?? {} };
+        return { kind: 'token', user, permissions: verified.permissions };
     }
 }
 

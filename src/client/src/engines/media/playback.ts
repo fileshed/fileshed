@@ -1,10 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Media Playback Engine
-//
-// Pure logic behind the video and audio transport controls: time formatting, seek clamping, the buffered-ahead
-// percentage for the scrub bar, and the fixed playback-rate ladder the rate menu offers. Callers hand in plain
-// numbers (and a TimeRanges-shaped buffered list) read off the native media element's own events -- nothing here
-// touches the DOM.
 //----------------------------------------------------------------------------------------------------------------------
 
 // The playback key rides the src as a query parameter, so a cast session starting rewrites the URL of the track

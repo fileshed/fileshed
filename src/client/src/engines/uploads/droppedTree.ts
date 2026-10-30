@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Dropped Tree Engine
 //
-// The shape a folder upload travels in: files at each level plus named subfolders, however it arrived -- an OS
-// drag-and-drop (traversed from FileSystemEntry handles in resource access) or the folder picker input, whose files
-// carry their place in webkitRelativePath. Both converge here so the uploads store has exactly one folder-upload
-// shape to walk.
+// A drag-and-drop (walked from FileSystemEntry handles in resource access) and the folder picker input (whose files
+// carry their place in webkitRelativePath) both convert to this shape, so the uploads store has one folder-upload shape
+// to walk.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface DroppedFolder

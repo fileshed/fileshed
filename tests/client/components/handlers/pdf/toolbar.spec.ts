@@ -12,10 +12,11 @@ import { defineComponent } from 'vue';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeResponse } from '@fileshed/core';
-
 // Stores
 import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 // Under test
 import PdfToolbar from '@client/components/handlers/pdf/toolbar.vue';
@@ -24,11 +25,6 @@ import PdfToolbar from '@client/components/handlers/pdf/toolbar.vue';
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
 vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -69,28 +65,6 @@ const stubs = {
     PdfFindBar: { name: 'PdfFindBar', template: '<div class="find-bar" />' },
     PdfParamsPopover: { name: 'PdfParamsPopover', props: [ 'mode' ], template: '<div />' },
 };
-
-type FileNode = Extract<NodeResponse, { type : 'file' }>;
-
-function fileNode(overrides : Partial<FileNode> = {}) : FileNode
-{
-    return {
-        id: 'f1',
-        name: 'contract.pdf',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        updatedAt: '2026-07-01T00:00:00.000Z',
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 2048,
-        mimeType: 'application/pdf',
-        trashedAt: null,
-        ...overrides,
-        sharing: overrides.sharing ?? null,
-    };
-}
 
 function mountToolbar() : VueWrapper
 {
