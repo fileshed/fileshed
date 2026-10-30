@@ -140,8 +140,7 @@ async function startProbe(databaseURL : string) : Promise<Probe>
             // that started the run happened to set.
             LOG_LEVEL: 'info',
 
-            // Plain JSON on stdout. pino-pretty is a transport worker, and its output is neither parseable nor
-            // reliably flushed by a process that is in the middle of dying.
+            // Plain JSON on stdout. Outside production the logger pretty-prints, which the spec can't parse.
             NODE_ENV: 'production',
         },
         stdio: [ 'ignore', 'pipe', 'pipe', 'ipc' ],
