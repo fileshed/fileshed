@@ -41,13 +41,13 @@
     import { zoomPresets } from '../../../engines/pdf/types.ts';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfZoomControls' });
+    defineOptions({ name: 'PDFZoomControls' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

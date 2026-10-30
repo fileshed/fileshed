@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia';
 
 // Resource Access
 import { uploadAvatar } from '@client/resource-access/avatar.ts';
-import { fetchNodeBlob } from '@client/resource-access/content.ts';
+import { getNodeBlob } from '@client/resource-access/content.ts';
 
 // Stores
 import { useAppStore } from '@client/stores/app.ts';
@@ -31,14 +31,14 @@ import AvatarEditModal from '@client/components/account/modals/avatarEditModal.v
 // The session store also reaches for auth/me at module scope -- stub them so importing it never hits the network.
 vi.mock('@client/resource-access/authClient.ts', () => ({ authClient: { updateUser: vi.fn() } }));
 vi.mock('@client/resource-access/avatar.ts', () => ({ uploadAvatar: vi.fn(), deleteAvatar: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 
 const toastAdd = vi.fn();
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
 const uploadAvatarMock = uploadAvatar as unknown as Mock;
-const fetchNodeBlobMock = fetchNodeBlob as unknown as Mock;
+const getNodeBlobMock = getNodeBlob as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -258,7 +258,7 @@ describe('AvatarEditModal', () =>
     {
         const session = useSessionStore();
         session.me = meFixture();
-        fetchNodeBlobMock.mockResolvedValue(new Blob([ 'jpeg-bytes' ], { type: 'image/jpeg' }));
+        getNodeBlobMock.mockResolvedValue(new Blob([ 'jpeg-bytes' ], { type: 'image/jpeg' }));
         const wrapper = mountModal();
         await openModal(wrapper);
 
@@ -266,7 +266,7 @@ describe('AvatarEditModal', () =>
         wrapper.findComponent(FilePickerStub).vm.$emit('select', fileNode({ id: 'node_9', name: 'avatar.jpg' }));
         await flushPromises();
 
-        expect(fetchNodeBlobMock).toHaveBeenCalledWith('node_9');
+        expect(getNodeBlobMock).toHaveBeenCalledWith('node_9');
         expect(wrapper.find('.cropper').exists()).toBe(true);
         expect(wrapper.find('.cropper').attributes('data-src')).toBe('blob:mock-url');
     });
@@ -275,7 +275,7 @@ describe('AvatarEditModal', () =>
     {
         const session = useSessionStore();
         session.me = meFixture({ image: null });
-        fetchNodeBlobMock.mockResolvedValue(new Blob([ 'jpeg-bytes' ], { type: 'image/jpeg' }));
+        getNodeBlobMock.mockResolvedValue(new Blob([ 'jpeg-bytes' ], { type: 'image/jpeg' }));
         uploadAvatarMock.mockResolvedValue(meFixture({ image: '/api/avatars/fs' }));
         const wrapper = mountModal();
         await openModal(wrapper);

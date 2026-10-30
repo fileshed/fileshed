@@ -71,7 +71,7 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
             grantee_user_id: granteeID,
             role,
             created_by: 'alice',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }
@@ -324,10 +324,10 @@ describe('NodeManager.copy', () =>
 
         const blob = await handle.db
             .selectFrom('blob')
-            .select('deleted_at')
+            .select('deleted')
             .where('sha256', '=', 'sha-a')
             .executeTakeFirstOrThrow();
-        expect(blob.deleted_at).toBeNull();
+        expect(blob.deleted).toBeNull();
     });
 });
 

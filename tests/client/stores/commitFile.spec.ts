@@ -16,7 +16,7 @@ import { createPinia, setActivePinia } from 'pinia';
 // Resource Access
 import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
 import { uploadChunked } from '@client/resource-access/chunkedUpload.ts';
-import { fetchMe } from '@client/resource-access/me.ts';
+import { getMe } from '@client/resource-access/me.ts';
 
 // Stores
 import { commitFile } from '@client/stores/commitFile.ts';
@@ -29,12 +29,12 @@ import { fileNode, meFixture } from '../support.ts';
 
 vi.mock('@client/resource-access/blobs.ts', () => ({ claimBlob: vi.fn(), answerChallenge: vi.fn() }));
 vi.mock('@client/resource-access/chunkedUpload.ts', () => ({ uploadChunked: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 
 const claimBlobMock = claimBlob as unknown as Mock;
 const answerChallengeMock = answerChallenge as unknown as Mock;
 const uploadMock = uploadChunked as unknown as Mock;
-const fetchMeMock = fetchMe as unknown as Mock;
+const getMeMock = getMe as unknown as Mock;
 
 const TEXT = 'the quick brown fox';
 const PLACEMENT = { name: 'fox.txt', parentID: null, mimeType: 'text/plain' };
@@ -51,7 +51,7 @@ beforeEach(() =>
 {
     vi.resetAllMocks();
     setActivePinia(createPinia());
-    fetchMeMock.mockResolvedValue(meFixture());
+    getMeMock.mockResolvedValue(meFixture());
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -109,7 +109,7 @@ describe('commitFile', () =>
     {
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'T1', chunkBytes: CHUNK_BYTES });
         uploadMock.mockResolvedValue(fileNode());
-        fetchMeMock.mockResolvedValue(meFixture({ quota: { used: 4096, effective: null, limit: null } }));
+        getMeMock.mockResolvedValue(meFixture({ quota: { used: 4096, effective: null, limit: null } }));
 
         await commitFile(foxFile(), PLACEMENT, { sha256: 'a'.repeat(64) });
 

@@ -11,13 +11,13 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson } from './request.ts';
+import { requestJSON } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export async function requestAccess(nodeID : string, request : CreateAccessRequest) : Promise<AccessRequestResponse>
 {
-    return requestJson(`/api/nodes/${ nodeID }/access-requests`, {
+    return requestJSON(`/api/nodes/${ nodeID }/access-requests`, {
         method: 'POST',
         body: request,
         codec: accessRequestResponseCodec,
@@ -26,12 +26,12 @@ export async function requestAccess(nodeID : string, request : CreateAccessReque
 
 export async function listAccessRequests() : Promise<AccessRequestListResponse>
 {
-    return requestJson('/api/access-requests', { codec: accessRequestListResponseCodec });
+    return requestJSON('/api/access-requests', { codec: accessRequestListResponseCodec });
 }
 
 export async function grantAccessRequest(requestID : string) : Promise<AccessRequestResponse>
 {
-    return requestJson(`/api/access-requests/${ requestID }/grant`, {
+    return requestJSON(`/api/access-requests/${ requestID }/grant`, {
         method: 'POST',
         codec: accessRequestResponseCodec,
     });
@@ -39,7 +39,7 @@ export async function grantAccessRequest(requestID : string) : Promise<AccessReq
 
 export async function declineAccessRequest(requestID : string) : Promise<AccessRequestResponse>
 {
-    return requestJson(`/api/access-requests/${ requestID }/decline`, {
+    return requestJSON(`/api/access-requests/${ requestID }/decline`, {
         method: 'POST',
         codec: accessRequestResponseCodec,
     });

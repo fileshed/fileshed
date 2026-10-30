@@ -138,7 +138,7 @@ export const useDriveStore = defineStore('drive', () =>
 
     //------------------------------------------------------------------------------------------------------------------
 
-    async function fetchChunk(offset : number, filtered : boolean) : Promise<NodeListResponse>
+    async function listChunk(offset : number, filtered : boolean) : Promise<NodeListResponse>
     {
         return listChildren(folderID.value, {
             limit: LISTING_CHUNK_SIZE,
@@ -158,7 +158,7 @@ export const useDriveStore = defineStore('drive', () =>
     }
 
     // The rows in hand and the chunk reads that fill them.
-    const rows = createChunkedListing({ fetchChunk, onPage: absorbPage });
+    const rows = createChunkedListing({ listChunk, onPage: absorbPage });
 
     // What the surface renders. While the folder is still arriving it is what has arrived, in the order it arrived;
     // once it is whole the client owns the presentation -- it narrows and orders the rows itself, so a sort or a

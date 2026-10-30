@@ -43,13 +43,13 @@
     import { ref, watch } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfPageControls' });
+    defineOptions({ name: 'PDFPageControls' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const draft = ref(String(store.currentPage));
     watch(() => store.currentPage, (page) => { draft.value = String(page); });

@@ -5,11 +5,11 @@
 import { RegulationCodeDisplay } from '@fileshed/core';
 
 // Resource Access
-import type { RegulationApiError } from '../../resource-access/apiError.ts';
+import type { RegulationAPIError } from '../../resource-access/apiError.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function regulationMessage(error : RegulationApiError) : string
+export function regulationMessage(error : RegulationAPIError) : string
 {
     for(const violation of error.violations)
     {

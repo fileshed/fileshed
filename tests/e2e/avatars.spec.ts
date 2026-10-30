@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerHandle,
     blobFileExists,
     readBlobFile,
@@ -47,9 +47,9 @@ function avatarBytes(seed : string) : Uint8Array
     return new Uint8Array(pngBytes(`fileshed-e2e-avatar-${ seed }`));
 }
 
-async function signedIn(email : string) : Promise<ApiClient>
+async function signedIn(email : string) : Promise<APIClient>
 {
-    const client = new ApiClient(server.baseURL);
+    const client = new APIClient(server.baseURL);
     await client.signUp(email, PASSWORD);
     return client;
 }
@@ -69,10 +69,10 @@ async function blobDeletedAt(sha256 : string) : Promise<string | null>
 {
     return withDb(server, async (db) =>
     {
-        const row = await db.selectFrom('blob').select('deleted_at')
+        const row = await db.selectFrom('blob').select('deleted')
             .where('sha256', '=', sha256)
             .executeTakeFirst();
-        return (row?.deleted_at ?? null) as string | null;
+        return (row?.deleted ?? null) as string | null;
     });
 }
 

@@ -131,7 +131,7 @@ export async function seedBlob(db : Kysely<Database>, sha256 : string, backendID
             size: 10,
             backend_id: backendID,
             storage_key: `key/${ sha256 }`,
-            created_at: isoNow(),
+            created: isoNow(),
         })
         .execute();
 }
@@ -148,8 +148,8 @@ interface FolderInit
     ownerID : string;
     parentID ?: string | null;
     name ?: string;
-    createdAt ?: Date;
-    updatedAt ?: Date;
+    created ?: Date;
+    updated ?: Date;
     trashedAt ?: Date | null;
 }
 
@@ -161,8 +161,8 @@ export function folderNode(init : FolderInit) : FolderNode
         name: init.name ?? init.id,
         ownerID: init.ownerID,
         parentID: init.parentID ?? null,
-        createdAt: init.createdAt ?? epoch,
-        updatedAt: init.updatedAt ?? epoch,
+        created: init.created ?? epoch,
+        updated: init.updated ?? epoch,
         trashedAt: init.trashedAt ?? null,
     };
 }
@@ -176,8 +176,8 @@ interface FileInit
     mimeType ?: string;
     parentID ?: string | null;
     name ?: string;
-    createdAt ?: Date;
-    updatedAt ?: Date;
+    created ?: Date;
+    updated ?: Date;
     trashedAt ?: Date | null;
 }
 
@@ -192,8 +192,8 @@ export function fileNode(init : FileInit) : FileNode
         blobID: init.blobID,
         size: init.size ?? 10,
         mimeType: init.mimeType ?? 'text/plain',
-        createdAt: init.createdAt ?? epoch,
-        updatedAt: init.updatedAt ?? epoch,
+        created: init.created ?? epoch,
+        updated: init.updated ?? epoch,
         trashedAt: init.trashedAt ?? null,
     };
 }
@@ -205,8 +205,8 @@ interface LinkInit
     targetNodeID : string;
     parentID ?: string | null;
     name ?: string;
-    createdAt ?: Date;
-    updatedAt ?: Date;
+    created ?: Date;
+    updated ?: Date;
 }
 
 export function linkNode(init : LinkInit) : LinkNode
@@ -218,8 +218,8 @@ export function linkNode(init : LinkInit) : LinkNode
         ownerID: init.ownerID,
         parentID: init.parentID ?? null,
         targetNodeID: init.targetNodeID,
-        createdAt: init.createdAt ?? epoch,
-        updatedAt: init.updatedAt ?? epoch,
+        created: init.created ?? epoch,
+        updated: init.updated ?? epoch,
     };
 }
 

@@ -7,7 +7,7 @@
 <template>
     <UDropdownMenu :items="userMenuItems">
         <UButton variant="ghost" color="neutral" class="gap-2">
-            <UAvatar :src="avatarUrl" :alt="displayName" size="sm" />
+            <UAvatar :src="avatarURL" :alt="displayName" size="sm" />
             <span class="hidden sm:inline">{{ displayName }}</span>
         </UButton>
     </UDropdownMenu>
@@ -48,7 +48,7 @@
     const { runMutation } = useRunWithToast();
 
     const displayName = computed(() => session.me?.name ?? session.me?.email ?? 'Account');
-    const avatarUrl = computed(() => session.me?.image ?? undefined);
+    const avatarURL = computed(() => session.me?.image ?? undefined);
 
     async function signOut() : Promise<void>
     {

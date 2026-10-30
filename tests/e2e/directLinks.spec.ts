@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ClaimResponse, NodeResponse, PublicLinkListResponse, PublicLinkResponse } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, largeFixture, readBlobFile, sha256Of, spawnServer, withDb } from './support.ts';
+import { APIClient, type ServerHandle, largeFixture, readBlobFile, sha256Of, spawnServer, withDb } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -29,9 +29,9 @@ const etag = `"${ sha }"`;
 
 let server : ServerHandle;
 
-let owner : ApiClient;
-let viewer : ApiClient;
-let stranger : ApiClient;
+let owner : APIClient;
+let viewer : APIClient;
+let stranger : APIClient;
 let viewerID : string;
 
 let fileID : string;
@@ -39,7 +39,7 @@ let link : PublicLinkResponse;
 let spare : PublicLinkResponse;
 let createStatus : number;
 
-async function callerID(client : ApiClient) : Promise<string>
+async function callerID(client : APIClient) : Promise<string>
 {
     const me = await (await client.get('/api/me')).json() as { id : string };
     return me.id;
@@ -59,14 +59,14 @@ async function directStatus(token : string, headers : Record<string, string> = {
     return res.status;
 }
 
-async function downloadStatus(client : ApiClient) : Promise<number>
+async function downloadStatus(client : APIClient) : Promise<number>
 {
     const res = await client.get(`/api/nodes/${ fileID }/download`);
     await res.arrayBuffer();
     return res.status;
 }
 
-async function upload(client : ApiClient, name : string, bytes : Buffer, mimeType : string) : Promise<NodeResponse>
+async function upload(client : APIClient, name : string, bytes : Buffer, mimeType : string) : Promise<NodeResponse>
 {
     const claim = await (await client.post('/api/blobs/claim', { sha256: sha256Of(bytes), size: bytes.length }))
         .json() as ClaimResponse;
@@ -84,9 +84,9 @@ beforeAll(async () =>
 {
     server = await spawnServer();
 
-    owner = new ApiClient(server.baseURL);
-    viewer = new ApiClient(server.baseURL);
-    stranger = new ApiClient(server.baseURL);
+    owner = new APIClient(server.baseURL);
+    viewer = new APIClient(server.baseURL);
+    stranger = new APIClient(server.baseURL);
     await owner.signUp('linker@example.com', PASSWORD);
     await viewer.signUp('viewer@example.com', PASSWORD);
     await stranger.signUp('stranger@example.com', PASSWORD);

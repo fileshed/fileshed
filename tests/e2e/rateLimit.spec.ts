@@ -15,7 +15,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -81,7 +81,7 @@ describe('the credential budget over a real socket', () =>
     {
         // The general tier is its own budget, and get-session rides it deliberately: every page load asks for one,
         // so putting it beside sign-in would take the whole app down with a burst of bad passwords.
-        const client = new ApiClient(server.baseURL);
+        const client = new APIClient(server.baseURL);
 
         expect((await client.get('/api/instance')).status).toBe(200);
         expect((await client.get('/api/auth/get-session')).status).toBe(200);

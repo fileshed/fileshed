@@ -126,7 +126,7 @@ describe('BrandingManager', () =>
 
         // Replacing moves the reference and graveyards the orphan in one step.
         await manager.setLogo(admin, Readable.from(second), 'image/svg+xml', second.length);
-        expect((await blob.get(firstSha ?? ''))?.deletedAt).not.toBeNull();
+        expect((await blob.get(firstSha ?? ''))?.deleted).not.toBeNull();
 
         await manager.deleteLogo(admin);
         expect(await manager.logoSha()).toBeNull();
@@ -144,7 +144,7 @@ describe('BrandingManager', () =>
         // Something else asks the graveyard question about this exact hash: the logo reference must answer it.
         await blob.graveyardUnreferenced([ sha ]);
 
-        expect((await blob.get(sha))?.deletedAt).toBeNull();
+        expect((await blob.get(sha))?.deleted).toBeNull();
         expect(await manager.serveLogo()).not.toBeNull();
     });
 

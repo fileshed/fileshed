@@ -13,14 +13,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const PASSWORD = 'correct-horse-battery';
 
 let server : ServerHandle;
-let user : ApiClient;
+let user : APIClient;
 let parentID : string;
 
 async function makeFolder(name : string, parent : string | null = null) : Promise<NodeResponse>
@@ -52,7 +52,7 @@ beforeAll(async () =>
 {
     server = await spawnServer();
 
-    user = new ApiClient(server.baseURL);
+    user = new APIClient(server.baseURL);
     await user.signUp('order@example.com', PASSWORD);
 
     const target = await makeFolder('target');

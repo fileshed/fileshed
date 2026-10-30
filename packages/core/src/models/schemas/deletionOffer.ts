@@ -20,7 +20,7 @@ export const deletionOfferCodec = z.strictObject({
     mimeType: z.string(),
     size: z.number(),
     createdBy: z.string(),
-    createdAt: z.date(),
+    created: z.date(),
     expiresAt: z.date(),
 });
 

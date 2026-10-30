@@ -83,7 +83,7 @@ export class SetupManager
 
     // Boot calls this once. Printing is how the generated code reaches the operator; an environment-provided token
     // is deliberately NOT echoed -- it is already in their hands, and logs travel further than environments do.
-    async announce(baseUrl : string) : Promise<void>
+    async announce(baseURL : string) : Promise<void>
     {
         if(!await this.needsSetup()) { return; }
 
@@ -93,7 +93,7 @@ export class SetupManager
             return;
         }
 
-        logger.info(`First-run setup: visit ${ baseUrl }/setup — setup code: ${ this.#token }`);
+        logger.info(`First-run setup: visit ${ baseURL }/setup — setup code: ${ this.#token }`);
     }
 
     async complete(request : SetupRequest) : Promise<{ email : string }>

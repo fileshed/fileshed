@@ -13,13 +13,13 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestVoid } from './request.ts';
+import { requestJSON, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export async function createPublicLink(nodeID : string) : Promise<PublicLinkResponse>
 {
-    return requestJson(`/api/nodes/${ nodeID }/links`, {
+    return requestJSON(`/api/nodes/${ nodeID }/links`, {
         method: 'POST',
         codec: publicLinkResponseCodec,
     });
@@ -27,7 +27,7 @@ export async function createPublicLink(nodeID : string) : Promise<PublicLinkResp
 
 export async function listLinksForNode(nodeID : string) : Promise<PublicLinkListResponse>
 {
-    return requestJson(`/api/nodes/${ nodeID }/links`, { codec: publicLinkListResponseCodec });
+    return requestJSON(`/api/nodes/${ nodeID }/links`, { codec: publicLinkListResponseCodec });
 }
 
 export async function revokePublicLink(linkID : string) : Promise<void>

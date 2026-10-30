@@ -15,8 +15,8 @@ import { defineStore } from 'pinia';
 import { PDF_ANNOTATOR_MAX_BYTES } from '@fileshed/core';
 
 // Resource Access
-import { fetchNodeBlob } from '../resource-access/content.ts';
-import { downloadUrl, saveBytes, showBytesIn } from '../resource-access/downloads.ts';
+import { getNodeBlob } from '../resource-access/content.ts';
+import { downloadURL, saveBytes, showBytesIn } from '../resource-access/downloads.ts';
 import { getNode } from '../resource-access/nodes.ts';
 
 // Stores
@@ -36,7 +36,7 @@ import {
     type InkParams,
     type OutlineDestination,
     type OutlineEntry,
-    type PdfAttachment,
+    type PDFAttachment,
     ROTATION_STEP,
     type ScrollModeName,
     type SidebarTab,
@@ -48,7 +48,7 @@ import {
 } from '../engines/pdf/types.ts';
 
 // Utils
-import { describeApiError } from '../utils/runWithToast.ts';
+import { describeAPIError } from '../utils/runWithToast.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -59,7 +59,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 //
 // View state the renderer should follow (mode, zoom, rotation, layout) stays as plain reactive state that the surface
 // watches. These are the calls that go the other way -- a question or a one-shot command, with no state to mirror.
-interface PdfDocumentAccess
+interface PDFDocumentAccess
 {
     save : () => Promise<Uint8Array>;
 
@@ -76,7 +76,7 @@ interface PdfDocumentAccess
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
+export const usePDFAnnotatorStore = defineStore('pdfAnnotator', () =>
 {
     const file = createFileSaveSession();
     const bytes = ref<Uint8Array | null>(null);
@@ -105,7 +105,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     const sidebarOpen = ref(false);
     const sidebarTab = ref<SidebarTab>('thumbnails');
     const outline = ref<OutlineEntry[]>([]);
-    const attachments = ref<PdfAttachment[]>([]);
+    const attachments = ref<PDFAttachment[]>([]);
 
     // Whether the document is filling the screen. Set by the surface once the browser confirms the change rather than
     // when it is asked for, since the reader can leave fullscreen by a route this app never hears about (Escape).
@@ -157,7 +157,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
 
     const dirty = computed(() => rendererDirty.value || unlandedSave.value);
 
-    let access : PdfDocumentAccess | null = null;
+    let access : PDFDocumentAccess | null = null;
     let altTextApply : AltTextRequest['apply'] | null = null;
 
     //------------------------------------------------------------------------------------------------------------------
@@ -195,7 +195,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // Surface seam
     //------------------------------------------------------------------------------------------------------------------
 
-    function setDocumentAccess(source : PdfDocumentAccess | null) : void
+    function setDocumentAccess(source : PDFDocumentAccess | null) : void
     {
         access = source;
     }
@@ -388,7 +388,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // when the tab it was left on has nothing behind it, so a reader moving between documents is never handed a pane
     // that is blank for a reason they cannot see.
     function setDocumentFacts(
-        facts : { outline : OutlineEntry[]; attachments : PdfAttachment[]; properties : DocumentProperties }
+        facts : { outline : OutlineEntry[]; attachments : PDFAttachment[]; properties : DocumentProperties }
     ) : void
     {
         outline.value = facts.outline;
@@ -497,7 +497,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
 
         if(access === null)
         {
-            window.open(downloadUrl(current.id, 'inline'), '_blank', 'noopener');
+            window.open(downloadURL(current.id, 'inline'), '_blank', 'noopener');
             return;
         }
 
@@ -518,7 +518,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         catch(caught)
         {
             target.close();
-            printError.value = describeApiError(caught);
+            printError.value = describeAPIError(caught);
         }
         finally
         {
@@ -588,7 +588,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
                 return;
             }
 
-            const blob = await fetchNodeBlob(nodeID);
+            const blob = await getNodeBlob(nodeID);
             const loadedBytes = new Uint8Array(await blob.arrayBuffer());
             if(!file.isCurrent(token)) { return; }
 
@@ -603,7 +603,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
             file.node.value = null;
             bytes.value = null;
             loadState.value = 'error';
-            loadError.value = describeApiError(caught);
+            loadError.value = describeAPIError(caught);
         }
     }
 

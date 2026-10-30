@@ -15,7 +15,7 @@ export interface DeletionOffer
     mimeType : string;
     size : number;
     createdBy : string;
-    createdAt : Date;
+    created : Date;
     expiresAt : Date;
 }
 

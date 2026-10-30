@@ -35,7 +35,7 @@ import { testNodePolicy } from '../nodes/support.ts';
 const GRACE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Comfortably older than any cutoff GRACE_MS produces -- a trashed_at the sweep must treat as lapsed.
-const EXPIRED = new Date('2020-01-01T00:00:00.000Z');
+const expired = new Date('2020-01-01T00:00:00.000Z');
 
 let handle : DatabaseHandle;
 let ra : NodeRA;
@@ -63,10 +63,10 @@ afterEach(async () =>
 
 async function blobDeletedAt(sha256 : string) : Promise<string | Date | null>
 {
-    const row = await handle.db.selectFrom('blob').select('deleted_at')
+    const row = await handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -79,10 +79,10 @@ describe('runTrashPurgeOnce', () =>
     it('purges an expired trashed subtree whole and graveyards its blobs, counting only the root', async () =>
     {
         await ra.insert(folderNode({ id: 'home', ownerID: 'alice' }));
-        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', parentID: 'home', trashedAt: EXPIRED }));
-        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashedAt: EXPIRED }));
-        await ra.insert(folderNode({ id: 'sub', ownerID: 'alice', parentID: 'dir', trashedAt: EXPIRED }));
-        await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', parentID: 'sub', blobID: 'sha-b', trashedAt: EXPIRED }));
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', parentID: 'home', trashedAt: expired }));
+        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashedAt: expired }));
+        await ra.insert(folderNode({ id: 'sub', ownerID: 'alice', parentID: 'dir', trashedAt: expired }));
+        await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', parentID: 'sub', blobID: 'sha-b', trashedAt: expired }));
 
         const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
@@ -101,7 +101,7 @@ describe('runTrashPurgeOnce', () =>
     // A root-level trashed item (parent_id null) is a candidate too -- the "no parent" case of "parent not trashed".
     it('purges a root-level trashed item whose grace window has lapsed', async () =>
     {
-        await ra.insert(fileNode({ id: 'solo', ownerID: 'alice', blobID: 'sha-a', trashedAt: EXPIRED }));
+        await ra.insert(fileNode({ id: 'solo', ownerID: 'alice', blobID: 'sha-a', trashedAt: expired }));
 
         const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
@@ -140,8 +140,8 @@ describe('runTrashPurgeOnce', () =>
     // trashed_at); it goes only because its target does.
     it('removes links pointing into a purged subtree by cascade', async () =>
     {
-        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', trashedAt: EXPIRED }));
-        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashedAt: EXPIRED }));
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', trashedAt: expired }));
+        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashedAt: expired }));
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'bob', targetNodeID: 'f1' }));
 
         const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
@@ -155,8 +155,8 @@ describe('runTrashPurgeOnce', () =>
     // summary reports the failure honestly rather than the whole sweep aborting.
     it('isolates a failing root, purging the rest and counting the failure', async () =>
     {
-        await ra.insert(folderNode({ id: 'alpha', ownerID: 'alice', trashedAt: EXPIRED }));
-        await ra.insert(folderNode({ id: 'beta', ownerID: 'alice', trashedAt: EXPIRED }));
+        await ra.insert(folderNode({ id: 'alpha', ownerID: 'alice', trashedAt: expired }));
+        await ra.insert(folderNode({ id: 'beta', ownerID: 'alice', trashedAt: expired }));
 
         const purger : SubtreePurger = {
             async purgeSubtree(rootID : string) : Promise<void>

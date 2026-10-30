@@ -168,7 +168,7 @@ vi.mock('@client/components/handlers/text/modals/conflictModal.vue', () => ({
 
 // The editor store's resource-access and toast seams -- the store is real, but nothing here drives a save over them.
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeText: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeText: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------

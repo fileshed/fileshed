@@ -57,10 +57,10 @@ afterEach(async () =>
 
 async function blobDeletedAt(sha256 : string) : Promise<string | Date | null>
 {
-    const row = await handle.db.selectFrom('blob').select('deleted_at')
+    const row = await handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -170,7 +170,7 @@
     } from '@fileshed/core';
 
     // Resource Access
-    import { ApiError } from '../../resource-access/apiError.ts';
+    import { APIError } from '../../resource-access/apiError.ts';
     import {
         declineAccessRequest,
         grantAccessRequest,
@@ -180,7 +180,7 @@
     import { lookupUser } from '../../resource-access/users.ts';
 
     // Utils
-    import { describeApiError, useRunWithToast } from '../../utils/runWithToast.ts';
+    import { describeAPIError, useRunWithToast } from '../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -256,13 +256,13 @@
         }
         catch(caught)
         {
-            if(caught instanceof ApiError && caught.status === 404)
+            if(caught instanceof APIError && caught.status === 404)
             {
                 lookupError.value = 'No user with that email.';
             }
             else
             {
-                toast.add({ title: 'That didn\'t work', description: describeApiError(caught), color: 'error' });
+                toast.add({ title: 'That didn\'t work', description: describeAPIError(caught), color: 'error' });
             }
         }
         finally

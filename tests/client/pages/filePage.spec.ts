@@ -13,8 +13,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
-import { fetchNodeText } from '@client/resource-access/content.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
+import { getNodeText } from '@client/resource-access/content.ts';
 import { getNode } from '@client/resource-access/nodes.ts';
 
 // Utils
@@ -32,7 +32,7 @@ import FilePage from '@client/pages/filePage.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn(), patchNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeText: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeText: vi.fn() }));
 vi.mock('@client/utils/replaceLocation.ts', () => ({ replaceLocation: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
@@ -46,7 +46,7 @@ function standIn(name : string, props : string[] | Record<string, unknown> = [])
 }
 
 vi.mock('@client/components/handlers/markdown/markdownEditor.vue', () => standIn('MarkdownEditor', [ 'modelValue' ]));
-vi.mock('@client/components/handlers/pdf/pdfAnnotator.vue', () => standIn('PdfAnnotator', [ 'nodeID' ]));
+vi.mock('@client/components/handlers/pdf/pdfAnnotator.vue', () => standIn('PDFAnnotator', [ 'nodeID' ]));
 vi.mock('@client/components/handlers/media/mediaPlayer.vue', () => standIn('MediaPlayer', {
     node: Object,
     media: String,
@@ -59,7 +59,7 @@ vi.mock('@client/components/handlers/text/modals/conflictModal.vue', () => stand
 vi.mock('@client/components/share/requestAccess.vue', () => standIn('RequestAccess', [ 'nodeID' ]));
 
 const getNodeMock = getNode as unknown as Mock;
-const fetchNodeTextMock = fetchNodeText as unknown as Mock;
+const getNodeTextMock = getNodeText as unknown as Mock;
 const replaceLocationMock = replaceLocation as unknown as Mock;
 
 const stubs = {
@@ -104,7 +104,7 @@ beforeEach(() =>
 {
     setActivePinia(createPinia());
     vi.clearAllMocks();
-    fetchNodeTextMock.mockResolvedValue('hello');
+    getNodeTextMock.mockResolvedValue('hello');
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ describe('FilePage', () =>
     {
         const wrapper = await openFile(fileNode({ id: 'n1', name: 'report.pdf', mimeType: 'application/pdf' }));
 
-        expect(familyProps(wrapper, 'PdfAnnotator')?.nodeID).toBe('n1');
+        expect(familyProps(wrapper, 'PDFAnnotator')?.nodeID).toBe('n1');
     });
 
     it('plays audio and video in the media player as what they are', async () =>
@@ -166,7 +166,7 @@ describe('FilePage', () =>
     // The server answers 404 for a file that is gone and for one the caller cannot see alike.
     it('offers to request access when the file does not resolve', async () =>
     {
-        getNodeMock.mockRejectedValue(new ApiError(404, 'Not found.'));
+        getNodeMock.mockRejectedValue(new APIError(404, 'Not found.'));
 
         const wrapper = await openRoute('n1');
 
@@ -175,7 +175,7 @@ describe('FilePage', () =>
 
     it('says the server failed, rather than asking for access, when the read errors', async () =>
     {
-        getNodeMock.mockRejectedValue(new ApiError(500, 'Storage is unavailable.'));
+        getNodeMock.mockRejectedValue(new APIError(500, 'Storage is unavailable.'));
 
         const wrapper = await openRoute('n1');
 

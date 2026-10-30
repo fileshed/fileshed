@@ -19,13 +19,13 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { type QueryParams, requestJson, requestVoid } from './request.ts';
+import { type QueryParams, requestJSON, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export async function getNode(id : string) : Promise<NodeResponse>
 {
-    return requestJson(`/api/nodes/${ id }`, { codec: nodeResponseCodec });
+    return requestJSON(`/api/nodes/${ id }`, { codec: nodeResponseCodec });
 }
 
 // A folder's children, or the caller's root when parentID is null. Pagination, sort, and the filters all default
@@ -42,7 +42,7 @@ export async function listChildren(
     const params : QueryParams = { ...rest };
     if(types !== undefined && types.length > 0) { params.types = types.join(','); }
 
-    return requestJson(path, { query: params, codec: nodeListResponseCodec });
+    return requestJSON(path, { query: params, codec: nodeListResponseCodec });
 }
 
 // The caller's trash: the roots of their trashed subtrees, one page at a time. Pagination, sort, and the Type/Modified
@@ -55,37 +55,37 @@ export async function listTrash(query : Partial<ListingQuery> = {}) : Promise<No
     const params : QueryParams = { ...rest };
     if(types !== undefined && types.length > 0) { params.types = types.join(','); }
 
-    return requestJson('/api/trash', { query: params, codec: nodeListResponseCodec });
+    return requestJSON('/api/trash', { query: params, codec: nodeListResponseCodec });
 }
 
 export async function createNode(request : CreateNodeRequest) : Promise<NodeResponse>
 {
-    return requestJson('/api/nodes', { method: 'POST', body: request, codec: nodeResponseCodec });
+    return requestJSON('/api/nodes', { method: 'POST', body: request, codec: nodeResponseCodec });
 }
 
 export async function patchNode(id : string, patch : PatchNodeRequest) : Promise<NodeResponse>
 {
-    return requestJson(`/api/nodes/${ id }`, { method: 'PATCH', body: patch, codec: nodeResponseCodec });
+    return requestJSON(`/api/nodes/${ id }`, { method: 'PATCH', body: patch, codec: nodeResponseCodec });
 }
 
 export async function trashNode(id : string) : Promise<NodeResponse>
 {
-    return requestJson(`/api/nodes/${ id }/trash`, { method: 'POST', codec: nodeResponseCodec });
+    return requestJSON(`/api/nodes/${ id }/trash`, { method: 'POST', codec: nodeResponseCodec });
 }
 
 export async function restoreNode(id : string) : Promise<NodeResponse>
 {
-    return requestJson(`/api/nodes/${ id }/restore`, { method: 'POST', codec: nodeResponseCodec });
+    return requestJSON(`/api/nodes/${ id }/restore`, { method: 'POST', codec: nodeResponseCodec });
 }
 
 export async function copyNode(id : string, request : CopyNodeRequest) : Promise<NodeResponse>
 {
-    return requestJson(`/api/nodes/${ id }/copy`, { method: 'POST', body: request, codec: nodeResponseCodec });
+    return requestJSON(`/api/nodes/${ id }/copy`, { method: 'POST', body: request, codec: nodeResponseCodec });
 }
 
 export async function purgeBrokenLinks(id : string) : Promise<PurgeBrokenLinksResponse>
 {
-    return requestJson(`/api/nodes/${ id }/purge-broken-links`, {
+    return requestJSON(`/api/nodes/${ id }/purge-broken-links`, {
         method: 'POST',
         codec: purgeBrokenLinksResponseCodec,
     });
@@ -102,7 +102,7 @@ export async function hardDeleteNode(id : string, offerCopies = false) : Promise
 // single permanent delete purges one.
 export async function emptyTrash() : Promise<EmptyTrashResponse>
 {
-    return requestJson('/api/trash', { method: 'DELETE', codec: emptyTrashResponseCodec });
+    return requestJSON('/api/trash', { method: 'DELETE', codec: emptyTrashResponseCodec });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

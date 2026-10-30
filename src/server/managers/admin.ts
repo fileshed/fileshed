@@ -83,7 +83,7 @@ interface ProfileSource
     banned ?: boolean | null;
     banReason ?: string | null;
     banExpires ?: Date | string | null;
-    createdAt : Date | string;
+    created : Date | string;
 }
 
 // better-auth's user carries plugin fields the codec narrows and validates; the ban trio is normalized here because
@@ -108,7 +108,7 @@ function toUserProfile(user : ProfileSource, now : Date) : UserProfile
         banned: ban.banned,
         banReason: ban.banReason,
         banExpires: ban.banExpires,
-        createdAt: new Date(user.createdAt),
+        created: new Date(user.created),
     });
 }
 

@@ -20,12 +20,12 @@ See `docs/design/requirements.md` for the full v1 scope and the technical decisi
 The decided stack (versions live in `package.json`, not here — don't quote them in prose):
 
 - **Server**: Hono, with `@hono/node-server` and `hono-openapi` for route docs; request bodies and queries are validated
-  through `clients/http/utils/readJsonBody.ts` and `clients/http/utils/parseQuery.ts`
+  through `clients/http/utils/readJSONBody.ts` and `clients/http/utils/parseQuery.ts`
 - **DB access**: Kysely, one query builder across **both** dialects — Postgres (primary target) and SQLite (supported convenience deployment). Feature parity required; when a tradeoff appears, Postgres wins and SQLite gets the workaround.
 - **Auth**: BetterAuth (`better-auth`) — email/password v1, OAuth providers are config not code
 - **Validation / codecs**: Zod v4
 - **Logging**: pino (structured)
-- **IDs**: cuid2, generated app-side. cuid2 is deliberately non-monotonic — **order by `created_at`, never by `id`**.
+- **IDs**: cuid2, generated app-side. cuid2 is deliberately non-monotonic — **order by `created`, never by `id`**.
 - **Client hashing**: hash-wasm for incremental SHA-256 over `File.stream()` — never `crypto.subtle.digest` (needs the whole file in memory)
 - **Tests**: Vitest
 

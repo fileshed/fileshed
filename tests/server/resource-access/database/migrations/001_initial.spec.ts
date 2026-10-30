@@ -81,7 +81,7 @@ const insertBlob = async (db : Kysely<Database>, sha256 : string, backendID : st
             size: 10,
             backend_id: backendID,
             storage_key: `key/${ sha256 }`,
-            created_at: isoNow(),
+            created: isoNow(),
         })
         .execute();
 };
@@ -95,8 +95,8 @@ const insertFolder = async (db : Kysely<Database>, id : string, ownerID : string
             type: 'folder',
             name: id,
             owner_id: ownerID,
-            created_at: isoNow(),
-            updated_at: isoNow(),
+            created: isoNow(),
+            updated: isoNow(),
         })
         .execute();
 };
@@ -113,8 +113,8 @@ const insertFile = async (db : Kysely<Database>, id : string, ownerID : string, 
             blob_id: blobID,
             size: 10,
             mime_type: 'text/plain',
-            created_at: isoNow(),
-            updated_at: isoNow(),
+            created: isoNow(),
+            updated: isoNow(),
         })
         .execute();
 };
@@ -129,8 +129,8 @@ const insertLink = async (db : Kysely<Database>, id : string, ownerID : string, 
             name: id,
             owner_id: ownerID,
             target_node_id: targetID,
-            created_at: isoNow(),
-            updated_at: isoNow(),
+            created: isoNow(),
+            updated: isoNow(),
         })
         .execute();
 };
@@ -189,8 +189,8 @@ describe('migration 001 — node variant constraints', () =>
                 name: 'f1',
                 owner_id: 'u1',
                 size: 100,
-                created_at: isoNow(),
-                updated_at: isoNow(),
+                created: isoNow(),
+                updated: isoNow(),
             })
             .execute();
 
@@ -214,8 +214,8 @@ describe('migration 001 — node variant constraints', () =>
                 owner_id: 'u1',
                 target_node_id: 'target',
                 blob_id: 'sha-a',
-                created_at: isoNow(),
-                updated_at: isoNow(),
+                created: isoNow(),
+                updated: isoNow(),
             })
             .execute();
 
@@ -236,8 +236,8 @@ describe('migration 001 — node variant constraints', () =>
                 owner_id: 'u1',
                 target_node_id: 'target',
                 trashed_at: isoNow(),
-                created_at: isoNow(),
-                updated_at: isoNow(),
+                created: isoNow(),
+                updated: isoNow(),
             })
             .execute();
 
@@ -266,7 +266,7 @@ describe('migration 001 — share and share_request constraints', () =>
                 // Deliberately invalid role, cast past the column's literal union to reach the DB CHECK.
                 role: 'owner' as unknown as ShareTable['role'],
                 created_by: 'owner',
-                created_at: isoNow(),
+                created: isoNow(),
             })
             .execute();
 
@@ -287,7 +287,7 @@ describe('migration 001 — share and share_request constraints', () =>
                 grantee_user_id: 'grantee',
                 role: 'viewer',
                 created_by: 'owner',
-                created_at: isoNow(),
+                created: isoNow(),
             })
             .execute();
 
@@ -299,7 +299,7 @@ describe('migration 001 — share and share_request constraints', () =>
                 grantee_user_id: 'grantee',
                 role: 'editor',
                 created_by: 'owner',
-                created_at: isoNow(),
+                created: isoNow(),
             })
             .execute();
 
@@ -320,7 +320,7 @@ describe('migration 001 — share and share_request constraints', () =>
                 requester_id: 'requester',
                 requested_role: 'viewer',
                 status: 'pending',
-                created_at: isoNow(),
+                created: isoNow(),
                 resolved_at: isoNow(),
             })
             .execute();
@@ -345,8 +345,8 @@ describe('migration 001 — foreign keys and cascades', () =>
                 type: 'folder',
                 name: 'n1',
                 owner_id: 'ghost',
-                created_at: isoNow(),
-                updated_at: isoNow(),
+                created: isoNow(),
+                updated: isoNow(),
             })
             .execute();
 
@@ -391,7 +391,7 @@ describe('migration 001 — foreign keys and cascades', () =>
                 mime_type: 'application/pdf',
                 size: 10,
                 created_by: 'u1',
-                created_at: isoNow(),
+                created: isoNow(),
                 expires_at: isoNow(),
             })
             .execute();
@@ -428,7 +428,7 @@ describe('migration 001 — foreign keys and cascades', () =>
                 mime_type: 'application/pdf',
                 size: 10,
                 created_by: 'creator',
-                created_at: isoNow(),
+                created: isoNow(),
                 expires_at: isoNow(),
             })
             .execute();

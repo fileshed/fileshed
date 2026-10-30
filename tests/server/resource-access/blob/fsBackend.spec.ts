@@ -410,7 +410,7 @@ describe('FsBackend reconciliation', () =>
         const stored = await store.statStored(sha256Of(data));
 
         expect(stored?.size).toBe(data.length);
-        expect(stored?.modifiedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+        expect(stored?.modified.getTime()).toBeGreaterThanOrEqual(before - 1000);
 
         expect(await store.statStored(sha256Of(Buffer.from('never stored')))).toBeNull();
     });

@@ -10,7 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -25,7 +25,7 @@ beforeAll(async () =>
     server = await spawnServer({ env: { FILESHED_SETUP_TOKEN: 'e2e-setup-token-1234' } });
 
     // First-run setup over the wire: the operator token gates admin creation, the password rides only this POST.
-    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+    const setup = await new APIClient(server.baseURL).post('/api/setup', {
         token: 'e2e-setup-token-1234',
         name: 'Administrator',
         email: ADMIN_EMAIL,
@@ -47,7 +47,7 @@ describe('sign-up / sign-in / session', () =>
 {
     it('signs a new account in and serves its profile from the session cookie', async () =>
     {
-        const client = new ApiClient(server.baseURL);
+        const client = new APIClient(server.baseURL);
 
         const signUp = await client.signUp('member-a@example.com', PASSWORD);
         expect(signUp.status).toBe(200);
@@ -65,7 +65,7 @@ describe('sign-up / sign-in / session', () =>
 
     it('rejects a request with no session cookie', async () =>
     {
-        const anonymous = new ApiClient(server.baseURL);
+        const anonymous = new APIClient(server.baseURL);
 
         const me = await anonymous.get('/api/me');
 
@@ -75,12 +75,12 @@ describe('sign-up / sign-in / session', () =>
 
     it('restores a session on a fresh client via sign-in', async () =>
     {
-        const first = new ApiClient(server.baseURL);
+        const first = new APIClient(server.baseURL);
         await first.signUp('member-b@example.com', PASSWORD);
 
         // A second client with an empty jar must sign in for itself -- proving the session rides the cookie, not
         // in-process state.
-        const second = new ApiClient(server.baseURL);
+        const second = new APIClient(server.baseURL);
         const signIn = await second.signIn('member-b@example.com', PASSWORD);
         expect(signIn.status).toBe(200);
 
@@ -93,7 +93,7 @@ describe('sign-up / sign-in / session', () =>
 
     it('saves a root-label preference and serves it back, persisting across a fresh session', async () =>
     {
-        const client = new ApiClient(server.baseURL);
+        const client = new APIClient(server.baseURL);
         await client.signUp('member-prefs@example.com', PASSWORD);
 
         const patched = await client.patch('/api/me/preferences', { rootLabel: 'My Vault' });
@@ -102,7 +102,7 @@ describe('sign-up / sign-in / session', () =>
 
         // A fresh client signs in with an empty jar: the preference comes from the row, not a session snapshot, so a
         // new session sees it immediately -- the same read a page reload makes.
-        const reader = new ApiClient(server.baseURL);
+        const reader = new APIClient(server.baseURL);
         await reader.signIn('member-prefs@example.com', PASSWORD);
         const me = await reader.get('/api/me');
 
@@ -119,7 +119,7 @@ describe('bootstrapped admin', () =>
 {
     it('signs in the env-provisioned admin with an admin role in its session', async () =>
     {
-        const admin = new ApiClient(server.baseURL);
+        const admin = new APIClient(server.baseURL);
 
         const signIn = await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
         expect(signIn.status).toBe(200);
@@ -141,7 +141,7 @@ describe('GET /api/admin/users', () =>
 {
     it('rejects an anonymous request with 401', async () =>
     {
-        const anonymous = new ApiClient(server.baseURL);
+        const anonymous = new APIClient(server.baseURL);
 
         const res = await anonymous.get('/api/admin/users');
 
@@ -151,7 +151,7 @@ describe('GET /api/admin/users', () =>
 
     it('rejects a signed-in non-admin with 403', async () =>
     {
-        const member = new ApiClient(server.baseURL);
+        const member = new APIClient(server.baseURL);
         await member.signUp('member-c@example.com', PASSWORD);
 
         const res = await member.get('/api/admin/users');
@@ -162,7 +162,7 @@ describe('GET /api/admin/users', () =>
 
     it('returns the user list to the admin with 200', async () =>
     {
-        const admin = new ApiClient(server.baseURL);
+        const admin = new APIClient(server.baseURL);
         await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
 
         const res = await admin.get('/api/admin/users');
@@ -178,7 +178,7 @@ describe('better-auth admin surface gate', () =>
 {
     it('404s the internal admin endpoints externally even with a valid admin cookie', async () =>
     {
-        const admin = new ApiClient(server.baseURL);
+        const admin = new APIClient(server.baseURL);
         await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
 
         // better-auth's own admin plugin would answer /api/auth/admin/list-users; the app.ts gate refuses that surface

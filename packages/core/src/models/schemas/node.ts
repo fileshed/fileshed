@@ -20,8 +20,8 @@ const nodeBaseShape = {
     name: z.string(),
     ownerID: z.string(),
     parentID: z.string().nullable(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    created: z.date(),
+    updated: z.date(),
 };
 
 //----------------------------------------------------------------------------------------------------------------------

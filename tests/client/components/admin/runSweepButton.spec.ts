@@ -12,7 +12,7 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import type { SweepRunResponse } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import { runSweep } from '@client/resource-access/admin.ts';
 
 // Under test
@@ -107,7 +107,7 @@ describe('RunSweepButton', () =>
 
     it('shows the refusal when the sweep is already running, rather than doing nothing quietly', async () =>
     {
-        runSweepMock.mockRejectedValue(new ApiError(
+        runSweepMock.mockRejectedValue(new APIError(
             409,
             'The garbage collection sweep is already running.',
             { code: 'sweep.alreadyRunning' }
@@ -138,7 +138,7 @@ describe('RunSweepButton', () =>
 
     it('does not tell the host to refresh when the sweep never ran', async () =>
     {
-        runSweepMock.mockRejectedValue(new ApiError(409, 'The garbage collection sweep is already running.', {}));
+        runSweepMock.mockRejectedValue(new APIError(409, 'The garbage collection sweep is already running.', {}));
 
         const wrapper = mountButton();
         await wrapper.find('.run').trigger('click');

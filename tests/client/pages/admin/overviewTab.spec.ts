@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminOverview, AdminStatusResponse } from '@fileshed/core';
 
 // Resource Access
-import { fetchAdminSettings, getAdminStatus, runSweep } from '@client/resource-access/admin.ts';
+import { getAdminSettings, getAdminStatus, runSweep } from '@client/resource-access/admin.ts';
 
 // Under test
 import OverviewTab from '@client/pages/admin/overviewTab.vue';
@@ -23,7 +23,7 @@ import OverviewTab from '@client/pages/admin/overviewTab.vue';
 
 vi.mock('@client/resource-access/admin.ts', () => ({
     getAdminStatus: vi.fn(),
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
     runSweep: vi.fn(),
 }));
@@ -34,7 +34,7 @@ vi.mock('@nuxt/ui/composables', () => ({
 }));
 
 const statusMock = getAdminStatus as unknown as Mock;
-const settingsMock = fetchAdminSettings as unknown as Mock;
+const settingsMock = getAdminSettings as unknown as Mock;
 const runSweepMock = runSweep as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------

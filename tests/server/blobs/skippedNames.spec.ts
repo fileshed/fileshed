@@ -19,8 +19,8 @@ import {
     type BootedStoreApp,
     answerChallenge,
     bootBlobApp,
+    calculateAnswer,
     claim,
-    computeAnswer,
     fileNodesForBlob,
     makeUser,
     putUpload,
@@ -152,7 +152,7 @@ describe('a deduped commit naming a skipped file', () =>
             .then((res) => res.json()) as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a challenge'); }
 
-        const answer = computeAnswer(challenge.nonce, challenge.ranges, data);
+        const answer = calculateAnswer(challenge.nonce, challenge.ranges, data);
         const res = await answerChallenge(booted.app, claimant.cookie, challenge.challengeID, answer, {
             name: 'Thumbs.db',
             parentID: null,

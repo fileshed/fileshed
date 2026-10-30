@@ -5,10 +5,10 @@
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import { authClient } from '@client/resource-access/authClient.ts';
-import { completeSetup, fetchInstance } from '@client/resource-access/instance.ts';
-import { fetchMe } from '@client/resource-access/me.ts';
+import { completeSetup, getInstance } from '@client/resource-access/instance.ts';
+import { getMe } from '@client/resource-access/me.ts';
 
 // Support
 import { type MountedAuthPage, alertText, fillField, mountAuthPage, submit } from './authPageSupport.ts';
@@ -20,14 +20,14 @@ import SetupPage from '@client/pages/setupPage.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/authClient.ts', () => ({ authClient: { signIn: { email: vi.fn() } } }));
-vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn(), completeSetup: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/instance.ts', () => ({ getInstance: vi.fn(), completeSetup: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const signInEmail = authClient.signIn.email as unknown as Mock;
-const fetchInstanceMock = fetchInstance as unknown as Mock;
+const getInstanceMock = getInstance as unknown as Mock;
 const completeSetupMock = completeSetup as unknown as Mock;
-const fetchMeMock = fetchMe as unknown as Mock;
+const getMeMock = getMe as unknown as Mock;
 
 async function completeWizard() : Promise<MountedAuthPage>
 {
@@ -45,10 +45,10 @@ async function completeWizard() : Promise<MountedAuthPage>
 beforeEach(() =>
 {
     vi.clearAllMocks();
-    fetchInstanceMock.mockResolvedValue(instanceFixture({ needsSetup: true }));
+    getInstanceMock.mockResolvedValue(instanceFixture({ needsSetup: true }));
     completeSetupMock.mockResolvedValue({ email: 'admin@example.com' });
     signInEmail.mockResolvedValue({ error: null });
-    fetchMeMock.mockResolvedValue(meFixture({ role: 'admin' }));
+    getMeMock.mockResolvedValue(meFixture({ role: 'admin' }));
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ describe('SetupPage', () =>
 
     it('says why setup was refused, in the server\'s words, and signs nobody in', async () =>
     {
-        completeSetupMock.mockRejectedValue(new ApiError(403, 'That setup code is not valid.'));
+        completeSetupMock.mockRejectedValue(new APIError(403, 'That setup code is not valid.'));
 
         const { wrapper, router } = await completeWizard();
 
@@ -89,7 +89,7 @@ describe('SetupPage', () =>
 
     it('sends the visitor to sign in once the instance is already set up', async () =>
     {
-        fetchInstanceMock.mockResolvedValue(instanceFixture({ needsSetup: false }));
+        getInstanceMock.mockResolvedValue(instanceFixture({ needsSetup: false }));
 
         const { router } = await mountAuthPage(SetupPage, '/setup', '/setup');
 

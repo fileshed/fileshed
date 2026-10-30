@@ -136,7 +136,7 @@ describe('NodeManager trashed visibility', () =>
             grantee_user_id: 'bob',
             role: 'viewer',
             created_by: 'alice',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
             .execute();
     }
@@ -209,7 +209,7 @@ describe('NodeManager.children — link row owner attribution', () =>
             grantee_user_id: 'alice',
             role: 'viewer',
             created_by: 'carol',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
             .execute();
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
@@ -262,7 +262,7 @@ describe('NodeManager.children owner facet — link targets', () =>
             grantee_user_id: 'alice',
             role: 'viewer',
             created_by: 'carol',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
             .execute();
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', parentID: 'p', targetNodeID: 'far' }));
@@ -306,7 +306,7 @@ describe('NodeManager.children owner facet — link targets', () =>
             grantee_user_id: 'alice',
             role: 'viewer',
             created_by: 'bob',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
             .execute();
         await ra.insert(linkNode({ id: 'lnk2', ownerID: 'alice', parentID: 'p3', targetNodeID: 'bobTarget' }));
@@ -339,7 +339,7 @@ describe('NodeManager.children through a folder link', () =>
             grantee_user_id: granteeID,
             role,
             created_by: createdBy,
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
             .execute();
     }
@@ -461,8 +461,8 @@ describe('NodeManager placement depth', () =>
             name: `chain-${ index }`,
             owner_id: 'alice',
             parent_id: index === 0 ? null : `chain-${ index - 1 }`,
-            created_at: now,
-            updated_at: now,
+            created: now,
+            updated: now,
         }));
 
         await handle.db

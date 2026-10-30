@@ -12,7 +12,7 @@ export interface PublicLinkResponse
     nodeID : string;
     token : string;
     url : string;
-    createdAt : string;
+    created : string;
     revokedAt : string | null;
 }
 

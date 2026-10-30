@@ -16,7 +16,7 @@ export const publicLinkCodec = z.strictObject({
     id: z.string(),
     nodeID: z.string(),
     token: z.string(),
-    createdAt: z.date(),
+    created: z.date(),
     revokedAt: z.date().nullable(),
 });
 

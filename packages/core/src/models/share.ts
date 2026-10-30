@@ -14,7 +14,7 @@ export interface Share
     granteeUserID : string;
     role : ShareRole;
     createdBy : string;
-    createdAt : Date;
+    created : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

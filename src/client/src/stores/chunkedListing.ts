@@ -17,7 +17,7 @@ import { listing } from '../engines/listing/index.ts';
 export interface ChunkedListingSource
 {
     // One chunk from `offset`, narrowed on the server when `filtered` is set.
-    fetchChunk(offset : number, filtered : boolean) : Promise<NodeListResponse>;
+    listChunk(offset : number, filtered : boolean) : Promise<NodeListResponse>;
 
     // Every page that lands, the first and each later one, after its rows are in.
     onPage ?: (page : NodeListResponse) => void;
@@ -100,7 +100,7 @@ export function createChunkedListing(source : ChunkedListingSource) : ChunkedLis
 
     async function replaceWithFirstChunk(token : number, filtered : boolean) : Promise<boolean>
     {
-        const page = await source.fetchChunk(0, filtered);
+        const page = await source.listChunk(0, filtered);
         if(token !== generation) { return false; }
 
         loaded.value = page.nodes;
@@ -120,7 +120,7 @@ export function createChunkedListing(source : ChunkedListingSource) : ChunkedLis
         inFlightFor = token;
         try
         {
-            const page = await source.fetchChunk(loaded.value.length, serverFiltered.value);
+            const page = await source.listChunk(loaded.value.length, serverFiltered.value);
             if(token !== generation || page.nodes.length === 0) { return false; }
 
             loaded.value = [ ...loaded.value, ...page.nodes ];

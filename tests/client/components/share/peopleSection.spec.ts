@@ -14,7 +14,7 @@ import type {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import { grantShare, listSharesForNode, revokeShare } from '@client/resource-access/shares.ts';
 import {
     declineAccessRequest,
@@ -70,7 +70,7 @@ function accessRequest(
 ) : AccessRequestResponse
 {
     return {
-        id, nodeID, requesterID, requestedRole: role, message, status: 'pending', createdAt: ISO, resolvedAt: null,
+        id, nodeID, requesterID, requestedRole: role, message, status: 'pending', created: ISO, resolvedAt: null,
     };
 }
 
@@ -92,7 +92,7 @@ function incomingRequest(
 function shareEntry(role : 'viewer' | 'editor', grantee : UserSummary = GRACE) : ShareListEntry
 {
     return {
-        share: { id: 's1', nodeID: 'f1', granteeUserID: grantee.id, role, createdBy: 'owner1', createdAt: ISO },
+        share: { id: 's1', nodeID: 'f1', granteeUserID: grantee.id, role, createdBy: 'owner1', created: ISO },
         grantee,
     };
 }
@@ -180,7 +180,7 @@ describe('PeopleSection', () =>
 
     it('shows an inline "no user" message when the email matches no account', async () =>
     {
-        lookupUserMock.mockRejectedValue(new ApiError(404, 'No user with that email.'));
+        lookupUserMock.mockRejectedValue(new APIError(404, 'No user with that email.'));
         const wrapper = mountSection();
         await flushPromises();
 

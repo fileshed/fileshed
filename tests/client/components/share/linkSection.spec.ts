@@ -44,7 +44,7 @@ function link(overrides : Partial<PublicLinkResponse> = {}) : PublicLinkResponse
         nodeID: 'f1',
         token: 'tok123',
         url: '/d/tok123',
-        createdAt: ISO,
+        created: ISO,
         revokedAt: null,
         ...overrides,
     };

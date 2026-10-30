@@ -37,17 +37,17 @@ export interface BlobLocation
     storageKey : string;
 }
 
-// The fields needed to write a blob record; created_at and the (cleared) deleted_at are set by the write itself.
+// The fields needed to write a blob record; created and the (cleared) deleted are set by the write itself.
 export interface BlobRowInsert extends BlobLocation
 {
     sha256 : string;
     size : number;
 }
 
-// A stored blob record as the flow reads it back. deletedAt is the GC graveyard marker: null means live.
+// A stored blob record as the flow reads it back. deleted is the GC graveyard marker: null means live.
 export interface BlobRow extends BlobRowInsert
 {
-    deletedAt : Date | null;
+    deleted : Date | null;
 }
 
 // Enough of a graveyarded record for GC to delete its bytes and route to the right backend (records pin their
@@ -208,7 +208,7 @@ export class BlobRA
                 // eslint-disable-next-line no-await-in-loop -- one measurement at a time; the batch is normally empty
                 const stat = await backend.statStored(sha256);
 
-                if(stat !== null && stat.modifiedAt.getTime() < cutoff.getTime())
+                if(stat !== null && stat.modified.getTime() < cutoff.getTime())
                 {
                     yield { sha256, size: stat.size, backendID, storageKey: sha256 };
                 }
@@ -222,7 +222,7 @@ export class BlobRA
     // the row created here instead of inserting its own -- so a caller only ever goes on to collect a row nothing has
     // claimed. That is why orphans re-enter through the graveyard instead of being deleted where they are found; the
     // conditional delete that follows is the one every other blob's bytes already wait for.
-    async adoptOrphan(orphan : GcCandidate, deletedAt : Date) : Promise<boolean>
+    async adoptOrphan(orphan : GcCandidate, deleted : Date) : Promise<boolean>
     {
         const result = await this.#db
             .insertInto('blob')
@@ -231,8 +231,8 @@ export class BlobRA
                 size: orphan.size,
                 backend_id: orphan.backendID,
                 storage_key: orphan.storageKey,
-                created_at: new Date().toISOString(),
-                deleted_at: deletedAt.toISOString(),
+                created: new Date().toISOString(),
+                deleted: deleted.toISOString(),
             })
             .onConflict((oc) => oc.column('sha256').doNothing())
             .executeTakeFirst();
@@ -261,7 +261,7 @@ export class BlobRA
     {
         const row = await this.#db
             .selectFrom('blob')
-            .select([ 'sha256', 'size', 'backend_id', 'storage_key', 'deleted_at' ])
+            .select([ 'sha256', 'size', 'backend_id', 'storage_key', 'deleted' ])
             .where('sha256', '=', sha256)
             .executeTakeFirst();
 
@@ -272,19 +272,19 @@ export class BlobRA
             size: row.size,
             backendID: row.backend_id,
             storageKey: row.storage_key,
-            deletedAt: toNullableDate(row.deleted_at),
+            deleted: toNullableDate(row.deleted),
         };
     }
 
-    // The records eligible for hard deletion: graveyarded and past the grace cutoff. deleted_at is written as
-    // an ISO string on both dialects, so the comparison is against the cutoff's ISO form; a null deleted_at never
+    // The records eligible for hard deletion: graveyarded and past the grace cutoff. deleted is written as
+    // an ISO string on both dialects, so the comparison is against the cutoff's ISO form; a null deleted never
     // satisfies `< cutoff`, so live records are excluded without a separate guard.
     async gcCandidates(cutoff : Date) : Promise<GcCandidate[]>
     {
         const rows = await this.#db
             .selectFrom('blob')
             .select([ 'sha256', 'size', 'backend_id', 'storage_key' ])
-            .where('deleted_at', '<', cutoff.toISOString())
+            .where('deleted', '<', cutoff.toISOString())
             .execute();
 
         return rows.map((row) => ({
@@ -316,11 +316,11 @@ export class BlobRA
         const row = await this.#db
             .selectFrom('blob')
             .select([
-                sql<string | number>`coalesce(sum(case when deleted_at is null then size else 0 end), 0)`
+                sql<string | number>`coalesce(sum(case when deleted is null then size else 0 end), 0)`
                     .as('live_bytes'),
-                sql<string | number>`coalesce(sum(case when deleted_at is null then 0 else size end), 0)`
+                sql<string | number>`coalesce(sum(case when deleted is null then 0 else size end), 0)`
                     .as('graveyard_bytes'),
-                sql<string | number>`coalesce(sum(case when deleted_at is null then 0 else 1 end), 0)`
+                sql<string | number>`coalesce(sum(case when deleted is null then 0 else 1 end), 0)`
                     .as('graveyard_count'),
             ])
             .executeTakeFirstOrThrow();
@@ -338,7 +338,7 @@ export class BlobRA
 
     // Insert the record, or if it already exists, clear its graveyard marker (resurrection). One race-safe
     // statement: two writers committing the same new blob concurrently both succeed, and a graveyarded record comes
-    // back to life. The conflict path only touches deleted_at -- backend_id/storage_key are never clobbered, since the
+    // back to life. The conflict path only touches deleted -- backend_id/storage_key are never clobbered, since the
     // existing bytes already live wherever the record says they do. Run inside the same transaction as the node insert
     // so the reference and the resurrection commit together.
     async insertOrResurrect(blob : BlobRowInsert) : Promise<void>
@@ -350,10 +350,10 @@ export class BlobRA
                 size: blob.size,
                 backend_id: blob.backendID,
                 storage_key: blob.storageKey,
-                created_at: new Date().toISOString(),
-                deleted_at: null,
+                created: new Date().toISOString(),
+                deleted: null,
             })
-            .onConflict((oc) => oc.column('sha256').doUpdateSet({ deleted_at: null }))
+            .onConflict((oc) => oc.column('sha256').doUpdateSet({ deleted: null }))
             .execute();
     }
 
@@ -364,7 +364,7 @@ export class BlobRA
     {
         await this.#db
             .updateTable('blob')
-            .set({ deleted_at: null })
+            .set({ deleted: null })
             .where('sha256', '=', sha256)
             .execute();
     }
@@ -373,7 +373,7 @@ export class BlobRA
     // is referenced by any file node pointing at it OR by any user whose avatar it is -- both keep it live, so both are
     // checked. One UPDATE, so a concurrent claim that adds a reference either lands before this -- a NOT EXISTS then
     // sees it and the record is left live -- or after, on an already-graveyarded record it resurrects. The
-    // `deleted_at IS NULL` guard keeps a re-sweep from resetting an already-graveyarded record's grace clock.
+    // `deleted IS NULL` guard keeps a re-sweep from resetting an already-graveyarded record's grace clock.
     async graveyardUnreferenced(shas : string[]) : Promise<void>
     {
         if(shas.length === 0) { return; }
@@ -396,9 +396,9 @@ export class BlobRA
 
         await this.#db
             .updateTable('blob')
-            .set({ deleted_at: new Date().toISOString() })
+            .set({ deleted: new Date().toISOString() })
             .where('sha256', 'in', shas)
-            .where('deleted_at', 'is', null)
+            .where('deleted', 'is', null)
             .where((eb) => eb.not(eb.exists(
                 eb.selectFrom('node')
                     .select('node.id')
@@ -422,7 +422,7 @@ export class BlobRA
     }
 
     // Hard-delete one record, but only if it is still graveyarded past the cutoff at delete time. The
-    // re-checked predicate is the GC half of the concurrency rule: a claim that resurrected the record (deleted_at
+    // re-checked predicate is the GC half of the concurrency rule: a claim that resurrected the record (deleted
     // cleared) between candidacy and here no longer matches, so GC removes nothing and the resurrected blob survives.
     // Returns whether a row was actually removed, so the caller only deletes the bytes when the record is truly gone.
     async hardDeleteRow(sha256 : string, cutoff : Date) : Promise<boolean>
@@ -430,7 +430,7 @@ export class BlobRA
         const result = await this.#db
             .deleteFrom('blob')
             .where('sha256', '=', sha256)
-            .where('deleted_at', '<', cutoff.toISOString())
+            .where('deleted', '<', cutoff.toISOString())
             .executeTakeFirst();
 
         return Number(result?.numDeletedRows ?? 0) > 0;

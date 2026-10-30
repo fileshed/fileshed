@@ -43,7 +43,7 @@ export class DeletionOfferRA
             .selectAll()
             .where('offeree_id', '=', offereeID)
             .where('expires_at', '>', now.toISOString())
-            .orderBy('created_at', 'asc')
+            .orderBy('created', 'asc')
             .execute();
 
         return rows.map(offerFromRow);

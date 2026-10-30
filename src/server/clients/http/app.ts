@@ -26,7 +26,7 @@ import { createDirectRoutes } from './routes/direct.ts';
 import { createArchiveRoutes } from './routes/archives.ts';
 import { createDownloadRoutes } from './routes/downloads.ts';
 import { createNodeRoutes } from './routes/nodes.ts';
-import { mountApiReference, mountOpenApiSpec } from './routes/openapi.ts';
+import { mountAPIReference, mountOpenAPISpec } from './routes/openapi.ts';
 import { createPublicLinkRoutes } from './routes/links.ts';
 import { createSearchRoutes } from './routes/search.ts';
 import { createAdminEmailRoutes } from './routes/adminEmail.ts';
@@ -156,11 +156,11 @@ export function createApp(composition ?: AppComposition, options : AppOptions = 
         app.route('/api', createDeletionOfferRoutes(sessions, services.deletionOffers));
         app.route('/d', createDirectRoutes(services.publicLinks));
 
-        mountOpenApiSpec(app, services.build.version);
+        mountOpenAPISpec(app, services.build.version);
 
         // Never from a deployment. The reference is a page that loads a bundle and offers to call this API from it,
         // and an instance has no business serving one anonymously; a developer asks for it explicitly at launch.
-        if(options.apiReference === true) { mountApiReference(app); }
+        if(options.apiReference === true) { mountAPIReference(app); }
     }
 
     app.route('/api', health);

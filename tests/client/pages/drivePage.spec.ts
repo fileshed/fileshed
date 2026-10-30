@@ -372,7 +372,7 @@ describe('DrivePage — kebab menu, ownership gating', () =>
     // where links are minted and killed, not where an existing one is fetched.
     it('offers both copy-link entries beside Share for a node with a live public link', async () =>
     {
-        const node = fileNode({ id: 'f1', sharing: { granteeCount: 0, linkUrl: '/d/tok' } });
+        const node = fileNode({ id: 'f1', sharing: { granteeCount: 0, linkURL: '/d/tok' } });
         const wrapper = await mountDrive([ node ]);
 
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
@@ -394,7 +394,7 @@ describe('DrivePage — kebab menu, ownership gating', () =>
     // Nothing to copy, no entries: a node shared with people but never published carries no link.
     it('offers no copy-link entries for a node that is shared but not published', async () =>
     {
-        const node = fileNode({ id: 'f1', sharing: { granteeCount: 2, linkUrl: null } });
+        const node = fileNode({ id: 'f1', sharing: { granteeCount: 2, linkURL: null } });
         const wrapper = await mountDrive([ node ]);
 
         expect(menuLabels(buildMenuOf(wrapper)(node))).toEqual(
@@ -505,7 +505,7 @@ describe('DrivePage — copying a public link', () =>
 
     it('copies the link as it renders, and the download form of the same token', async () =>
     {
-        const node = fileNode({ id: 'f1', sharing: { granteeCount: 0, linkUrl: '/d/tok' } });
+        const node = fileNode({ id: 'f1', sharing: { granteeCount: 0, linkURL: '/d/tok' } });
         const wrapper = await mountDrive([ node ]);
 
         await chooseFromKebab(wrapper, node, 'Copy link');

@@ -5,7 +5,7 @@
 // Constants
 import { MIME_FAMILY_SPECS, mimeFamilies } from '../constants/nodeType.ts';
 import { MIME_TYPE_MAX_LENGTH } from '../constants/node.ts';
-import { PLAYLIST_EXTENSIONS, PLAYLIST_MIME_TYPES } from '../constants/media.ts';
+import { PLAYLIST_EXTENSIONS, playlistMimeTypes } from '../constants/media.ts';
 
 // Models
 import type { NodeTypeFamily } from '../models/requests/nodes.ts';
@@ -17,11 +17,11 @@ import type { NodeTypeFamily } from '../models/requests/nodes.ts';
 // safe to emit -- CR, LF, DEL and everything above U+007F are outside it.
 const TOKEN = String.raw`[A-Za-z0-9!#$%&'*+.^_\`|~-]+`;
 const QUOTED = String.raw`"[\x20\x21\x23-\x5b\x5d-\x7e]*"`;
-const MEDIA_TYPE = new RegExp(`^${ TOKEN }/${ TOKEN }(?:[ \t]*;[ \t]*${ TOKEN }=(?:${ TOKEN }|${ QUOTED }))*$`);
+const mediaTypePattern = new RegExp(`^${ TOKEN }/${ TOKEN }(?:[ \t]*;[ \t]*${ TOKEN }=(?:${ TOKEN }|${ QUOTED }))*$`);
 
 export function isValidMimeType(value : string) : boolean
 {
-    return value.length <= MIME_TYPE_MAX_LENGTH && MEDIA_TYPE.test(value);
+    return value.length <= MIME_TYPE_MAX_LENGTH && mediaTypePattern.test(value);
 }
 
 // The file type-family a mime type belongs to, or null when it matches none (an unclassified binary). The families are
@@ -47,7 +47,7 @@ export function familyOfMimeType(mimeType : string) : NodeTypeFamily | null
 // presentation and the client's open-intent registry both key off it.
 export function isPlaylistFile(mimeType : string, name : string) : boolean
 {
-    if(PLAYLIST_MIME_TYPES.has(mimeType)) { return true; }
+    if(playlistMimeTypes.has(mimeType)) { return true; }
 
     const lower = name.toLowerCase();
 

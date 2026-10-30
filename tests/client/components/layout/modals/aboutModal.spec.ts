@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { ISSUES_URL, type VersionResponse } from '@fileshed/core';
 
 // Resource Access
-import { fetchVersion } from '@client/resource-access/version.ts';
+import { getVersion } from '@client/resource-access/version.ts';
 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
@@ -28,8 +28,8 @@ import AboutModal from '@client/components/layout/modals/aboutModal.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/utils/copyToClipboard.ts', () => ({ copyToClipboard: vi.fn() }));
-vi.mock('@client/resource-access/version.ts', () => ({ fetchVersion: vi.fn() }));
-vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn() }));
+vi.mock('@client/resource-access/version.ts', () => ({ getVersion: vi.fn() }));
+vi.mock('@client/resource-access/instance.ts', () => ({ getInstance: vi.fn() }));
 
 const toasts : { title ?: string; color ?: string }[] = [];
 vi.mock('@nuxt/ui/composables', () => ({
@@ -37,7 +37,7 @@ vi.mock('@nuxt/ui/composables', () => ({
 }));
 
 const copyMock = copyToClipboard as unknown as Mock;
-const fetchVersionMock = fetchVersion as unknown as Mock;
+const getVersionMock = getVersion as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -84,7 +84,7 @@ beforeEach(() =>
 
     // A request that never settles: the dialog is opened with the build already in the store, so what these specs
     // assert is what it renders, never what a fetch happened to win a race with.
-    fetchVersionMock.mockReturnValue(new Promise(() => { /* never settles */ }));
+    getVersionMock.mockReturnValue(new Promise(() => { /* never settles */ }));
 });
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -73,13 +73,13 @@
     import type { FindOptions } from '../../../engines/pdf/types.ts';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfFindBar' });
+    defineOptions({ name: 'PDFFindBar' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const input = ref<HTMLInputElement | null>(null);
 

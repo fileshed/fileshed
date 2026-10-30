@@ -225,7 +225,7 @@ export interface OutlineEntry
 
 // An embedded file. The format records no length for one, and pdf.js reads the bytes only when asked, so the list
 // carries what the document actually states and nothing more; `id` is what the renderer wants back to fetch it.
-export interface PdfAttachment
+export interface PDFAttachment
 {
     id : string;
     filename : string;

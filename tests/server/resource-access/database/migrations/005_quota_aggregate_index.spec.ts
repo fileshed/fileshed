@@ -94,8 +94,8 @@ async function seedChargeableRows(db : Kysely<Database>) : Promise<void>
             target_node_id: null,
             size: 10,
             mime_type: 'application/octet-stream',
-            created_at: stamp,
-            updated_at: stamp,
+            created: stamp,
+            updated: stamp,
             trashed_at: null,
         }))))
         .execute();

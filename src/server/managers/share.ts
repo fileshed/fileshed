@@ -77,11 +77,11 @@ function matchesTypeFamilies(target : SharedTargetSummary, families : readonly N
 function matchesSharedFilters(row : SharedWithMeRow, query : SharedWithMeQuery) : boolean
 {
     if(!matchesTypeFamilies(row.target, query.types)) { return false; }
-    if(query.updatedAfter !== undefined && row.updatedAt.getTime() < new Date(query.updatedAfter).getTime())
+    if(query.updatedAfter !== undefined && row.updated.getTime() < new Date(query.updatedAfter).getTime())
     {
         return false;
     }
-    if(query.updatedBefore !== undefined && row.updatedAt.getTime() >= new Date(query.updatedBefore).getTime())
+    if(query.updatedBefore !== undefined && row.updated.getTime() >= new Date(query.updatedBefore).getTime())
     {
         return false;
     }
@@ -236,7 +236,7 @@ export class ShareManager
             message: request.message ?? null,
             status: 'pending',
             resolvedAt: null,
-            createdAt: new Date(),
+            created: new Date(),
         };
         await this.#shares.insertRequest(pending);
 
@@ -309,7 +309,7 @@ export class ShareManager
                 requesterID: request.requesterID,
                 requestedRole: request.requestedRole,
                 message: request.message,
-                createdAt: request.createdAt,
+                created: request.created,
                 status: decision === 'grant' ? 'granted' : 'declined',
                 resolvedAt: now,
             };
@@ -346,7 +346,7 @@ export class ShareManager
             granteeUserID: granteeID,
             role,
             createdBy: granterID,
-            createdAt: new Date(),
+            created: new Date(),
         });
     }
 

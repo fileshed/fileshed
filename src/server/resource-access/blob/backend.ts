@@ -34,7 +34,7 @@ export interface StagedSweep
 export interface StoredBlobStat
 {
     size : number;
-    modifiedAt : Date;
+    modified : Date;
 }
 
 export interface BlobBackend

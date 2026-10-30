@@ -13,7 +13,7 @@ import type { SessionManager } from '../../../managers/session.ts';
 
 // Routes
 import { answerChallengeSpec, claimSpec } from './blobs.openapi.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -25,7 +25,7 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
 
-        const request = await readJsonBody(ctx, claimRequestCodec);
+        const request = await readJSONBody(ctx, claimRequestCodec);
 
         return ctx.json(await blobs.claim(actor.user, request));
     });
@@ -34,7 +34,7 @@ export function createBlobRoutes(sessions : SessionManager, blobs : BlobManager)
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
 
-        const { answer, ...metadata } = await readJsonBody(ctx, challengeAnswerRequestCodec);
+        const { answer, ...metadata } = await readJSONBody(ctx, challengeAnswerRequestCodec);
         return ctx.json(await blobs.answerChallenge(actor, ctx.req.param('challengeID'), answer, metadata));
     });
 

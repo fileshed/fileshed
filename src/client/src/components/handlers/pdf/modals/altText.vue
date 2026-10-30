@@ -52,13 +52,13 @@
     import { computed, ref, watch } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfAltText' });
+    defineOptions({ name: 'PDFAltText' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const draft = ref('');
     const decorative = ref(false);

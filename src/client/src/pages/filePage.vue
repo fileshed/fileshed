@@ -33,7 +33,7 @@
             <UButton icon="i-lucide-hard-drive" label="Go to my files" color="neutral" @click="goHome" />
         </div>
 
-        <PdfAnnotator
+        <PDFAnnotator
             v-else-if="action?.kind === 'annotate' && fileID !== null"
             v-bind="{ nodeID: fileID }"
             class="min-h-0 flex-1"
@@ -128,8 +128,8 @@
     import { useSessionStore } from '../stores/session.ts';
 
     // Resource Access
-    import { ApiError } from '../resource-access/apiError.ts';
-    import { downloadUrl } from '../resource-access/downloads.ts';
+    import { APIError } from '../resource-access/apiError.ts';
+    import { downloadURL } from '../resource-access/downloads.ts';
     import { getNode } from '../resource-access/nodes.ts';
 
     // Utils
@@ -145,7 +145,7 @@
     // The heavier families load only when a file actually opens with them: pdf.js and TipTap stay out of the main
     // bundle, and nothing outside an opened file ever evaluates their module graphs.
     const MarkdownEditor = defineAsyncComponent(() => import('../components/handlers/markdown/markdownEditor.vue'));
-    const PdfAnnotator = defineAsyncComponent(() => import('../components/handlers/pdf/pdfAnnotator.vue'));
+    const PDFAnnotator = defineAsyncComponent(() => import('../components/handlers/pdf/pdfAnnotator.vue'));
     const MediaPlayer = defineAsyncComponent(() => import('../components/handlers/media/mediaPlayer.vue'));
 
     //------------------------------------------------------------------------------------------------------------------
@@ -208,9 +208,9 @@
             // affordance) is the honest rendering of a resolve that found nothing; other failures land on the plain
             // error card.
             node.value = null;
-            const notFound = error instanceof ApiError && error.status === 404;
+            const notFound = error instanceof APIError && error.status === 404;
             phase.value = notFound ? 'denied' : 'error';
-            loadError.value = !notFound && error instanceof ApiError ? error.message : null;
+            loadError.value = !notFound && error instanceof APIError ? error.message : null;
 
             return;
         }
@@ -226,8 +226,8 @@
 
         const id = routeFileID();
         if(resolved.kind === 'edit' && id !== null) { void editor.open(id); }
-        if(resolved.kind === 'view') { replaceLocation(downloadUrl(resolved.nodeID, 'inline')); }
-        if(resolved.kind === 'download') { replaceLocation(downloadUrl(resolved.nodeID)); }
+        if(resolved.kind === 'view') { replaceLocation(downloadURL(resolved.nodeID, 'inline')); }
+        if(resolved.kind === 'download') { replaceLocation(downloadURL(resolved.nodeID)); }
     }, { immediate: true });
 
     watch(() => route.params.id, () => { void load(); });

@@ -15,20 +15,20 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { Role } from '@fileshed/core';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
 // Support
 import { fileNode } from '../../../support.ts';
 
 // Under test
-import PdfIdentityBar from '@client/components/handlers/pdf/identityBar.vue';
+import PDFIdentityBar from '@client/components/handlers/pdf/identityBar.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getNode: vi.fn(), getNodeSharing: vi.fn(async () => ({ granteeCount: 0, linkUrl: null })),
+    getNode: vi.fn(), getNodeSharing: vi.fn(async () => ({ granteeCount: 0, linkURL: null })),
 }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -71,11 +71,11 @@ function header() : HTMLElement
 
 async function mountBar(options : { role ?: Role; dirty ?: boolean } = {}) : Promise<VueWrapper>
 {
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
     store.$patch({ node: fileNode({ name: 'contract.pdf', role: options.role ?? 'owner' }) });
     store.setDirty(options.dirty ?? false);
 
-    const wrapper = mount(PdfIdentityBar, { global: { stubs } });
+    const wrapper = mount(PDFIdentityBar, { global: { stubs } });
     await nextTick();
 
     return wrapper;
@@ -83,7 +83,7 @@ async function mountBar(options : { role ?: Role; dirty ?: boolean } = {}) : Pro
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfIdentityBar', () =>
+describe('PDFIdentityBar', () =>
 {
     beforeEach(() =>
     {
@@ -103,7 +103,7 @@ describe('PdfIdentityBar', () =>
 
     it('drives a store save when Save is clicked over a dirty writable session', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const saveSpy = vi.spyOn(store, 'save').mockResolvedValue();
         await mountBar({ dirty: true });
 

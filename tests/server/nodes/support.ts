@@ -121,8 +121,8 @@ export async function seedLinkRow(
             target_node_id: init.targetNodeID,
             size: null,
             mime_type: null,
-            created_at: now,
-            updated_at: now,
+            created: now,
+            updated: now,
             trashed_at: null,
         })
         .execute();
@@ -143,7 +143,7 @@ export async function seedShareRow(
             grantee_user_id: init.granteeID,
             role: init.role,
             created_by: init.createdBy,
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }
@@ -158,11 +158,11 @@ interface ActorInit
     email ?: string;
     name ?: string;
     role ?: 'admin' | 'user';
-    createdAt ?: Date;
+    created ?: Date;
 }
 
 // A minimal signed-in principal for manager-level specs that drive the manager directly rather than over HTTP. The
-// manager reads only id (every method) plus email/name/role/createdAt (me); the rest of better-auth's inferred
+// manager reads only id (every method) plus email/name/role/created (me); the rest of better-auth's inferred
 // SessionUser is irrelevant here, so a partial is cast to the boundary type.
 //
 // Deliberately carries no quota: a session cannot state one. Quota is read from the user row at every enforcement
@@ -170,7 +170,7 @@ interface ActorInit
 // knob here would let a spec "set" a quota that nothing enforces.
 export function testActor(init : ActorInit) : SessionUser
 {
-    const createdAt = init.createdAt ?? new Date('2026-01-01T00:00:00.000Z');
+    const created = init.created ?? new Date('2026-01-01T00:00:00.000Z');
 
     return {
         id: init.id,
@@ -178,8 +178,8 @@ export function testActor(init : ActorInit) : SessionUser
         name: init.name ?? init.id,
         role: init.role ?? 'user',
         emailVerified: true,
-        createdAt,
-        updatedAt: createdAt,
+        createdAt: created,
+        updatedAt: created,
     } as unknown as SessionUser;
 }
 

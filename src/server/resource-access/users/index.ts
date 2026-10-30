@@ -67,7 +67,7 @@ export interface AdminUserRow
     banned : boolean;
     banReason : string | null;
     banExpires : Date | null;
-    createdAt : Date;
+    created : Date;
 }
 
 export interface AdminUserListing
@@ -82,7 +82,7 @@ export interface AdminUserListing
 const userSortColumns : Record<AdminUserSortKey, 'name' | 'email' | 'createdAt'> = {
     name: 'name',
     email: 'email',
-    createdAt: 'createdAt',
+    created: 'createdAt',
 };
 
 // A substring match with BOTH sides folded: the stored value through lower(), the term in JS. SQLite's LIKE already
@@ -114,7 +114,7 @@ function adminUserRow(row : AdminUserSelection) : AdminUserRow
         banned: row.banned === true || row.banned === 1,
         banReason: row.banReason,
         banExpires: row.banExpires === null ? null : new Date(row.banExpires),
-        createdAt: new Date(row.createdAt),
+        created: new Date(row.createdAt),
     };
 }
 
@@ -231,7 +231,7 @@ export class UserRA
     // account carries it. Whole-email match only -- never a prefix or substring -- so the share dialog's lookup can
     // confirm a grantee without becoming an account-enumeration oracle. Builds the UserSummary the same way the owner
     // facet does (avatarImage), so the avatar URL is derived identically on both paths.
-    async findSummaryByEmail(email : string) : Promise<UserSummary | undefined>
+    async getSummaryByEmail(email : string) : Promise<UserSummary | undefined>
     {
         const normalized = email.trim().toLowerCase();
         const row = await this.#db

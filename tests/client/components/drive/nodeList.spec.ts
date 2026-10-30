@@ -21,7 +21,7 @@ const STUBS = {
     NodeRow: {
         props: [ 'node', 'selected', 'menuItems', 'owners' ],
         template: '<div class="node-row" :data-id="node.id" :data-owners="owners.map((o) => o.id).join(\',\')" '
-            + ':data-link="node.sharing?.linkUrl ?? \'none\'" />',
+            + ':data-link="node.sharing?.linkURL ?? \'none\'" />',
     },
 };
 
@@ -86,7 +86,7 @@ describe('NodeList — sharing wiring', () =>
     it('gives each row the sharing its own node carries', () =>
     {
         const linked = folderNode({ id: 'first' });
-        linked.sharing = { granteeCount: 0, linkUrl: '/d/tok' };
+        linked.sharing = { granteeCount: 0, linkURL: '/d/tok' };
 
         const rows = mountList([ linked, folderNode({ id: 'second' }) ], []).findAll('.node-row');
 

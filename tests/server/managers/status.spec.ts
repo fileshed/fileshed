@@ -33,7 +33,7 @@ import { testActor } from '../nodes/support.ts';
 const PASSWORD = 'correct-horse-battery';
 const UPTIME_SECONDS = 90;
 
-const ADMIN = testActor({ id: 'admin-actor', role: 'admin' });
+const admin = testActor({ id: 'admin-actor', role: 'admin' });
 
 let booted : BootedApp;
 let backendID : string;
@@ -79,7 +79,7 @@ afterEach(async () =>
 
 async function overview() : Promise<AdminOverview>
 {
-    return (await manager.status(ADMIN)).overview;
+    return (await manager.status(admin)).overview;
 }
 
 async function createUser(email : string) : Promise<string>
@@ -268,7 +268,7 @@ describe('StatusManager.status', () =>
             message: null,
             status: 'pending',
             resolvedAt: null,
-            createdAt: new Date(),
+            created: new Date(),
         });
         await shares.insertRequest({
             id: 'request-bob',
@@ -278,7 +278,7 @@ describe('StatusManager.status', () =>
             message: null,
             status: 'pending',
             resolvedAt: null,
-            createdAt: new Date(),
+            created: new Date(),
         });
         await shares.insertRequest({
             id: 'request-settled',
@@ -288,7 +288,7 @@ describe('StatusManager.status', () =>
             message: null,
             status: 'pending',
             resolvedAt: null,
-            createdAt: new Date(),
+            created: new Date(),
         });
         await shares.resolveRequest('request-settled', 'granted', new Date());
 

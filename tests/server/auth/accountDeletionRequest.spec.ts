@@ -113,8 +113,8 @@ async function makeFile(ownerID : string, name : string) : Promise<string>
             size: 8,
             backend_id: backendID,
             storage_key: sha256,
-            created_at: now.toISOString(),
-            deleted_at: null,
+            created: now.toISOString(),
+            deleted: null,
         })
         .execute();
 
@@ -128,8 +128,8 @@ async function makeFile(ownerID : string, name : string) : Promise<string>
         blobID: sha256,
         size: 8,
         mimeType: 'application/octet-stream',
-        createdAt: now,
-        updatedAt: now,
+        created: now,
+        updated: now,
         trashedAt: null,
     });
 

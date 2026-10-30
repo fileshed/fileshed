@@ -33,7 +33,7 @@ import { type UploadStatus, isActiveStatus } from '../engines/uploads/status.ts'
 import { formatBytes } from '../utils/formatters/index.ts';
 import { nextCopyName } from '../utils/nextCopyName.ts';
 import { hashFile } from '../utils/hashFile.ts';
-import { describeApiError } from '../utils/runWithToast.ts';
+import { describeAPIError } from '../utils/runWithToast.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -313,7 +313,7 @@ export const useUploadsStore = defineStore('uploads', () =>
         {
             if(isAbort(caught)) { finalizeCancelled(item); return; }
 
-            finalizeFailed(item, describeApiError(caught));
+            finalizeFailed(item, describeAPIError(caught));
         }
     }
 
@@ -422,7 +422,7 @@ export const useUploadsStore = defineStore('uploads', () =>
             id: `upload-${ counter }`,
             name,
             status: 'error',
-            error: `Couldn't create this folder — nothing inside it was uploaded. ${ describeApiError(error) }`,
+            error: `Couldn't create this folder — nothing inside it was uploaded. ${ describeAPIError(error) }`,
         });
     }
 

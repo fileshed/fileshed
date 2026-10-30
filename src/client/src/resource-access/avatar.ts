@@ -7,7 +7,7 @@
 import { type MeResponse, meResponseCodec } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestUpload } from './request.ts';
+import { requestJSON, requestUpload } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -23,7 +23,7 @@ export async function uploadAvatar(file : File) : Promise<MeResponse>
 
 export async function deleteAvatar() : Promise<MeResponse>
 {
-    return requestJson('/api/me/avatar', { method: 'DELETE', codec: meResponseCodec });
+    return requestJSON('/api/me/avatar', { method: 'DELETE', codec: meResponseCodec });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

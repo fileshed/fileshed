@@ -84,7 +84,7 @@ export const getLogoSpec = describeRoute({
     },
 });
 
-export const brandingCssSpec = describeRoute({
+export const brandingCSSSpec = describeRoute({
     tags: [ 'Instance' ],
     summary: 'The instance theme stylesheet',
     description: 'Anonymous by design -- pre-auth pages brand through it. Empty when the theme is stock. Serves '

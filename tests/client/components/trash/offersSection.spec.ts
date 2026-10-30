@@ -9,7 +9,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { DeletionOfferResponse } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import {
     acceptDeletionOffer,
     declineDeletionOffer,
@@ -47,7 +47,7 @@ function offer(id : string, name = 'report.pdf') : DeletionOfferResponse
         mimeType: 'application/pdf',
         size: 2048,
         createdBy: 'owner1',
-        createdAt: ISO,
+        created: ISO,
         expiresAt: '2026-07-28T00:00:00.000Z',
     };
 }
@@ -137,7 +137,7 @@ describe('OffersSection', () =>
     it('keeps the offer and toasts the error when a save-a-copy is rejected', async () =>
     {
         listMock.mockResolvedValue({ offers: [ offer('o1', 'budget.xlsx') ] });
-        acceptMock.mockRejectedValue(new ApiError(403, 'That would exceed your storage quota.'));
+        acceptMock.mockRejectedValue(new APIError(403, 'That would exceed your storage quota.'));
         const wrapper = mountSection();
         await flushPromises();
 

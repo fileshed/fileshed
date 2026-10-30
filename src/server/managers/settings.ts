@@ -194,7 +194,7 @@ export class SettingsManager
         // A stored row can carry a key this version no longer defines.
         const restartRequired = rows.some((row) => isOneOf(adminSettingKeys, row.key)
             && settingDefinitions[row.key].requiresRestart === true
-            && row.updatedAt > this.#startedAt);
+            && row.updated > this.#startedAt);
 
         return { settings, restartRequired };
     }

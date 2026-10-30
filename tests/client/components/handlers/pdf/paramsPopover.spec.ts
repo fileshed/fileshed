@@ -13,15 +13,15 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AnnotationMode } from '@client/engines/pdf/types.ts';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
 // Under test
-import PdfParamsPopover from '@client/components/handlers/pdf/paramsPopover.vue';
+import PDFParamsPopover from '@client/components/handlers/pdf/paramsPopover.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -50,12 +50,12 @@ const stubs = {
 
 function mountPopover(mode : AnnotationMode) : VueWrapper
 {
-    return mount(PdfParamsPopover, { props: { mode }, global: { stubs } });
+    return mount(PDFParamsPopover, { props: { mode }, global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfParamsPopover highlight', () =>
+describe('PDFParamsPopover highlight', () =>
 {
     beforeEach(() =>
     {
@@ -65,7 +65,7 @@ describe('PdfParamsPopover highlight', () =>
 
     it('picks a highlight color from the Mozilla palette', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountPopover('highlight');
 
         await wrapper.get('[aria-label="Green"]').trigger('click');
@@ -75,7 +75,7 @@ describe('PdfParamsPopover highlight', () =>
 
     it('sets the highlight thickness from the slider', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountPopover('highlight');
 
         await wrapper.get('.slider').setValue('20');
@@ -85,7 +85,7 @@ describe('PdfParamsPopover highlight', () =>
 
     it('toggles show-all from the switch', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountPopover('highlight');
 
         await wrapper.get('.switch').setValue(false);
@@ -94,7 +94,7 @@ describe('PdfParamsPopover highlight', () =>
     });
 });
 
-describe('PdfParamsPopover text', () =>
+describe('PDFParamsPopover text', () =>
 {
     beforeEach(() =>
     {
@@ -104,7 +104,7 @@ describe('PdfParamsPopover text', () =>
 
     it('picks a text color and sets the font size', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountPopover('freetext');
 
         await wrapper.get('[aria-label="Blue"]').trigger('click');
@@ -115,7 +115,7 @@ describe('PdfParamsPopover text', () =>
     });
 });
 
-describe('PdfParamsPopover ink', () =>
+describe('PDFParamsPopover ink', () =>
 {
     beforeEach(() =>
     {
@@ -125,7 +125,7 @@ describe('PdfParamsPopover ink', () =>
 
     it('picks an ink color and sets thickness and opacity', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountPopover('ink');
 
         await wrapper.get('[aria-label="Red"]').trigger('click');

@@ -30,7 +30,7 @@ import { ShareRA } from '@server/resource-access/shares/index.ts';
 // Support
 import { sha256Of } from '../support/sha256.ts';
 import { ORIGIN, cookieFrom, signIn, signUp } from '../auth/support.ts';
-import { REAL_PNG } from '../support/imageBytes.ts';
+import { realPNG } from '../support/imageBytes.ts';
 import {
     type BootedStoreApp,
     type TestUser,
@@ -230,8 +230,8 @@ describe('what a deleted account releases', () =>
         const cookie = await adminCookie();
         const leaver = await makeUser(booted, 'has-avatar@example.com');
 
-        await booted.services.avatars.setAvatar(leaver.id, Readable.from([ REAL_PNG ]), 'image/png', REAL_PNG.length);
-        const sha256 = sha256Of(REAL_PNG);
+        await booted.services.avatars.setAvatar(leaver.id, Readable.from([ realPNG ]), 'image/png', realPNG.length);
+        const sha256 = sha256Of(realPNG);
 
         expect(await bytesExist(booted, sha256)).toBe(true);
 
@@ -262,7 +262,7 @@ describe('what a deleted account releases', () =>
             granteeUserID: grantee.id,
             role: 'viewer',
             createdBy: leaver.id,
-            createdAt: new Date(),
+            created: new Date(),
         });
 
         expect((await deleteUser(booted.app, leaver.id, cookie)).status).toBe(204);

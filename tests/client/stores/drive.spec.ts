@@ -16,7 +16,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
+import { APIError, RegulationAPIError } from '@client/resource-access/apiError.ts';
 import {
     copyNode,
     createNode,
@@ -218,7 +218,7 @@ describe('useDriveStore', () =>
             if(id === 'c') { return Promise.resolve(folderNode({ id: 'c', parentID: 'b', name: 'Reports' })); }
             if(id === 'b') { return Promise.resolve(folderNode({ id: 'b', parentID: null, name: 'Work' })); }
 
-            return Promise.reject(new ApiError(404, 'not found'));
+            return Promise.reject(new APIError(404, 'not found'));
         });
         const store = useDriveStore();
 
@@ -242,7 +242,7 @@ describe('useDriveStore', () =>
         {
             if(id === 'b') { return Promise.resolve(folderNode({ id: 'b', parentID: null, name: 'Work' })); }
 
-            return Promise.reject(new ApiError(404, 'should not be asked'));
+            return Promise.reject(new APIError(404, 'should not be asked'));
         });
         const store = useDriveStore();
         await store.load('b');
@@ -261,7 +261,7 @@ describe('useDriveStore', () =>
         {
             if(id === 'x') { return Promise.resolve(folderNode({ id: 'x', parentID: 'p', name: 'Shared' })); }
 
-            return Promise.reject(new ApiError(404, 'no access'));
+            return Promise.reject(new APIError(404, 'no access'));
         });
         const store = useDriveStore();
 
@@ -286,7 +286,7 @@ describe('useDriveStore', () =>
             if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
             if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
-            return Promise.reject(new ApiError(404, 'out of reach'));
+            return Promise.reject(new APIError(404, 'out of reach'));
         });
         const store = useDriveStore();
 
@@ -316,7 +316,7 @@ describe('useDriveStore', () =>
             if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
             if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
-            return Promise.reject(new ApiError(404, 'out of reach'));
+            return Promise.reject(new APIError(404, 'out of reach'));
         });
         const store = useDriveStore();
         await store.load('lnk');
@@ -343,7 +343,7 @@ describe('useDriveStore', () =>
             if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
             if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
-            return Promise.reject(new ApiError(404, 'out of reach'));
+            return Promise.reject(new APIError(404, 'out of reach'));
         });
         const store = useDriveStore();
         await store.load('lnk');
@@ -363,7 +363,7 @@ describe('useDriveStore', () =>
         {
             if(id === 'sub') { return Promise.resolve(folderNode({ id: 'sub', parentID: 'far', name: 'Reports' })); }
 
-            return Promise.reject(new ApiError(404, 'out of reach'));
+            return Promise.reject(new APIError(404, 'out of reach'));
         });
         const store = useDriveStore();
 
@@ -385,7 +385,7 @@ describe('useDriveStore', () =>
             if(id === 'c') { return Promise.resolve(folderNode({ id: 'c', parentID: 'b', name: 'Reports' })); }
             if(id === 'b') { return Promise.resolve(folderNode({ id: 'b', parentID: null, name: 'Work' })); }
 
-            return Promise.reject(new ApiError(404, 'not found'));
+            return Promise.reject(new APIError(404, 'not found'));
         });
         useSessionStore().me = meFixture();
         const store = useDriveStore();
@@ -402,7 +402,7 @@ describe('useDriveStore', () =>
         {
             if(id === 'x') { return Promise.resolve(folderNode({ id: 'x', parentID: 'p', name: 'Shared' })); }
 
-            return Promise.reject(new ApiError(404, 'no access'));
+            return Promise.reject(new APIError(404, 'no access'));
         });
         useSessionStore().me = meFixture();
         const store = useDriveStore();
@@ -426,7 +426,7 @@ describe('useDriveStore', () =>
                 return Promise.resolve(folderNode({ id: 'r', parentID: null, name: 'Shared Root', ownerID: 'bob' }));
             }
 
-            return Promise.reject(new ApiError(404, 'not found'));
+            return Promise.reject(new APIError(404, 'not found'));
         });
         useSessionStore().me = meFixture();
         const store = useDriveStore();
@@ -454,7 +454,7 @@ describe('useDriveStore', () =>
             if(id === 'lnk') { return Promise.resolve(linkNode(DOCS_LINK)); }
             if(id === 'docs') { return Promise.resolve(folderNode({ id: 'docs', parentID: null, name: 'Documents' })); }
 
-            return Promise.reject(new ApiError(404, 'out of reach'));
+            return Promise.reject(new APIError(404, 'out of reach'));
         });
         useSessionStore().me = meFixture();
         const store = useDriveStore();
@@ -483,7 +483,7 @@ describe('useDriveStore', () =>
                 return Promise.resolve(folderNode({ id: 'g', parentID: 'r', name: 'Reports', ownerID: 'bob' }));
             }
 
-            return Promise.reject(new ApiError(404, 'no access'));
+            return Promise.reject(new APIError(404, 'no access'));
         });
         useSessionStore().me = meFixture();
         const store = useDriveStore();
@@ -559,7 +559,7 @@ describe('useDriveStore', () =>
         listChildrenMock
             .mockResolvedValueOnce(page([ fileNode({ id: 'f1' }) ], 1, [ ownerSummary('bob') ]))
             .mockResolvedValueOnce(page([ fileNode({ id: 'f2' }) ], 1, []));
-        getNodeMock.mockRejectedValue(new ApiError(404, 'no crumb'));
+        getNodeMock.mockRejectedValue(new APIError(404, 'no crumb'));
         const store = useDriveStore();
         await store.load('a');
 
@@ -611,7 +611,7 @@ describe('useDriveStore', () =>
 
     it('narrows a folder in hand by modified date without asking the server', async () =>
     {
-        const recent = fileNode({ id: 'recent', updatedAt: new Date().toISOString() });
+        const recent = fileNode({ id: 'recent', updated: new Date().toISOString() });
         listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'ancient' }), recent ], 2));
         const store = useDriveStore();
         await store.load(null);
@@ -670,7 +670,7 @@ describe('useDriveStore', () =>
     it('resets the filters when navigating to a different folder', async () =>
     {
         listChildrenMock.mockResolvedValue(page([]));
-        getNodeMock.mockRejectedValue(new ApiError(404, 'no crumb'));
+        getNodeMock.mockRejectedValue(new APIError(404, 'no crumb'));
         const store = useDriveStore();
         await store.load('a');
         await store.setTypeFamilies([ 'images' ]);
@@ -798,12 +798,12 @@ describe('useDriveStore', () =>
 
     it('lands a failed listing in error with an empty, non-empty-state surface', async () =>
     {
-        listChildrenMock.mockRejectedValue(new ApiError(500, 'boom'));
+        listChildrenMock.mockRejectedValue(new APIError(500, 'boom'));
         const store = useDriveStore();
 
         await store.load(null);
 
-        expect(store.error).toBeInstanceOf(ApiError);
+        expect(store.error).toBeInstanceOf(APIError);
         expect(store.children).toEqual([]);
         expect(store.total).toBe(0);
         expect(store.isEmpty).toBe(false);
@@ -815,14 +815,14 @@ describe('useDriveStore', () =>
 
     it('keeps each listed node\'s own sharing', async () =>
     {
-        const shared = fileNode({ id: 'f1', sharing: { granteeCount: 2, linkUrl: '/d/tok' } });
+        const shared = fileNode({ id: 'f1', sharing: { granteeCount: 2, linkURL: '/d/tok' } });
         const theirs = fileNode({ id: 'f2' });
         listChildrenMock.mockResolvedValue(page([ shared, theirs ], 2));
         const store = useDriveStore();
 
         await store.load(null);
 
-        expect(store.children[0]?.sharing).toEqual({ granteeCount: 2, linkUrl: '/d/tok' });
+        expect(store.children[0]?.sharing).toEqual({ granteeCount: 2, linkURL: '/d/tok' });
         expect(store.children[1]?.sharing).toBeNull();
     });
 
@@ -830,18 +830,18 @@ describe('useDriveStore', () =>
     // than the whole folder, and takes the server's answer rather than guessing at the new state.
     it('re-reads one node without disturbing the rest', async () =>
     {
-        const first = fileNode({ id: 'f1', sharing: { granteeCount: 1, linkUrl: null } });
-        const second = fileNode({ id: 'f2', sharing: { granteeCount: 0, linkUrl: '/d/other' } });
+        const first = fileNode({ id: 'f1', sharing: { granteeCount: 1, linkURL: null } });
+        const second = fileNode({ id: 'f2', sharing: { granteeCount: 0, linkURL: '/d/other' } });
         listChildrenMock.mockResolvedValue(page([ first, second ], 2));
-        getNodeMock.mockResolvedValue(fileNode({ id: 'f1', sharing: { granteeCount: 1, linkUrl: '/d/fresh' } }));
+        getNodeMock.mockResolvedValue(fileNode({ id: 'f1', sharing: { granteeCount: 1, linkURL: '/d/fresh' } }));
         const store = useDriveStore();
         await store.load(null);
 
         await store.refreshSharingFor('f1');
 
         expect(getNodeMock).toHaveBeenCalledWith('f1');
-        expect(store.children[0]?.sharing).toEqual({ granteeCount: 1, linkUrl: '/d/fresh' });
-        expect(store.children[1]?.sharing).toEqual({ granteeCount: 0, linkUrl: '/d/other' });
+        expect(store.children[0]?.sharing).toEqual({ granteeCount: 1, linkURL: '/d/fresh' });
+        expect(store.children[1]?.sharing).toEqual({ granteeCount: 0, linkURL: '/d/other' });
     });
 
     // Revoking the last grant and the last link leaves the owner's own answer that nothing is shared -- zeros, which
@@ -849,21 +849,21 @@ describe('useDriveStore', () =>
     it('reports zeros once the last grant and link are revoked', async () =>
     {
         listChildrenMock.mockResolvedValue(page([
-            fileNode({ id: 'f1', sharing: { granteeCount: 1, linkUrl: '/d/tok' } }),
+            fileNode({ id: 'f1', sharing: { granteeCount: 1, linkURL: '/d/tok' } }),
         ], 1));
-        getNodeMock.mockResolvedValue(fileNode({ id: 'f1', sharing: { granteeCount: 0, linkUrl: null } }));
+        getNodeMock.mockResolvedValue(fileNode({ id: 'f1', sharing: { granteeCount: 0, linkURL: null } }));
         const store = useDriveStore();
         await store.load(null);
 
         await store.refreshSharingFor('f1');
 
-        expect(store.children[0]?.sharing).toEqual({ granteeCount: 0, linkUrl: null });
+        expect(store.children[0]?.sharing).toEqual({ granteeCount: 0, linkURL: null });
     });
 
     it('propagates a regulation rejection from a mutation to the caller', async () =>
     {
         listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1' }) ]));
-        patchNodeMock.mockRejectedValue(new RegulationApiError(
+        patchNodeMock.mockRejectedValue(new RegulationAPIError(
             422,
             'blocked',
             [ { code: 'move.intoDescendant', message: 'nope' } ]
@@ -871,7 +871,7 @@ describe('useDriveStore', () =>
         const store = useDriveStore();
         await store.load(null);
 
-        await expect(store.move('f1', 'dest')).rejects.toBeInstanceOf(RegulationApiError);
+        await expect(store.move('f1', 'dest')).rejects.toBeInstanceOf(RegulationAPIError);
     });
 });
 

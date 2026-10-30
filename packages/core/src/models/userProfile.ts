@@ -23,7 +23,7 @@ export interface UserProfile
     banReason : string | null;
     banExpires : Date | null;
 
-    createdAt : Date;
+    created : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -17,9 +17,9 @@ import {
 //----------------------------------------------------------------------------------------------------------------------
 
 const INLINE_PREFIXES = [ 'text/', 'image/', 'audio/', 'video/' ] as const;
-const INLINE_EXACT = new Set([ 'application/pdf', 'application/json' ]);
+const inlineExactTypes = new Set([ 'application/pdf', 'application/json' ]);
 
-const MARKDOWN_MIME = new Set([ 'text/markdown', 'text/x-markdown' ]);
+const markdownMimeTypes = new Set([ 'text/markdown', 'text/x-markdown' ]);
 const MARKDOWN_EXTENSIONS = [ '.md', '.markdown' ] as const;
 
 export type EditorMode = 'markdown' | 'plain';
@@ -51,7 +51,7 @@ interface OpenTarget
 
 export function canViewInline(mimeType : string) : boolean
 {
-    if(INLINE_EXACT.has(mimeType)) { return true; }
+    if(inlineExactTypes.has(mimeType)) { return true; }
 
     return INLINE_PREFIXES.some((prefix) => mimeType.startsWith(prefix));
 }
@@ -59,7 +59,7 @@ export function canViewInline(mimeType : string) : boolean
 // Markdown by declared type or by extension -- a .md the server typed as text/plain (or worse) is still markdown to us.
 function isMarkdown(mimeType : string, name : string) : boolean
 {
-    if(MARKDOWN_MIME.has(mimeType)) { return true; }
+    if(markdownMimeTypes.has(mimeType)) { return true; }
 
     const lower = name.toLowerCase();
     return MARKDOWN_EXTENSIONS.some((extension) => lower.endsWith(extension));
@@ -89,7 +89,7 @@ export function defaultEditorMode(mimeType : string, name : string) : EditorMode
 
 type OpenHandler = (target : OpenTarget) => OpenAction | null;
 
-const HANDLERS : readonly OpenHandler[] = [
+const handlers : readonly OpenHandler[] = [
     // First on purpose: an .m3u often arrives typed text/plain (which the editor would claim) or audio/x-mpegurl
     // (which the player would claim as an undecodable "track"); the playlist opens as a playlist regardless.
     (target) =>
@@ -139,7 +139,7 @@ function nativeOpen(target : OpenTarget) : OpenAction
 
 function openFile(target : OpenTarget) : OpenAction
 {
-    for(const handle of HANDLERS)
+    for(const handle of handlers)
     {
         const action = handle(target);
         if(action !== null) { return action; }

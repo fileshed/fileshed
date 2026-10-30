@@ -15,7 +15,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -60,9 +60,9 @@ async function secretFileExists(handle : ServerHandle) : Promise<boolean>
     catch { return false; }
 }
 
-async function adminClient(handle : ServerHandle) : Promise<ApiClient>
+async function adminClient(handle : ServerHandle) : Promise<APIClient>
 {
-    const client = new ApiClient(handle.baseURL);
+    const client = new APIClient(handle.baseURL);
     const signIn = await client.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
     if(signIn.status !== 200) { throw new Error(`admin sign-in: expected 200, got ${ signIn.status }`); }
 
@@ -87,7 +87,7 @@ beforeAll(async () =>
     // First boot: no secret anywhere. The server generates one, and an admin seals an SMTP password under it.
     server = await spawnServer({ env: { ...NO_SECRET, FILESHED_SETUP_TOKEN: SETUP_TOKEN } });
 
-    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+    const setup = await new APIClient(server.baseURL).post('/api/setup', {
         token: SETUP_TOKEN,
         name: 'Administrator',
         email: ADMIN_EMAIL,
@@ -102,7 +102,7 @@ beforeAll(async () =>
     fileMode = (await stat(secretPath(server))).mode & 0o777;
 
     // A session cookie minted before the restart, in the form a browser sends it back.
-    const member = new ApiClient(server.baseURL);
+    const member = new APIClient(server.baseURL);
     const signUp = await member.signUp('member@example.com', 'correct-horse-battery');
     if(signUp.status !== 200) { throw new Error(`sign-up: expected 200, got ${ signUp.status }`); }
 

@@ -29,7 +29,7 @@ declare module 'vue' {
     ConnectedAccounts: typeof import('./src/components/account/connectedAccounts.vue')['default']
     CreateAccessToken: typeof import('./src/components/account/tokens/createAccessToken.vue')['default']
     CssEditor: typeof import('./src/components/admin/branding/cssEditor.vue')['default']
-    CustomCssField: typeof import('./src/components/admin/branding/customCssField.vue')['default']
+    CustomCSSField: typeof import('./src/components/admin/branding/customCSSField.vue')['default']
     DeleteAccount: typeof import('./src/components/account/deleteAccount.vue')['default']
     DeleteAccountModal: typeof import('./src/components/account/modals/deleteAccountModal.vue')['default']
     DeleteForever: typeof import('./src/components/trash/modals/deleteForever.vue')['default']

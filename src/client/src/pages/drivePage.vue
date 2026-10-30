@@ -75,7 +75,7 @@
     import { useUploadsStore } from '../stores/uploads.ts';
 
     // Resource Access
-    import { archiveUrl } from '../resource-access/downloads.ts';
+    import { archiveURL } from '../resource-access/downloads.ts';
 
     // Components
     import DriveHeader from '../components/drive/driveHeader.vue';
@@ -100,7 +100,7 @@
     // Utils
     import { copyToClipboard } from '../utils/copyToClipboard.ts';
     import { isDeadLink, openActionIcon } from '../utils/formatters/index.ts';
-    import { publicLinkUrl } from '../utils/publicLinkUrl.ts';
+    import { publicLinkURL } from '../utils/publicLinkURL.ts';
     import { ownerIDFor, resolveOwner } from '../utils/resolveOwner.ts';
     import { useOpenNode } from '../utils/openNode.ts';
     import { useRunWithToast } from '../utils/runWithToast.ts';
@@ -351,7 +351,7 @@
     // the toast to copy by hand.
     async function copyLink(path : string, asDownload = false) : Promise<void>
     {
-        const url = publicLinkUrl(path, asDownload);
+        const url = publicLinkURL(path, asDownload);
         const copied = await copyToClipboard(url);
 
         toast.add(copied
@@ -406,7 +406,7 @@
             return;
         }
 
-        window.open(archiveUrl(ids, format), '_blank');
+        window.open(archiveURL(ids, format), '_blank');
     }
 
     // The selection bar's Copy: only reachable when every selected node is a file, each copied into the current folder.
@@ -483,8 +483,8 @@
 
     function copyNodeLink(node : NodeResponse, asDownload : boolean) : void
     {
-        const linkUrl = node.sharing?.linkUrl ?? null;
-        if(linkUrl !== null) { void copyLink(linkUrl, asDownload); }
+        const linkURL = node.sharing?.linkURL ?? null;
+        if(linkURL !== null) { void copyLink(linkURL, asDownload); }
     }
 
     function menuItem(action : NodeMenuAction, node : NodeResponse) : ContextMenuItem

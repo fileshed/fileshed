@@ -109,7 +109,7 @@
                             {{ row.node.type === 'file' ? formatBytes(row.node.size) : '—' }}
                         </span>
                         <span class="hidden truncate text-muted sm:block">
-                            {{ formatNodeDate(row.node.updatedAt, session.timeFormat) }}
+                            {{ formatNodeDate(row.node.updated, session.timeFormat) }}
                         </span>
                         <span class="hidden truncate text-muted xl:block">{{ nodeKindLabel(row.node) }}</span>
 

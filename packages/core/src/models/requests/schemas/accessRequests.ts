@@ -52,7 +52,7 @@ export const accessRequestResponseCodec = z.strictObject({
     requestedRole: shareRoleCodec,
     message: z.string().nullable(),
     status: z.enum(shareRequestStatuses),
-    createdAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
     resolvedAt: isoDateTimeCodec.nullable(),
 });
 
@@ -86,7 +86,7 @@ export function toAccessRequestResponse(request : ShareRequest) : AccessRequestR
         requestedRole: request.requestedRole,
         message: request.message,
         status: request.status,
-        createdAt: request.createdAt.toISOString(),
+        created: request.created.toISOString(),
         resolvedAt: request.resolvedAt === null ? null : request.resolvedAt.toISOString(),
     };
 }

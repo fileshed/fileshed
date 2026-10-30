@@ -72,10 +72,10 @@ async function listOffers(cookie : string) : Promise<DeletionOfferListResponse>
 
 async function blobDeletedAt() : Promise<string | Date | null>
 {
-    const row = await booted.handle.db.selectFrom('blob').select('deleted_at')
+    const row = await booted.handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256Of(bytes))
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -14,7 +14,7 @@
             @click="store.toggleSidebar()"
         />
 
-        <PdfFindBar v-if="store.findOpen" class="w-full sm:w-auto" />
+        <PDFFindBar v-if="store.findOpen" class="w-full sm:w-auto" />
         <UButton
             v-else
             icon="i-lucide-search"
@@ -47,7 +47,7 @@
                     aria-label="Tool options"
                 />
                 <template #content>
-                    <PdfParamsPopover :mode="store.mode" />
+                    <PDFParamsPopover :mode="store.mode" />
                 </template>
             </UPopover>
         </UFieldGroup>
@@ -75,11 +75,11 @@
             />
         </UFieldGroup>
 
-        <PdfPageControls />
+        <PDFPageControls />
 
-        <PdfZoomControls />
+        <PDFZoomControls />
 
-        <PdfViewMenu class="ml-auto" @present="emit('present')" />
+        <PDFViewMenu class="ml-auto" @present="emit('present')" />
     </div>
 </template>
 
@@ -89,28 +89,28 @@
     import { computed } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Engines
     import type { AnnotationMode } from '../../../engines/pdf/types.ts';
 
     // Components
-    import PdfFindBar from './findBar.vue';
-    import PdfPageControls from './pageControls.vue';
-    import PdfParamsPopover from './paramsPopover.vue';
-    import PdfViewMenu from './viewMenu.vue';
-    import PdfZoomControls from './zoomControls.vue';
+    import PDFFindBar from './findBar.vue';
+    import PDFPageControls from './pageControls.vue';
+    import PDFParamsPopover from './paramsPopover.vue';
+    import PDFViewMenu from './viewMenu.vue';
+    import PDFZoomControls from './zoomControls.vue';
 
     //------------------------------------------------------------------------------------------------------------------
 
     // The registered name stays descriptive though the file is just the handler namespace's `toolbar`.
-    defineOptions({ name: 'PdfToolbar' });
+    defineOptions({ name: 'PDFToolbar' });
 
     const emit = defineEmits<{
         present : [];
     }>();
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const tools : readonly { mode : AnnotationMode; icon : string; label : string }[]
         = [

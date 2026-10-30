@@ -19,7 +19,7 @@ import {
 import { useAppStore } from './app.ts';
 
 // Resource Access
-import { fetchBranding, patchBranding } from '../resource-access/admin.ts';
+import { getBranding, patchBranding } from '../resource-access/admin.ts';
 
 // Utils
 import { applyThemePreview, clearThemePreview } from '../utils/themePreview.ts';
@@ -69,7 +69,7 @@ export const useAdminBrandingStore = defineStore('adminBranding', () =>
 
         try
         {
-            saved.value = await fetchBranding();
+            saved.value = await getBranding();
             draft.value = { ...saved.value };
         }
         catch(caught)
@@ -104,7 +104,7 @@ export const useAdminBrandingStore = defineStore('adminBranding', () =>
 
         // The instance facts changed too (mode policy at minimum) -- refresh them so the admin's own session
         // re-resolves immediately instead of waiting for the next page load.
-        void useAppStore().initialize();
+        void useAppStore().init();
     }
 
     function revert() : void

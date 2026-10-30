@@ -15,7 +15,7 @@ describe('meResponseCodec', () =>
         email: 'ada@example.com',
         role: 'user' as const,
         limits: { trashRetentionDays: 30, accountDeletionDays: 30 },
-        createdAt: '2026-01-01T00:00:00.000Z',
+        created: '2026-01-01T00:00:00.000Z',
         deletion: null,
     };
 

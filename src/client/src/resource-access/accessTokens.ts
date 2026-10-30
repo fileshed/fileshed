@@ -16,7 +16,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestVoid } from './request.ts';
+import { requestJSON, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -26,7 +26,7 @@ export async function createAccessToken(
     expiresInDays : number | null
 ) : Promise<CreateAccessTokenResponse>
 {
-    return requestJson('/api/me/access-tokens', {
+    return requestJSON('/api/me/access-tokens', {
         method: 'POST',
         body: { name, scopes, expiresInDays },
         codec: createAccessTokenResponseCodec,
@@ -35,7 +35,7 @@ export async function createAccessToken(
 
 export async function listAccessTokens() : Promise<AccessTokenListResponse>
 {
-    return requestJson('/api/me/access-tokens', { codec: accessTokenListResponseCodec });
+    return requestJSON('/api/me/access-tokens', { codec: accessTokenListResponseCodec });
 }
 
 export async function revokeAccessToken(id : string) : Promise<void>
@@ -45,7 +45,7 @@ export async function revokeAccessToken(id : string) : Promise<void>
 
 export async function mintPlaybackToken(previousID : string | null) : Promise<PlaybackTokenResponse>
 {
-    return requestJson('/api/me/playback-token', {
+    return requestJSON('/api/me/playback-token', {
         method: 'POST',
         body: { previousID },
         codec: playbackTokenResponseCodec,

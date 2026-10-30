@@ -8,9 +8,9 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Resource Access
-import { ConflictApiError } from '@client/resource-access/apiError.ts';
+import { ConflictAPIError } from '@client/resource-access/apiError.ts';
 import { getNode, patchNode } from '@client/resource-access/nodes.ts';
-import { fetchNodeText } from '@client/resource-access/content.ts';
+import { getNodeText } from '@client/resource-access/content.ts';
 
 // Utils
 import { hashFile } from '@client/utils/hashFile.ts';
@@ -25,13 +25,13 @@ import { fileNode } from '../support.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn(), patchNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeText: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeText: vi.fn() }));
 vi.mock('@client/stores/commitFile.ts', () => ({ commitFile: vi.fn() }));
 vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const getNodeMock = getNode as unknown as Mock;
-const fetchTextMock = fetchNodeText as unknown as Mock;
+const getTextMock = getNodeText as unknown as Mock;
 const commitMock = commitFile as unknown as Mock;
 const hashFileMock = hashFile as unknown as Mock;
 
@@ -42,7 +42,7 @@ const hashFileMock = hashFile as unknown as Mock;
 async function openReady(overrides : Parameters<typeof fileNode>[0] = {}) : Promise<ReturnType<typeof useEditorStore>>
 {
     getNodeMock.mockResolvedValue(fileNode(overrides));
-    fetchTextMock.mockResolvedValue('hello');
+    getTextMock.mockResolvedValue('hello');
 
     const store = useEditorStore();
     await store.open('f1');
@@ -70,13 +70,13 @@ describe('useEditorStore.open', () =>
         getNodeMock
             .mockResolvedValueOnce(fileNode({ id: 'f1', blobID: 'b1' }))
             .mockResolvedValueOnce(fileNode({ id: 'f2', blobID: 'c1' }));
-        fetchTextMock
+        getTextMock
             .mockImplementationOnce(() => new Promise((resolve) => { slowText = resolve; }))
             .mockResolvedValueOnce('second file');
         const store = useEditorStore();
 
         const first = store.open('f1');
-        await vi.waitFor(() => { expect(fetchTextMock).toHaveBeenCalledTimes(1); });
+        await vi.waitFor(() => { expect(getTextMock).toHaveBeenCalledTimes(1); });
         await store.open('f2');
         slowText('first file');
         await first;
@@ -123,7 +123,7 @@ describe('useEditorStore.open', () =>
         const store = await openReady({ size: 1_474_561 });
 
         expect(store.loadState).toBe('error');
-        expect(fetchTextMock).not.toHaveBeenCalled();
+        expect(getTextMock).not.toHaveBeenCalled();
     });
 });
 
@@ -282,7 +282,7 @@ describe('useEditorStore.save', () =>
 
         store.reset();
         getNodeMock.mockResolvedValue(fileNode({ id: 'f2', blobID: 'c1' }));
-        fetchTextMock.mockResolvedValue('other file');
+        getTextMock.mockResolvedValue('other file');
         await store.open('f2');
         store.setBuffer('other file, edited');
 
@@ -306,7 +306,7 @@ describe('useEditorStore conflict', () =>
     {
         const store = await openReady();
         commitMock.mockRejectedValueOnce(
-            new ConflictApiError('The file changed since you opened it.', 'replace.staleBlob')
+            new ConflictAPIError('The file changed since you opened it.', 'replace.staleBlob')
         );
 
         store.setBuffer('my edit');
@@ -321,7 +321,7 @@ describe('useEditorStore conflict', () =>
     {
         const store = await openReady();
         commitMock
-            .mockRejectedValueOnce(new ConflictApiError('stale', 'replace.staleBlob'))
+            .mockRejectedValueOnce(new ConflictAPIError('stale', 'replace.staleBlob'))
             .mockResolvedValueOnce(fileNode({ blobID: 'b2' }));
 
         store.setBuffer('my edit');
@@ -339,14 +339,14 @@ describe('useEditorStore conflict', () =>
     it('reload discards local edits and restores the server content', async () =>
     {
         const store = await openReady();
-        commitMock.mockRejectedValueOnce(new ConflictApiError('stale', 'replace.staleBlob'));
+        commitMock.mockRejectedValueOnce(new ConflictAPIError('stale', 'replace.staleBlob'));
 
         store.setBuffer('my edit');
         await store.save();
         expect(store.conflict).toBe(true);
 
         // The server now serves different content on reload.
-        fetchTextMock.mockResolvedValue('their newer content');
+        getTextMock.mockResolvedValue('their newer content');
         await store.reload();
 
         expect(store.conflict).toBe(false);

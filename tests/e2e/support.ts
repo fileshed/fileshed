@@ -42,15 +42,15 @@ import type { Database } from '@server/resource-access/database/database.ts';
 
 // The proof-of-possession answer, computed the way a possessing client would. Single source of truth for the HMAC,
 // shared with the in-process blob-flow specs rather than reimplemented here.
-export { computeAnswer } from '../server/blobs/support.ts';
+export { calculateAnswer } from '../server/blobs/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Spawn configuration
 //----------------------------------------------------------------------------------------------------------------------
 
 // tests/e2e/support.ts -> repo root is two directories up. The production entry lives under src/server.
-const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const SERVER_ENTRY = join(REPO_ROOT, 'src/server/server.ts');
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+const serverEntry = join(repoRoot, 'src/server/server.ts');
 
 // The child stages its database and blobs here; both are removed on stop().
 const DATABASE_FILENAME = 'fileshed.db';
@@ -231,8 +231,8 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
     const storageRoot = options.dirs?.storageRoot ?? await mkdtemp(join(tmpdir(), 'fileshed-e2e-blobs-'));
     const databasePath = join(dataDir, DATABASE_FILENAME);
 
-    const child = spawn(process.execPath, [ SERVER_ENTRY, ...options.args ?? [] ], {
-        cwd: REPO_ROOT,
+    const child = spawn(process.execPath, [ serverEntry, ...options.args ?? [] ], {
+        cwd: repoRoot,
         stdio: [ 'ignore', 'pipe', 'pipe' ],
         env: {
             ...process.env,
@@ -309,7 +309,7 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
 // better-auth's CSRF check trusts that origin, and Node's fetch sends no Origin on its own.
 //----------------------------------------------------------------------------------------------------------------------
 
-export class ApiClient
+export class APIClient
 {
     readonly #baseURL : string;
     readonly #cookies = new Map<string, string>();

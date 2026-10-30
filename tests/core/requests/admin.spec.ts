@@ -23,7 +23,7 @@ const profile : UserProfile = {
     banned: false,
     banReason: null,
     banExpires: null,
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    created: new Date('2026-01-01T00:00:00.000Z'),
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -41,7 +41,7 @@ describe('toAdminUserResponse', () =>
             usedBytes: 1500,
         });
 
-        expect(wire.createdAt).toBe('2026-01-01T00:00:00.000Z');
+        expect(wire.created).toBe('2026-01-01T00:00:00.000Z');
         expect(wire.banExpires).toBe('2026-08-01T00:00:00.000Z');
         expect(wire.usedBytes).toBe(1500);
         expect(adminUserResponseCodec.safeParse(wire).success).toBe(true);
@@ -91,7 +91,7 @@ describe('adminUserResponseCodec', () =>
 
 describe('adminUserPageResponseCodec', () =>
 {
-    it('accepts a serialized page and rejects a Date-typed createdAt', () =>
+    it('accepts a serialized page and rejects a Date-typed created', () =>
     {
         const page = toAdminUserPageResponse({
             users: [ { profile, quotaEffective: null, usedBytes: 0 } ],
@@ -103,7 +103,7 @@ describe('adminUserPageResponseCodec', () =>
         expect(adminUserPageResponseCodec.safeParse(page).success).toBe(true);
         expect(adminUserPageResponseCodec.safeParse({
             ...page,
-            users: [ { ...page.users[0], createdAt: new Date() } ],
+            users: [ { ...page.users[0], created: new Date() } ],
         }).success).toBe(false);
     });
 });

@@ -33,7 +33,7 @@ const {
     releaseMediaTagsMock,
     listChildrenMock,
     getNodeMock,
-    fetchNodeBlobMock,
+    getNodeBlobMock,
     commitFileMock,
     mintPlaybackTokenMock,
 } = vi.hoisted(() => ({
@@ -41,7 +41,7 @@ const {
     releaseMediaTagsMock: vi.fn(),
     listChildrenMock: vi.fn(),
     getNodeMock: vi.fn(),
-    fetchNodeBlobMock: vi.fn(),
+    getNodeBlobMock: vi.fn(),
     commitFileMock: vi.fn(),
     mintPlaybackTokenMock: vi.fn(),
 }));
@@ -52,7 +52,7 @@ vi.mock('@client/resource-access/mediaTags.ts', () => ({
 }));
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ listChildren: listChildrenMock, getNode: getNodeMock }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: fetchNodeBlobMock }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: getNodeBlobMock }));
 vi.mock('@client/stores/commitFile.ts', () => ({ commitFile: commitFileMock }));
 vi.mock('@client/resource-access/accessTokens.ts', () => ({ mintPlaybackToken: mintPlaybackTokenMock }));
 
@@ -62,7 +62,7 @@ function someTags(overrides : Partial<MediaTags> = {}) : MediaTags
         title: 'Neon Skyline',
         artist: 'The Sample Band',
         album: 'Fixtures',
-        artworkUrl: 'blob:fake-cover',
+        artworkURL: 'blob:fake-cover',
         ...overrides,
     };
 }
@@ -474,7 +474,7 @@ describe('MediaPlayerStore playlist files', () =>
 
     function mockPlaylistWorld() : void
     {
-        fetchNodeBlobMock.mockResolvedValue(new Blob([ DIALECT ]));
+        getNodeBlobMock.mockResolvedValue(new Blob([ DIALECT ]));
 
         getNodeMock.mockImplementation((id : string) =>
         {
@@ -539,7 +539,7 @@ describe('MediaPlayerStore playlist files', () =>
         expect(outcome).toEqual({ resolved: 3, broken: 1 });
         expect(store.tracks.map((entry) => entry.nodeID))
             .toEqual([ 'a1', 'a2', 'https://radio.example/live.mp3', 'broken:3' ]);
-        expect(store.tracks[2]?.remoteUrl).toBe('https://radio.example/live.mp3');
+        expect(store.tracks[2]?.remoteURL).toBe('https://radio.example/live.mp3');
         expect(store.tracks[2]?.name).toBe('Radio');
         expect(store.tracks[3]?.broken).toBe(true);
         expect(store.tracks[3]?.name).toBe('Ghost');
@@ -551,7 +551,7 @@ describe('MediaPlayerStore playlist files', () =>
     it('appends into the current session without adopting the appended file', async () =>
     {
         mockPlaylistWorld();
-        fetchNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#FILESHED:node=a1\none.mp3\n' ]));
+        getNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#FILESHED:node=a1\none.mp3\n' ]));
 
         const store = useMediaPlayerStore();
         store.open(fileNode({ ...AUDIO, id: 'a0', name: 'zero.mp3' }), 'audio');
@@ -603,7 +603,7 @@ describe('MediaPlayerStore playlist files', () =>
     it('Save As onto the adopted file\'s own name overwrites it instead of forking a duplicate', async () =>
     {
         mockPlaylistWorld();
-        fetchNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#FILESHED:node=a1\none.mp3\n' ]));
+        getNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#FILESHED:node=a1\none.mp3\n' ]));
         commitFileMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
 
         const store = useMediaPlayerStore();
@@ -628,7 +628,7 @@ describe('MediaPlayerStore playlist files', () =>
     it('retitles by writing the new title through to the adopted file, reverting if the write fails', async () =>
     {
         mockPlaylistWorld();
-        fetchNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#PLAYLIST:Old Title\n#FILESHED:node=a1\none.mp3\n' ]));
+        getNodeBlobMock.mockResolvedValue(new Blob([ '#EXTM3U\n#PLAYLIST:Old Title\n#FILESHED:node=a1\none.mp3\n' ]));
         commitFileMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
 
         const store = useMediaPlayerStore();
@@ -658,7 +658,7 @@ describe('MediaPlayerStore playlist files', () =>
     it('Save overwrites the adopted file, guarded by the blob it last read, keeping the title', async () =>
     {
         mockPlaylistWorld();
-        fetchNodeBlobMock.mockResolvedValue(
+        getNodeBlobMock.mockResolvedValue(
             new Blob([ '#EXTM3U\n#PLAYLIST:Keeper\n#FILESHED:node=a1\none.mp3\n' ])
         );
         commitFileMock.mockResolvedValue(fileNode({ id: 'pl', name: 'mix.m3u8', parentID: 'dir' }));
@@ -930,7 +930,7 @@ describe('MediaPlayerStore playback token', () =>
         const mountsBefore = store.playToken;
 
         mintPlaybackTokenMock.mockResolvedValue(tokenResponse('k2', 5 * HOUR_MS));
-        store.handleTrackError();
+        store.onTrackError();
         await flushPromises();
 
         expect(store.currentIndex).toBe(0);
@@ -947,7 +947,7 @@ describe('MediaPlayerStore playback token', () =>
         await store.beginCasting();
         store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
 
-        store.handleTrackError();
+        store.onTrackError();
 
         expect(store.currentIndex).toBe(1);
         expect(store.tracks[0]?.failed).toBe(true);
@@ -960,7 +960,7 @@ describe('MediaPlayerStore playback token', () =>
         store.open(fileNode({ ...AUDIO, id: 'f1' }), 'audio');
         await flushPromises();
         store.add(fileNode({ ...AUDIO, id: 'f2', name: 'second.mp3' }));
-        store.handleTrackError();
+        store.onTrackError();
         expect(store.tracks[0]?.failed).toBe(true);
 
         store.select(0);

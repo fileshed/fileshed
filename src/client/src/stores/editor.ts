@@ -11,7 +11,7 @@ import { defineStore } from 'pinia';
 import { EDITOR_MAX_BYTES } from '@fileshed/core';
 
 // Resource Access
-import { fetchNodeText } from '../resource-access/content.ts';
+import { getNodeText } from '../resource-access/content.ts';
 import { getNode } from '../resource-access/nodes.ts';
 
 // Engines
@@ -21,7 +21,7 @@ import { type EditorMode, intent } from '../engines/intent/index.ts';
 import { type SaveWriter, createFileSaveSession } from './fileSaveSession.ts';
 
 // Utils
-import { describeApiError } from '../utils/runWithToast.ts';
+import { describeAPIError } from '../utils/runWithToast.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -154,7 +154,7 @@ export const useEditorStore = defineStore('editor', () =>
                 return;
             }
 
-            const text = await fetchNodeText(nodeID);
+            const text = await getNodeText(nodeID);
             if(!file.isCurrent(token)) { return; }
 
             buffer.value = text;
@@ -169,7 +169,7 @@ export const useEditorStore = defineStore('editor', () =>
 
             file.node.value = null;
             loadState.value = 'error';
-            loadError.value = describeApiError(caught);
+            loadError.value = describeAPIError(caught);
         }
     }
 

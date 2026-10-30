@@ -95,7 +95,7 @@ describe('NodeTile — sharing', () =>
 {
     it('carries the badges for a shared node and none for a private one', () =>
     {
-        const exposed = mountTile(fileNode({ sharing: { granteeCount: 1, linkUrl: '/d/tok' } }));
+        const exposed = mountTile(fileNode({ sharing: { granteeCount: 1, linkURL: '/d/tok' } }));
         const priv = mountTile(fileNode());
 
         expect(exposed.findAll('.badge').map((badge) => badge.attributes('data-text')))

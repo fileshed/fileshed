@@ -19,7 +19,7 @@ import type { DatabaseHandle } from '../database/database.ts';
 
 // The identity table is better-auth's, and it names its columns in camelCase -- quoted, because Postgres folds an
 // unquoted identifier to lower case and would look for `providerid`.
-const ACCOUNT_COLUMNS = {
+const accountColumnQueries = {
     sqlite: sql<{ name : string }>`select name from pragma_table_info('account')`,
     postgres: sql<{ name : string }>`
         select column_name as name from information_schema.columns where table_name = 'account'
@@ -28,7 +28,7 @@ const ACCOUNT_COLUMNS = {
 
 async function accountColumns(handle : DatabaseHandle) : Promise<Set<string>>
 {
-    const { rows } = await ACCOUNT_COLUMNS[handle.kind].execute(handle.db);
+    const { rows } = await accountColumnQueries[handle.kind].execute(handle.db);
 
     return new Set(rows.map((row) => row.name));
 }

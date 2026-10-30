@@ -7,25 +7,25 @@
 import { useToast } from '@nuxt/ui/composables';
 
 // Resource Access
-import { ApiError, PayloadTooLargeApiError, RegulationApiError } from '../resource-access/apiError.ts';
+import { APIError, PayloadTooLargeAPIError, RegulationAPIError } from '../resource-access/apiError.ts';
 
 // Utils
 import { formatBytes, regulationMessage } from './formatters/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function describeApiError(caught : unknown) : string
+export function describeAPIError(caught : unknown) : string
 {
-    if(caught instanceof RegulationApiError) { return regulationMessage(caught); }
+    if(caught instanceof RegulationAPIError) { return regulationMessage(caught); }
 
     // "Too large" says nothing without the size it was measured against, and the person reading it just picked the
     // file -- so the limit goes on the end of the server's own sentence, in units a human reads.
-    if(caught instanceof PayloadTooLargeApiError && caught.maxBytes !== null)
+    if(caught instanceof PayloadTooLargeAPIError && caught.maxBytes !== null)
     {
         return `${ caught.message.replace(/\.$/, '') } (${ formatBytes(caught.maxBytes) }).`;
     }
 
-    if(caught instanceof ApiError) { return caught.message; }
+    if(caught instanceof APIError) { return caught.message; }
 
     return 'Please try again.';
 }
@@ -54,7 +54,7 @@ export function useRunWithToast() : RunWithToast
         }
         catch(caught)
         {
-            toast.add({ title: 'That didn\'t work', description: describeApiError(caught), color: 'error' });
+            toast.add({ title: 'That didn\'t work', description: describeAPIError(caught), color: 'error' });
         }
         finally
         {

@@ -22,7 +22,7 @@
         </template>
 
         <div class="mt-3 flex items-end gap-5">
-            <img :src="app.logoUrl" alt="Current logo" class="size-24 shrink-0 rounded-md border border-default p-2">
+            <img :src="app.logoURL" alt="Current logo" class="size-24 shrink-0 rounded-md border border-default p-2">
 
             <div class="flex flex-col items-start gap-3">
                 <p class="text-sm text-muted">
@@ -84,7 +84,7 @@
         void runMutation(async () =>
         {
             await uploadBrandingLogo(file);
-            await app.initialize();
+            await app.init();
         }, pending);
     }
 
@@ -93,7 +93,7 @@
         void runMutation(async () =>
         {
             await deleteBrandingLogo();
-            await app.initialize();
+            await app.init();
         }, pending);
     }
 </script>

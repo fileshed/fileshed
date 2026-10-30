@@ -38,7 +38,7 @@ import {
     trashNodeSpec,
 } from './nodes.openapi.ts';
 import { parseQuery } from '../utils/parseQuery.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -91,7 +91,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
     router.post('/nodes', createNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
-        const request = await readJsonBody(ctx, createNodeRequestCodec);
+        const request = await readJSONBody(ctx, createNodeRequestCodec);
 
         const created = request.type === 'folder'
             ? await nodes.createFolder(actor.user, request)
@@ -103,7 +103,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
     router.patch('/nodes/:id', patchNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
-        const patch = await readJsonBody(ctx, patchNodeRequestCodec);
+        const patch = await readJSONBody(ctx, patchNodeRequestCodec);
 
         return ctx.json(await nodes.patch(actor, ctx.req.param('id'), patch));
     });
@@ -125,7 +125,7 @@ export function createNodeRoutes(sessions : SessionManager, nodes : NodeManager)
     router.post('/nodes/:id/copy', copyNodeSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
-        const request = await readJsonBody(ctx, copyNodeRequestCodec);
+        const request = await readJSONBody(ctx, copyNodeRequestCodec);
 
         return ctx.json(await nodes.copy(actor.user, ctx.req.param('id'), request), 201);
     });

@@ -5,7 +5,7 @@
 import type { MiddlewareHandler } from 'hono';
 
 // Routes
-import { APP_CONTENT_SECURITY_POLICY } from '../utils/contentSecurityPolicy.ts';
+import { appContentSecurityPolicy } from '../utils/contentSecurityPolicy.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -23,7 +23,7 @@ export function createResponseHardening() : MiddlewareHandler
 
         if(!ctx.res.headers.has('content-security-policy'))
         {
-            ctx.header('content-security-policy', APP_CONTENT_SECURITY_POLICY);
+            ctx.header('content-security-policy', appContentSecurityPolicy);
         }
     };
 }

@@ -39,10 +39,10 @@ function page(offset : number, count : number, total : number) : NodeListRespons
 }
 
 // A listing of `total` rows served `chunk` at a time.
-function rowsSource(total : number, chunk : number) : ChunkedListingSource & { fetchChunk : ReturnType<typeof vi.fn> }
+function rowsSource(total : number, chunk : number) : ChunkedListingSource & { listChunk : ReturnType<typeof vi.fn> }
 {
     return {
-        fetchChunk: vi.fn(async (offset : number) => page(offset, Math.max(0, Math.min(chunk, total - offset)), total)),
+        listChunk: vi.fn(async (offset : number) => page(offset, Math.max(0, Math.min(chunk, total - offset)), total)),
     };
 }
 
@@ -68,7 +68,7 @@ describe('createChunkedListing', () =>
     it('lands nothing from a first read that a newer read superseded', async () =>
     {
         const slow = deferred();
-        const rows = createChunkedListing({ fetchChunk: () => slow.promise });
+        const rows = createChunkedListing({ listChunk: () => slow.promise });
 
         const reading = rows.replaceWithFirstChunk(rows.begin(), false);
         rows.begin();
@@ -81,7 +81,7 @@ describe('createChunkedListing', () =>
     it('stops filling when a chunk comes back empty short of the total', async () =>
     {
         const source = rowsSource(4, 2);
-        source.fetchChunk.mockImplementation(async (offset : number) => page(offset, offset < 4 ? 2 : 0, 10));
+        source.listChunk.mockImplementation(async (offset : number) => page(offset, offset < 4 ? 2 : 0, 10));
         const rows = createChunkedListing(source);
         const token = rows.begin();
 
@@ -95,13 +95,13 @@ describe('createChunkedListing', () =>
     it('leaves the listing short when a chunk fails, and picks it up as the reader nears the end', async () =>
     {
         const source = rowsSource(4, 2);
-        source.fetchChunk.mockRejectedValueOnce(new Error('offline'));
+        source.listChunk.mockRejectedValueOnce(new Error('offline'));
         const rows = createChunkedListing(source);
         const token = rows.begin();
         await rows.replaceWithFirstChunk(token, false).catch(() => undefined);
         await rows.replaceWithFirstChunk(token, false);
 
-        source.fetchChunk.mockRejectedValueOnce(new Error('offline'));
+        source.listChunk.mockRejectedValueOnce(new Error('offline'));
         await rows.fillRest(token);
         expect(rows.loaded.value).toHaveLength(2);
 
@@ -120,7 +120,7 @@ describe('createChunkedListing', () =>
 
         const first = rows.begin();
         await rows.replaceWithFirstChunk(first, false);
-        source.fetchChunk.mockImplementationOnce(() => stuck.promise);
+        source.listChunk.mockImplementationOnce(() => stuck.promise);
         const abandoned = rows.fillRest(first);
 
         const second = rows.begin();

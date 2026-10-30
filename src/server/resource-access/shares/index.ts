@@ -55,14 +55,14 @@ export interface SharedTargetSummary
 }
 
 // One active share granted to the caller, with its target summary and whether the caller has placed a link to it --
-// placement is independent of the grant. `updatedAt` is the target's last-modified time, carried alongside the
+// placement is independent of the grant. `updated` is the target's last-modified time, carried alongside the
 // wire-shaped summary rather than inside it, so the caller's Modified filter has a value to test without widening the
 // wire target.
 export interface SharedWithMeRow
 {
     share : Share;
     target : SharedTargetSummary;
-    updatedAt : Date;
+    updated : Date;
     placed : boolean;
 }
 
@@ -312,7 +312,7 @@ export class ShareRA
         return Number(result?.numDeletedRows ?? 0);
     }
 
-    // Every grant on a node, for the owner's share list. Ordered by created_at -- cuid2 ids are non-monotonic, so id
+    // Every grant on a node, for the owner's share list. Ordered by created -- cuid2 ids are non-monotonic, so id
     // is never a stand-in for insertion order.
     async listByNode(nodeID : string) : Promise<Share[]>
     {
@@ -320,7 +320,7 @@ export class ShareRA
             .selectFrom('share')
             .selectAll()
             .where('node_id', '=', nodeID)
-            .orderBy('created_at', 'asc')
+            .orderBy('created', 'asc')
             .execute();
 
         return rows.map(shareFromRow);
@@ -342,13 +342,13 @@ export class ShareRA
                 'share.grantee_user_id as grantee_user_id',
                 'share.role as role',
                 'share.created_by as created_by',
-                'share.created_at as created_at',
+                'share.created as created',
                 'node.type as target_type',
                 'node.name as target_name',
                 'node.owner_id as target_owner_id',
                 'node.mime_type as target_mime_type',
                 'node.size as target_size',
-                'node.updated_at as target_updated_at',
+                'node.updated as target_updated',
                 eb.exists(eb
                     .selectFrom('node as link')
                     .select('link.id')
@@ -356,7 +356,7 @@ export class ShareRA
                     .where('link.owner_id', '=', granteeID)
                     .where('link.type', '=', 'link')).as('placed'),
             ])
-            .orderBy('share.created_at', 'asc')
+            .orderBy('share.created', 'asc')
             .execute();
 
         return rows.map((row) => ({
@@ -366,7 +366,7 @@ export class ShareRA
                 granteeUserID: row.grantee_user_id,
                 role: row.role,
                 createdBy: row.created_by,
-                createdAt: new Date(row.created_at),
+                created: new Date(row.created),
             },
             target: {
                 id: row.node_id,
@@ -376,7 +376,7 @@ export class ShareRA
                 mimeType: row.target_mime_type ?? undefined,
                 size: row.target_size ?? undefined,
             },
-            updatedAt: new Date(row.target_updated_at),
+            updated: new Date(row.target_updated),
             placed: toBool(row.placed),
         }));
     }
@@ -424,7 +424,7 @@ export class ShareRA
             .where('node.owner_id', '=', ownerID)
             .where('share_request.status', '=', 'pending')
             .selectAll('share_request')
-            .orderBy('share_request.created_at', 'asc')
+            .orderBy('share_request.created', 'asc')
             .execute();
 
         return rows.map(shareRequestFromRow);
@@ -436,7 +436,7 @@ export class ShareRA
             .selectFrom('share_request')
             .selectAll()
             .where('requester_id', '=', requesterID)
-            .orderBy('created_at', 'asc')
+            .orderBy('created', 'asc')
             .execute();
 
         return rows.map(shareRequestFromRow);

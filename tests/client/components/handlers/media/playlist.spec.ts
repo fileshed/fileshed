@@ -37,7 +37,7 @@ vi.mock('@client/resource-access/mediaTags.ts', () => ({
 }));
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ listChildren: listChildrenMock, getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -132,7 +132,7 @@ describe('MediaPlaylist rows', () =>
         readMediaTagsMock.mockImplementation((nodeID : string) =>
         {
             return Promise.resolve(nodeID === 'a1'
-                ? { title: 'Neon Skyline', artist: 'The Sample Band', album: null, artworkUrl: null }
+                ? { title: 'Neon Skyline', artist: 'The Sample Band', album: null, artworkURL: null }
                 : null);
         });
 
@@ -168,7 +168,7 @@ describe('MediaPlaylist rows', () =>
         const store = useMediaPlayerStore();
         store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
         store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
-        store.handleTrackError();
+        store.onTrackError();
 
         const wrapper = mountPanel();
         await nextTick();

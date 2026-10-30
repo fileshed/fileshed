@@ -74,7 +74,7 @@
     import { useSessionStore } from '../stores/session.ts';
 
     // Resource Access
-    import { archiveUrl } from '../resource-access/downloads.ts';
+    import { archiveURL } from '../resource-access/downloads.ts';
 
     // Components
     import SearchSurface from '../components/search/searchSurface.vue';
@@ -186,7 +186,7 @@
             return;
         }
 
-        window.open(archiveUrl(ids, format), '_blank');
+        window.open(archiveURL(ids, format), '_blank');
     }
 
     // Into the caller's own root: this surface has no open folder to copy into, and a hit found by search is as

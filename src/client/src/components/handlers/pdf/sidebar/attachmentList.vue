@@ -43,13 +43,13 @@
 
 <script setup lang="ts">
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfAttachmentList' });
+    defineOptions({ name: 'PDFAttachmentList' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

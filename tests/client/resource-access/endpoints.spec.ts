@@ -48,9 +48,9 @@ import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
 import {
     banUser,
     deleteBrandingLogo,
-    fetchAdminSettings,
-    fetchBranding,
+    getAdminSettings,
     getAdminStatus,
+    getBranding,
     listUsers,
     patchAdminSettings,
     patchBranding,
@@ -62,9 +62,9 @@ import {
     unbanUser,
     uploadBrandingLogo,
 } from '@client/resource-access/admin.ts';
-import { completeSetup, fetchInstance } from '@client/resource-access/instance.ts';
-import { downloadUrl } from '@client/resource-access/downloads.ts';
-import { fetchVersion } from '@client/resource-access/version.ts';
+import { completeSetup, getInstance } from '@client/resource-access/instance.ts';
+import { downloadURL } from '@client/resource-access/downloads.ts';
+import { getVersion } from '@client/resource-access/version.ts';
 
 // Support
 import { SERVER_ROUTES } from '../../support/routeTable.ts';
@@ -337,7 +337,7 @@ const rows : EndpointRow[] = [
     },
     { name: 'getAdminStatus', call: () => getAdminStatus(), method: 'GET', path: '/api/admin/status' },
     { name: 'sendTestEmail', call: () => sendTestEmail(), method: 'POST', path: '/api/admin/email/test' },
-    { name: 'fetchAdminSettings', call: () => fetchAdminSettings(), method: 'GET', path: '/api/admin/settings' },
+    { name: 'getAdminSettings', call: () => getAdminSettings(), method: 'GET', path: '/api/admin/settings' },
     {
         name: 'patchAdminSettings',
         call: () => patchAdminSettings({ SIGN_UP_ENABLED: false }),
@@ -345,7 +345,7 @@ const rows : EndpointRow[] = [
         path: '/api/admin/settings',
         body: { changes: { SIGN_UP_ENABLED: false } },
     },
-    { name: 'fetchBranding', call: () => fetchBranding(), method: 'GET', path: '/api/admin/branding' },
+    { name: 'getBranding', call: () => getBranding(), method: 'GET', path: '/api/admin/branding' },
     {
         name: 'patchBranding',
         call: () => patchBranding({ primary: '#3b82f6' }),
@@ -368,7 +368,7 @@ const rows : EndpointRow[] = [
     },
 
     // Instance & first-run setup
-    { name: 'fetchInstance', call: () => fetchInstance(), method: 'GET', path: '/api/instance' },
+    { name: 'getInstance', call: () => getInstance(), method: 'GET', path: '/api/instance' },
     {
         name: 'completeSetup',
         call: () => completeSetup({ token: 'tok', name: 'Admin', email: 'a@example.com', password: 'pw12345678' }),
@@ -378,7 +378,7 @@ const rows : EndpointRow[] = [
     },
 
     // Version
-    { name: 'fetchVersion', call: () => fetchVersion(), method: 'GET', path: '/api/version' },
+    { name: 'getVersion', call: () => getVersion(), method: 'GET', path: '/api/version' },
 ];
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -461,17 +461,17 @@ describe('resource-access routes', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('downloadUrl', () =>
+describe('downloadURL', () =>
 {
     it('builds the authed download path with no query when disposition is omitted', () =>
     {
-        expect(downloadUrl('n1')).toBe('/api/nodes/n1/download');
+        expect(downloadURL('n1')).toBe('/api/nodes/n1/download');
     });
 
     it('appends the disposition when one is given', () =>
     {
-        expect(downloadUrl('n1', 'inline')).toBe('/api/nodes/n1/download?disposition=inline');
-        expect(downloadUrl('n1', 'attachment')).toBe('/api/nodes/n1/download?disposition=attachment');
+        expect(downloadURL('n1', 'inline')).toBe('/api/nodes/n1/download?disposition=inline');
+        expect(downloadURL('n1', 'attachment')).toBe('/api/nodes/n1/download?disposition=attachment');
     });
 });
 

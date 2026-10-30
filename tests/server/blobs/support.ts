@@ -278,7 +278,7 @@ export async function answerReplace(
 // Client-side proof, computed from the fixture bytes the way a possessing client would.
 //----------------------------------------------------------------------------------------------------------------------
 
-export function computeAnswer(nonce : string, ranges : [ number, number ][], data : Buffer) : string
+export function calculateAnswer(nonce : string, ranges : [ number, number ][], data : Buffer) : string
 {
     const hmac = createHmac('sha256', nonce);
     for(const [ offset, length ] of ranges)
@@ -358,10 +358,10 @@ export async function blobDeletedAt(handle : DatabaseHandle, sha256 : string) : 
 {
     const row = await handle.db
         .selectFrom('blob')
-        .select('deleted_at')
+        .select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 interface NodeContentRow
@@ -402,7 +402,7 @@ export async function grantShare(
             grantee_user_id: granteeID,
             role,
             created_by: createdBy,
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }

@@ -36,7 +36,7 @@
                         </UBadge>
                     </div>
                     <p class="mt-1 text-xs text-dimmed">
-                        Created {{ formatDate(token.createdAt) }}
+                        Created {{ formatDate(token.created) }}
                         · {{ token.lastUsedAt ? `last used ${ formatDate(token.lastUsedAt) }` : 'never used' }}
                         · {{ token.expiresAt ? `expires ${ formatDate(token.expiresAt) }` : 'no expiry' }}
                     </p>

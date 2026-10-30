@@ -43,7 +43,7 @@ function tokenRow(overrides : Record<string, unknown> = {}) : Record<string, unk
         name: 'backup script',
         start: 'fspat_abc123',
         scopes: [ 'files:download', 'files:read' ],
-        createdAt: '2026-07-01T00:00:00.000Z',
+        created: '2026-07-01T00:00:00.000Z',
         lastUsedAt: null,
         expiresAt: null,
         ...overrides,

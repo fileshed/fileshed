@@ -58,7 +58,7 @@ const updatePreferencesMock = updatePreferences as unknown as Mock;
 //----------------------------------------------------------------------------------------------------------------------
 
 const ISO = '2026-07-01T00:00:00.000Z';
-const TRASHED = { trashedAt: ISO };
+const trashed = { trashedAt: ISO };
 
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
@@ -74,7 +74,7 @@ function offer(id : string, name : string) : DeletionOfferResponse
         mimeType: 'text/plain',
         size: 64,
         createdBy: 'owner1',
-        createdAt: ISO,
+        created: ISO,
         expiresAt: '2026-07-28T00:00:00.000Z',
     };
 }
@@ -146,8 +146,8 @@ describe('TrashPage', () =>
     it('lists the caller\'s trashed roots', async () =>
     {
         const wrapper = await mountTrash([
-            folderNode({ ...TRASHED, id: 'project' }),
-            fileNode({ ...TRASHED, id: 'notes.txt' }),
+            folderNode({ ...trashed, id: 'project' }),
+            fileNode({ ...trashed, id: 'notes.txt' }),
         ]);
 
         expect(listTrashMock).toHaveBeenCalled();
@@ -164,7 +164,7 @@ describe('TrashPage', () =>
 
     it('restores a node through the restore endpoint', async () =>
     {
-        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
+        const wrapper = await mountTrash([ fileNode({ ...trashed, id: 'notes.txt' }) ]);
 
         await rowAction(wrapper, 'notes.txt', 'Restore').trigger('click');
         await flushPromises();
@@ -175,7 +175,7 @@ describe('TrashPage', () =>
 
     it('does not purge on Delete forever until the destructive confirm is accepted', async () =>
     {
-        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
+        const wrapper = await mountTrash([ fileNode({ ...trashed, id: 'notes.txt' }) ]);
 
         await rowAction(wrapper, 'notes.txt', 'Delete forever').trigger('click');
         await flushPromises();
@@ -216,14 +216,14 @@ describe('TrashPage', () =>
 
     it('enables the Empty trash action once the trash holds something', async () =>
     {
-        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
+        const wrapper = await mountTrash([ fileNode({ ...trashed, id: 'notes.txt' }) ]);
 
         expect(wrapper.get('[aria-label="Empty trash"]').attributes('disabled')).toBeUndefined();
     });
 
     it('does not empty the trash until the Empty trash confirm is accepted', async () =>
     {
-        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
+        const wrapper = await mountTrash([ fileNode({ ...trashed, id: 'notes.txt' }) ]);
 
         await wrapper.get('[aria-label="Empty trash"]').trigger('click');
         await flushPromises();
@@ -240,14 +240,14 @@ describe('TrashPage', () =>
 
     it('hides the offers section when no deletion offers are pending', async () =>
     {
-        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
+        const wrapper = await mountTrash([ fileNode({ ...trashed, id: 'notes.txt' }) ]);
 
         expect(wrapper.text()).not.toContain('Offered to you');
     });
 
     it('surfaces the offers section above the trash when an offer is pending', async () =>
     {
-        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ], [ offer('o1', 'shared.txt') ]);
+        const wrapper = await mountTrash([ fileNode({ ...trashed, id: 'notes.txt' }) ], [ offer('o1', 'shared.txt') ]);
 
         expect(wrapper.text()).toContain('Offered to you');
         expect(wrapper.text()).toContain('shared.txt');
@@ -280,7 +280,7 @@ describe('TrashPage — view toggle', () =>
     {
         updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
         const wrapper = await mountTrash(
-            [ fileNode({ ...TRASHED, id: 'notes.txt' }) ],
+            [ fileNode({ ...trashed, id: 'notes.txt' }) ],
             [],
             meFixture({ preferences: { viewMode: 'grid' } })
         );
@@ -308,7 +308,7 @@ describe('TrashPage — view toggle', () =>
         try
         {
             const wrapper = await mountTrash(
-                [ fileNode({ ...TRASHED, id: 'notes.txt' }) ],
+                [ fileNode({ ...trashed, id: 'notes.txt' }) ],
                 [],
                 meFixture({ preferences: { viewMode: 'grid' } })
             );

@@ -7,13 +7,13 @@
 import { type UserSummary, userSummaryCodec } from '@fileshed/core';
 
 // Resource Access
-import { requestJson } from './request.ts';
+import { requestJSON } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export async function lookupUser(email : string) : Promise<UserSummary>
 {
-    return requestJson('/api/users/lookup', { query: { email }, codec: userSummaryCodec });
+    return requestJSON('/api/users/lookup', { query: { email }, codec: userSummaryCodec });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

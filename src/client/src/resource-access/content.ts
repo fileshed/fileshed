@@ -5,21 +5,21 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Resource Access
-import { downloadUrl } from './downloads.ts';
+import { downloadURL } from './downloads.ts';
 import { apiFetch } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function fetchNodeText(nodeID : string) : Promise<string>
+export async function getNodeText(nodeID : string) : Promise<string>
 {
-    const response = await apiFetch(downloadUrl(nodeID, 'inline'));
+    const response = await apiFetch(downloadURL(nodeID, 'inline'));
 
     return response.text();
 }
 
-export async function fetchNodeBlob(nodeID : string) : Promise<Blob>
+export async function getNodeBlob(nodeID : string) : Promise<Blob>
 {
-    const response = await apiFetch(downloadUrl(nodeID, 'inline'));
+    const response = await apiFetch(downloadURL(nodeID, 'inline'));
 
     return response.blob();
 }

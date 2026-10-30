@@ -67,7 +67,7 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
             grantee_user_id: granteeID,
             role,
             created_by: 'alice',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }

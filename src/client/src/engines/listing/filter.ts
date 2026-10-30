@@ -49,9 +49,9 @@ function matches(node : NodeResponse, filters : ListingFilters) : boolean
     }
 
     if(filters.ownerID !== null && node.ownerID !== filters.ownerID) { return false; }
-    if(filters.after !== null && node.updatedAt < filters.after) { return false; }
+    if(filters.after !== null && node.updated < filters.after) { return false; }
 
-    return filters.before === null || node.updatedAt < filters.before;
+    return filters.before === null || node.updated < filters.before;
 }
 
 export function filterNodes(nodes : readonly NodeResponse[], filters : ListingFilters) : NodeResponse[]

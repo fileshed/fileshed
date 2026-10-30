@@ -13,7 +13,7 @@
                     @click="openAvatarEdit"
                 >
                     <UAvatar
-                        :src="avatarUrl"
+                        :src="avatarURL"
                         :alt="displayName"
                         size="3xl"
                         :ui="{ root: 'size-24', fallback: 'text-3xl' }"
@@ -76,7 +76,7 @@
 
     const displayName = computed(() => session.me?.name ?? session.me?.email ?? 'Account');
     const email = computed(() => session.me?.email ?? '');
-    const avatarUrl = computed(() => session.me?.image ?? undefined);
+    const avatarURL = computed(() => session.me?.image ?? undefined);
 
     //------------------------------------------------------------------------------------------------------------------
     // Avatar

@@ -24,7 +24,7 @@ const shareRequestBaseShape = {
     requesterID: z.string(),
     requestedRole: shareRoleCodec,
     message: z.string().nullable(),
-    createdAt: z.date(),
+    created: z.date(),
 };
 
 //----------------------------------------------------------------------------------------------------------------------

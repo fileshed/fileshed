@@ -69,7 +69,7 @@
     // Resource Access
     import { apiErrorFromAuth } from '../../resource-access/apiError.ts';
     import { authClient } from '../../resource-access/authClient.ts';
-    import { fetchInstance } from '../../resource-access/instance.ts';
+    import { getInstance } from '../../resource-access/instance.ts';
 
     // Utils
     import { useRunWithToast } from '../../utils/runWithToast.ts';
@@ -101,7 +101,7 @@
 
         try
         {
-            const [ accounts, instance ] = await Promise.all([ authClient.listAccounts(), fetchInstance() ]);
+            const [ accounts, instance ] = await Promise.all([ authClient.listAccounts(), getInstance() ]);
             if(accounts.error) { throw apiErrorFromAuth(accounts.error, 'Unable to list sign-in methods.'); }
 
             linkedAccounts.value = (accounts.data ?? [])

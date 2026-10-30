@@ -39,7 +39,7 @@ export const deletionOfferResponseCodec = z.strictObject({
     mimeType: z.string(),
     size: z.number(),
     createdBy: z.string(),
-    createdAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
     expiresAt: isoDateTimeCodec,
 });
 
@@ -62,7 +62,7 @@ export function toDeletionOfferResponse(offer : DeletionOffer) : DeletionOfferRe
         mimeType: offer.mimeType,
         size: offer.size,
         createdBy: offer.createdBy,
-        createdAt: offer.createdAt.toISOString(),
+        created: offer.created.toISOString(),
         expiresAt: offer.expiresAt.toISOString(),
     };
 }

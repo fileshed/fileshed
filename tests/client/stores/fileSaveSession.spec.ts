@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Resource Access
-import { ApiError, ConflictApiError } from '@client/resource-access/apiError.ts';
+import { APIError, ConflictAPIError } from '@client/resource-access/apiError.ts';
 import { patchNode } from '@client/resource-access/nodes.ts';
 
 // Stores
@@ -112,7 +112,7 @@ describe('createFileSaveSession', () =>
     {
         const session = openSession();
         commitMock.mockRejectedValue(
-            new ConflictApiError('The file changed since you opened it.', 'replace.staleBlob')
+            new ConflictAPIError('The file changed since you opened it.', 'replace.staleBlob')
         );
 
         await saveText(session, 'edited');
@@ -127,7 +127,7 @@ describe('createFileSaveSession', () =>
     it('reports a conflict other than a stale blob as a save error', async () =>
     {
         const session = openSession();
-        commitMock.mockRejectedValue(new ConflictApiError('These bytes do not belong here.', 'upload.offsetConflict'));
+        commitMock.mockRejectedValue(new ConflictAPIError('These bytes do not belong here.', 'upload.offsetConflict'));
 
         await saveText(session, 'edited');
 
@@ -138,7 +138,7 @@ describe('createFileSaveSession', () =>
     it('reports any other failure as a save error', async () =>
     {
         const session = openSession();
-        commitMock.mockRejectedValue(new ApiError(500, 'Storage is unavailable.'));
+        commitMock.mockRejectedValue(new APIError(500, 'Storage is unavailable.'));
 
         await saveText(session, 'edited');
 

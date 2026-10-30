@@ -11,7 +11,7 @@ import { useRouter } from 'vue-router';
 import type { OpenAction } from '../engines/intent/index.ts';
 
 // Resource Access
-import { downloadUrl } from '../resource-access/downloads.ts';
+import { downloadURL } from '../resource-access/downloads.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -33,8 +33,8 @@ export function useOpenNode() : OpenNode
             case 'annotate':
             case 'play':
             case 'play-playlist': window.open(`/file/${ action.nodeID }`, '_blank'); break;
-            case 'view': window.open(downloadUrl(action.nodeID, 'inline'), '_blank'); break;
-            case 'download': window.open(downloadUrl(action.nodeID), '_blank'); break;
+            case 'view': window.open(downloadURL(action.nodeID, 'inline'), '_blank'); break;
+            case 'download': window.open(downloadURL(action.nodeID), '_blank'); break;
             case 'none': break;
         }
     }

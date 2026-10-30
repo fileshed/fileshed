@@ -204,8 +204,8 @@ export async function seedEmptyFile(booted : BootedStoreApp, user : TestUser, na
         blobID: EMPTY_SHA256,
         size: 0,
         mimeType: 'application/octet-stream',
-        createdAt: now,
-        updatedAt: now,
+        created: now,
+        updated: now,
         trashedAt: null,
     });
 

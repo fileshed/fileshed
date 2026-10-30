@@ -15,7 +15,7 @@ import { type Kysely, sql } from 'kysely';
 
 // Resource Access
 import type { Database } from '@server/resource-access/database/database.ts';
-import { migrateTo, migrateToLatest } from '@server/resource-access/database/migrator.ts';
+import { migrateTo } from '@server/resource-access/database/migrator.ts';
 
 // Support
 import { testConfig } from '../../../auth/support.ts';
@@ -26,6 +26,7 @@ import { openTestDatabase } from '../../../support/database.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 const BEFORE_THIS_ONE = '006_name_ordering_index';
+const THIS_ONE = '007_public_link_kind_removal';
 
 const isoNow = () : string => new Date().toISOString();
 
@@ -58,25 +59,16 @@ const seedFile = async (db : Kysely<Database>, id : string) : Promise<void> =>
         .values({ id: 'be1', kind: 'fs', config: '{}', is_default: 1 })
         .execute();
 
-    await db
-        .insertInto('blob')
-        .values({ sha256: 'sha-a', size: 10, backend_id: 'be1', storage_key: 'key/sha-a', created_at: isoNow() })
-        .execute();
+    // Raw SQL because these timestamp columns carry their pre-009 names here, not the ones the table types now spell.
+    await sql`
+        insert into blob (sha256, size, backend_id, storage_key, created_at)
+        values ('sha-a', 10, 'be1', 'key/sha-a', ${ isoNow() })
+    `.execute(db);
 
-    await db
-        .insertInto('node')
-        .values({
-            id,
-            type: 'file',
-            name: 'report.pdf',
-            owner_id: 'u1',
-            blob_id: 'sha-a',
-            size: 10,
-            mime_type: 'application/pdf',
-            created_at: isoNow(),
-            updated_at: isoNow(),
-        })
-        .execute();
+    await sql`
+        insert into node (id, type, name, owner_id, blob_id, size, mime_type, created_at, updated_at)
+        values (${ id }, 'file', 'report.pdf', 'u1', 'sha-a', 10, 'application/pdf', ${ isoNow() }, ${ isoNow() })
+    `.execute(db);
 };
 
 // A link as the pre-007 schema held it. Raw SQL because the kind columns are gone from the table type -- writing them
@@ -140,7 +132,7 @@ describe('migration 007 — public link kind removal', () =>
 {
     it('drops mode and disposition, leaving the rest of the link untouched', async () =>
     {
-        await migrateToLatest(db, kind);
+        await migrateTo(db, kind, THIS_ONE);
 
         expect(await columnsOf(db, 'public_link'))
             .toEqual([ 'created_at', 'id', 'node_id', 'revoked_at', 'token' ]);
@@ -165,7 +157,7 @@ describe('migration 007 — public link kind removal', () =>
             revokedAt: null,
         });
 
-        await migrateToLatest(db, kind);
+        await migrateTo(db, kind, THIS_ONE);
 
         const rows = await db
             .selectFrom('public_link')
@@ -200,7 +192,7 @@ describe('migration 007 — public link kind removal', () =>
             revokedAt,
         });
 
-        await migrateToLatest(db, kind);
+        await migrateTo(db, kind, THIS_ONE);
 
         const rows = await db
             .selectFrom('public_link')
@@ -216,7 +208,7 @@ describe('migration 007 — public link kind removal', () =>
     // Nothing may put a kind back: the columns are gone, so a write naming one is rejected by the database itself.
     it('leaves no column for a kind to be written to', async () =>
     {
-        await migrateToLatest(db, kind);
+        await migrateTo(db, kind, THIS_ONE);
 
         await expect(seedLegacyLink(db, {
             id: 'l3',

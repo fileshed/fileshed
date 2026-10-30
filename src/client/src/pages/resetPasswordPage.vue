@@ -107,7 +107,7 @@
     import { authClient } from '../resource-access/authClient.ts';
 
     // Utils
-    import { describeApiError } from '../utils/runWithToast.ts';
+    import { describeAPIError } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -156,7 +156,7 @@
         }
         catch(error)
         {
-            errorMessage.value = describeApiError(error);
+            errorMessage.value = describeAPIError(error);
         }
         finally
         {

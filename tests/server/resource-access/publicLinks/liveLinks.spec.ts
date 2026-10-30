@@ -45,13 +45,13 @@ afterEach(async () =>
     await db.destroy();
 });
 
-function link(init : { id : string; nodeID : string; createdAt : Date; revokedAt ?: Date | null }) : PublicLink
+function link(init : { id : string; nodeID : string; created : Date; revokedAt ?: Date | null }) : PublicLink
 {
     return {
         id: init.id,
         nodeID: init.nodeID,
         token: `token-${ init.id }`,
-        createdAt: init.createdAt,
+        created: init.created,
         revokedAt: init.revokedAt ?? null,
     };
 }
@@ -64,8 +64,8 @@ describe('PublicLinkRA.liveLinksByNode', () =>
     {
         await nodes.insert(fileNode({ id: 'a', ownerID: 'owner', blobID: 'sha-a' }));
         await nodes.insert(fileNode({ id: 'b', ownerID: 'owner', blobID: 'sha-a' }));
-        await links.insert(link({ id: 'l1', nodeID: 'a', createdAt: new Date('2026-03-01T00:00:00.000Z') }));
-        await links.insert(link({ id: 'l2', nodeID: 'b', createdAt: new Date('2026-03-02T00:00:00.000Z') }));
+        await links.insert(link({ id: 'l1', nodeID: 'a', created: new Date('2026-03-01T00:00:00.000Z') }));
+        await links.insert(link({ id: 'l2', nodeID: 'b', created: new Date('2026-03-02T00:00:00.000Z') }));
 
         const found = await links.liveLinksByNode([ 'a', 'b' ]);
 
@@ -85,7 +85,7 @@ describe('PublicLinkRA.liveLinksByNode', () =>
     it('does not count a revoked link as live', async () =>
     {
         await nodes.insert(fileNode({ id: 'a', ownerID: 'owner', blobID: 'sha-a' }));
-        await links.insert(link({ id: 'l1', nodeID: 'a', createdAt: new Date('2026-03-01T00:00:00.000Z') }));
+        await links.insert(link({ id: 'l1', nodeID: 'a', created: new Date('2026-03-01T00:00:00.000Z') }));
 
         await links.revoke('l1');
         const found = await links.liveLinksByNode([ 'a' ]);
@@ -98,8 +98,8 @@ describe('PublicLinkRA.liveLinksByNode', () =>
     it('answers with the oldest live link when a node carries more than one', async () =>
     {
         await nodes.insert(fileNode({ id: 'a', ownerID: 'owner', blobID: 'sha-a' }));
-        await links.insert(link({ id: 'older', nodeID: 'a', createdAt: new Date('2026-03-01T00:00:00.000Z') }));
-        await links.insert(link({ id: 'newer', nodeID: 'a', createdAt: new Date('2026-03-05T00:00:00.000Z') }));
+        await links.insert(link({ id: 'older', nodeID: 'a', created: new Date('2026-03-01T00:00:00.000Z') }));
+        await links.insert(link({ id: 'newer', nodeID: 'a', created: new Date('2026-03-05T00:00:00.000Z') }));
 
         expect((await links.liveLinksByNode([ 'a' ])).get('a')?.id).toBe('older');
     });
@@ -108,8 +108,8 @@ describe('PublicLinkRA.liveLinksByNode', () =>
     it('skips past a revoked older link to the live one behind it', async () =>
     {
         await nodes.insert(fileNode({ id: 'a', ownerID: 'owner', blobID: 'sha-a' }));
-        await links.insert(link({ id: 'older', nodeID: 'a', createdAt: new Date('2026-03-01T00:00:00.000Z') }));
-        await links.insert(link({ id: 'newer', nodeID: 'a', createdAt: new Date('2026-03-05T00:00:00.000Z') }));
+        await links.insert(link({ id: 'older', nodeID: 'a', created: new Date('2026-03-01T00:00:00.000Z') }));
+        await links.insert(link({ id: 'newer', nodeID: 'a', created: new Date('2026-03-05T00:00:00.000Z') }));
 
         await links.revoke('older');
 

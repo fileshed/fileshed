@@ -26,8 +26,8 @@ import {
     blobDeletedAt,
     blobRowCount,
     bootBlobApp,
+    calculateAnswer,
     claim,
-    computeAnswer,
     fileNodesForBlob,
     grantShare,
     makeUser,
@@ -133,14 +133,14 @@ describe('replace via upload ticket — owner', () =>
         expect(node.id).toBe(file.id);
         expect(node.name).toBe('notes.txt');
         expect(node.parentID).toBe(file.parentID);
-        expect(node.createdAt).toBe(file.createdAt);
+        expect(node.created).toBe(file.created);
         expect(node.role).toBe('owner');
 
-        // New content: blob, size, mime, and a freshly bumped updated_at.
+        // New content: blob, size, mime, and a freshly bumped updated.
         expect(node.blobID).toBe(replacementSha);
         expect(node.size).toBe(replacement.length);
         expect(node.mimeType).toBe('text/markdown');
-        expect(new Date(node.updatedAt).getTime()).toBeGreaterThanOrEqual(beforeReplace);
+        expect(new Date(node.updated).getTime()).toBeGreaterThanOrEqual(beforeReplace);
 
         // The row and the stored bytes agree with the response.
         const row = await nodeContentRow(booted.handle, file.id);
@@ -226,7 +226,7 @@ describe('replace response sharing', () =>
         const node = await res.json() as NodeResponse;
 
         expect(res.status).toBe(200);
-        expect(node.sharing).toEqual({ granteeCount: 1, linkUrl: null });
+        expect(node.sharing).toEqual({ granteeCount: 1, linkURL: null });
     });
 
     it('answers an editor with no sharing at all, since what the file shares is the owner\'s to know', async () =>
@@ -429,7 +429,7 @@ describe('replace via proof-of-possession', () =>
         expect(challenge.upload).toBe(false);
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const answer = computeAnswer(challenge.nonce, challenge.ranges, known);
+        const answer = calculateAnswer(challenge.nonce, challenge.ranges, known);
         const res = await answerReplace(booted.app, owner.cookie, challenge.challengeID, answer, file.id);
         const node = await res.json() as NodeResponse;
 

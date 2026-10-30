@@ -47,7 +47,7 @@
     import { ref } from 'vue';
     import { useToast } from '@nuxt/ui/composables';
 
-    import { type NodeResponse, PLAYLIST_EXTENSIONS, PLAYLIST_MIME_TYPES } from '@fileshed/core';
+    import { type NodeResponse, PLAYLIST_EXTENSIONS, playlistMimeTypes } from '@fileshed/core';
 
     // Stores
     import { useMediaPlayerStore } from '../../../../stores/mediaPlayer.ts';
@@ -56,7 +56,7 @@
     import FilePicker from '../../../drive/filePicker.vue';
 
     // Utils
-    import { describeApiError } from '../../../../utils/runWithToast.ts';
+    import { describeAPIError } from '../../../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -67,7 +67,7 @@
     const picked = ref<NodeResponse | null>(null);
     const pending = ref(false);
 
-    const playlistAccept = [ ...PLAYLIST_MIME_TYPES, ...PLAYLIST_EXTENSIONS ];
+    const playlistAccept = [ ...playlistMimeTypes, ...PLAYLIST_EXTENSIONS ];
 
     async function confirm(mode : 'replace' | 'append') : Promise<void>
     {
@@ -95,7 +95,7 @@
         {
             toast.add({
                 title: 'Couldn\'t open this playlist.',
-                description: describeApiError(caught),
+                description: describeAPIError(caught),
                 color: 'error',
             });
         }

@@ -10,30 +10,30 @@ import { blobCodec } from '@fileshed/core';
 
 describe('blobCodec', () =>
 {
-    it('parses a referenced blob with a null deletedAt', () =>
+    it('parses a referenced blob with a null deleted', () =>
     {
         const blob = {
             sha256: 'a'.repeat(64),
             size: 2048,
             backendID: 'backend_1',
             storageKey: 'ab/cd/abcd',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            deletedAt: null,
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            deleted: null,
         };
 
         expect(blobCodec.safeParse(blob).success).toBe(true);
     });
 
-    // deletedAt is the graveyard marker set when the last reference drops.
-    it('parses a graveyarded blob with a deletedAt', () =>
+    // deleted is the graveyard marker set when the last reference drops.
+    it('parses a graveyarded blob with a deleted', () =>
     {
         const blob = {
             sha256: 'b'.repeat(64),
             size: 2048,
             backendID: 'backend_1',
             storageKey: 'bb/cd/bbcd',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            deletedAt: new Date('2026-02-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            deleted: new Date('2026-02-01T00:00:00.000Z'),
         };
 
         expect(blobCodec.safeParse(blob).success).toBe(true);
@@ -48,8 +48,8 @@ describe('blobCodec', () =>
             size: 2048,
             backendID: 'backend_1',
             storageKey: 'cc/cd/cccd',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            deletedAt: null,
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            deleted: null,
             refCount: 3,
         };
 

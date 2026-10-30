@@ -28,13 +28,13 @@
     import { computed } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfDocumentProperties' });
+    defineOptions({ name: 'PDFDocumentProperties' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const open = computed<boolean>({
         get: () => store.propertiesOpen,

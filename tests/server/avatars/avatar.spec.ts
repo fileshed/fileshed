@@ -37,7 +37,7 @@ import {
     postAvatar,
     seedUnreferencedBlob,
 } from './support.ts';
-import { REAL_PNG, gifBytes, jpegBytes, pngBytes, svgBytes, webpBytes } from '../support/imageBytes.ts';
+import { gifBytes, jpegBytes, pngBytes, realPNG, svgBytes, webpBytes } from '../support/imageBytes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -133,10 +133,10 @@ describe('POST /api/me/avatar', () =>
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
 
-        const res = await postAvatar(booted.app, user.cookie, REAL_PNG, 'image/png');
+        const res = await postAvatar(booted.app, user.cookie, realPNG, 'image/png');
 
         expect(res.status).toBe(200);
-        expect((await avatarRow(booted, user.id)).avatar_sha256).toBe(sha256Of(REAL_PNG));
+        expect((await avatarRow(booted, user.id)).avatar_sha256).toBe(sha256Of(realPNG));
     });
 
     it('graveyards the previous avatar blob when a replacement leaves it unreferenced', async () =>
@@ -310,7 +310,7 @@ describe('avatar GC interaction', () =>
         await deleteAvatar(booted.app, user.cookie);
 
         // A cutoff 1s in the future puts the just-graveyarded blob unambiguously past the grace window (a 0 grace can
-        // tie the same millisecond the delete stamped deleted_at). The point is that the removed avatar no longer
+        // tie the same millisecond the delete stamped deleted). The point is that the removed avatar no longer
         // protects the blob, so the sweep is now free to reap it.
         await runGcOnce({ blob: booted.blob, graceMs: async () => -1000 });
 

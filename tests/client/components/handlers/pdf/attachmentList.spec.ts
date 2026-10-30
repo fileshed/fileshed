@@ -13,20 +13,20 @@ import { createPinia, setActivePinia } from 'pinia';
 import { saveBytes } from '@client/resource-access/downloads.ts';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
 // Engines
 import type { DocumentProperties } from '@client/engines/pdf/types.ts';
 
 // Under test
-import PdfAttachmentList from '@client/components/handlers/pdf/sidebar/attachmentList.vue';
+import PDFAttachmentList from '@client/components/handlers/pdf/sidebar/attachmentList.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@client/resource-access/downloads.ts', () => ({
-    downloadUrl: vi.fn(() => '/api/nodes/f1/download'),
+    downloadURL: vi.fn(() => '/api/nodes/f1/download'),
     saveBytes: vi.fn(),
     showBytesIn: vi.fn(),
 }));
@@ -66,12 +66,12 @@ function documentProperties() : DocumentProperties
 
 function mountList() : VueWrapper
 {
-    return mount(PdfAttachmentList, { global: { stubs } });
+    return mount(PDFAttachmentList, { global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfAttachmentList', () =>
+describe('PDFAttachmentList', () =>
 {
     beforeEach(() =>
     {
@@ -88,7 +88,7 @@ describe('PdfAttachmentList', () =>
 
     it('names each embedded file and what the document says about it', () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setDocumentFacts({
             outline: [],
             attachments: [ { id: 'a0', filename: 'appendix.csv', description: 'Quarterly figures' } ],
@@ -103,7 +103,7 @@ describe('PdfAttachmentList', () =>
     it('writes the bytes the renderer holds when one is saved', async () =>
     {
         const content = new Uint8Array([ 1, 2, 3 ]);
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setDocumentAccess({
             save: vi.fn(() => Promise.resolve(new Uint8Array())),
             serialize: vi.fn(() => Promise.resolve(new Uint8Array())),

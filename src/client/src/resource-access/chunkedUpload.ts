@@ -20,7 +20,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError, ConflictApiError } from './apiError.ts';
+import { APIError, ConflictAPIError } from './apiError.ts';
 import { type UploadOutcome, type UploadProgress, uploadWithProgress } from './uploadWithProgress.ts';
 
 // Engines
@@ -59,7 +59,7 @@ function delay(ms : number) : Promise<void>
 // (status 0), or the server broke while answering. A 409 is an answer, so it is never one of these.
 function isTransportFailure(error : unknown) : boolean
 {
-    return error instanceof ApiError && (error.status === 0 || error.status >= 500);
+    return error instanceof APIError && (error.status === 0 || error.status >= 500);
 }
 
 // The ticket was busy with this chunk's own torn attempt, which is the one refusal that clears without the client
@@ -67,7 +67,7 @@ function isTransportFailure(error : unknown) : boolean
 // second time as the first.
 function isChunkInFlight(error : unknown) : boolean
 {
-    return error instanceof ConflictApiError && error.code === 'upload.chunkInFlight';
+    return error instanceof ConflictAPIError && error.code === 'upload.chunkInFlight';
 }
 
 // The position the server corrects a misplaced chunk to. Both disagreements carry one -- a chunk repeating ground the
@@ -75,7 +75,7 @@ function isChunkInFlight(error : unknown) : boolean
 // one that decides where the rest of the file goes.
 function correctedPosition(error : unknown) : number | null
 {
-    if(!(error instanceof ConflictApiError) || error.code !== 'upload.offsetConflict') { return null; }
+    if(!(error instanceof ConflictAPIError) || error.code !== 'upload.offsetConflict') { return null; }
 
     return error.receivedBytes;
 }
@@ -198,7 +198,7 @@ export async function uploadChunked(options : ChunkedUploadOptions) : Promise<No
             const accepted = usablePosition(outcome.receivedBytes, sentFrom, file.size);
             if(accepted === null)
             {
-                throw new ApiError(0, 'The upload was accepted without moving forward.');
+                throw new APIError(0, 'The upload was accepted without moving forward.');
             }
 
             owed = chunksFrom(accepted, file.size, chunkBytes);
@@ -216,7 +216,7 @@ export async function uploadChunked(options : ChunkedUploadOptions) : Promise<No
         chunk = owed[0];
     }
 
-    throw new ApiError(0, 'The upload delivered every byte without committing the file.');
+    throw new APIError(0, 'The upload delivered every byte without committing the file.');
 }
 
 //----------------------------------------------------------------------------------------------------------------------

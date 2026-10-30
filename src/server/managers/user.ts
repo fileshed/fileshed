@@ -82,7 +82,7 @@ export class UserManager
             limits: { trashRetentionDays, accountDeletionDays },
             preferences: toUserPreferences(stored),
             image: avatarImage(avatarSha256),
-            createdAt: new Date(user.createdAt).toISOString(),
+            created: new Date(user.createdAt).toISOString(),
             deletion,
         };
     }
@@ -97,9 +97,9 @@ export class UserManager
         return this.me(user);
     }
 
-    async lookupByEmail(email : string) : Promise<UserSummary>
+    async getByEmail(email : string) : Promise<UserSummary>
     {
-        const summary = await this.#users.findSummaryByEmail(email);
+        const summary = await this.#users.getSummaryByEmail(email);
         if(summary === undefined) { throw new NotFoundError('No user with that email.'); }
 
         return summary;

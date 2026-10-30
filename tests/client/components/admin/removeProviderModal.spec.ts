@@ -24,7 +24,7 @@ import RemoveProviderModal from '@client/components/admin/modals/removeProviderM
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
 }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));

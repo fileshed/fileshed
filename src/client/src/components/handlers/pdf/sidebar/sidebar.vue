@@ -24,9 +24,9 @@
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto">
-            <PdfThumbnailRail v-if="store.sidebarTab === 'thumbnails'" />
-            <PdfOutlineTree v-else-if="store.sidebarTab === 'outline'" />
-            <PdfAttachmentList v-else />
+            <PDFThumbnailRail v-if="store.sidebarTab === 'thumbnails'" />
+            <PDFOutlineTree v-else-if="store.sidebarTab === 'outline'" />
+            <PDFAttachmentList v-else />
         </div>
     </div>
 </template>
@@ -37,21 +37,21 @@
     import { computed } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     // Engines
     import type { SidebarTab } from '../../../../engines/pdf/types.ts';
 
     // Components
-    import PdfAttachmentList from './attachmentList.vue';
-    import PdfOutlineTree from './outlineTree.vue';
-    import PdfThumbnailRail from './thumbnailRail.vue';
+    import PDFAttachmentList from './attachmentList.vue';
+    import PDFOutlineTree from './outlineTree.vue';
+    import PDFThumbnailRail from './thumbnailRail.vue';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfSidebar' });
+    defineOptions({ name: 'PDFSidebar' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const tabs = computed<{ value : SidebarTab; icon : string; label : string; empty : boolean }[]>(() =>
     {

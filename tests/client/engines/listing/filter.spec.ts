@@ -107,10 +107,10 @@ describe('filterNodes', () =>
     it('keeps rows inside the modified window and excludes its upper bound', () =>
     {
         const nodes = [
-            file('before', 'text/plain', { updatedAt: '2026-05-31T23:59:59.000Z' }),
-            file('start', 'text/plain', { updatedAt: '2026-06-01T00:00:00.000Z' }),
-            file('inside', 'text/plain', { updatedAt: '2026-06-15T00:00:00.000Z' }),
-            file('end', 'text/plain', { updatedAt: '2026-07-01T00:00:00.000Z' }),
+            file('before', 'text/plain', { updated: '2026-05-31T23:59:59.000Z' }),
+            file('start', 'text/plain', { updated: '2026-06-01T00:00:00.000Z' }),
+            file('inside', 'text/plain', { updated: '2026-06-15T00:00:00.000Z' }),
+            file('end', 'text/plain', { updated: '2026-07-01T00:00:00.000Z' }),
         ];
 
         const kept = filterNodes(nodes, {
@@ -125,10 +125,10 @@ describe('filterNodes', () =>
     it('applies every active filter together', () =>
     {
         const nodes = [
-            file('keep', 'image/png', { updatedAt: '2026-06-15T00:00:00.000Z' }),
-            file('wrongType', 'text/plain', { updatedAt: '2026-06-15T00:00:00.000Z' }),
-            file('wrongOwner', 'image/png', { ownerID: 'u2', updatedAt: '2026-06-15T00:00:00.000Z' }),
-            file('wrongDate', 'image/png', { updatedAt: '2026-01-01T00:00:00.000Z' }),
+            file('keep', 'image/png', { updated: '2026-06-15T00:00:00.000Z' }),
+            file('wrongType', 'text/plain', { updated: '2026-06-15T00:00:00.000Z' }),
+            file('wrongOwner', 'image/png', { ownerID: 'u2', updated: '2026-06-15T00:00:00.000Z' }),
+            file('wrongDate', 'image/png', { updated: '2026-01-01T00:00:00.000Z' }),
         ];
 
         const kept = filterNodes(nodes, {

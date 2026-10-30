@@ -97,21 +97,21 @@ describe('sortNodes', () =>
     it('orders by modified time, newest last ascending', () =>
     {
         const nodes = [
-            file('newer', { updatedAt: '2026-07-05T00:00:00.000Z' }),
-            file('older', { updatedAt: '2026-01-02T00:00:00.000Z' }),
+            file('newer', { updated: '2026-07-05T00:00:00.000Z' }),
+            file('older', { updated: '2026-01-02T00:00:00.000Z' }),
         ];
 
-        expect(order(sortNodes(nodes, 'updatedAt', 'asc'))).toEqual([ 'older', 'newer' ]);
+        expect(order(sortNodes(nodes, 'updated', 'asc'))).toEqual([ 'older', 'newer' ]);
     });
 
     it('orders by created time independently of modified time', () =>
     {
         const nodes = [
-            file('second', { createdAt: '2026-07-05T00:00:00.000Z' }),
-            file('first', { createdAt: '2026-01-02T00:00:00.000Z' }),
+            file('second', { created: '2026-07-05T00:00:00.000Z' }),
+            file('first', { created: '2026-01-02T00:00:00.000Z' }),
         ];
 
-        expect(order(sortNodes(nodes, 'createdAt', 'asc'))).toEqual([ 'first', 'second' ]);
+        expect(order(sortNodes(nodes, 'created', 'asc'))).toEqual([ 'first', 'second' ]);
     });
 
     // Kind groups files by format and keeps links together, so a folder of mixed content reads by type.

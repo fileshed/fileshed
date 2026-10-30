@@ -71,7 +71,7 @@ function entry(target : SharedTarget, role : ShareRole = 'viewer', placed = fals
             granteeUserID: ME_ID,
             role,
             createdBy: 'owner1',
-            createdAt: '2026-07-01T00:00:00.000Z',
+            created: '2026-07-01T00:00:00.000Z',
         },
         target,
         owner: OWNER,

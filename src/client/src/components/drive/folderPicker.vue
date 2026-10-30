@@ -37,7 +37,7 @@
 
             <div v-else-if="error" class="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted">
                 <span>Couldn't load folders.</span>
-                <UButton size="xs" color="neutral" variant="subtle" label="Retry" @click="fetchFolders" />
+                <UButton size="xs" color="neutral" variant="subtle" label="Retry" @click="loadFolders" />
             </div>
 
             <div
@@ -129,7 +129,7 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    async function fetchFolders() : Promise<void>
+    async function loadFolders() : Promise<void>
     {
         loading.value = true;
         error.value = false;
@@ -155,17 +155,17 @@
         if(!regulation.node.canEnterFolderForMove(props.movingNodeIDs, folder.id)) { return; }
 
         path.value = [ ...path.value, folder ];
-        await fetchFolders();
+        await loadFolders();
     }
 
     // Breadcrumb hop: -1 is My Files (root), any other index truncates the path to that folder.
     async function goTo(index : number) : Promise<void>
     {
         path.value = index < 0 ? [] : path.value.slice(0, index + 1);
-        await fetchFolders();
+        await loadFolders();
     }
 
-    onMounted(fetchFolders);
+    onMounted(loadFolders);
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

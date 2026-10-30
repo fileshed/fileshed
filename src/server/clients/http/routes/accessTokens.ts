@@ -22,7 +22,7 @@ import {
     listAccessTokensSpec,
     revokeAccessTokenSpec,
 } from './accessTokens.openapi.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ export function createAccessTokenRoutes(sessions : SessionManager, tokens : Acce
     router.post('/me/access-tokens', createAccessTokenSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const request = await readJsonBody(ctx, createAccessTokenRequestCodec);
+        const request = await readJSONBody(ctx, createAccessTokenRequestCodec);
 
         return ctx.json(await tokens.create(user, ctx.req.raw.headers, request), 201);
     });
@@ -56,7 +56,7 @@ export function createAccessTokenRoutes(sessions : SessionManager, tokens : Acce
     router.post('/me/playback-token', createPlaybackTokenSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const request = await readJsonBody(ctx, createPlaybackTokenRequestCodec);
+        const request = await readJSONBody(ctx, createPlaybackTokenRequestCodec);
 
         return ctx.json(await tokens.mintPlayback(user, ctx.req.raw.headers, request.previousID));
     });

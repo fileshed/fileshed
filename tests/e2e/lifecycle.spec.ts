@@ -3,7 +3,7 @@
 //
 // The trash/delete semantics walked end to end over real sockets, with the database and the blob store inspected at
 // each step: a file uploaded into a folder is trashed (hidden from the listing but still charged), restored (back in
-// the listing), then hard-deleted -- its node row gone and its now-unreferenced blob graveyarded (deleted_at set) with
+// the listing), then hard-deleted -- its node row gone and its now-unreferenced blob graveyarded (deleted set) with
 // the bytes still on disk pending GC. A separate lying-sha upload proves the store rejects mismatched bytes and leaves
 // nothing behind: no blob row, no node, no file, no staging orphan.
 //----------------------------------------------------------------------------------------------------------------------
@@ -14,7 +14,7 @@ import type { ClaimResponse, MeResponse, NodeListResponse, NodeResponse } from '
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerHandle,
     blobFileExists,
     sha256Of,
@@ -32,7 +32,7 @@ const data = smallFixture('lifecycle-file');
 const sha = sha256Of(data);
 
 let server : ServerHandle;
-let user : ApiClient;
+let user : APIClient;
 let userID : string;
 let folderID : string;
 let fileNodeID : string;
@@ -58,7 +58,7 @@ beforeAll(async () =>
 {
     server = await spawnServer();
 
-    user = new ApiClient(server.baseURL);
+    user = new APIClient(server.baseURL);
     await user.signUp('curator@example.com', PASSWORD);
     userID = (await (await user.get('/api/me')).json() as MeResponse).id;
 
@@ -131,15 +131,15 @@ describe('trash, restore, hard delete', () =>
             .executeTakeFirst());
         expect(node).toBeUndefined();
 
-        // Last reference gone -> the blob is graveyarded (deleted_at set), not yet purged: the bytes survive the grace
+        // Last reference gone -> the blob is graveyarded (deleted set), not yet purged: the bytes survive the grace
         // window for possible resurrection, and GC removes them later.
         const blob = await withDb(server, (db) => db
             .selectFrom('blob')
-            .select([ 'sha256', 'deleted_at' ])
+            .select([ 'sha256', 'deleted' ])
             .where('sha256', '=', sha)
             .executeTakeFirst());
         expect(blob).toBeDefined();
-        expect(blob?.deleted_at).not.toBeNull();
+        expect(blob?.deleted).not.toBeNull();
         expect(await blobFileExists(server.storageRoot, sha)).toBe(true);
 
         expect(await quotaUsed()).toBe(0);
@@ -195,13 +195,13 @@ describe('lying-sha upload', () =>
 // Shared helpers for the multi-user lifecycle scenarios below
 //----------------------------------------------------------------------------------------------------------------------
 
-async function idOf(client : ApiClient) : Promise<string>
+async function idOf(client : APIClient) : Promise<string>
 {
     return (await (await client.get('/api/me')).json() as MeResponse).id;
 }
 
 async function uploadInto(
-    client : ApiClient,
+    client : APIClient,
     parentID : string | null,
     name : string,
     bytes : Buffer
@@ -228,15 +228,15 @@ async function uploadInto(
 
 describe('trashing a shared folder', () =>
 {
-    let owner : ApiClient;
-    let recipient : ApiClient;
+    let owner : APIClient;
+    let recipient : APIClient;
     let sharedFolderID : string;
     let sharedChildID : string;
 
     beforeAll(async () =>
     {
-        owner = new ApiClient(server.baseURL);
-        recipient = new ApiClient(server.baseURL);
+        owner = new APIClient(server.baseURL);
+        recipient = new APIClient(server.baseURL);
         await owner.signUp('trash-owner@example.com', PASSWORD);
         await recipient.signUp('trash-recipient@example.com', PASSWORD);
         const recipientID = await idOf(recipient);
@@ -322,7 +322,7 @@ describe('restore to root', () =>
 
 describe('trash listing over the wire', () =>
 {
-    async function trashIDs(client : ApiClient) : Promise<string[]>
+    async function trashIDs(client : APIClient) : Promise<string[]>
     {
         const listing = await (await client.get('/api/trash')).json() as NodeListResponse;
         return listing.nodes.map((node) => node.id);
@@ -330,8 +330,8 @@ describe('trash listing over the wire', () =>
 
     it('lists trashed roots, hides nested trashed children, and clears on restore -- per caller', async () =>
     {
-        const owner = new ApiClient(server.baseURL);
-        const other = new ApiClient(server.baseURL);
+        const owner = new APIClient(server.baseURL);
+        const other = new APIClient(server.baseURL);
         await owner.signUp('trash-list-owner@example.com', PASSWORD);
         await other.signUp('trash-list-other@example.com', PASSWORD);
 
@@ -372,7 +372,7 @@ describe('trash listing over the wire', () =>
 
 describe('empty trash over the wire', () =>
 {
-    async function trashIDs(client : ApiClient) : Promise<string[]>
+    async function trashIDs(client : APIClient) : Promise<string[]>
     {
         const listing = await (await client.get('/api/trash')).json() as NodeListResponse;
         return listing.nodes.map((node) => node.id);
@@ -380,8 +380,8 @@ describe('empty trash over the wire', () =>
 
     it('purges every trashed root and reports the count, leaving another user\'s trash intact', async () =>
     {
-        const owner = new ApiClient(server.baseURL);
-        const other = new ApiClient(server.baseURL);
+        const owner = new APIClient(server.baseURL);
+        const other = new APIClient(server.baseURL);
         await owner.signUp('empty-trash-owner@example.com', PASSWORD);
         await other.signUp('empty-trash-other@example.com', PASSWORD);
 
@@ -417,8 +417,8 @@ describe('deletion offers over the wire', () =>
 {
     it('offers a copy on delete; accepting resurrects the blob into an owned node', async () =>
     {
-        const owner = new ApiClient(server.baseURL);
-        const recipient = new ApiClient(server.baseURL);
+        const owner = new APIClient(server.baseURL);
+        const recipient = new APIClient(server.baseURL);
         await owner.signUp('offer-owner@example.com', PASSWORD);
         await recipient.signUp('offer-recipient@example.com', PASSWORD);
         const recipientID = await idOf(recipient);
@@ -434,10 +434,10 @@ describe('deletion offers over the wire', () =>
         // Last reference gone: the blob is graveyarded, but its bytes ride the grace window on disk.
         const graveyarded = await withDb(server, (db) => db
             .selectFrom('blob')
-            .select('deleted_at')
+            .select('deleted')
             .where('sha256', '=', offerSha)
             .executeTakeFirstOrThrow());
-        expect(graveyarded.deleted_at).not.toBeNull();
+        expect(graveyarded.deleted).not.toBeNull();
         expect(await blobFileExists(server.storageRoot, offerSha)).toBe(true);
 
         // The recipient sees the offer and accepts it.
@@ -459,10 +459,10 @@ describe('deletion offers over the wire', () =>
         // Accepting cleared the graveyard marker (resurrection), bytes still in place.
         const resurrected = await withDb(server, (db) => db
             .selectFrom('blob')
-            .select('deleted_at')
+            .select('deleted')
             .where('sha256', '=', offerSha)
             .executeTakeFirstOrThrow());
-        expect(resurrected.deleted_at).toBeNull();
+        expect(resurrected.deleted).toBeNull();
         expect(await blobFileExists(server.storageRoot, offerSha)).toBe(true);
 
         // The offer is consumed -- it no longer lists.

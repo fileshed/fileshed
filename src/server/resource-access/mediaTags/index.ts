@@ -121,7 +121,7 @@ export class MediaTagsRA
             .distinct()
             .where('node.type', '=', 'file')
             .where(sql<string>`lower(node.mime_type)`, 'like', 'audio/%')
-            .where('blob.deleted_at', 'is', null)
+            .where('blob.deleted', 'is', null)
             .where('media_tags.blob_id', 'is', null)
             .limit(limit)
             .execute();

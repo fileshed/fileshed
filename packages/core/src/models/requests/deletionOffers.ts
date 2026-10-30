@@ -10,7 +10,7 @@ export interface DeletionOfferResponse
     mimeType : string;
     size : number;
     createdBy : string;
-    createdAt : string;
+    created : string;
     expiresAt : string;
 }
 

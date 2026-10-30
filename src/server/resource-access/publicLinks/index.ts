@@ -2,7 +2,7 @@
 // Public Link Resource Access
 //
 // getByToken fetches regardless of revoked_at: a revoked token still resolves, to a dead link, and the manager decides
-// what a dead link serves. Listings order by created_at, never by id (cuid2 is non-monotonic); id appears only as a
+// what a dead link serves. Listings order by created, never by id (cuid2 is non-monotonic); id appears only as a
 // tiebreak, so two links sharing a timestamp do not alternate between reads.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -25,7 +25,7 @@ function linkFromRow(row : Selectable<PublicLinkTable>) : PublicLink
         id: row.id,
         nodeID: row.node_id,
         token: row.token,
-        createdAt: new Date(row.created_at),
+        created: new Date(row.created),
         revokedAt: row.revoked_at === null ? null : new Date(row.revoked_at),
     };
 }
@@ -76,7 +76,7 @@ export class PublicLinkRA
             .selectFrom('public_link')
             .selectAll()
             .where('node_id', '=', nodeID)
-            .orderBy('created_at', 'asc')
+            .orderBy('created', 'asc')
             .execute();
 
         return rows.map(linkFromRow);
@@ -95,7 +95,7 @@ export class PublicLinkRA
             .selectAll()
             .where('node_id', 'in', nodeIDs)
             .where('revoked_at', 'is', null)
-            .orderBy('created_at', 'asc')
+            .orderBy('created', 'asc')
             .orderBy('id', 'asc')
             .execute();
 
@@ -120,7 +120,7 @@ export class PublicLinkRA
                 id: link.id,
                 node_id: link.nodeID,
                 token: link.token,
-                created_at: link.createdAt.toISOString(),
+                created: link.created.toISOString(),
                 revoked_at: link.revokedAt === null ? null : link.revokedAt.toISOString(),
             })
             .execute();

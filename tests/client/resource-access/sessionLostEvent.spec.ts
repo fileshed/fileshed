@@ -10,8 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 // Under test
-import { fetchNodeBlob, fetchNodeText } from '@client/resource-access/content.ts';
-import { SESSION_LOST_EVENT, requestJson } from '@client/resource-access/request.ts';
+import { getNodeBlob, getNodeText } from '@client/resource-access/content.ts';
+import { SESSION_LOST_EVENT, requestJSON } from '@client/resource-access/request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -42,11 +42,11 @@ describe('the session-lost announcement', () =>
         vi.restoreAllMocks();
     });
 
-    it('fires on a 401 and still throws the ApiError to the caller', async () =>
+    it('fires on a 401 and still throws the APIError to the caller', async () =>
     {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(401, { error: 'No session.' }));
 
-        await expect(requestJson('/api/me', { codec: z.unknown() })).rejects.toThrow('No session.');
+        await expect(requestJSON('/api/me', { codec: z.unknown() })).rejects.toThrow('No session.');
         expect(fired).toBe(1);
     });
 
@@ -54,7 +54,7 @@ describe('the session-lost announcement', () =>
     {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(403, { error: 'Not yours.' }));
 
-        await expect(requestJson('/api/admin/users', { codec: z.unknown() })).rejects.toThrow('Not yours.');
+        await expect(requestJSON('/api/admin/users', { codec: z.unknown() })).rejects.toThrow('Not yours.');
         expect(fired).toBe(0);
     });
 
@@ -64,8 +64,8 @@ describe('the session-lost announcement', () =>
     {
         vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(401, { error: 'No session.' }));
 
-        await expect(fetchNodeText('n1')).rejects.toThrow('No session.');
-        await expect(fetchNodeBlob('n1')).rejects.toThrow('No session.');
+        await expect(getNodeText('n1')).rejects.toThrow('No session.');
+        await expect(getNodeBlob('n1')).rejects.toThrow('No session.');
         expect(fired).toBe(2);
     });
 
@@ -73,7 +73,7 @@ describe('the session-lost announcement', () =>
     {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, { fine: true }));
 
-        await requestJson('/api/health', { codec: z.unknown() });
+        await requestJSON('/api/health', { codec: z.unknown() });
         expect(fired).toBe(0);
     });
 });

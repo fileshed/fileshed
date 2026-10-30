@@ -32,10 +32,10 @@
             <button
                 type="button"
                 class="hidden items-center gap-1 text-left hover:text-default sm:flex"
-                @click="emit('sort', 'updatedAt')"
+                @click="emit('sort', 'updated')"
             >
                 Modified
-                <UIcon v-if="sortKey === 'updatedAt'" :name="directionIcon" class="size-3.5" />
+                <UIcon v-if="sortKey === 'updated'" :name="directionIcon" class="size-3.5" />
             </button>
             <button
                 type="button"

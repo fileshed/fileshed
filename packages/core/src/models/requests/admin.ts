@@ -59,7 +59,7 @@ export interface TestEmailResponse
 // Listing query (GET /api/admin/users)
 //----------------------------------------------------------------------------------------------------------------------
 
-export const adminUserSortKeys = [ 'name', 'email', 'createdAt' ] as const;
+export const adminUserSortKeys = [ 'name', 'email', 'created' ] as const;
 export type AdminUserSortKey = typeof adminUserSortKeys[number];
 
 export const adminUserSearchFields = [ 'email', 'name' ] as const;
@@ -100,7 +100,7 @@ export interface AdminUserResponse
     banReason : string | null;
     banExpires : string | null;
     usedBytes : number;
-    createdAt : string;
+    created : string;
 }
 
 export interface AdminUserPageResponse

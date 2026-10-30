@@ -49,7 +49,7 @@ export const useSharedStore = defineStore('shared', () =>
         await readEntries(++generation);
     }
 
-    async function fetchListing() : Promise<void>
+    async function loadListing() : Promise<void>
     {
         const token = ++generation;
         loading.value = true;
@@ -76,7 +76,7 @@ export const useSharedStore = defineStore('shared', () =>
     async function load() : Promise<void>
     {
         filters.reset();
-        await fetchListing();
+        await loadListing();
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -86,19 +86,19 @@ export const useSharedStore = defineStore('shared', () =>
     async function setTypeFamilies(families : NodeTypeFamily[]) : Promise<void>
     {
         filters.typeFamilies.value = [ ...families ];
-        await fetchListing();
+        await loadListing();
     }
 
     async function setModified(next : ModifiedFilter | null) : Promise<void>
     {
         filters.modified.value = next;
-        await fetchListing();
+        await loadListing();
     }
 
     async function clearFilters() : Promise<void>
     {
         filters.reset();
-        await fetchListing();
+        await loadListing();
     }
 
     // Save a copy of a shared file into My Files (root), a fresh node the caller owns referencing the same content.

@@ -40,13 +40,13 @@
     import { THUMBNAIL_WIDTH } from '../../../../engines/pdf/types.ts';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfThumbnailRail' });
+    defineOptions({ name: 'PDFThumbnailRail' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const cells = ref<HTMLButtonElement[]>([]);
     const canvases = new Map<number, HTMLCanvasElement>();

@@ -28,7 +28,7 @@ import {
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerHandle,
     blobFileExists,
     sha256Of,
@@ -64,7 +64,7 @@ const collectibleSha = sha256Of(collectible);
 const lingering = smallFixture('sweep-now-lingering');
 
 let server : ServerHandle;
-let admin : ApiClient;
+let admin : APIClient;
 let lingeringNodeID : string;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -134,7 +134,7 @@ beforeAll(async () =>
 {
     server = await spawnServer({ env: { FILESHED_SETUP_TOKEN: SETUP_TOKEN, ...HELD_OPEN } });
 
-    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+    const setup = await new APIClient(server.baseURL).post('/api/setup', {
         token: SETUP_TOKEN,
         name: 'Admin',
         email: ADMIN_EMAIL,
@@ -142,7 +142,7 @@ beforeAll(async () =>
     });
     ensureOk(setup.status, 'expected first-run setup to succeed');
 
-    admin = new ApiClient(server.baseURL);
+    admin = new APIClient(server.baseURL);
     ensureOk((await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).status, 'expected the admin sign-in to succeed');
 
     // Trashed and emptied out: the node is gone and its blob graveyarded, but the open grace window means the bytes
@@ -271,7 +271,7 @@ describe('running a sweep from the admin surface', () =>
 
     it('refuses a caller who is not an admin', async () =>
     {
-        const member = new ApiClient(server.baseURL);
+        const member = new APIClient(server.baseURL);
         const signedUp = await member.signUp('sweep-now-member@fileshed.test', 'member-password-e2e');
         ensureOk(signedUp.status, 'expected the member sign-up to succeed');
 

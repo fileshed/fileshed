@@ -16,12 +16,12 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { NodeListResponse } from '@fileshed/core';
 
 // Resource Access
-import { ApiError, apiErrorFromBody } from '@client/resource-access/apiError.ts';
+import { APIError, apiErrorFromBody } from '@client/resource-access/apiError.ts';
 import { readDroppedPayload } from '@client/resource-access/browser/droppedEntries.ts';
 import { createNode, listChildren } from '@client/resource-access/nodes.ts';
 import { answerChallenge, claimBlob } from '@client/resource-access/blobs.ts';
 import { uploadChunked } from '@client/resource-access/chunkedUpload.ts';
-import { fetchMe } from '@client/resource-access/me.ts';
+import { getMe } from '@client/resource-access/me.ts';
 
 // Utils
 import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
@@ -55,7 +55,7 @@ vi.mock('@client/resource-access/browser/droppedEntries.ts', () => ({ readDroppe
 
 vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
 
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
@@ -67,7 +67,7 @@ const answerChallengeMock = answerChallenge as unknown as Mock;
 const uploadMock = uploadChunked as unknown as Mock;
 const hashFileMock = hashFile as unknown as Mock;
 const readWindowsMock = readSampleWindows as unknown as Mock;
-const fetchMeMock = fetchMe as unknown as Mock;
+const getMeMock = getMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -193,7 +193,7 @@ describe('useUploadsStore', () =>
     {
         mockHappyPipeline();
         const refreshedProfile = meFixture({ quota: { used: 4096, effective: 10_000, limit: 10_000 } });
-        fetchMeMock.mockResolvedValue(refreshedProfile);
+        getMeMock.mockResolvedValue(refreshedProfile);
 
         const store = useUploadsStore();
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -245,7 +245,7 @@ describe('useUploadsStore', () =>
         hashFileMock.mockResolvedValueOnce('sha-1');
         listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockRejectedValueOnce(new ApiError(403, 'You are over your storage quota.'));
+        uploadMock.mockRejectedValueOnce(new APIError(403, 'You are over your storage quota.'));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('too-big.txt') ], null);
@@ -399,7 +399,7 @@ describe('useUploadsStore', () =>
         hashFileMock.mockResolvedValue('sha-1');
         listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockRejectedValue(new ApiError(403, 'You are over your storage quota.'));
+        uploadMock.mockRejectedValue(new APIError(403, 'You are over your storage quota.'));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -448,7 +448,7 @@ describe('useUploadsStore', () =>
         hashFileMock.mockResolvedValue('sha-1');
         listChildrenMock.mockResolvedValue(listing(0));
         claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TKT', chunkBytes: CHUNK_BYTES });
-        uploadMock.mockRejectedValueOnce(new ApiError(503, 'Try again')).mockResolvedValue(fileNode({ id: 'n1' }));
+        uploadMock.mockRejectedValueOnce(new APIError(503, 'Try again')).mockResolvedValue(fileNode({ id: 'n1' }));
         const store = useUploadsStore();
 
         store.enqueue([ uploadFile('report.txt') ], null);
@@ -603,7 +603,7 @@ describe('useUploadsStore', () =>
     it('surfaces an uncreatable folder as an error row naming it, skipping what was inside', async () =>
     {
         mockHappyPipeline();
-        createNodeMock.mockRejectedValue(new ApiError(403, 'read only'));
+        createNodeMock.mockRejectedValue(new APIError(403, 'read only'));
 
         const store = useUploadsStore();
         await store.enqueuePayload({
@@ -621,7 +621,7 @@ describe('useUploadsStore', () =>
     it('leaves an uncreatable folder\'s row failed when it is retried, uploading nothing', async () =>
     {
         mockHappyPipeline();
-        createNodeMock.mockRejectedValue(new ApiError(403, 'read only'));
+        createNodeMock.mockRejectedValue(new APIError(403, 'read only'));
         const store = useUploadsStore();
         await store.enqueuePayload({
             files: [],

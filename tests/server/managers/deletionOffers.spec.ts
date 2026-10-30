@@ -84,7 +84,7 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
             grantee_user_id: granteeID,
             role,
             created_by: 'alice',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }
@@ -110,10 +110,10 @@ async function offerRows() : Promise<{ offeree_id : string, name : string, sha25
 
 async function blobDeletedAt(sha256 : string) : Promise<string | Date | null>
 {
-    const row = await handle.db.selectFrom('blob').select('deleted_at')
+    const row = await handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 async function seedOffer(init : Partial<DeletionOffer> = {}) : Promise<string>
@@ -127,7 +127,7 @@ async function seedOffer(init : Partial<DeletionOffer> = {}) : Promise<string>
         mimeType: 'application/pdf',
         size: 10,
         createdBy: 'alice',
-        createdAt: new Date(),
+        created: new Date(),
         expiresAt: new Date(Date.now() + GRACE_MS),
         ...init,
     } ]);

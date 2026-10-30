@@ -18,7 +18,7 @@ import type { RouteLocationRaw } from 'vue-router';
 
 export interface GuardSession
 {
-    initialize() : Promise<void>;
+    init() : Promise<void>;
     isAuthenticated : boolean;
     isAdmin : boolean;
     isClosing : boolean;
@@ -73,7 +73,7 @@ export function createAuthGuard(getSession : () => GuardSession) : AuthGuard
     return async (to) =>
     {
         const session = getSession();
-        await session.initialize();
+        await session.init();
 
         return guardDecision(to, session);
     };

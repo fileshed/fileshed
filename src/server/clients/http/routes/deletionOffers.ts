@@ -17,7 +17,7 @@ import {
     declineDeletionOfferSpec,
     listDeletionOffersSpec,
 } from './deletionOffers.openapi.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ export function createDeletionOfferRoutes(sessions : SessionManager, offers : De
     router.post('/deletion-offers/:id/accept', acceptDeletionOfferSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.filesWrite);
-        const request = await readJsonBody(ctx, acceptDeletionOfferRequestCodec);
+        const request = await readJSONBody(ctx, acceptDeletionOfferRequestCodec);
 
         return ctx.json(await offers.accept(actor.user, ctx.req.param('id'), request), 201);
     });

@@ -151,17 +151,17 @@
     } from '../../../engines/pdf/types.ts';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfParamsPopover' });
+    defineOptions({ name: 'PDFParamsPopover' });
 
     defineProps<{
         mode : AnnotationMode;
     }>();
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     //------------------------------------------------------------------------------------------------------------------
 

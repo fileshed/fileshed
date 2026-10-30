@@ -26,7 +26,7 @@ import FilePicker from '@client/components/drive/filePicker.vue';
 
 vi.mock('@client/resource-access/authClient.ts', () => ({ authClient: { updateUser: vi.fn() } }));
 vi.mock('@client/resource-access/avatar.ts', () => ({ uploadAvatar: vi.fn(), deleteAvatar: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 vi.mock('@client/resource-access/nodes.ts', () => ({ listChildren: vi.fn() }));
 
 const listChildrenMock = listChildren as unknown as Mock;

@@ -27,7 +27,21 @@ import { type Auth, type SessionUser, deleteAccessTokensFor, deletePendingAccoun
 
 // The admin plugin types a mutation's result as UserWithRole, which does not statically carry app-level
 // additionalFields; quota_limit is present at runtime (it is a real column), so the type is widened to admit it.
-export type AdminUser = Awaited<ReturnType<Auth['api']['banUser']>>['user'] & { quotaLimit ?: number | null };
+type PluginUser = Awaited<ReturnType<Auth['api']['banUser']>>['user'] & { quotaLimit ?: number | null };
+
+// The plugin's user as a mutation answers it, with better-auth's createdAt read into created.
+export interface AdminUser
+{
+    id : string;
+    email : string;
+    name : string;
+    role ?: string | null;
+    quotaLimit ?: number | null;
+    banned ?: boolean | null;
+    banReason ?: string | null;
+    banExpires ?: Date | null;
+    created : Date;
+}
 
 export interface AccessKey
 {
@@ -35,7 +49,7 @@ export interface AccessKey
     name : string | null;
     start : string | null;
     permissions : PermissionStatement;
-    createdAt : Date;
+    created : Date;
     lastUsedAt : Date | null;
     expiresAt : Date | null;
 }
@@ -57,7 +71,7 @@ export interface MintedKey
     key : AccessKey;
 }
 
-export interface VerifiedKey
+export interface ValidKey
 {
     userID : string;
     permissions : PermissionStatement;
@@ -77,6 +91,21 @@ export interface NewAccount
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+
+function toAdminUser(user : PluginUser) : AdminUser
+{
+    return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        quotaLimit: user.quotaLimit,
+        banned: user.banned,
+        banReason: user.banReason,
+        banExpires: user.banExpires,
+        created: user.createdAt,
+    };
+}
 
 function refusalFor(error : unknown, missing ?: string) : Error | null
 {
@@ -158,7 +187,7 @@ export class AuthRA
     }
 
     // Read through better-auth's own adapter, so the row carries every field its session user does.
-    async findUser(userID : string) : Promise<SessionUser | null>
+    async getUser(userID : string) : Promise<SessionUser | null>
     {
         const context = await this.#auth.$context;
         const user = await context.internalAdapter.findUserById(userID);
@@ -230,7 +259,7 @@ export class AuthRA
                 name: created.name ?? null,
                 start: created.start ?? null,
                 permissions: permissionsOf(created.permissions),
-                createdAt: created.createdAt,
+                created: created.createdAt,
                 lastUsedAt: null,
                 expiresAt: created.expiresAt ?? null,
             },
@@ -247,7 +276,7 @@ export class AuthRA
             name: key.name ?? null,
             start: key.start ?? null,
             permissions: permissionsOf(key.permissions),
-            createdAt: key.createdAt,
+            created: key.createdAt,
             lastUsedAt: key.lastRequest ?? null,
             expiresAt: key.expiresAt ?? null,
         }));
@@ -276,7 +305,7 @@ export class AuthRA
     // Null for any key the plugin will not vouch for, under-scoped for `required` included -- every 4xx it answers a
     // verify with means the same thing to the caller. One plugin call, never getSession, which would count the key's
     // use twice.
-    async verifyKey(token : string, configID : string, required ?: PermissionStatement) : Promise<VerifiedKey | null>
+    async validateKey(token : string, configID : string, required ?: PermissionStatement) : Promise<ValidKey | null>
     {
         let result;
         try
@@ -305,10 +334,10 @@ export class AuthRA
 
     async setQuota(headers : Headers, userID : string, quotaLimit : number | null) : Promise<AdminUser>
     {
-        return translated(
+        return toAdminUser(await translated(
             () => this.#auth.api.adminUpdateUser({ body: { userId: userID, data: { quotaLimit } }, headers }),
             `No user ${ userID }.`
-        );
+        ));
     }
 
     async ban(headers : Headers, userID : string, terms : BanTerms) : Promise<AdminUser>
@@ -322,7 +351,7 @@ export class AuthRA
             headers,
         }), `No user ${ userID }.`);
 
-        return user;
+        return toAdminUser(user);
     }
 
     async unban(headers : Headers, userID : string) : Promise<AdminUser>
@@ -332,7 +361,7 @@ export class AuthRA
             `No user ${ userID }.`
         );
 
-        return user;
+        return toAdminUser(user);
     }
 
     async setRole(headers : Headers, userID : string, role : UserRole) : Promise<AdminUser>
@@ -342,7 +371,7 @@ export class AuthRA
             `No user ${ userID }.`
         );
 
-        return user;
+        return toAdminUser(user);
     }
 
     async setPassword(headers : Headers, userID : string, password : string) : Promise<void>

@@ -102,13 +102,13 @@ export interface AccessScope
 // The column holding each field the listing order names. Which fields a key sorts by, in what order, is core's to
 // say -- this is only where those fields live, and the mapping is what keeps a caller's sort key from ever reaching
 // orderBy as raw SQL.
-type SortColumn = 'name' | 'size' | 'created_at' | 'updated_at' | 'type' | 'mime_type';
+type SortColumn = 'name' | 'size' | 'created' | 'updated' | 'type' | 'mime_type';
 
 const sortColumnOf : Record<ListingSortField, SortColumn> = {
     name: 'name',
     size: 'size',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
+    created: 'created',
+    updated: 'updated',
     type: 'type',
     mimeType: 'mime_type',
 };
@@ -160,7 +160,7 @@ type NodeConditions = (eb : NodeExpressionBuilder) => Expression<SqlBool>[];
 // The columns the in-Node ordering reads and nothing more: the whole selection crosses the wire to be ordered, and
 // the page's rows are fetched by id once the order is known. Timestamps are compared as the fixed-width UTC text
 // SQLite stores them as, which is how the client compares them too.
-const SORT_KEY_COLUMNS = [ 'id', 'name', 'type', 'size', 'mime_type', 'created_at', 'updated_at' ] as const;
+const SORT_KEY_COLUMNS = [ 'id', 'name', 'type', 'size', 'mime_type', 'created', 'updated' ] as const;
 
 interface SortKeyRow
 {
@@ -169,8 +169,8 @@ interface SortKeyRow
     type : Database['node']['type'];
     size : number | null;
     mime_type : string | null;
-    created_at : string | Date;
-    updated_at : string | Date;
+    created : string | Date;
+    updated : string | Date;
 }
 
 function orderRow(row : SortKeyRow) : ListingOrderRow
@@ -181,8 +181,8 @@ function orderRow(row : SortKeyRow) : ListingOrderRow
         type: row.type,
         size: row.size,
         mimeType: row.mime_type,
-        createdAt: String(row.created_at),
-        updatedAt: String(row.updated_at),
+        created: String(row.created),
+        updated: String(row.updated),
     };
 }
 
@@ -235,7 +235,7 @@ function hasFilters(filters : NodeFilters) : boolean
 }
 
 // The AND of every active filter. Selected families OR together into one term; owner and the date bounds add their own.
-// updated_at is stored as an ISO string (SQLite) or a timestamp (Postgres) and both compare correctly against an ISO
+// updated is stored as an ISO string (SQLite) or a timestamp (Postgres) and both compare correctly against an ISO
 // bound, the same crossing expiredTrashRootIDs relies on.
 function filterConditions(eb : NodeExpressionBuilder, filters : NodeFilters) : Expression<SqlBool>[]
 {
@@ -249,11 +249,11 @@ function filterConditions(eb : NodeExpressionBuilder, filters : NodeFilters) : E
     if(filters.name !== undefined) { conditions.push(eb('name', '=', filters.name)); }
     if(filters.updatedAfter !== undefined)
     {
-        conditions.push(eb('updated_at', '>=', filters.updatedAfter.toISOString()));
+        conditions.push(eb('updated', '>=', filters.updatedAfter.toISOString()));
     }
     if(filters.updatedBefore !== undefined)
     {
-        conditions.push(eb('updated_at', '<', filters.updatedBefore.toISOString()));
+        conditions.push(eb('updated', '<', filters.updatedBefore.toISOString()));
     }
 
     return conditions;
@@ -865,7 +865,7 @@ export class NodeRA
     {
         await this.#db
             .updateTable('node')
-            .set({ name, updated_at: new Date().toISOString() })
+            .set({ name, updated: new Date().toISOString() })
             .where('id', '=', id)
             .execute();
     }
@@ -874,21 +874,21 @@ export class NodeRA
     {
         await this.#db
             .updateTable('node')
-            .set({ parent_id: newParentID, updated_at: new Date().toISOString() })
+            .set({ parent_id: newParentID, updated: new Date().toISOString() })
             .where('id', '=', id)
             .execute();
     }
 
-    // Repoint a file node at new content: its blob, logical size, and mime type, bumping updated_at. Name, parent, and
+    // Repoint a file node at new content: its blob, logical size, and mime type, bumping updated. Name, parent, and
     // owner never change -- a replace overwrites bytes in place so the node keeps its id and every link and share
     // pointing at it stays valid. Runs inside the commit transaction alongside the blob write and the old-blob
     // graveyard sweep, so the reference move and the record write commit together.
-    async replaceContent(id : string, blobID : string, size : number, mimeType : string, updatedAt : Date)
+    async replaceContent(id : string, blobID : string, size : number, mimeType : string, updated : Date)
     : Promise<void>
     {
         await this.#db
             .updateTable('node')
-            .set({ blob_id: blobID, size, mime_type: mimeType, updated_at: updatedAt.toISOString() })
+            .set({ blob_id: blobID, size, mime_type: mimeType, updated: updated.toISOString() })
             .where('id', '=', id)
             .execute();
     }

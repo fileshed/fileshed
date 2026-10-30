@@ -7,8 +7,6 @@
 // row that is not JSON is refused the same way, as a corrupt row.
 //----------------------------------------------------------------------------------------------------------------------
 
-/* eslint-disable camelcase -- a seeded row names snake_case DB columns (house convention for Kysely inserts) */
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Models
@@ -75,7 +73,7 @@ describe('SettingsRA reads', () =>
     {
         await handle.db
             .insertInto('instance_setting')
-            .values({ key: 'INSTANCE_NAME', value: '{not json', updated_at: new Date().toISOString() })
+            .values({ key: 'INSTANCE_NAME', value: '{not json', updated: new Date().toISOString() })
             .execute();
     });
 

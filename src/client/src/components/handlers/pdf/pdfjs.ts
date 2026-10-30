@@ -43,7 +43,7 @@ import {
     type FindQuery,
     type OutlineDestination,
     type OutlineEntry,
-    type PdfAttachment,
+    type PDFAttachment,
     type ScrollModeName,
     type SpreadModeName,
     highlightColors,
@@ -92,13 +92,13 @@ const SPREAD_MODE : Record<SpreadModeName, number>
 // Handed nothing, the toolbar silently falls back to a delete button alone and a highlight can never be recoloured
 // after it is drawn. pdf.js parses the list itself, as comma-separated name=#hex pairs, so the swatches the params
 // popover offers are reused here rather than a second palette being written down beside them.
-const HIGHLIGHT_PALETTE = highlightColors
+const highlightPalette = highlightColors
     .map(({ name, value }) => `${ name.toLowerCase() }=${ value }`)
     .join(',');
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export interface PdfSessionCallbacks
+export interface PDFSessionCallbacks
 {
     onPage : (current : number, total : number) => void;
     onDirty : (dirty : boolean) => void;
@@ -107,11 +107,11 @@ export interface PdfSessionCallbacks
     onAltText : (request : AltTextRequest) => void;
 }
 
-export interface PdfSession
+export interface PDFSession
 {
     // Read once when the document opens; none of the three changes while it is open.
     outline : OutlineEntry[];
-    attachments : PdfAttachment[];
+    attachments : PDFAttachment[];
     properties : DocumentProperties;
 
     setMode : (mode : AnnotationMode) => void;
@@ -134,13 +134,13 @@ export interface PdfSession
     destroy : () => void;
 }
 
-export interface PdfSessionOptions
+export interface PDFSessionOptions
 {
     container : HTMLDivElement;
     viewer : HTMLDivElement;
     data : Uint8Array;
     readOnly : boolean;
-    callbacks : PdfSessionCallbacks;
+    callbacks : PDFSessionCallbacks;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -245,7 +245,7 @@ function createReadyGate<K extends string>(order : readonly K[]) : ReadyGate<K>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfSession>
+export async function openPDFSession(options : PDFSessionOptions) : Promise<PDFSession>
 {
     const { container, viewer, data, readOnly, callbacks } = options;
 
@@ -284,7 +284,7 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
         linkService,
         findController,
         annotationEditorMode: readOnly ? AnnotationEditorType.DISABLE : AnnotationEditorType.NONE,
-        annotationEditorHighlightColors: HIGHLIGHT_PALETTE,
+        annotationEditorHighlightColors: highlightPalette,
         altTextManager,
     } as ViewerOptions);
     linkService.setViewer(pdfViewer);
@@ -426,7 +426,7 @@ export async function openPdfSession(options : PdfSessionOptions) : Promise<PdfS
         () => pdfDocument.getAttachments() as Promise<Map<string, RawAttachment> | null>,
         null
     );
-    const attachments : PdfAttachment[] = [ ...(rawAttachments ?? new Map<string, RawAttachment>()) ]
+    const attachments : PDFAttachment[] = [ ...(rawAttachments ?? new Map<string, RawAttachment>()) ]
         .map(([ id, entry ]) => ({ id, filename: entry.filename, description: entry.description }));
 
     const info = await attempt<RawDocumentInfo>(

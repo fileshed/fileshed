@@ -33,7 +33,7 @@
         </div>
 
         <ul v-if="expanded && entry.items.length > 0" class="ml-3 border-l border-default pl-1">
-            <PdfOutlineBranch v-for="child in entry.items" :key="child.id" :entry="child" />
+            <PDFOutlineBranch v-for="child in entry.items" :key="child.id" :entry="child" />
         </ul>
     </li>
 </template>
@@ -47,17 +47,17 @@
     import type { OutlineEntry } from '../../../../engines/pdf/types.ts';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfOutlineBranch' });
+    defineOptions({ name: 'PDFOutlineBranch' });
 
     const props = defineProps<{
         entry : OutlineEntry;
     }>();
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     // Outlines in the wild carry blank titles; a row with no label is unclickable and looks broken.
     const title = computed(() =>

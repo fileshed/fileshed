@@ -34,7 +34,7 @@ async function patchBranding(app : Hono, cookie : string, patch : Record<string,
     });
 }
 
-async function getCss(app : Hono, etag ?: string) : Promise<Response>
+async function getCSS(app : Hono, etag ?: string) : Promise<Response>
 {
     return app.request(`${ ORIGIN }/api/branding.css`, { headers: etag ? { 'if-none-match': etag } : {} });
 }
@@ -117,7 +117,7 @@ describe('GET /api/branding.css', () =>
     {
         const booted = await boot();
 
-        const res = await getCss(booted.app);
+        const res = await getCSS(booted.app);
         expect(res.status).toBe(200);
         expect(res.headers.get('content-type')).toContain('text/css');
         expect(await res.text()).toBe('');
@@ -130,7 +130,7 @@ describe('GET /api/branding.css', () =>
 
         await patchBranding(booted.app, cookie, { primary: '#3b82f6', customCSS: '.x { color: red; }' });
 
-        const css = await (await getCss(booted.app)).text();
+        const css = await (await getCSS(booted.app)).text();
         expect(css).toContain('--ui-color-primary-500: #3b82f6;');
         expect(css).toContain('.x { color: red; }');
     });
@@ -140,14 +140,14 @@ describe('GET /api/branding.css', () =>
         const booted = await boot();
         const cookie = await makeAdmin(booted, 'root@example.com', 'correct-horse-battery');
 
-        const first = await getCss(booted.app);
+        const first = await getCSS(booted.app);
         const etag = first.headers.get('etag');
         expect(etag).not.toBeNull();
 
-        expect((await getCss(booted.app, etag ?? '')).status).toBe(304);
+        expect((await getCSS(booted.app, etag ?? '')).status).toBe(304);
 
         await patchBranding(booted.app, cookie, { primary: '#3b82f6' });
-        const changed = await getCss(booted.app, etag ?? '');
+        const changed = await getCSS(booted.app, etag ?? '');
         expect(changed.status).toBe(200);
         expect(changed.headers.get('etag')).not.toBe(etag);
     });

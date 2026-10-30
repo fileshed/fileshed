@@ -15,7 +15,7 @@ import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
 import { emptyTrash, listTrash } from '@client/resource-access/nodes.ts';
-import { fetchMe } from '@client/resource-access/me.ts';
+import { getMe } from '@client/resource-access/me.ts';
 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
@@ -33,16 +33,16 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     emptyTrash: vi.fn(),
 }));
 
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 
 const listTrashMock = listTrash as unknown as Mock;
 const emptyTrashMock = emptyTrash as unknown as Mock;
-const fetchMeMock = fetchMe as unknown as Mock;
+const getMeMock = getMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const ISO = '2026-07-01T00:00:00.000Z';
-const TRASHED = { trashedAt: ISO };
+const trashed = { trashedAt: ISO };
 
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
@@ -63,8 +63,8 @@ describe('useTrashStore.emptyAll', () =>
     {
         const store = useTrashStore();
         listTrashMock.mockResolvedValue(page([
-            folderNode({ ...TRASHED, id: 'a' }),
-            folderNode({ ...TRASHED, id: 'b' }),
+            folderNode({ ...trashed, id: 'a' }),
+            folderNode({ ...trashed, id: 'b' }),
         ]));
         await store.load();
 
@@ -80,7 +80,7 @@ describe('useTrashStore.emptyAll', () =>
     it('leaves the listing untouched when the purge itself fails', async () =>
     {
         const store = useTrashStore();
-        listTrashMock.mockResolvedValue(page([ folderNode({ ...TRASHED, id: 'a' }) ]));
+        listTrashMock.mockResolvedValue(page([ folderNode({ ...trashed, id: 'a' }) ]));
         await store.load();
 
         emptyTrashMock.mockRejectedValue(new Error('boom'));
@@ -94,10 +94,10 @@ describe('useTrashStore.emptyAll', () =>
     it('refreshes the session quota after emptying, so the gauge drops', async () =>
     {
         const refreshedProfile = meFixture({ quota: { used: 0, effective: 10_000, limit: 10_000 } });
-        fetchMeMock.mockResolvedValue(refreshedProfile);
+        getMeMock.mockResolvedValue(refreshedProfile);
 
         const store = useTrashStore();
-        listTrashMock.mockResolvedValue(page([ folderNode({ ...TRASHED, id: 'a' }) ]));
+        listTrashMock.mockResolvedValue(page([ folderNode({ ...trashed, id: 'a' }) ]));
         await store.load();
 
         emptyTrashMock.mockResolvedValue({ purged: 1 });
@@ -122,8 +122,8 @@ describe('useTrashStore — filters', () =>
     it('narrows the listing in hand by type without asking the server', async () =>
     {
         listTrashMock.mockResolvedValue(page([
-            fileNode({ ...TRASHED, id: 'doc', mimeType: 'text/plain' }),
-            fileNode({ ...TRASHED, id: 'pic', mimeType: 'image/png' }),
+            fileNode({ ...trashed, id: 'doc', mimeType: 'text/plain' }),
+            fileNode({ ...trashed, id: 'pic', mimeType: 'image/png' }),
         ]));
         const store = useTrashStore();
         await store.load();
@@ -139,8 +139,8 @@ describe('useTrashStore — filters', () =>
 
     it('narrows the listing in hand by modified date without asking the server', async () =>
     {
-        const recent = fileNode({ ...TRASHED, id: 'recent', updatedAt: new Date().toISOString() });
-        listTrashMock.mockResolvedValue(page([ fileNode({ ...TRASHED, id: 'ancient' }), recent ]));
+        const recent = fileNode({ ...trashed, id: 'recent', updated: new Date().toISOString() });
+        listTrashMock.mockResolvedValue(page([ fileNode({ ...trashed, id: 'ancient' }), recent ]));
         const store = useTrashStore();
         await store.load();
         listTrashMock.mockClear();
@@ -154,8 +154,8 @@ describe('useTrashStore — filters', () =>
     it('brings back every filtered-out row on clearFilters', async () =>
     {
         listTrashMock.mockResolvedValue(page([
-            fileNode({ ...TRASHED, id: 'doc', mimeType: 'text/plain' }),
-            fileNode({ ...TRASHED, id: 'pic', mimeType: 'image/png' }),
+            fileNode({ ...trashed, id: 'doc', mimeType: 'text/plain' }),
+            fileNode({ ...trashed, id: 'pic', mimeType: 'image/png' }),
         ]));
         const store = useTrashStore();
         await store.load();

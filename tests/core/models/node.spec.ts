@@ -21,8 +21,8 @@ describe('nodeCodec', () =>
             mimeType: 'application/pdf',
             blobID: 'blob_1',
             size: 2048,
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            updated: new Date('2026-01-02T00:00:00.000Z'),
             trashedAt: null,
         };
 
@@ -39,8 +39,8 @@ describe('nodeCodec', () =>
             name: 'Photos',
             ownerID: 'user_1',
             parentID: null,
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            updated: new Date('2026-01-01T00:00:00.000Z'),
             trashedAt: null,
         };
 
@@ -58,8 +58,8 @@ describe('nodeCodec', () =>
             ownerID: 'user_2',
             parentID: 'node_folder_1',
             targetNodeID: 'node_file_1',
-            createdAt: new Date('2026-01-03T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+            created: new Date('2026-01-03T00:00:00.000Z'),
+            updated: new Date('2026-01-03T00:00:00.000Z'),
         };
 
         const result = nodeCodec.safeParse(linkNode);
@@ -78,8 +78,8 @@ describe('nodeCodec', () =>
             ownerID: 'user_2',
             parentID: null,
             blobID: 'blob_1',
-            createdAt: new Date('2026-01-03T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+            created: new Date('2026-01-03T00:00:00.000Z'),
+            updated: new Date('2026-01-03T00:00:00.000Z'),
         };
 
         const result = nodeCodec.safeParse(malformedLink);
@@ -97,8 +97,8 @@ describe('nodeCodec', () =>
             ownerID: 'user_1',
             parentID: null,
             size: 4096,
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            updated: new Date('2026-01-01T00:00:00.000Z'),
             trashedAt: null,
         };
 
@@ -117,8 +117,8 @@ describe('nodeCodec', () =>
             ownerID: 'user_1',
             parentID: null,
             mimeType: 'inode/directory',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            updated: new Date('2026-01-01T00:00:00.000Z'),
             trashedAt: null,
         };
 
@@ -138,8 +138,8 @@ describe('nodeCodec', () =>
             ownerID: 'user_2',
             parentID: null,
             targetNodeID: 'node_file_1',
-            createdAt: new Date('2026-01-03T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+            created: new Date('2026-01-03T00:00:00.000Z'),
+            updated: new Date('2026-01-03T00:00:00.000Z'),
             trashedAt: null,
         };
 
@@ -157,8 +157,8 @@ describe('nodeCodec', () =>
             name: 'Mystery',
             ownerID: 'user_1',
             parentID: null,
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            updated: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         const result = nodeCodec.safeParse(unknownTypeNode);
@@ -177,8 +177,8 @@ describe('isHiddenTrash', () =>
         name: 'Shared',
         ownerID: 'owner',
         parentID: null,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        created: new Date('2026-01-01T00:00:00.000Z'),
+        updated: new Date('2026-01-01T00:00:00.000Z'),
         trashedAt,
     });
 
@@ -204,8 +204,8 @@ describe('isHiddenTrash', () =>
             ownerID: 'owner',
             parentID: null,
             targetNodeID: 'node_folder',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            updated: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(isHiddenTrash(link, 'recipient')).toBe(false);

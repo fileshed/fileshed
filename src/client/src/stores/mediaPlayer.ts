@@ -45,7 +45,7 @@ import {
     selectAt,
     trackForPlay,
     trackFromNode,
-    trackFromUrl,
+    trackFromURL,
     tracksOf,
     unplayedIndexes,
     withEntryFailed,
@@ -53,7 +53,7 @@ import {
 
 // Resource Access
 import { mintPlaybackToken } from '../resource-access/accessTokens.ts';
-import { fetchNodeBlob } from '../resource-access/content.ts';
+import { getNodeBlob } from '../resource-access/content.ts';
 import { type MediaTags, readMediaTags, releaseMediaTags } from '../resource-access/mediaTags.ts';
 import { getNode, listChildren } from '../resource-access/nodes.ts';
 
@@ -132,7 +132,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // question gets the same answer at the moment it asks.
     function blocksRemote(entry : MediaTrack) : boolean
     {
-        return entry.remoteUrl !== null && !session.allowRemoteMedia;
+        return entry.remoteURL !== null && !session.allowRemoteMedia;
     }
 
     const track = computed(() => queue.value?.current ?? null);
@@ -429,7 +429,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // remount the same track rather than letting the skip path eat the queue. (Playback position is not restored;
     // only a single file outlasting the whole token lifetime can land here.) A genuine media failure marks the
     // seat before skipping, so queue-driven playback never walks into it again -- a deliberate click retries.
-    function handleTrackError() : void
+    function onTrackError() : void
     {
         const stamp = playbackToken.value;
         if(stamp !== null && stamp.expiresAt <= Date.now())
@@ -508,7 +508,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     {
         if(entry.url !== null)
         {
-            const remote = trackFromUrl(entry.url, nextEntryID());
+            const remote = trackFromURL(entry.url, nextEntryID());
 
             return entry.title === null ? remote : { ...remote, name: entry.title };
         }
@@ -546,7 +546,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         for(const entry of list)
         {
             queue.value = queue.value === null ? queueFromTrack(entry) : appendTrack(queue.value, entry);
-            if(entry.remoteUrl === null && !entry.broken) { loadTags(entry); }
+            if(entry.remoteURL === null && !entry.broken) { loadTags(entry); }
         }
     }
 
@@ -561,7 +561,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
 
         try
         {
-            const text = await (await fetchNodeBlob(node.id)).text();
+            const text = await (await getNodeBlob(node.id)).text();
             const { title, entries } = parsePlaylist(text);
 
             const list : MediaTrack[] = [];
@@ -640,9 +640,9 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
 
         for(const entry of tracks.value.filter((candidate) => !candidate.broken))
         {
-            if(entry.remoteUrl !== null)
+            if(entry.remoteURL !== null)
             {
-                rows.push({ nodeID: null, url: entry.remoteUrl, relativePath: null, title: rowTitle(entry) });
+                rows.push({ nodeID: null, url: entry.remoteURL, relativePath: null, title: rowTitle(entry) });
             }
             else
             {
@@ -833,7 +833,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         previous,
         advance,
         beginCasting,
-        handleTrackError,
+        onTrackError,
         toggleShuffle,
         cycleRepeat,
         openPlaylistNode,

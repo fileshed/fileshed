@@ -16,7 +16,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { NodeResponse } from '@fileshed/core';
 
 // Engines
-import { queueFromTrack, trackFromUrl } from '@client/engines/media/queue.ts';
+import { queueFromTrack, trackFromURL } from '@client/engines/media/queue.ts';
 
 // Stores
 import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
@@ -43,7 +43,7 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     // The identity bar reads the playing track's sharing off the node it fetches, so this has to answer a node.
     getNode: vi.fn(async (id : string) => ({ id, sharing: null })),
 }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@client/resource-access/accessTokens.ts', () => ({
     mintPlaybackToken: vi.fn(() => Promise.reject(new Error('no token in this spec'))),
 }));
@@ -127,7 +127,7 @@ describe('MediaPlayer surfaces', () =>
         const store = useMediaPlayerStore();
         const wrapper = mountPlayer(fileNode(AUDIO));
 
-        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3', 'seat-1'));
+        store.queue = queueFromTrack(trackFromURL('https://radio.example/live.mp3', 'seat-1'));
         await wrapper.vm.$nextTick();
 
         expect(wrapper.get('audio').attributes('src')).toBe('');
@@ -140,7 +140,7 @@ describe('MediaPlayer surfaces', () =>
         const store = useMediaPlayerStore();
         const wrapper = mountPlayer(fileNode(AUDIO));
 
-        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3', 'seat-1'));
+        store.queue = queueFromTrack(trackFromURL('https://radio.example/live.mp3', 'seat-1'));
         await wrapper.vm.$nextTick();
 
         expect(wrapper.get('audio').attributes('src')).toBe('https://radio.example/live.mp3');
@@ -183,7 +183,7 @@ describe('MediaPlayer surfaces', () =>
             title: 'Neon Skyline',
             artist: 'The Sample Band',
             album: 'Fixtures',
-            artworkUrl: 'blob:fake-cover',
+            artworkURL: 'blob:fake-cover',
         });
 
         const wrapper = mountPlayer(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }));

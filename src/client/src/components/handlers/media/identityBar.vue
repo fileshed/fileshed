@@ -56,7 +56,7 @@
     const downloadableID = computed<string | null>(() =>
     {
         const track = store.track;
-        if(track === null || track.remoteUrl !== null || track.broken) { return null; }
+        if(track === null || track.remoteURL !== null || track.broken) { return null; }
 
         return track.nodeID;
     });

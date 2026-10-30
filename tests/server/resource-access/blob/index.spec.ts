@@ -28,9 +28,9 @@ let handle : DatabaseHandle;
 let db : Kysely<Database>;
 let ra : BlobRA;
 
-const PAST = new Date('2020-01-01T00:00:00.000Z').toISOString();
+const past = new Date('2020-01-01T00:00:00.000Z').toISOString();
 
-async function seedBlobRow(sha256 : string, deletedAt : string | null) : Promise<void>
+async function seedBlobRow(sha256 : string, deleted : string | null) : Promise<void>
 {
     await db
         .insertInto('blob')
@@ -39,15 +39,15 @@ async function seedBlobRow(sha256 : string, deletedAt : string | null) : Promise
             size: 128,
             backend_id: 'be1',
             storage_key: sha256,
-            created_at: new Date().toISOString(),
-            deleted_at: deletedAt,
+            created: new Date().toISOString(),
+            deleted,
         })
         .execute();
 }
 
 async function deletedAtOf(sha256 : string) : Promise<Date | null | undefined>
 {
-    return (await ra.get(sha256))?.deletedAt;
+    return (await ra.get(sha256))?.deleted;
 }
 
 beforeEach(async () =>
@@ -83,11 +83,11 @@ describe('BlobRA.graveyardUnreferenced', () =>
 
     it('does not reset the grace clock of an already-graveyarded blob', async () =>
     {
-        await seedBlobRow('sha-old', PAST);
+        await seedBlobRow('sha-old', past);
 
         await ra.graveyardUnreferenced([ 'sha-old' ]);
 
-        expect((await deletedAtOf('sha-old'))?.toISOString()).toBe(PAST);
+        expect((await deletedAtOf('sha-old'))?.toISOString()).toBe(past);
     });
 });
 
@@ -160,7 +160,7 @@ describe('BlobRA resurrection', () =>
 {
     it('clears the graveyard marker when insertOrResurrect meets an existing graveyarded record', async () =>
     {
-        await seedBlobRow('sha-dead', PAST);
+        await seedBlobRow('sha-dead', past);
 
         await ra.insertOrResurrect({ sha256: 'sha-dead', size: 128, backendID: 'be1', storageKey: 'sha-dead' });
 
@@ -172,13 +172,13 @@ describe('BlobRA resurrection', () =>
         await ra.insertOrResurrect({ sha256: 'sha-new', size: 64, backendID: 'be1', storageKey: 'sha-new' });
 
         const row = await ra.get('sha-new');
-        expect(row?.deletedAt).toBeNull();
+        expect(row?.deleted).toBeNull();
         expect(row?.size).toBe(64);
     });
 
     it('clears the graveyard marker via resurrect', async () =>
     {
-        await seedBlobRow('sha-dead', PAST);
+        await seedBlobRow('sha-dead', past);
 
         await ra.resurrect('sha-dead');
 
@@ -193,7 +193,7 @@ describe('BlobRA GC selection', () =>
     it('lists only records graveyarded before the cutoff', async () =>
     {
         const cutoff = new Date();
-        await seedBlobRow('sha-expired', PAST);
+        await seedBlobRow('sha-expired', past);
         await seedBlobRow('sha-in-grace', new Date(cutoff.getTime() + 60_000).toISOString());
         await seedBlobRow('sha-live', null);
 
@@ -204,7 +204,7 @@ describe('BlobRA GC selection', () =>
 
     it('hard-deletes a record still past the cutoff and reports the removal', async () =>
     {
-        await seedBlobRow('sha-expired', PAST);
+        await seedBlobRow('sha-expired', past);
 
         const removed = await ra.hardDeleteRow('sha-expired', new Date());
 
@@ -214,7 +214,7 @@ describe('BlobRA GC selection', () =>
 
     it('does not delete a record resurrected since it became a candidate', async () =>
     {
-        // Resurrected (deleted_at cleared) between candidacy and here: the conditional delete must miss.
+        // Resurrected (deleted cleared) between candidacy and here: the conditional delete must miss.
         await seedBlobRow('sha-saved', null);
 
         const removed = await ra.hardDeleteRow('sha-saved', new Date());

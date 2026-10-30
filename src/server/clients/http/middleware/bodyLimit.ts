@@ -26,7 +26,7 @@ import { API_BODY_MAX_BYTES, PayloadTooLargeError } from '@fileshed/core';
 const BYTE_ROUTE_PREFIXES = [ '/api/uploads/', '/api/me/avatar', '/api/admin/branding/logo' ];
 
 // The methods no route in this API reads a body from. HTTP permits a body on a DELETE; nothing here looks at one.
-const BODILESS_METHODS = new Set([ 'GET', 'HEAD', 'DELETE', 'OPTIONS' ]);
+const bodilessMethods = new Set([ 'GET', 'HEAD', 'DELETE', 'OPTIONS' ]);
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -36,7 +36,7 @@ export function bodyLimitApplies(method : string, pathname : string) : boolean
 {
     if(BYTE_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix))) { return false; }
 
-    return !BODILESS_METHODS.has(method.toUpperCase());
+    return !bodilessMethods.has(method.toUpperCase());
 }
 
 export function createBodyLimit() : MiddlewareHandler

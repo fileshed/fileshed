@@ -23,7 +23,7 @@ import {
 } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, sha256Of, smallFixture, spawnServer, withDb } from './support.ts';
+import { APIClient, type ServerHandle, sha256Of, smallFixture, spawnServer, withDb } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -32,10 +32,10 @@ const PASSWORD = 'correct-horse-battery';
 const data = smallFixture('token-file');
 
 let server : ServerHandle;
-let owner : ApiClient;
+let owner : APIClient;
 let fileID : string;
 
-async function upload(client : ApiClient, name : string, bytes : Buffer) : Promise<NodeResponse>
+async function upload(client : APIClient, name : string, bytes : Buffer) : Promise<NodeResponse>
 {
     const claim = await (await client.post('/api/blobs/claim', { sha256: sha256Of(bytes), size: bytes.length }))
         .json() as ClaimResponse;
@@ -76,7 +76,7 @@ async function bearerStatus(path : string, token : string, init : RequestInit = 
 beforeAll(async () =>
 {
     server = await spawnServer();
-    owner = new ApiClient(server.baseURL);
+    owner = new APIClient(server.baseURL);
     await owner.signUp('tokens@example.com', PASSWORD);
     fileID = (await upload(owner, 'track.mp3', data)).id;
 });

@@ -26,7 +26,7 @@ describe('shareListEntryCodec', () =>
         granteeUserID: 'user_2',
         role: 'viewer' as const,
         createdBy: 'user_1',
-        createdAt: '2026-01-01T00:00:00.000Z',
+        created: '2026-01-01T00:00:00.000Z',
     };
     const grantee = { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com', image: null };
 
@@ -58,7 +58,7 @@ describe('shareListResponseCodec', () =>
             granteeUserID: 'user_2',
             role: 'viewer',
             createdBy: 'user_1',
-            createdAt: '2026-01-01T00:00:00.000Z',
+            created: '2026-01-01T00:00:00.000Z',
         };
 
         expect(shareListResponseCodec.safeParse({ shares: [ bareShare ] }).success).toBe(false);
@@ -75,7 +75,7 @@ describe('toShareListEntry', () =>
             granteeUserID: 'user_2',
             role: 'editor',
             createdBy: 'user_1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
         const grantee = { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com', image: null };
 
@@ -98,7 +98,7 @@ describe('sharedWithMeEntryCodec', () =>
         granteeUserID: 'me',
         role: 'viewer' as const,
         createdBy: 'user_1',
-        createdAt: '2026-01-01T00:00:00.000Z',
+        created: '2026-01-01T00:00:00.000Z',
     };
     const target = { id: 'node_1', type: 'folder' as const, name: 'Team', ownerID: 'user_1' };
     const owner = { id: 'user_1', name: 'Ada Lovelace', email: 'ada@example.com', image: null };
@@ -168,7 +168,7 @@ describe('toSharedWithMeEntry', () =>
             granteeUserID: 'me',
             role: 'viewer',
             createdBy: 'user_1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
         const target : SharedTarget = { id: 'node_1', type: 'folder', name: 'Team', ownerID: 'user_1' };
         const owner = { id: 'user_1', name: 'Ada Lovelace', email: 'ada@example.com', image: null };

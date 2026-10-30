@@ -23,7 +23,7 @@ import {
     requestAccountDeletionSpec,
     updatePreferencesSpec,
 } from './me.openapi.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -49,7 +49,7 @@ export function createMeRoutes(
     router.patch('/me/preferences', updatePreferencesSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const patch = await readJsonBody(ctx, updatePreferencesRequestCodec);
+        const patch = await readJSONBody(ctx, updatePreferencesRequestCodec);
 
         return ctx.json(await users.updatePreferences(user, patch));
     });

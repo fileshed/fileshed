@@ -30,7 +30,7 @@ function concat(windows : readonly ArrayBuffer[]) : Uint8Array<ArrayBuffer>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function computeProofAnswer(nonce : string, windows : readonly ArrayBuffer[]) : Promise<string>
+export async function calculateProofAnswer(nonce : string, windows : readonly ArrayBuffer[]) : Promise<string>
 {
     const key = await crypto.subtle.importKey(
         'raw',

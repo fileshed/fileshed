@@ -66,7 +66,7 @@ export function nodeMenu(node : NodeResponse, userID : string | null) : NodeMenu
     // where links are minted and killed, not where an existing one is fetched.
     if(node.type !== 'link')
     {
-        const hasLink = (node.sharing?.linkUrl ?? null) !== null;
+        const hasLink = (node.sharing?.linkURL ?? null) !== null;
         groups.push(hasLink ? [ 'share', 'copyLink', 'copyDownloadLink' ] : [ 'share' ]);
     }
 

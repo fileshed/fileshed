@@ -50,7 +50,7 @@ const PASSWORD = 'correct-horse-battery';
 const GRACE_MS = 7 * MS_PER_DAY;
 
 // Comfortably outside any window the specs open: graveyarded or trashed at this instant is collectible on sight.
-const LAPSED = new Date('2020-01-01T00:00:00.000Z');
+const lapsed = new Date('2020-01-01T00:00:00.000Z');
 
 let booted : BootedStoreApp;
 let nodeRA : NodeRA;
@@ -133,7 +133,7 @@ async function runSweep(sweep : string, cookie ?: string) : Promise<Response>
 //----------------------------------------------------------------------------------------------------------------------
 
 // Real bytes through the storage RA plus the record row that points at them, graveyarded at a chosen moment.
-async function seedGraveyardedBlob(size : number, deletedAt : Date | null) : Promise<string>
+async function seedGraveyardedBlob(size : number, deleted : Date | null) : Promise<string>
 {
     const bytes = randomBytes(size);
     const sha256 = sha256Of(bytes);
@@ -147,8 +147,8 @@ async function seedGraveyardedBlob(size : number, deletedAt : Date | null) : Pro
             size: bytes.length,
             backend_id: location.backendID,
             storage_key: location.storageKey,
-            created_at: new Date().toISOString(),
-            deleted_at: deletedAt === null ? null : deletedAt.toISOString(),
+            created: new Date().toISOString(),
+            deleted: deleted === null ? null : deleted.toISOString(),
         })
         .execute();
 
@@ -187,7 +187,7 @@ describe('POST /api/admin/sweeps/:sweep/run', () =>
         await bootAdmin();
         const cookie = await makeAdmin('gc-runner@t.test');
 
-        const collectible = await seedGraveyardedBlob(4096, LAPSED);
+        const collectible = await seedGraveyardedBlob(4096, lapsed);
         const protectedByGrace = await seedGraveyardedBlob(2048, new Date());
         const live = await seedGraveyardedBlob(1024, null);
 
@@ -231,13 +231,13 @@ describe('POST /api/admin/sweeps/:sweep/run', () =>
 
         const sha = await seedGraveyardedBlob(512, null);
         await nodeRA.insert(folderNode({ id: 'keep', ownerID: owner.id }));
-        await nodeRA.insert(folderNode({ id: 'doomed', ownerID: owner.id, trashedAt: LAPSED }));
+        await nodeRA.insert(folderNode({ id: 'doomed', ownerID: owner.id, trashedAt: lapsed }));
         await nodeRA.insert(fileNode({
             id: 'doomed-file',
             ownerID: owner.id,
             parentID: 'doomed',
             blobID: sha,
-            trashedAt: LAPSED,
+            trashedAt: lapsed,
         }));
 
         const res = await runSweep('trashPurge', cookie);
@@ -256,7 +256,7 @@ describe('POST /api/admin/sweeps/:sweep/run', () =>
     {
         await bootAdmin();
         const cookie = await makeAdmin('gc-recorder@t.test');
-        await seedGraveyardedBlob(4096, LAPSED);
+        await seedGraveyardedBlob(4096, lapsed);
 
         const run = sweepRunResponseCodec.parse(await (await runSweep('gc', cookie)).json()) as SweepRunResponse;
 
@@ -324,7 +324,7 @@ describe('POST /api/admin/sweeps/:sweep/run', () =>
     {
         await bootAdmin();
         const cookie = await makeMember('member2@t.test');
-        const collectible = await seedGraveyardedBlob(4096, LAPSED);
+        const collectible = await seedGraveyardedBlob(4096, lapsed);
 
         await runSweep('gc', cookie);
 

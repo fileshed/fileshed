@@ -75,7 +75,7 @@ describe('AuthRA refusals', () =>
 
     it('answers a token nobody minted with no verified key', async () =>
     {
-        expect(await ra.verifyKey('fs_pat_nobody-minted-this', ACCESS_TOKEN_CONFIG_PAT)).toBeNull();
+        expect(await ra.validateKey('fs_pat_nobody-minted-this', ACCESS_TOKEN_CONFIG_PAT)).toBeNull();
     });
 });
 

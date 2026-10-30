@@ -97,7 +97,7 @@ export interface FileCopySnapshot
 
 // The answer for a node that reaches no one, and the one a node just created always earns: no grants, no link. It
 // costs no query, unlike the same answer arrived at by asking.
-const NOTHING_SHARED : NodeSharing = { granteeCount: 0, linkUrl: null };
+const NOTHING_SHARED : NodeSharing = { granteeCount: 0, linkURL: null };
 
 // GET /nodes/:id/links and GET /nodes/:id/shares already demand. A link URL is not a description of the capability,
 // it IS the capability, so a files:read key must never harvest one off a listing it may otherwise read.
@@ -364,7 +364,7 @@ export class NodeManager
             const link = links.get(id);
             sharing.set(id, {
                 granteeCount: granteeCounts.get(id) ?? 0,
-                linkUrl: link === undefined ? null : publicLinkPath(link.token),
+                linkURL: link === undefined ? null : publicLinkPath(link.token),
             });
         }
 
@@ -458,8 +458,8 @@ export class NodeManager
             name: request.name,
             ownerID: user.id,
             parentID: request.parentID,
-            createdAt: now,
-            updatedAt: now,
+            created: now,
+            updated: now,
             trashedAt: null,
         };
         await this.#nodes.insert(node);
@@ -498,8 +498,8 @@ export class NodeManager
             ownerID: actor.user.id,
             parentID: request.parentID,
             targetNodeID: target.id,
-            createdAt: now,
-            updatedAt: now,
+            created: now,
+            updated: now,
         };
         await this.#nodes.insert(node);
 
@@ -676,7 +676,7 @@ export class NodeManager
                 mimeType: node.mimeType,
                 size: node.size,
                 createdBy: user.id,
-                createdAt: now,
+                created: now,
                 expiresAt,
             }));
     }
@@ -828,8 +828,8 @@ export class NodeManager
             blobID: snapshot.blobID,
             size: snapshot.size,
             mimeType: snapshot.mimeType,
-            createdAt: now,
-            updatedAt: now,
+            created: now,
+            updated: now,
             trashedAt: null,
         };
 
@@ -855,7 +855,7 @@ export class NodeManager
         return parent === undefined || (parent.type !== 'link' && parent.trashedAt !== null);
     }
 
-    // Re-read after a write so the response carries the RA-stamped updated_at (and cleared/set trashed_at). The row is
+    // Re-read after a write so the response carries the RA-stamped updated (and cleared/set trashed_at). The row is
     // the one we just wrote as owner, so 'owner' is the effective role.
     async #reread(actor : Actor, id : string) : Promise<NodeResponse>
     {

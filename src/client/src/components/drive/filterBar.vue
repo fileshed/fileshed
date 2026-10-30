@@ -117,8 +117,8 @@
     const SORT_LABELS : Record<NodeSortKey, string> = {
         name: 'Name',
         size: 'Size',
-        createdAt: 'Created',
-        updatedAt: 'Modified',
+        created: 'Created',
+        updated: 'Modified',
         kind: 'Kind',
     };
 

@@ -43,7 +43,7 @@
 
     const linkLabel = computed<string | null>(() =>
     {
-        return (props.sharing?.linkUrl ?? null) === null ? null : 'Public link';
+        return (props.sharing?.linkURL ?? null) === null ? null : 'Public link';
     });
 </script>
 

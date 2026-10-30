@@ -12,7 +12,7 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 
 // Resource Access
 import { authClient } from '@client/resource-access/authClient.ts';
-import { fetchInstance } from '@client/resource-access/instance.ts';
+import { getInstance } from '@client/resource-access/instance.ts';
 
 // Support
 import { instanceFixture } from '../../support.ts';
@@ -29,14 +29,14 @@ vi.mock('@client/resource-access/authClient.ts', () => ({
         unlinkAccount: vi.fn(),
     },
 }));
-vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn() }));
+vi.mock('@client/resource-access/instance.ts', () => ({ getInstance: vi.fn() }));
 
 const toastAdd = vi.fn();
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
 const listAccountsMock = authClient.listAccounts as unknown as Mock;
 const unlinkMock = authClient.unlinkAccount as unknown as Mock;
-const fetchInstanceMock = fetchInstance as unknown as Mock;
+const getInstanceMock = getInstance as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -78,7 +78,7 @@ describe('ConnectedAccounts', () =>
     it('lists the credential method and offers a connect for each configured provider', async () =>
     {
         listAccountsMock.mockResolvedValue(accountsFixture([ 'credential' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
+        getInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
         const wrapper = mountAccounts();
         await flushPromises();
 
@@ -92,7 +92,7 @@ describe('ConnectedAccounts', () =>
     it('keeps a linked provider visible and disconnectable even when no longer offered', async () =>
     {
         listAccountsMock.mockResolvedValue(accountsFixture([ 'credential', 'github' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture());
+        getInstanceMock.mockResolvedValue(instanceFixture());
         const wrapper = mountAccounts();
         await flushPromises();
 
@@ -105,7 +105,7 @@ describe('ConnectedAccounts', () =>
         listAccountsMock
             .mockResolvedValueOnce(accountsFixture([ 'credential', 'github' ]))
             .mockResolvedValueOnce(accountsFixture([ 'credential' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture());
+        getInstanceMock.mockResolvedValue(instanceFixture());
         unlinkMock.mockResolvedValue({ data: {}, error: null });
         const wrapper = mountAccounts();
         await flushPromises();
@@ -120,7 +120,7 @@ describe('ConnectedAccounts', () =>
     it('toasts the server\'s refusal to disconnect in its own words', async () =>
     {
         listAccountsMock.mockResolvedValue(accountsFixture([ 'github' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
+        getInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
         unlinkMock.mockResolvedValue({
             data: null,
             error: { status: 400, message: 'You can\'t unlink your last account' },
@@ -141,7 +141,7 @@ describe('ConnectedAccounts', () =>
     it('never offers a disconnect for the credential method', async () =>
     {
         listAccountsMock.mockResolvedValue(accountsFixture([ 'credential' ]));
-        fetchInstanceMock.mockResolvedValue(instanceFixture());
+        getInstanceMock.mockResolvedValue(instanceFixture());
         const wrapper = mountAccounts();
         await flushPromises();
 
@@ -152,7 +152,7 @@ describe('ConnectedAccounts', () =>
     it('shows the retry state when the methods cannot load', async () =>
     {
         listAccountsMock.mockRejectedValue(new Error('offline'));
-        fetchInstanceMock.mockResolvedValue(instanceFixture());
+        getInstanceMock.mockResolvedValue(instanceFixture());
         const wrapper = mountAccounts();
         await flushPromises();
 

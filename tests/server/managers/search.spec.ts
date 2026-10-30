@@ -67,7 +67,7 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
             grantee_user_id: granteeID,
             role,
             created_by: 'alice',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }
@@ -399,8 +399,8 @@ describe('NodeManager.search isolation', () =>
             name: `${ prefix }${ index }`,
             owner_id: ownerID,
             parent_id: null,
-            created_at: now,
-            updated_at: now,
+            created: now,
+            updated: now,
         }));
 
         await handle.db

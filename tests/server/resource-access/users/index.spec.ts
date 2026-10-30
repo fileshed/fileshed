@@ -34,10 +34,10 @@ function listing(overrides : Partial<AdminUserListQuery> = {}) : AdminUserListQu
     return { limit: 50, offset: 0, searchField: 'email', sortDirection: 'asc', ...overrides };
 }
 
-async function backdate(booted : BootedApp, email : string, createdAt : Date) : Promise<void>
+async function backdate(booted : BootedApp, email : string, created : Date) : Promise<void>
 {
     await booted.handle.db.updateTable('user')
-        .set({ createdAt: createdAt.toISOString() })
+        .set({ createdAt: created.toISOString() })
         .where('email', '=', email)
         .execute();
 }
@@ -194,7 +194,7 @@ describe('UserRA.listUsers — ordering and paging', () =>
         await backdate(booted, 'middle@example.com', new Date('2026-02-01T00:00:00.000Z'));
         await backdate(booted, 'newest@example.com', new Date('2026-03-01T00:00:00.000Z'));
 
-        const page = await new UserRA(booted.handle).listUsers(listing({ sortKey: 'createdAt' }));
+        const page = await new UserRA(booted.handle).listUsers(listing({ sortKey: 'created' }));
 
         expect(page.users.map((user) => user.email))
             .toEqual([ 'oldest@example.com', 'middle@example.com', 'newest@example.com' ]);
@@ -275,7 +275,7 @@ describe('UserRA.listUsers — rows', () =>
         expect(row?.banned).toBe(true);
         expect(row?.banReason).toBe('spamming');
         expect(row?.banExpires).toEqual(expires);
-        expect(row?.createdAt).toBeInstanceOf(Date);
+        expect(row?.created).toBeInstanceOf(Date);
     });
 
     it('reads a never-banned account as a clean record', async () =>

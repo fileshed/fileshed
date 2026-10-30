@@ -7,13 +7,13 @@
 import { type MeResponse, type UpdatePreferencesRequest, meResponseCodec } from '@fileshed/core';
 
 // Resource Access
-import { requestJson } from './request.ts';
+import { requestJSON } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export async function updatePreferences(patch : UpdatePreferencesRequest) : Promise<MeResponse>
 {
-    return requestJson('/api/me/preferences', { method: 'PATCH', body: patch, codec: meResponseCodec });
+    return requestJSON('/api/me/preferences', { method: 'PATCH', body: patch, codec: meResponseCodec });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

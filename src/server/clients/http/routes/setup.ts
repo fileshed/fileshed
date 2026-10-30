@@ -22,7 +22,7 @@ import type { SetupManager } from '../../../managers/setup.ts';
 
 // Routes
 import { instanceSpec, setupSpec } from './setup.openapi.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -63,7 +63,7 @@ export function createSetupRoutes(setup : SetupManager, facts : InstanceFacts) :
 
     router.post('/setup', setupSpec, async (ctx) =>
     {
-        const request = await readJsonBody(ctx, setupRequestCodec);
+        const request = await readJSONBody(ctx, setupRequestCodec);
 
         return ctx.json(await setup.complete(request));
     });

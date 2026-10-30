@@ -13,7 +13,7 @@ import { createPinia, setActivePinia } from 'pinia';
 
 // Resource Access
 import { authClient } from '@client/resource-access/authClient.ts';
-import { fetchMe } from '@client/resource-access/me.ts';
+import { getMe } from '@client/resource-access/me.ts';
 
 // Stores
 import { useSessionStore } from '@client/stores/session.ts';
@@ -28,13 +28,13 @@ import ProfileTab from '@client/pages/account/profileTab.vue';
 
 vi.mock('@client/resource-access/authClient.ts', () => ({ authClient: { updateUser: vi.fn() } }));
 vi.mock('@client/resource-access/avatar.ts', () => ({ uploadAvatar: vi.fn(), deleteAvatar: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 
 const toastAdd = vi.fn();
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
 const updateUserMock = authClient.updateUser as unknown as Mock;
-const fetchMeMock = fetchMe as unknown as Mock;
+const getMeMock = getMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -231,7 +231,7 @@ describe('ProfileTab', () =>
         const session = useSessionStore();
         session.me = meFixture({ name: 'Ada Lovelace' });
         updateUserMock.mockResolvedValue({ error: null });
-        fetchMeMock.mockResolvedValue(meFixture({ name: 'Ada L.' }));
+        getMeMock.mockResolvedValue(meFixture({ name: 'Ada L.' }));
         const wrapper = mountTab();
 
         await nameInput(wrapper).setValue('  Ada L.  ');

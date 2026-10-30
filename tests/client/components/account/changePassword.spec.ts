@@ -20,7 +20,7 @@ import ChangePassword from '@client/components/account/changePassword.vue';
 
 vi.mock('@client/resource-access/authClient.ts', () => ({ authClient: { changePassword: vi.fn() } }));
 vi.mock('@client/resource-access/avatar.ts', () => ({ uploadAvatar: vi.fn(), deleteAvatar: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 
 const toastAdd = vi.fn();
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));

@@ -30,7 +30,7 @@ import {
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerHandle,
     readBlobFile,
     sha256Of,
@@ -43,7 +43,7 @@ import {
 const PASSWORD = 'correct-horse-battery';
 
 let server : ServerHandle;
-let alice : ApiClient;
+let alice : APIClient;
 
 // The chunk size this deployment is configured with -- deliberately not the compiled default, so a client that fell
 // back to the constant would cut this file into the wrong number of requests and be caught doing it. Above the 1 MiB
@@ -61,7 +61,7 @@ function uploadQuery(name : string, offset : number) : string
 
 // The claim's ticket half: the ticket to write against and the chunk size to cut the file into, which is the only
 // place a client learns what this instance wants.
-async function ticketFor(client : ApiClient, data : Buffer) : Promise<{ ticket : string; chunkBytes : number }>
+async function ticketFor(client : APIClient, data : Buffer) : Promise<{ ticket : string; chunkBytes : number }>
 {
     const claim = await (await client.post('/api/blobs/claim', { sha256: sha256Of(data), size: data.length }))
         .json() as ClaimResponse;
@@ -71,7 +71,7 @@ async function ticketFor(client : ApiClient, data : Buffer) : Promise<{ ticket :
     return { ticket: claim.ticket, chunkBytes: claim.chunkBytes };
 }
 
-function putChunk(client : ApiClient, ticket : string, name : string, data : Buffer, offset : number, length : number)
+function putChunk(client : APIClient, ticket : string, name : string, data : Buffer, offset : number, length : number)
 : Promise<Response>
 {
     return client.put(
@@ -124,7 +124,7 @@ function hangingBody(bytes : Buffer) : { body : ReadableStream<Uint8Array>; onWi
 // not belong where they were sent, which no amount of waiting repairs. Either way the failure carries the server's own
 // words.
 async function putChunkOnceReceiving(
-    client : ApiClient,
+    client : APIClient,
     ticket : string,
     name : string,
     data : Buffer,
@@ -163,7 +163,7 @@ beforeAll(async () =>
 {
     server = await spawnServer({ env: { UPLOAD_CHUNK_BYTES: String(CONFIGURED_CHUNK_BYTES) } });
 
-    alice = new ApiClient(server.baseURL);
+    alice = new APIClient(server.baseURL);
     await alice.signUp('alice@example.com', PASSWORD);
 });
 
@@ -239,7 +239,7 @@ describe('a file larger than one chunk', () =>
 
         expect(blob?.size).toBe(data.length);
         expect(blob?.storage_key).toBe(sha);
-        expect(blob?.deleted_at).toBeNull();
+        expect(blob?.deleted).toBeNull();
     });
 });
 

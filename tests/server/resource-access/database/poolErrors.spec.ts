@@ -23,8 +23,8 @@ import type { ProbeReply, ProbeRequest } from '../../support/poolErrorProbe.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
-const PROBE = join(REPO_ROOT, 'tests/server/support/poolErrorProbe.ts');
+const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+const probeScript = join(repoRoot, 'tests/server/support/poolErrorProbe.ts');
 
 // Spawning node over the factory's import graph, provisioning a database, and killing a backend all live inside one
 // test; vitest's default budget is too tight for that on a contended run.
@@ -125,8 +125,8 @@ function withDeadline<TValue>(work : Promise<TValue>, ms : number, what : string
 
 async function startProbe(databaseURL : string) : Promise<Probe>
 {
-    const child = spawn(process.execPath, [ PROBE ], {
-        cwd: REPO_ROOT,
+    const child = spawn(process.execPath, [ probeScript ], {
+        cwd: repoRoot,
         env: {
             ...process.env,
             DATABASE_KIND: 'postgres',

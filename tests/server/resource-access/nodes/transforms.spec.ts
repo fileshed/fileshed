@@ -115,8 +115,8 @@ function fileRow() : Selectable<NodeTable>
         target_node_id: null,
         size: 10,
         mime_type: 'text/plain',
-        created_at: '2026-01-02T03:04:05.678Z',
-        updated_at: '2026-01-02T03:04:05.678Z',
+        created: '2026-01-02T03:04:05.678Z',
+        updated: '2026-01-02T03:04:05.678Z',
         trashed_at: null,
     };
 }

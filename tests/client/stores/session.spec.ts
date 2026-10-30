@@ -14,9 +14,9 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import { authClient } from '@client/resource-access/authClient.ts';
-import { fetchMe } from '@client/resource-access/me.ts';
+import { getMe } from '@client/resource-access/me.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 
 // Support
@@ -35,7 +35,7 @@ vi.mock('@client/resource-access/authClient.ts', () => ({
     },
 }));
 
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
 
 // The better-auth client and the RA calls are the only mocked seam; casting to Mock frees the tests from better-auth's
@@ -43,7 +43,7 @@ vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi
 const signInEmail = authClient.signIn.email as unknown as Mock;
 const signUpEmail = authClient.signUp.email as unknown as Mock;
 const signOutMock = authClient.signOut as unknown as Mock;
-const fetchMeMock = fetchMe as unknown as Mock;
+const getMeMock = getMe as unknown as Mock;
 const updatePreferencesMock = updatePreferences as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ describe('useSessionStore', () =>
     it('populates the current user from /api/me on a successful sign-in', async () =>
     {
         signInEmail.mockResolvedValue({ error: null });
-        fetchMeMock.mockResolvedValue(meFixture({ email: 'member@example.com', role: 'user' }));
+        getMeMock.mockResolvedValue(meFixture({ email: 'member@example.com', role: 'user' }));
         const store = useSessionStore();
 
         await store.signIn('member@example.com', 'correct-horse');
@@ -80,7 +80,7 @@ describe('useSessionStore', () =>
     it('reports the admin role for an admin account', async () =>
     {
         signInEmail.mockResolvedValue({ error: null });
-        fetchMeMock.mockResolvedValue(meFixture({ role: 'admin' }));
+        getMeMock.mockResolvedValue(meFixture({ role: 'admin' }));
         const store = useSessionStore();
 
         await store.signIn('admin@example.com', 'correct-horse');
@@ -97,14 +97,14 @@ describe('useSessionStore', () =>
 
         expect(store.isAuthenticated).toBe(false);
         expect(store.me).toBeNull();
-        expect(fetchMeMock).not.toHaveBeenCalled();
+        expect(getMeMock).not.toHaveBeenCalled();
     });
 
     it('reports pending only while a sign-in is in flight', async () =>
     {
         let resolveSignIn : (() => void) | undefined;
         signInEmail.mockReturnValue(new Promise((resolve) => { resolveSignIn = () => resolve({ error: null }); }));
-        fetchMeMock.mockResolvedValue(meFixture());
+        getMeMock.mockResolvedValue(meFixture());
         const store = useSessionStore();
 
         const inFlight = store.signIn('member@example.com', 'correct-horse');
@@ -123,7 +123,7 @@ describe('useSessionStore', () =>
     it('populates the current user on a successful sign-up', async () =>
     {
         signUpEmail.mockResolvedValue({ error: null });
-        fetchMeMock.mockResolvedValue(meFixture({ email: 'new@example.com' }));
+        getMeMock.mockResolvedValue(meFixture({ email: 'new@example.com' }));
         const store = useSessionStore();
 
         await store.signUp('New Member', 'new@example.com', 'correct-horse');
@@ -140,7 +140,7 @@ describe('useSessionStore', () =>
         await expect(store.signUp('Dup', 'dup@example.com', 'correct-horse')).rejects.toThrow('User already exists');
 
         expect(store.isAuthenticated).toBe(false);
-        expect(fetchMeMock).not.toHaveBeenCalled();
+        expect(getMeMock).not.toHaveBeenCalled();
     });
 
     //------------------------------------------------------------------------------------------------------------------
@@ -150,7 +150,7 @@ describe('useSessionStore', () =>
     it('clears the current user on sign-out', async () =>
     {
         signInEmail.mockResolvedValue({ error: null });
-        fetchMeMock.mockResolvedValue(meFixture());
+        getMeMock.mockResolvedValue(meFixture());
         signOutMock.mockResolvedValue(undefined);
         const store = useSessionStore();
         await store.signIn('member@example.com', 'correct-horse');
@@ -168,10 +168,10 @@ describe('useSessionStore', () =>
 
     it('restores the profile from a valid session cookie', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ role: 'admin' }));
+        getMeMock.mockResolvedValue(meFixture({ role: 'admin' }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.isAuthenticated).toBe(true);
         expect(store.isAdmin).toBe(true);
@@ -180,10 +180,10 @@ describe('useSessionStore', () =>
 
     it('resolves to signed-out when there is no session (401)', async () =>
     {
-        fetchMeMock.mockRejectedValue(new ApiError(401, 'Unauthorized'));
+        getMeMock.mockRejectedValue(new APIError(401, 'Unauthorized'));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.isAuthenticated).toBe(false);
         expect(store.me).toBeNull();
@@ -193,10 +193,10 @@ describe('useSessionStore', () =>
     it('stays signed out when the profile fetch fails unexpectedly', async () =>
     {
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        fetchMeMock.mockRejectedValue(new ApiError(500, 'Internal Server Error'));
+        getMeMock.mockRejectedValue(new APIError(500, 'Internal Server Error'));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.isAuthenticated).toBe(false);
         consoleError.mockRestore();
@@ -204,12 +204,12 @@ describe('useSessionStore', () =>
 
     it('restores exactly once under concurrent callers', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture());
+        getMeMock.mockResolvedValue(meFixture());
         const store = useSessionStore();
 
-        await Promise.all([ store.initialize(), store.initialize() ]);
+        await Promise.all([ store.init(), store.init() ]);
 
-        expect(fetchMeMock).toHaveBeenCalledTimes(1);
+        expect(getMeMock).toHaveBeenCalledTimes(1);
     });
 
     //------------------------------------------------------------------------------------------------------------------
@@ -218,9 +218,9 @@ describe('useSessionStore', () =>
 
     it('adopts the profile a refresh reads', async () =>
     {
-        fetchMeMock.mockResolvedValueOnce(meFixture()).mockResolvedValueOnce(meFixture({ name: 'Renamed' }));
+        getMeMock.mockResolvedValueOnce(meFixture()).mockResolvedValueOnce(meFixture({ name: 'Renamed' }));
         const store = useSessionStore();
-        await store.initialize();
+        await store.init();
 
         await store.refreshProfile();
 
@@ -229,9 +229,9 @@ describe('useSessionStore', () =>
 
     it('keeps the profile in hand when a refresh read fails', async () =>
     {
-        fetchMeMock.mockResolvedValueOnce(meFixture({ name: 'Ada' })).mockRejectedValueOnce(new Error('offline'));
+        getMeMock.mockResolvedValueOnce(meFixture({ name: 'Ada' })).mockRejectedValueOnce(new Error('offline'));
         const store = useSessionStore();
-        await store.initialize();
+        await store.init();
 
         await expect(store.refreshProfile()).resolves.toBeUndefined();
 
@@ -244,20 +244,20 @@ describe('useSessionStore', () =>
 
     it('reports the default files-root label when no preference is set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.rootLabel).toBe(DEFAULT_ROOT_LABEL);
     });
 
     it('reports the stored files-root label when one is set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { rootLabel: 'Work' } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { rootLabel: 'Work' } }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.rootLabel).toBe('Work');
     });
@@ -275,20 +275,20 @@ describe('useSessionStore', () =>
 
     it('reports the default time format when no preference is set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.timeFormat).toBe(DEFAULT_TIME_FORMAT);
     });
 
     it('reports the stored time format when one is set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { timeFormat: '24h' } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { timeFormat: '24h' } }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.timeFormat).toBe('24h');
     });
@@ -299,10 +299,10 @@ describe('useSessionStore', () =>
 
     it('adopts the refreshed profile after saving a preferences patch', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { rootLabel: 'Photos' } }));
         const store = useSessionStore();
-        await store.initialize();
+        await store.init();
 
         await store.savePreferences({ rootLabel: 'Photos' });
 
@@ -317,10 +317,10 @@ describe('useSessionStore', () =>
 
     it('reports the default editor theme and gutter when none are set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.editorTheme).toBe(DEFAULT_EDITOR_THEME);
         expect(store.editorGutter).toBe(DEFAULT_EDITOR_GUTTER);
@@ -328,10 +328,10 @@ describe('useSessionStore', () =>
 
     it('reports the stored editor theme and gutter when set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { editorTheme: 'nord', editorGutter: true } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { editorTheme: 'nord', editorGutter: true } }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.editorTheme).toBe('nord');
         expect(store.editorGutter).toBe(true);
@@ -339,9 +339,9 @@ describe('useSessionStore', () =>
 
     it('applies an editor preference in memory at once without hitting the wire', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         const store = useSessionStore();
-        await store.initialize();
+        await store.init();
 
         store.applyPreferences({ editorTheme: 'dracula', editorGutter: true });
 
@@ -366,10 +366,10 @@ describe('useSessionStore', () =>
 
     it('reports the default view mode (grid) when no preference is set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.viewMode).toBe('grid');
         expect(store.viewMode).toBe(DEFAULT_VIEW_MODE);
@@ -377,10 +377,10 @@ describe('useSessionStore', () =>
 
     it('reports the stored view mode when one is set', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.viewMode).toBe('list');
     });
@@ -391,20 +391,20 @@ describe('useSessionStore', () =>
     it('lets this browser outrank the account\'s stored view mode', async () =>
     {
         window.localStorage.setItem('fileshed.drive.deviceViewMode', 'list');
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'grid' } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'grid' } }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.viewMode).toBe('list');
     });
 
     it('follows the account when this browser has never chosen', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.viewMode).toBe('list');
     });
@@ -412,10 +412,10 @@ describe('useSessionStore', () =>
     it('ignores a stored value that is not a view mode', async () =>
     {
         window.localStorage.setItem('fileshed.drive.deviceViewMode', 'mosaic');
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
         const store = useSessionStore();
 
-        await store.initialize();
+        await store.init();
 
         expect(store.viewMode).toBe('list');
     });
@@ -424,9 +424,9 @@ describe('useSessionStore', () =>
     // device to arrive inherits the most recent choice rather than whatever was picked first.
     it('binds this browser and the account together when a view mode is chosen', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'grid' } }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'grid' } }));
         const store = useSessionStore();
-        await store.initialize();
+        await store.init();
 
         store.chooseViewMode('list');
 
@@ -438,9 +438,9 @@ describe('useSessionStore', () =>
 
     it('applies a view-mode preference in memory at once without hitting the wire', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         const store = useSessionStore();
-        await store.initialize();
+        await store.init();
 
         store.applyPreferences({ viewMode: 'list' });
 
@@ -450,10 +450,10 @@ describe('useSessionStore', () =>
 
     it('adopts the refreshed profile after saving a view-mode preference patch', async () =>
     {
-        fetchMeMock.mockResolvedValue(meFixture({ preferences: {} }));
+        getMeMock.mockResolvedValue(meFixture({ preferences: {} }));
         updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
         const store = useSessionStore();
-        await store.initialize();
+        await store.init();
 
         await store.savePreferences({ viewMode: 'list' });
 

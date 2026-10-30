@@ -5,13 +5,13 @@
 import { type VersionResponse, versionResponseCodec } from '@fileshed/core';
 
 // Resource Access
-import { requestJson } from './request.ts';
+import { requestJSON } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function fetchVersion() : Promise<VersionResponse>
+export async function getVersion() : Promise<VersionResponse>
 {
-    return requestJson('/api/version', { codec: versionResponseCodec });
+    return requestJSON('/api/version', { codec: versionResponseCodec });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

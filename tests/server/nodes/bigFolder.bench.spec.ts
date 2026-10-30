@@ -27,7 +27,7 @@ const SIZES = [ 500, 10_000 ];
 
 // The measurement is the point, and vitest swallows console output, so it lands in a file. The system temp
 // directory rather than anywhere clever: this runs on developer machines and on CI, and both have one.
-const REPORT = join(tmpdir(), 'fileshed-listing-bench.txt');
+const reportPath = join(tmpdir(), 'fileshed-listing-bench.txt');
 
 let booted : BootedStoreApp;
 let owner : TestUser;
@@ -65,8 +65,8 @@ async function seedFiles(count : number, parentID : string | null) : Promise<voi
             size: 4_000_000,
             backend_id: backend.id,
             storage_key: 'seed/bench',
-            created_at: now,
-            deleted_at: null,
+            created: now,
+            deleted: null,
         } as never)
         .execute();
 
@@ -79,8 +79,8 @@ async function seedFiles(count : number, parentID : string | null) : Promise<voi
         blob_id: sha256,
         size: 4_000_000,
         mime_type: 'audio/mpeg',
-        created_at: now,
-        updated_at: now,
+        created: now,
+        updated: now,
         trashed_at: null,
         target_node_id: null,
     }));
@@ -140,7 +140,7 @@ describe('listing cost by folder size', () =>
             const perNode = Math.round(JSON.stringify(first.body.nodes).length / first.body.nodes.length);
 
             appendFileSync(
-                REPORT,
+                reportPath,
                 `\n  ${ size } nodes: total=${ first.body.total }`
                 + `\n    first chunk (${ LISTING_CHUNK_SIZE }): ${ first.ms.toFixed(0) }ms`
                 + `\n    deep chunk  (${ LISTING_CHUNK_SIZE }): ${ deep.ms.toFixed(0) }ms  @offset ${ deepOffset }`

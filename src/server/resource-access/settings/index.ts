@@ -5,8 +5,6 @@
 // raw JSON values per key.
 //----------------------------------------------------------------------------------------------------------------------
 
-/* eslint-disable camelcase -- insert values and update sets name snake_case DB columns (house convention) */
-
 // Models
 import { RowCorruptionError } from '@fileshed/core';
 
@@ -19,7 +17,7 @@ export interface SettingRow
 {
     key : string;
     value : unknown;
-    updatedAt : Date;
+    updated : Date;
 }
 
 function decodeValue(key : string, stored : string) : unknown
@@ -57,7 +55,7 @@ export class SettingsRA
         return rows.map((row) => ({
             key: row.key,
             value: decodeValue(row.key, row.value),
-            updatedAt: new Date(row.updated_at),
+            updated: new Date(row.updated),
         }));
     }
 
@@ -86,8 +84,8 @@ export class SettingsRA
 
         await this.#db
             .insertInto('instance_setting')
-            .values({ key, value: encoded, updated_at: stamp })
-            .onConflict((oc) => oc.column('key').doUpdateSet({ value: encoded, updated_at: stamp }))
+            .values({ key, value: encoded, updated: stamp })
+            .onConflict((oc) => oc.column('key').doUpdateSet({ value: encoded, updated: stamp }))
             .execute();
     }
 

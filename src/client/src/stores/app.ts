@@ -16,7 +16,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { fetchInstance } from '../resource-access/instance.ts';
+import { getInstance } from '../resource-access/instance.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -31,7 +31,7 @@ export const useAppStore = defineStore('app', () =>
 
     // The mark every sidebar and the favicon show: the uploaded logo when set (hash-busted, so replacing it
     // never fights a cache), the stock mark otherwise.
-    const logoUrl = computed(() =>
+    const logoURL = computed(() =>
     {
         const logo = branding.value?.logo;
 
@@ -48,11 +48,11 @@ export const useAppStore = defineStore('app', () =>
     const skippedUploadNames = computed(() => limits.value?.skippedUploadNames ?? []);
     const avatarMaxBytes = computed(() => limits.value?.avatarMaxBytes ?? DEFAULT_AVATAR_MAX_BYTES);
 
-    async function initialize() : Promise<void>
+    async function init() : Promise<void>
     {
         try
         {
-            const instance = await fetchInstance();
+            const instance = await getInstance();
 
             branding.value = instance.branding;
             limits.value = instance.limits;
@@ -69,11 +69,11 @@ export const useAppStore = defineStore('app', () =>
         name,
         tagline,
         forcedMode,
-        logoUrl,
+        logoURL,
         uploadMaxBytes,
         skippedUploadNames,
         avatarMaxBytes,
-        initialize,
+        init,
     };
 });
 

@@ -14,18 +14,18 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { type QueryParams, requestJson, requestVoid } from './request.ts';
+import { type QueryParams, requestJSON, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export async function grantShare(nodeID : string, request : GrantShareRequest) : Promise<ShareResponse>
 {
-    return requestJson(`/api/nodes/${ nodeID }/shares`, { method: 'POST', body: request, codec: shareResponseCodec });
+    return requestJSON(`/api/nodes/${ nodeID }/shares`, { method: 'POST', body: request, codec: shareResponseCodec });
 }
 
 export async function listSharesForNode(nodeID : string) : Promise<ShareListResponse>
 {
-    return requestJson(`/api/nodes/${ nodeID }/shares`, { codec: shareListResponseCodec });
+    return requestJSON(`/api/nodes/${ nodeID }/shares`, { codec: shareListResponseCodec });
 }
 
 // The caller's shared-with-me listing, optionally narrowed by the Type/Modified filters on each target. The type
@@ -37,7 +37,7 @@ export async function listSharedWithMe(query : Partial<SharedWithMeQuery> = {}) 
     const params : QueryParams = { ...rest };
     if(types !== undefined && types.length > 0) { params.types = types.join(','); }
 
-    return requestJson('/api/shared-with-me', { query: params, codec: sharedWithMeResponseCodec });
+    return requestJSON('/api/shared-with-me', { query: params, codec: sharedWithMeResponseCodec });
 }
 
 export async function leaveShare(shareID : string) : Promise<void>

@@ -217,15 +217,15 @@ describe('NodeRA.trashedRoots — Type and Modified filters', () =>
         await ra.insert(fileNode({ id: 'old',
             ownerID: 'u1',
             blobID: 'sha-a',
-            updatedAt: new Date('2026-01-10T00:00:00.000Z') }));
+            updated: new Date('2026-01-10T00:00:00.000Z') }));
         await ra.insert(fileNode({ id: 'mid',
             ownerID: 'u1',
             blobID: 'sha-a',
-            updatedAt: new Date('2026-02-10T00:00:00.000Z') }));
+            updated: new Date('2026-02-10T00:00:00.000Z') }));
         await ra.insert(fileNode({ id: 'new',
             ownerID: 'u1',
             blobID: 'sha-a',
-            updatedAt: new Date('2026-03-10T00:00:00.000Z') }));
+            updated: new Date('2026-03-10T00:00:00.000Z') }));
         await ra.setTrashed('old', trashedAt);
         await ra.setTrashed('mid', trashedAt);
         await ra.setTrashed('new', trashedAt);

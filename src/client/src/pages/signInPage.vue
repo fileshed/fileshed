@@ -110,11 +110,11 @@
     // Resource Access
     import { apiErrorFromAuth } from '../resource-access/apiError.ts';
     import { authClient } from '../resource-access/authClient.ts';
-    import { fetchInstance } from '../resource-access/instance.ts';
+    import { getInstance } from '../resource-access/instance.ts';
 
     // Utils
     import { providerIcon, providerLabel } from '../utils/formatters/index.ts';
-    import { describeApiError } from '../utils/runWithToast.ts';
+    import { describeAPIError } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
     // Setup
@@ -195,7 +195,7 @@
     {
         try
         {
-            const instance = await fetchInstance();
+            const instance = await getInstance();
             if(instance.needsSetup) { await router.replace('/setup'); }
             signUpEnabled.value = instance.signUpEnabled;
             emailEnabled.value = instance.emailEnabled;
@@ -221,7 +221,7 @@
         }
         catch(error)
         {
-            errorMessage.value = describeApiError(error);
+            errorMessage.value = describeAPIError(error);
             socialPending.value = null;
         }
     }
@@ -241,7 +241,7 @@
         }
         catch(error)
         {
-            errorMessage.value = describeApiError(error);
+            errorMessage.value = describeAPIError(error);
         }
     }
 </script>

@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminSettingEntry, AdminSettingsResponse } from '@fileshed/core';
 
 // Resource Access
-import { fetchAdminSettings, patchAdminSettings } from '@client/resource-access/admin.ts';
+import { getAdminSettings, patchAdminSettings } from '@client/resource-access/admin.ts';
 
 // Under test
 import { useAdminSettingsStore } from '@client/stores/adminSettings.ts';
@@ -22,11 +22,11 @@ import { useAdminSettingsStore } from '@client/stores/adminSettings.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
 }));
 
-const fetchMock = fetchAdminSettings as unknown as Mock;
+const getSettingsMock = getAdminSettings as unknown as Mock;
 const patchMock = patchAdminSettings as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ describe('useAdminSettingsStore', () =>
 
     it('adopts the server view on load', async () =>
     {
-        fetchMock.mockResolvedValue(view([ entry() ], true));
+        getSettingsMock.mockResolvedValue(view([ entry() ], true));
         const store = useAdminSettingsStore();
 
         await store.load();
@@ -79,7 +79,7 @@ describe('useAdminSettingsStore', () =>
 
     it('lands a failed load in error instead of throwing', async () =>
     {
-        fetchMock.mockRejectedValue(new Error('offline'));
+        getSettingsMock.mockRejectedValue(new Error('offline'));
         const store = useAdminSettingsStore();
 
         await store.load();
@@ -90,7 +90,7 @@ describe('useAdminSettingsStore', () =>
 
     it('ensureLoaded fetches the view when the store has none', async () =>
     {
-        fetchMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
+        getSettingsMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
         const store = useAdminSettingsStore();
 
         await store.ensureLoaded();
@@ -100,25 +100,25 @@ describe('useAdminSettingsStore', () =>
 
     it('ensureLoaded answers from the view already in hand instead of asking again', async () =>
     {
-        fetchMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
+        getSettingsMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
         const store = useAdminSettingsStore();
         await store.load();
-        fetchMock.mockClear();
+        getSettingsMock.mockClear();
 
         await store.ensureLoaded();
 
         expect(store.defaultQuota).toBe(20_000);
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(getSettingsMock).not.toHaveBeenCalled();
     });
 
     // A blip that leaves the store empty must not blank the values every later reader depends on.
     it('ensureLoaded asks again after a load that failed', async () =>
     {
-        fetchMock.mockRejectedValueOnce(new Error('offline'));
+        getSettingsMock.mockRejectedValueOnce(new Error('offline'));
         const store = useAdminSettingsStore();
         await store.load();
 
-        fetchMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
+        getSettingsMock.mockResolvedValue(view([ quotaEntry(20_000) ]));
         await store.ensureLoaded();
 
         expect(store.defaultQuota).toBe(20_000);

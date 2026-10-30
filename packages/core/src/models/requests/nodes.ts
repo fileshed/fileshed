@@ -103,7 +103,7 @@ export interface EmptyTrashResponse
 // Children listing (GET /api/nodes/:id/children) -- pagination, the sort-key vocabulary, and the filter facets.
 //----------------------------------------------------------------------------------------------------------------------
 
-export const nodeSortKeys = [ 'name', 'size', 'createdAt', 'updatedAt', 'kind' ] as const;
+export const nodeSortKeys = [ 'name', 'size', 'created', 'updated', 'kind' ] as const;
 export type NodeSortKey = typeof nodeSortKeys[number];
 
 export const sortDirections = [ 'asc', 'desc' ] as const;
@@ -169,7 +169,7 @@ export interface LinkTarget
 export interface NodeSharing
 {
     granteeCount : number;
-    linkUrl : string | null;
+    linkURL : string | null;
 }
 
 interface NodeResponseBase
@@ -178,8 +178,8 @@ interface NodeResponseBase
     name : string;
     ownerID : string;
     parentID : string | null;
-    createdAt : string;
-    updatedAt : string;
+    created : string;
+    updated : string;
     role : Role;
 
     // What the node reaches beyond its owner, as far as this caller may see it. The two answers are distinct and both

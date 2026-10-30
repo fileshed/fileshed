@@ -1,13 +1,13 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Annotator
   --
-  -- The PDF family's single mount point. Everything under it is internal, so a host mounts `<PdfAnnotator :node-id="id"
+  -- The PDF family's single mount point. Everything under it is internal, so a host mounts `<PDFAnnotator :node-id="id"
   -- />` without knowing the family's parts.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <div class="flex h-full flex-col" @keydown="onCardKeydown">
-        <PdfIdentityBar />
+        <PDFIdentityBar />
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-default">
             <div v-if="store.loadState === 'loading'" class="flex flex-1 items-center justify-center text-muted">
@@ -26,18 +26,18 @@
             </div>
 
             <template v-else>
-                <PdfToolbar @present="present" />
+                <PDFToolbar @present="present" />
 
                 <div class="flex min-h-0 flex-1">
-                    <PdfSidebar v-if="store.sidebarOpen" />
-                    <PdfSurface ref="surface" class="min-h-0 flex-1" />
+                    <PDFSidebar v-if="store.sidebarOpen" />
+                    <PDFSurface ref="surface" class="min-h-0 flex-1" />
                 </div>
             </template>
         </div>
 
-        <PdfAltText />
+        <PDFAltText />
 
-        <PdfDocumentProperties />
+        <PDFDocumentProperties />
 
         <ConflictModal
             v-model:open="conflictOpen"
@@ -56,16 +56,16 @@
     import { useToast } from '@nuxt/ui/composables';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Components
     import ConflictModal from '../text/modals/conflictModal.vue';
-    import PdfAltText from './modals/altText.vue';
-    import PdfDocumentProperties from './modals/documentProperties.vue';
-    import PdfIdentityBar from './identityBar.vue';
-    import PdfSidebar from './sidebar/sidebar.vue';
-    import PdfSurface from './pdfSurface.vue';
-    import PdfToolbar from './toolbar.vue';
+    import PDFAltText from './modals/altText.vue';
+    import PDFDocumentProperties from './modals/documentProperties.vue';
+    import PDFIdentityBar from './identityBar.vue';
+    import PDFSidebar from './sidebar/sidebar.vue';
+    import PDFSurface from './pdfSurface.vue';
+    import PDFToolbar from './toolbar.vue';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -73,11 +73,11 @@
         nodeID : string;
     }>();
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
     const router = useRouter();
     const toast = useToast();
 
-    const surface = useTemplateRef<InstanceType<typeof PdfSurface>>('surface');
+    const surface = useTemplateRef<InstanceType<typeof PDFSurface>>('surface');
 
     //------------------------------------------------------------------------------------------------------------------
 

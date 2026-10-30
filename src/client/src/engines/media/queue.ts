@@ -35,7 +35,7 @@ export interface MediaTrack
     kind : MediaKind;
 
     // A remote stream's URL; the drive serves everything else.
-    remoteUrl : string | null;
+    remoteURL : string | null;
 
     // A playlist entry whose file couldn't be resolved: rendered dimmed, skipped when playback reaches it.
     broken : boolean;
@@ -73,7 +73,7 @@ export function trackFromNode(node : NodeResponse, entryID : string) : MediaTrac
         name: node.name,
         mimeType: node.mimeType,
         kind,
-        remoteUrl: null,
+        remoteURL: null,
         broken: false,
         failed: false,
     };
@@ -92,7 +92,7 @@ export function trackForPlay(node : NodeResponse, kind : MediaKind, entryID : st
             name: node.name,
             mimeType: node.target.mimeType ?? null,
             kind,
-            remoteUrl: null,
+            remoteURL: null,
             broken: false,
             failed: false,
         };
@@ -106,7 +106,7 @@ export function trackForPlay(node : NodeResponse, kind : MediaKind, entryID : st
         name: node.name,
         mimeType,
         kind,
-        remoteUrl: null,
+        remoteURL: null,
         broken: false,
         failed: false,
     };
@@ -117,7 +117,7 @@ const REMOTE_VIDEO_EXTENSIONS = [ '.mp4', '.m4v', '.webm', '.mkv', '.mov', '.avi
 // A remote stream from a playlist: the URL is the identity, the last path segment the display name, and the kind a
 // guess from the extension -- audio unless it looks like video, since audio playlists are what people actually pass
 // around.
-export function trackFromUrl(url : string, entryID : string) : MediaTrack
+export function trackFromURL(url : string, entryID : string) : MediaTrack
 {
     let name = url;
 
@@ -137,7 +137,7 @@ export function trackFromUrl(url : string, entryID : string) : MediaTrack
         name,
         mimeType: null,
         kind,
-        remoteUrl: url,
+        remoteURL: url,
         broken: false,
         failed: false,
     };
@@ -153,7 +153,7 @@ export function brokenTrack(label : string, key : string, entryID : string) : Me
         name: label,
         mimeType: null,
         kind: 'audio',
-        remoteUrl: null,
+        remoteURL: null,
         broken: true,
         failed: false,
     };

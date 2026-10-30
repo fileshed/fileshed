@@ -26,7 +26,7 @@ import SettingField from '@client/components/admin/settingField.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
     runSweep: vi.fn(),
 }));

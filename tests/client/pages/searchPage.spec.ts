@@ -43,7 +43,7 @@ vi.mock('@client/resource-access/nodes.ts', () => ({
     hardDeleteNode: vi.fn(),
     copyNode: vi.fn(),
 }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const searchMock = search as unknown as Mock;

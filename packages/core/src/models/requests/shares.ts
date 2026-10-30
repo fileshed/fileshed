@@ -20,7 +20,7 @@ export interface GrantShareRequest
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Share response -- the domain Share (models/share.ts) with its createdAt serialized.
+// Share response -- the domain Share (models/share.ts) with its created serialized.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface ShareResponse
@@ -30,7 +30,7 @@ export interface ShareResponse
     granteeUserID : string;
     role : ShareRole;
     createdBy : string;
-    createdAt : string;
+    created : string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -245,7 +245,7 @@ export class FsBackend implements BlobBackend
             throw error;
         });
 
-        return stats === null ? null : { size: stats.size, modifiedAt: stats.mtime };
+        return stats === null ? null : { size: stats.size, modified: stats.mtime };
     }
 
     //------------------------------------------------------------------------------------------------------------------

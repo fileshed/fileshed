@@ -12,15 +12,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
 // Under test
-import PdfFindBar from '@client/components/handlers/pdf/findBar.vue';
+import PDFFindBar from '@client/components/handlers/pdf/findBar.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -40,12 +40,12 @@ const stubs = {
 
 function mountBar() : VueWrapper
 {
-    return mount(PdfFindBar, { global: { stubs } });
+    return mount(PDFFindBar, { global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfFindBar', () =>
+describe('PDFFindBar', () =>
 {
     beforeEach(() =>
     {
@@ -55,7 +55,7 @@ describe('PdfFindBar', () =>
 
     it('searches for the typed query as it is entered', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountBar();
 
         await wrapper.find('input').setValue('invoice');
@@ -66,7 +66,7 @@ describe('PdfFindBar', () =>
 
     it('walks to the next and previous matches', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setFindQuery('invoice');
         const wrapper = mountBar();
 
@@ -79,7 +79,7 @@ describe('PdfFindBar', () =>
 
     it('toggles case sensitivity', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setFindQuery('invoice');
         const wrapper = mountBar();
 
@@ -90,7 +90,7 @@ describe('PdfFindBar', () =>
 
     it('re-runs the term already in the box when whole-words is switched on', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setFindQuery('port');
         const wrapper = mountBar();
 
@@ -109,7 +109,7 @@ describe('PdfFindBar', () =>
 
     it('walks backwards on Shift+Enter, the binding every find box has taught', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setFindQuery('invoice');
         const wrapper = mountBar();
 
@@ -120,7 +120,7 @@ describe('PdfFindBar', () =>
 
     it('closes the find bar', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.openFind();
         const wrapper = mountBar();
 
@@ -131,7 +131,7 @@ describe('PdfFindBar', () =>
 
     it('shows the match tally when there are results', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setFindQuery('invoice');
         store.setFindResult(2, 5);
         const wrapper = mountBar();
@@ -141,7 +141,7 @@ describe('PdfFindBar', () =>
 
     it('reads "No results" for a query that matches nothing', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setFindQuery('invoice');
         store.setFindResult(0, 0);
         const wrapper = mountBar();

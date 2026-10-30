@@ -11,7 +11,7 @@ import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Engines
-import { brokenTrack, queueFromTrack, trackFromUrl } from '@client/engines/media/queue.ts';
+import { brokenTrack, queueFromTrack, trackFromURL } from '@client/engines/media/queue.ts';
 
 // Stores
 import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
@@ -99,7 +99,7 @@ describe('MediaIdentityBar', () =>
             title: 'Neon Skyline',
             artist: 'The Sample Band',
             album: null,
-            artworkUrl: null,
+            artworkURL: null,
         });
         const store = useMediaPlayerStore();
         store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
@@ -152,7 +152,7 @@ describe('MediaIdentityBar', () =>
     it('offers no download for a remote stream', async () =>
     {
         const store = useMediaPlayerStore();
-        store.queue = queueFromTrack(trackFromUrl('https://radio.example/live.mp3', 'seat-1'));
+        store.queue = queueFromTrack(trackFromURL('https://radio.example/live.mp3', 'seat-1'));
 
         mountBar();
         await nextTick();

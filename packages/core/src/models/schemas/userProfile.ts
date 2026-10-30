@@ -21,7 +21,7 @@ export const userProfileCodec = z.strictObject({
     banned: z.boolean(),
     banReason: z.string().nullable(),
     banExpires: z.date().nullable(),
-    createdAt: z.date(),
+    created: z.date(),
 });
 
 typeAssert<Equals<z.output<typeof userProfileCodec>, UserProfile>>();

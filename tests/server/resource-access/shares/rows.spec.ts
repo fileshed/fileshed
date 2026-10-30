@@ -57,11 +57,11 @@ afterEach(async () =>
     await db.destroy();
 });
 
-const createdAt = new Date('2026-02-01T00:00:00.000Z');
+const created = new Date('2026-02-01T00:00:00.000Z');
 
 function shareOf(id : string, nodeID : string, granteeUserID : string, role : ShareRole) : Share
 {
-    return { id, nodeID, granteeUserID, role, createdBy: 'owner', createdAt };
+    return { id, nodeID, granteeUserID, role, createdBy: 'owner', created };
 }
 
 function pendingRequest(
@@ -72,7 +72,7 @@ function pendingRequest(
     message : string | null = null
 ) : PendingShareRequest
 {
-    return { id, nodeID, requesterID, requestedRole: role, message, status: 'pending', resolvedAt: null, createdAt };
+    return { id, nodeID, requesterID, requestedRole: role, message, status: 'pending', resolvedAt: null, created };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -127,8 +127,8 @@ describe('ShareRA share rows', () =>
     it('lists every grant on a node for the owner view', async () =>
     {
         await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
-        await shares.upsertShare({ ...shareOf('s1', 'f', 'grantee', 'viewer'), createdAt: new Date('2026-02-01') });
-        await shares.upsertShare({ ...shareOf('s2', 'f', 'other', 'editor'), createdAt: new Date('2026-02-02') });
+        await shares.upsertShare({ ...shareOf('s1', 'f', 'grantee', 'viewer'), created: new Date('2026-02-01') });
+        await shares.upsertShare({ ...shareOf('s2', 'f', 'other', 'editor'), created: new Date('2026-02-02') });
 
         const listed = await shares.listByNode('f');
 
@@ -268,14 +268,14 @@ describe('ShareRA.sharedWithMe', () =>
     // value to test; it is not part of the wire target, only the row.
     it('carries the target\'s last-modified time on the row', async () =>
     {
-        const updatedAt = new Date('2026-05-15T12:00:00.000Z');
-        await nodes.insert(fileNode({ id: 'doc', ownerID: 'owner', blobID: 'sha-a', updatedAt }));
+        const updated = new Date('2026-05-15T12:00:00.000Z');
+        await nodes.insert(fileNode({ id: 'doc', ownerID: 'owner', blobID: 'sha-a', updated }));
         await shares.upsertShare(shareOf('s1', 'doc', 'grantee', 'viewer'));
 
         const [ entry ] = await shares.sharedWithMe('grantee');
         if(entry === undefined) { throw new Error('the share was never listed'); }
 
-        expect(entry.updatedAt).toEqual(updatedAt);
+        expect(entry.updated).toEqual(updated);
     });
 
     it('reports placed=true when the grantee holds a link to the shared target', async () =>
@@ -378,8 +378,8 @@ describe('ShareRA share request rows', () =>
     {
         await nodes.insert(folderNode({ id: 'a', ownerID: 'owner' }));
         await nodes.insert(folderNode({ id: 'b', ownerID: 'owner' }));
-        const earlier = { ...pendingRequest('r1', 'a', 'requester', 'viewer'), createdAt: new Date('2026-02-01') };
-        const later = { ...pendingRequest('r2', 'b', 'requester', 'editor'), createdAt: new Date('2026-02-02') };
+        const earlier = { ...pendingRequest('r1', 'a', 'requester', 'viewer'), created: new Date('2026-02-01') };
+        const later = { ...pendingRequest('r2', 'b', 'requester', 'editor'), created: new Date('2026-02-02') };
         await shares.insertRequest(earlier);
         await shares.insertRequest(later);
         await shares.resolveRequest('r2', 'declined', new Date('2026-04-01T00:00:00.000Z'));

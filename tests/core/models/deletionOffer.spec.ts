@@ -20,7 +20,7 @@ describe('deletionOfferCodec', () =>
             mimeType: 'application/pdf',
             size: 2048,
             createdBy: 'user_1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
             expiresAt: new Date('2026-01-08T00:00:00.000Z'),
         };
 
@@ -39,7 +39,7 @@ describe('deletionOfferCodec', () =>
             mimeType: 'application/pdf',
             size: 2048,
             createdBy: 'user_1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(deletionOfferCodec.safeParse(offer).success).toBe(false);

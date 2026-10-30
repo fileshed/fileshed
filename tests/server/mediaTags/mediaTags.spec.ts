@@ -143,7 +143,7 @@ describe('MediaTagManager', () =>
                 size: 100,
                 backendID: 'b1',
                 storageKey: sha256,
-                deletedAt: null,
+                deleted: null,
             })),
             getStream: vi.fn(() =>
             {

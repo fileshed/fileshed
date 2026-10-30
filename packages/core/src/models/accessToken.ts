@@ -25,7 +25,7 @@ export interface AccessToken
     name : string;
     start : string | null;
     scopes : AccessTokenScope[];
-    createdAt : Date;
+    created : Date;
     lastUsedAt : Date | null;
     expiresAt : Date | null;
 }

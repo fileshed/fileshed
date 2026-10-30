@@ -79,25 +79,25 @@
     import 'pdfjs-dist/web/pdf_viewer.css';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Engines
     import type { ScrollModeName, SpreadModeName } from '../../../engines/pdf/types.ts';
 
     // Components
-    import { type PdfSession, openPdfSession } from './pdfjs.ts';
+    import { type PDFSession, openPDFSession } from './pdfjs.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfSurface' });
+    defineOptions({ name: 'PDFSurface' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const container = ref<HTMLDivElement | null>(null);
     const viewer = ref<HTMLDivElement | null>(null);
     const renderError = ref<string | null>(null);
 
-    let session : PdfSession | null = null;
+    let session : PDFSession | null = null;
 
     // Bumped on every (re)mount so a session that finishes loading after its bytes were already superseded tears itself
     // down instead of attaching a stale document.
@@ -125,7 +125,7 @@
 
         try
         {
-            const active = await openPdfSession({
+            const active = await openPDFSession({
                 container: container.value,
                 viewer: viewer.value,
                 data,

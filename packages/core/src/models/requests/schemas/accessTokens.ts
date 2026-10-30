@@ -61,7 +61,7 @@ export const accessTokenResponseCodec = z.strictObject({
     name: z.string(),
     start: z.string().nullable(),
     scopes: z.array(z.enum(accessTokenScopes)),
-    createdAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
     lastUsedAt: isoDateTimeCodec.nullable(),
     expiresAt: isoDateTimeCodec.nullable(),
 });
@@ -109,7 +109,7 @@ export function toAccessTokenResponse(token : AccessToken) : AccessTokenResponse
         name: token.name,
         start: token.start,
         scopes: token.scopes,
-        createdAt: token.createdAt.toISOString(),
+        created: token.created.toISOString(),
         lastUsedAt: token.lastUsedAt === null ? null : token.lastUsedAt.toISOString(),
         expiresAt: token.expiresAt === null ? null : token.expiresAt.toISOString(),
     };

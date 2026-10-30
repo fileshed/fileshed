@@ -22,7 +22,7 @@ interface ShareRequestBase
     requesterID : string;
     requestedRole : ShareRole;
     message : string | null;
-    createdAt : Date;
+    created : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -10,7 +10,7 @@ export const MEDIA_FOLDER_ADD_MAX_DEPTH = 8;
 
 export const PLAYLIST_EXTENSIONS = [ '.m3u', '.m3u8' ] as const;
 export const PLAYLIST_MIME_LIST = [ 'audio/x-mpegurl', 'audio/mpegurl', 'application/vnd.apple.mpegurl' ] as const;
-export const PLAYLIST_MIME_TYPES = new Set<string>(PLAYLIST_MIME_LIST);
+export const playlistMimeTypes = new Set<string>(PLAYLIST_MIME_LIST);
 
 export const PLAYLIST_SAVE_MIME = 'audio/x-mpegurl';
 

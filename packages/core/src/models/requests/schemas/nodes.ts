@@ -199,7 +199,7 @@ export const nodeSharingCodec = z.strictObject({
     granteeCount: z.number()
         .int()
         .nonnegative(),
-    linkUrl: z.string().nullable(),
+    linkURL: z.string().nullable(),
 });
 
 typeAssert<Equals<z.output<typeof nodeSharingCodec>, NodeSharing>>();
@@ -209,8 +209,8 @@ const nodeResponseBaseShape = {
     name: z.string(),
     ownerID: z.string(),
     parentID: z.string().nullable(),
-    createdAt: isoDateTimeCodec,
-    updatedAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
+    updated: isoDateTimeCodec,
     role: roleCodec,
     sharing: nodeSharingCodec.nullable(),
 };
@@ -307,8 +307,8 @@ export function toNodeResponse(
         name: node.name,
         ownerID: node.ownerID,
         parentID: node.parentID,
-        createdAt: node.createdAt.toISOString(),
-        updatedAt: node.updatedAt.toISOString(),
+        created: node.created.toISOString(),
+        updated: node.updated.toISOString(),
         role,
         sharing,
     };

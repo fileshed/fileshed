@@ -19,7 +19,7 @@ import type { SessionManager } from '../../../managers/session.ts';
 
 // Routes
 import {
-    brandingCssSpec,
+    brandingCSSSpec,
     deleteLogoSpec,
     getBrandingSpec,
     getLogoSpec,
@@ -27,7 +27,7 @@ import {
     uploadLogoSpec,
 } from './branding.openapi.ts';
 import { readByteBody } from '../utils/readByteBody.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 import { USER_CONTENT_HEADERS } from '../utils/userContentHeaders.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -52,7 +52,7 @@ export function createBrandingRoutes(sessions : SessionManager, branding : Brand
     router.patch('/admin/branding', patchBrandingSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const request = await readJsonBody(ctx, updateBrandingRequestCodec);
+        const request = await readJSONBody(ctx, updateBrandingRequestCodec);
 
         return ctx.json(await branding.update(user, request));
     });
@@ -92,7 +92,7 @@ export function createBrandingRoutes(sessions : SessionManager, branding : Brand
         });
     });
 
-    router.get('/branding.css', brandingCssSpec, async (ctx) =>
+    router.get('/branding.css', brandingCSSSpec, async (ctx) =>
     {
         const css = await branding.css();
         const etag = `"${ createHash('sha256').update(css)

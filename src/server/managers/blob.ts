@@ -348,7 +348,7 @@ function randomRanges(size : number) : [ number, number ][]
 // The expected answer: read the same windows the challenge named, in order, and HMAC-SHA256 their concatenation keyed
 // by the nonce. Keying by the per-challenge nonce is what stops an answer captured on one challenge from
 // satisfying another.
-async function computeProof(
+async function calculateProof(
     blob : BlobRA,
     location : BlobLocation,
     ranges : [ number, number ][],
@@ -666,7 +666,7 @@ export class BlobManager
         let expected : string;
         try
         {
-            expected = await computeProof(this.#blob, challenge.location, challenge.ranges, challenge.nonce);
+            expected = await calculateProof(this.#blob, challenge.location, challenge.ranges, challenge.nonce);
         }
         catch(error)
         {
@@ -1062,8 +1062,8 @@ export class BlobManager
             blobID: sha256,
             size,
             mimeType: metadata.mimeType,
-            createdAt: now,
-            updatedAt: now,
+            created: now,
+            updated: now,
             trashedAt: null,
         };
 
@@ -1133,7 +1133,7 @@ export class BlobManager
     }
 
     // Repoint an existing file at new content in one transaction: persist the blob record (insert-or-resurrect for an
-    // upload, resurrect for a proven dedup), move the node's blob/size/mime and bump updated_at, and graveyard the OLD
+    // upload, resurrect for a proven dedup), move the node's blob/size/mime and bump updated, and graveyard the OLD
     // blob if this node was its last reference -- the sweep runs AFTER the repoint so its reference count reflects the
     // new state. Name, parent, owner, and trash state never change, so the node keeps its id and every link and share
     // pointing at it stays valid.
@@ -1182,7 +1182,7 @@ export class BlobManager
             if(oldBlobID !== sha256) { await blob.graveyardUnreferenced([ oldBlobID ]); }
         });
 
-        const node : FileNode = { ...target, blobID: sha256, size, mimeType: resolvedMime, updatedAt: now };
+        const node : FileNode = { ...target, blobID: sha256, size, mimeType: resolvedMime, updated: now };
 
         return { node, role };
     }

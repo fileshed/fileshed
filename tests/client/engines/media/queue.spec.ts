@@ -48,7 +48,7 @@ function track(id : string, kind : 'audio' | 'video' = 'audio') : MediaTrack
         name: `${ id }.media`,
         mimeType: kind === 'audio' ? 'audio/mpeg' : 'video/mp4',
         kind,
-        remoteUrl: null,
+        remoteURL: null,
         broken: false,
         failed: false,
     };
@@ -78,7 +78,7 @@ describe('trackFromNode', () =>
             name: 'song.mp3',
             mimeType: 'audio/mpeg',
             kind: 'audio',
-            remoteUrl: null,
+            remoteURL: null,
             broken: false,
             failed: false,
         });
@@ -116,7 +116,7 @@ describe('trackForPlay', () =>
             name: 'clip.mp4',
             mimeType: 'video/mp4',
             kind: 'video',
-            remoteUrl: null,
+            remoteURL: null,
             broken: false,
             failed: false,
         });
@@ -133,7 +133,7 @@ describe('trackForPlay', () =>
             name: 'shared-movie',
             mimeType: 'video/mp4',
             kind: 'video',
-            remoteUrl: null,
+            remoteURL: null,
             broken: false,
             failed: false,
         });

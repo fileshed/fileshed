@@ -8,7 +8,7 @@
     <AppShell>
         <template #sidebar>
             <RouterLink to="/" class="mb-6 flex items-center gap-2 px-2 text-xl font-bold">
-                <img :src="app.logoUrl" alt="" class="size-8">
+                <img :src="app.logoURL" alt="" class="size-8">
                 {{ app.name }}
             </RouterLink>
 

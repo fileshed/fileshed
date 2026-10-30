@@ -28,8 +28,8 @@ import UserMenu from '@client/components/layout/userMenu.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
-vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn() }));
-vi.mock('@client/resource-access/version.ts', () => ({ fetchVersion: vi.fn() }));
+vi.mock('@client/resource-access/instance.ts', () => ({ getInstance: vi.fn() }));
+vi.mock('@client/resource-access/version.ts', () => ({ getVersion: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 

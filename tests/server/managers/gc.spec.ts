@@ -62,7 +62,7 @@ async function seedStoredBytes() : Promise<string>
 }
 
 // Write real bytes through the storage RA and record its blob row with a chosen graveyard marker. Returns the sha256.
-async function seedStoredBlob(deletedAt : string | null) : Promise<string>
+async function seedStoredBlob(deleted : string | null) : Promise<string>
 {
     const sha256 = await seedStoredBytes();
 
@@ -73,8 +73,8 @@ async function seedStoredBlob(deletedAt : string | null) : Promise<string>
             size: BLOB_BYTES,
             backend_id: backendID,
             storage_key: sha256,
-            created_at: new Date().toISOString(),
-            deleted_at: deletedAt,
+            created: new Date().toISOString(),
+            deleted,
         })
         .execute();
 

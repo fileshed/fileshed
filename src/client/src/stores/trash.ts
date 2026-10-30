@@ -34,13 +34,13 @@ export const useTrashStore = defineStore('trash', () =>
 
     //------------------------------------------------------------------------------------------------------------------
 
-    async function fetchChunk(offset : number, filtered : boolean) : Promise<NodeListResponse>
+    async function listChunk(offset : number, filtered : boolean) : Promise<NodeListResponse>
     {
         return listTrash({ limit: LISTING_CHUNK_SIZE, offset, ...(filtered ? filters.query() : {}) });
     }
 
     // The rows in hand and the chunk reads that fill them.
-    const rows = createChunkedListing({ fetchChunk });
+    const rows = createChunkedListing({ listChunk });
 
     // What the surface renders: what has arrived while the listing is still arriving, and once it is whole, the rows
     // the active filters admit. Trash has no sort control -- the server's order stands either way.
@@ -56,7 +56,7 @@ export const useTrashStore = defineStore('trash', () =>
     // An empty result WITH an active filter is a distinct surface state from a genuinely empty trash.
     const filteredEmpty = computed(() => isEmpty.value && filters.active.value);
 
-    async function fetchListing() : Promise<void>
+    async function loadListing() : Promise<void>
     {
         const filtered = rows.shouldFilterOnServer(filters.active.value);
         const token = rows.begin();
@@ -87,7 +87,7 @@ export const useTrashStore = defineStore('trash', () =>
     async function load() : Promise<void>
     {
         filters.reset();
-        await fetchListing();
+        await loadListing();
     }
 
     // Re-read the trash, holding the filters in force, so a mutation reflects without dropping the active filter or
@@ -106,7 +106,7 @@ export const useTrashStore = defineStore('trash', () =>
     {
         if(rows.whole.value) { return; }
 
-        await fetchListing();
+        await loadListing();
     }
 
     async function setTypeFamilies(families : NodeTypeFamily[]) : Promise<void>

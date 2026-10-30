@@ -35,7 +35,7 @@
                     :initial-rate="rate"
                     class="min-h-0 flex-1"
                     @ended="store.advance()"
-                    @error="store.handleTrackError()"
+                    @error="store.onTrackError()"
                     @previous="store.previous()"
                     @next="store.next()"
                     @toggle-shuffle="store.toggleShuffle()"
@@ -63,8 +63,8 @@
                 <div v-else-if="store.track !== null" class="flex min-h-0 flex-1 items-center justify-center">
                     <div class="flex w-full max-w-md flex-col items-center gap-5">
                         <img
-                            v-if="currentTags?.artworkUrl"
-                            :src="currentTags.artworkUrl"
+                            v-if="currentTags?.artworkURL"
+                            :src="currentTags.artworkURL"
                             alt=""
                             class="size-48 rounded-lg object-cover shadow-lg"
                         >
@@ -105,7 +105,7 @@
                             :initial-muted="muted"
                             :initial-rate="rate"
                             @ended="store.advance()"
-                            @error="store.handleTrackError()"
+                            @error="store.onTrackError()"
                             @previous="store.previous()"
                             @next="store.next()"
                             @toggle-shuffle="store.toggleShuffle()"
@@ -154,7 +154,7 @@
     import { useMediaPlayerStore } from '../../../stores/mediaPlayer.ts';
 
     // Resource Access
-    import { downloadUrl } from '../../../resource-access/downloads.ts';
+    import { downloadURL } from '../../../resource-access/downloads.ts';
 
     // Components
     import AudioPlayer from './audioPlayer.vue';
@@ -163,7 +163,7 @@
     import VideoPlayer from './videoPlayer.vue';
 
     // Utils
-    import { describeApiError } from '../../../utils/runWithToast.ts';
+    import { describeAPIError } from '../../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -189,9 +189,9 @@
         // whole of what the preference buys.
         if(store.blocksRemote(entry)) { return ''; }
 
-        if(entry.remoteUrl !== null) { return entry.remoteUrl; }
+        if(entry.remoteURL !== null) { return entry.remoteURL; }
 
-        const src = downloadUrl(entry.nodeID, 'inline');
+        const src = downloadURL(entry.nodeID, 'inline');
         const stamp = store.playbackToken;
 
         return stamp === null ? src : `${ src }&token=${ encodeURIComponent(stamp.token) }`;
@@ -199,7 +199,7 @@
 
     function downloadHrefFor(entry : MediaTrack) : string
     {
-        return entry.remoteUrl ?? downloadUrl(entry.nodeID);
+        return entry.remoteURL ?? downloadURL(entry.nodeID);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -250,7 +250,7 @@
         {
             toast.add({
                 title: 'Couldn\'t open this playlist.',
-                description: describeApiError(caught),
+                description: describeAPIError(caught),
                 color: 'error',
             });
         }

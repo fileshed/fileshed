@@ -36,7 +36,7 @@ export function shareFromRow(row : Selectable<ShareTable>) : Share
         granteeUserID: row.grantee_user_id,
         role: row.role,
         createdBy: row.created_by,
-        createdAt: toDate(row.created_at),
+        created: toDate(row.created),
     };
 }
 
@@ -48,7 +48,7 @@ export function rowFromShare(share : Share) : Insertable<ShareTable>
         grantee_user_id: share.granteeUserID,
         role: share.role,
         created_by: share.createdBy,
-        created_at: share.createdAt.toISOString(),
+        created: share.created.toISOString(),
     };
 }
 
@@ -64,7 +64,7 @@ export function shareRequestFromRow(row : Selectable<ShareRequestTable>) : Share
         requesterID: row.requester_id,
         requestedRole: row.requested_role,
         message: row.message,
-        createdAt: toDate(row.created_at),
+        created: toDate(row.created),
     };
 
     if(row.status === 'pending')
@@ -93,7 +93,7 @@ export function rowFromPendingShareRequest(request : PendingShareRequest) : Inse
         requested_role: request.requestedRole,
         message: request.message,
         status: 'pending',
-        created_at: request.createdAt.toISOString(),
+        created: request.created.toISOString(),
         resolved_at: null,
     };
 }

@@ -18,7 +18,7 @@ import {
     listAccessRequestsSpec,
     requestAccessSpec,
 } from './accessRequests.openapi.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -29,7 +29,7 @@ export function createAccessRequestRoutes(sessions : SessionManager, shares : Sh
     router.post('/nodes/:id/access-requests', requestAccessSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.sharesWrite);
-        const request = await readJsonBody(ctx, createAccessRequestCodec);
+        const request = await readJSONBody(ctx, createAccessRequestCodec);
 
         return ctx.json(await shares.requestAccess(actor.user, ctx.req.param('id'), request), 201);
     });

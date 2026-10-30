@@ -21,7 +21,7 @@ export const shareCodec = z.strictObject({
     granteeUserID: z.string(),
     role: shareRoleCodec,
     createdBy: z.string(),
-    createdAt: z.date(),
+    created: z.date(),
 });
 
 typeAssert<Equals<z.output<typeof shareCodec>, Share>>();

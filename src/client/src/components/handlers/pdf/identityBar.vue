@@ -39,7 +39,7 @@
     import { computed } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Components
     import DownloadAction from '../downloadAction.vue';
@@ -50,9 +50,9 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfIdentityBar' });
+    defineOptions({ name: 'PDFIdentityBar' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
 </script>
 

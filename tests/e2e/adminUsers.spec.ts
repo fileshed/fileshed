@@ -13,7 +13,7 @@ import { sql } from 'kysely';
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerHandle,
     sha256Of,
     smallFixture,
@@ -28,13 +28,13 @@ const ADMIN_PASSWORD = 'admin-password-e2e';
 const PASSWORD = 'correct-horse-battery';
 
 let server : ServerHandle;
-let admin : ApiClient;
+let admin : APIClient;
 
 beforeAll(async () =>
 {
     server = await spawnServer({ env: { FILESHED_SETUP_TOKEN: 'e2e-setup-token-1234' } });
 
-    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+    const setup = await new APIClient(server.baseURL).post('/api/setup', {
         token: 'e2e-setup-token-1234',
         name: 'Administrator',
         email: ADMIN_EMAIL,
@@ -42,7 +42,7 @@ beforeAll(async () =>
     });
     if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 
-    admin = new ApiClient(server.baseURL);
+    admin = new APIClient(server.baseURL);
     const signIn = await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
     if(signIn.status !== 200) { throw new Error('setup: expected the admin sign-in to succeed'); }
 });
@@ -54,9 +54,9 @@ afterAll(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-async function signUpMember(email : string) : Promise<ApiClient>
+async function signUpMember(email : string) : Promise<APIClient>
 {
-    const client = new ApiClient(server.baseURL);
+    const client = new APIClient(server.baseURL);
     const res = await client.signUp(email, PASSWORD);
     if(res.status !== 200) { throw new Error(`setup: expected ${ email } to sign up`); }
 
@@ -130,13 +130,13 @@ describe('ban and unban', () =>
         expect(typeof banned.banExpires).toBe('string');
         expect(await sessionCountOf(target.id)).toBe(0);
 
-        const refused = await new ApiClient(server.baseURL).signIn('banned@example.com', PASSWORD);
+        const refused = await new APIClient(server.baseURL).signIn('banned@example.com', PASSWORD);
         expect(refused.status).toBe(403);
 
         const unban = await admin.post(`/api/admin/users/${ target.id }/unban`, {});
         expect(unban.status).toBe(200);
 
-        const restored = await new ApiClient(server.baseURL).signIn('banned@example.com', PASSWORD);
+        const restored = await new APIClient(server.baseURL).signIn('banned@example.com', PASSWORD);
         expect(restored.status).toBe(200);
     });
 });
@@ -156,8 +156,8 @@ describe('admin-set password', () =>
         );
         expect(res.status).toBe(204);
 
-        expect((await new ApiClient(server.baseURL).signIn('reset-me@example.com', PASSWORD)).status).not.toBe(200);
-        expect((await new ApiClient(server.baseURL).signIn('reset-me@example.com', 'a-brand-new-password')).status)
+        expect((await new APIClient(server.baseURL).signIn('reset-me@example.com', PASSWORD)).status).not.toBe(200);
+        expect((await new APIClient(server.baseURL).signIn('reset-me@example.com', 'a-brand-new-password')).status)
             .toBe(200);
     });
 });
@@ -169,7 +169,7 @@ describe('revoke sessions', () =>
     it('empties every session row the target holds', async () =>
     {
         await signUpMember('everywhere@example.com');
-        await new ApiClient(server.baseURL).signIn('everywhere@example.com', PASSWORD);
+        await new APIClient(server.baseURL).signIn('everywhere@example.com', PASSWORD);
         const target = await rowFor('everywhere@example.com');
         expect(await sessionCountOf(target.id)).toBeGreaterThanOrEqual(2);
 
@@ -195,14 +195,14 @@ describe('role changes', () =>
         expect(promote.status).toBe(200);
 
         // A fresh sign-in mints a session that reflects the new role; the old cookie's cached role would lag it.
-        const promoted = new ApiClient(server.baseURL);
+        const promoted = new APIClient(server.baseURL);
         await promoted.signIn('climber@example.com', PASSWORD);
         expect((await promoted.get('/api/admin/users')).status).toBe(200);
 
         const demote = await admin.post(`/api/admin/users/${ target.id }/role`, { role: 'user' });
         expect(demote.status).toBe(200);
 
-        const demoted = new ApiClient(server.baseURL);
+        const demoted = new APIClient(server.baseURL);
         await demoted.signIn('climber@example.com', PASSWORD);
         expect((await demoted.get('/api/admin/users')).status).toBe(403);
     });

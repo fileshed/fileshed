@@ -20,7 +20,7 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const AT = new Date('2026-01-01T00:00:00.000Z');
+const at = new Date('2026-01-01T00:00:00.000Z');
 
 function folder(overrides : Partial<FolderNode> = {}) : FolderNode
 {
@@ -30,8 +30,8 @@ function folder(overrides : Partial<FolderNode> = {}) : FolderNode
         name: 'Docs',
         ownerID: 'user_owner',
         parentID: null,
-        createdAt: AT,
-        updatedAt: AT,
+        created: at,
+        updated: at,
         trashedAt: null,
         ...overrides,
     };
@@ -48,8 +48,8 @@ function file(overrides : Partial<FileNode> = {}) : FileNode
         blobID: 'blob_1',
         size: 2048,
         mimeType: 'application/pdf',
-        createdAt: AT,
-        updatedAt: AT,
+        created: at,
+        updated: at,
         trashedAt: null,
         ...overrides,
     };
@@ -64,8 +64,8 @@ function link(overrides : Partial<LinkNode> = {}) : LinkNode
         ownerID: 'user_recipient',
         parentID: 'folder_1',
         targetNodeID: 'file_1',
-        createdAt: AT,
-        updatedAt: AT,
+        created: at,
+        updated: at,
         ...overrides,
     };
 }
@@ -165,7 +165,7 @@ describe('judgeParentEdge', () =>
     {
         const result = judgeParentEdge({
             creatorID: 'user_owner',
-            parent: folder({ trashedAt: AT }),
+            parent: folder({ trashedAt: at }),
             creatorRoleOnParent: 'owner',
         });
 

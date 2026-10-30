@@ -128,8 +128,8 @@ export interface BlobTable
     size : number;
     backend_id : string;
     storage_key : string;
-    created_at : Timestamp;
-    deleted_at : Timestamp | null;
+    created : Timestamp;
+    deleted : Timestamp | null;
 }
 
 // An admin-set configuration override, layered above the loaded config. Secret values are stored encrypted.
@@ -137,7 +137,7 @@ export interface InstanceSettingTable
 {
     key : string;
     value : string;
-    updated_at : string;
+    updated : string;
 }
 
 // Embedded audio metadata keyed by content: deduplicated copies share one row, and the row's existence means
@@ -161,8 +161,8 @@ export interface NodeTable
     target_node_id : string | null;
     size : number | null;
     mime_type : string | null;
-    created_at : Timestamp;
-    updated_at : Timestamp;
+    created : Timestamp;
+    updated : Timestamp;
     trashed_at : Timestamp | null;
 }
 
@@ -173,7 +173,7 @@ export interface ShareTable
     grantee_user_id : string;
     role : ShareRole;
     created_by : string;
-    created_at : Timestamp;
+    created : Timestamp;
 }
 
 export interface ShareRequestTable
@@ -184,7 +184,7 @@ export interface ShareRequestTable
     requested_role : ShareRole;
     message : string | null;
     status : ShareRequestStatus;
-    created_at : Timestamp;
+    created : Timestamp;
     resolved_at : Timestamp | null;
 }
 
@@ -193,7 +193,7 @@ export interface PublicLinkTable
     id : string;
     node_id : string;
     token : string;
-    created_at : Timestamp;
+    created : Timestamp;
     revoked_at : Timestamp | null;
 }
 
@@ -206,7 +206,7 @@ export interface DeletionOfferTable
     mime_type : string;
     size : number;
     created_by : string;
-    created_at : Timestamp;
+    created : Timestamp;
     expires_at : Timestamp;
 }
 

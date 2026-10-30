@@ -46,7 +46,7 @@ function toAccessToken(key : AccessKey, name : string) : AccessToken
         name,
         start: key.start,
         scopes: scopesFromStatement(key.permissions),
-        createdAt: key.createdAt,
+        created: key.created,
         lastUsedAt: key.lastUsedAt,
         expiresAt: key.expiresAt,
     };
@@ -100,7 +100,7 @@ export class AccessTokenManager
 
         return toAccessTokenListResponse(keys
             .map((key) => toAccessToken(key, key.name ?? ''))
-            .sort((first, second) => second.createdAt.getTime() - first.createdAt.getTime()));
+            .sort((first, second) => second.created.getTime() - first.created.getTime()));
     }
 
     // Revocation is deletion -- a PAT row gone is a credential dead. The plugin scopes the delete to the session

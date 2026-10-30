@@ -31,26 +31,26 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { requestJson, requestUpload, requestVoid } from './request.ts';
+import { requestJSON, requestUpload, requestVoid } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 // Whatever the caller leaves out takes the server's default.
 export async function listUsers(query : Partial<AdminUserListQuery> = {}) : Promise<AdminUserPageResponse>
 {
-    return requestJson('/api/admin/users', { query: { ...query }, codec: adminUserPageResponseCodec });
+    return requestJSON('/api/admin/users', { query: { ...query }, codec: adminUserPageResponseCodec });
 }
 
 export async function setQuota(userID : string, quotaLimit : number | null) : Promise<AdminUserResponse>
 {
     const body : SetQuotaRequest = { quotaLimit };
 
-    return requestJson(`/api/admin/users/${ userID }`, { method: 'PATCH', body, codec: adminUserResponseCodec });
+    return requestJSON(`/api/admin/users/${ userID }`, { method: 'PATCH', body, codec: adminUserResponseCodec });
 }
 
 export async function banUser(userID : string, request : BanUserRequest) : Promise<AdminUserResponse>
 {
-    return requestJson(`/api/admin/users/${ userID }/ban`, {
+    return requestJSON(`/api/admin/users/${ userID }/ban`, {
         method: 'POST',
         body: request,
         codec: adminUserResponseCodec,
@@ -59,14 +59,14 @@ export async function banUser(userID : string, request : BanUserRequest) : Promi
 
 export async function unbanUser(userID : string) : Promise<AdminUserResponse>
 {
-    return requestJson(`/api/admin/users/${ userID }/unban`, { method: 'POST', codec: adminUserResponseCodec });
+    return requestJSON(`/api/admin/users/${ userID }/unban`, { method: 'POST', codec: adminUserResponseCodec });
 }
 
 export async function setUserRole(userID : string, role : UserRole) : Promise<AdminUserResponse>
 {
     const body : SetRoleRequest = { role };
 
-    return requestJson(`/api/admin/users/${ userID }/role`, {
+    return requestJSON(`/api/admin/users/${ userID }/role`, {
         method: 'POST',
         body,
         codec: adminUserResponseCodec,
@@ -93,41 +93,41 @@ export async function deleteUser(userID : string) : Promise<void>
 
 export async function sendTestEmail() : Promise<TestEmailResponse>
 {
-    return requestJson('/api/admin/email/test', { method: 'POST', codec: testEmailResponseCodec });
+    return requestJSON('/api/admin/email/test', { method: 'POST', codec: testEmailResponseCodec });
 }
 
 export async function getAdminStatus() : Promise<AdminStatusResponse>
 {
-    return requestJson('/api/admin/status', { codec: adminStatusResponseCodec });
+    return requestJSON('/api/admin/status', { codec: adminStatusResponseCodec });
 }
 
 // Resolves only once the sweep has finished, with what it reclaimed. A sweep already running answers 409, which
-// surfaces as an ApiError carrying the server's sentence.
+// surfaces as an APIError carrying the server's sentence.
 export async function runSweep(sweep : SweepKind) : Promise<SweepRunResponse>
 {
-    return requestJson(`/api/admin/sweeps/${ sweep }/run`, { method: 'POST', codec: sweepRunResponseCodec });
+    return requestJSON(`/api/admin/sweeps/${ sweep }/run`, { method: 'POST', codec: sweepRunResponseCodec });
 }
 
-export async function fetchAdminSettings() : Promise<AdminSettingsResponse>
+export async function getAdminSettings() : Promise<AdminSettingsResponse>
 {
-    return requestJson('/api/admin/settings', { codec: adminSettingsResponseCodec });
+    return requestJSON('/api/admin/settings', { codec: adminSettingsResponseCodec });
 }
 
 export async function patchAdminSettings(changes : PatchSettingsRequest['changes']) : Promise<AdminSettingsResponse>
 {
     const body : PatchSettingsRequest = { changes };
 
-    return requestJson('/api/admin/settings', { method: 'PATCH', body, codec: adminSettingsResponseCodec });
+    return requestJSON('/api/admin/settings', { method: 'PATCH', body, codec: adminSettingsResponseCodec });
 }
 
-export async function fetchBranding() : Promise<InstanceTheme>
+export async function getBranding() : Promise<InstanceTheme>
 {
-    return requestJson('/api/admin/branding', { codec: instanceThemeCodec });
+    return requestJSON('/api/admin/branding', { codec: instanceThemeCodec });
 }
 
 export async function patchBranding(patch : UpdateBrandingRequest) : Promise<InstanceTheme>
 {
-    return requestJson('/api/admin/branding', { method: 'PATCH', body: patch, codec: instanceThemeCodec });
+    return requestJSON('/api/admin/branding', { method: 'PATCH', body: patch, codec: instanceThemeCodec });
 }
 
 export async function uploadBrandingLogo(file : File) : Promise<void>

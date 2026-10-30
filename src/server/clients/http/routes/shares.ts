@@ -16,7 +16,7 @@ import type { ShareManager } from '../../../managers/share.ts';
 
 // Routes
 import { parseQuery } from '../utils/parseQuery.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 import {
     grantShareSpec,
     leaveShareSpec,
@@ -34,7 +34,7 @@ export function createShareRoutes(sessions : SessionManager, shares : ShareManag
     router.post('/nodes/:id/shares', grantShareSpec, async (ctx) =>
     {
         const actor = await sessions.requireActor(ctx.req.raw.headers, permissionDemands.sharesWrite);
-        const request = await readJsonBody(ctx, grantShareRequestCodec);
+        const request = await readJSONBody(ctx, grantShareRequestCodec);
 
         return ctx.json(await shares.grant(actor.user, ctx.req.param('id'), request), 201);
     });

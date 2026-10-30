@@ -22,7 +22,7 @@ describe('userProfileCodec', () =>
             role: 'user',
             quotaLimit: null,
             ...neverBanned,
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(userProfileCodec.safeParse(profile).success).toBe(true);
@@ -39,7 +39,7 @@ describe('userProfileCodec', () =>
             banned: true,
             banReason: 'Spamming',
             banExpires: new Date('2026-08-01T00:00:00.000Z'),
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(userProfileCodec.safeParse(profile).success).toBe(true);
@@ -54,7 +54,7 @@ describe('userProfileCodec', () =>
             role: 'superuser',
             quotaLimit: null,
             ...neverBanned,
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(userProfileCodec.safeParse(profile).success).toBe(false);

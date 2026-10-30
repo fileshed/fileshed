@@ -45,7 +45,7 @@
                             Quota
                         </th>
                         <th class="hidden w-32 px-4 py-3 xl:table-cell">
-                            <SortHeader label="Joined" sort-key="createdAt" :state="sort" @toggle="toggleSort" />
+                            <SortHeader label="Joined" sort-key="created" :state="sort" @toggle="toggleSort" />
                         </th>
                         <th class="w-12 px-2 py-3" />
                     </tr>

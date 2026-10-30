@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ClaimResponse, InstanceLimits } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, sha256Of, smallFixture, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, sha256Of, smallFixture, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -26,14 +26,14 @@ const data = smallFixture('fileshed-e2e-limits');
 const sha = sha256Of(data);
 
 let server : ServerHandle;
-let admin : ApiClient;
-let member : ApiClient;
+let admin : APIClient;
+let member : APIClient;
 
 beforeAll(async () =>
 {
     server = await spawnServer({ env: { FILESHED_SETUP_TOKEN: SETUP_TOKEN } });
 
-    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+    const setup = await new APIClient(server.baseURL).post('/api/setup', {
         token: SETUP_TOKEN,
         name: 'Administrator',
         email: ADMIN_EMAIL,
@@ -41,14 +41,14 @@ beforeAll(async () =>
     });
     if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 
-    admin = new ApiClient(server.baseURL);
+    admin = new APIClient(server.baseURL);
     if((await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).status !== 200)
     {
         throw new Error('setup: expected the admin sign-in to succeed');
     }
 
     // A fresh account, so its quota_limit is NULL -- the state that inherits the instance default.
-    member = new ApiClient(server.baseURL);
+    member = new APIClient(server.baseURL);
     if((await member.signUp('member@fileshed.test', PASSWORD)).status !== 200)
     {
         throw new Error('setup: expected the member to sign up');
@@ -74,7 +74,7 @@ async function claimFixture() : Promise<Response>
 
 async function publishedLimits() : Promise<InstanceLimits>
 {
-    const res = await new ApiClient(server.baseURL).get('/api/instance');
+    const res = await new APIClient(server.baseURL).get('/api/instance');
 
     return (await res.json() as { limits : InstanceLimits }).limits;
 }

@@ -102,7 +102,7 @@ export class PublicLinkManager
             id: createId(),
             nodeID,
             token: randomBytes(PUBLIC_LINK_TOKEN_BYTES).toString('base64url'),
-            createdAt: new Date(),
+            created: new Date(),
             revokedAt: null,
         };
         await this.#links.insert(link);

@@ -38,8 +38,8 @@ export function nodeFromRow(row : Selectable<NodeTable>) : Node
         name: row.name,
         ownerID: row.owner_id,
         parentID: row.parent_id,
-        createdAt: toDate(row.created_at),
-        updatedAt: toDate(row.updated_at),
+        created: toDate(row.created),
+        updated: toDate(row.updated),
     };
 
     switch (row.type)
@@ -106,8 +106,8 @@ export function rowFromNode(node : Node) : Insertable<NodeTable>
         name: node.name,
         owner_id: node.ownerID,
         parent_id: node.parentID,
-        created_at: node.createdAt.toISOString(),
-        updated_at: node.updatedAt.toISOString(),
+        created: node.created.toISOString(),
+        updated: node.updated.toISOString(),
     };
 
     switch (node.type)

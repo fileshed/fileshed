@@ -89,8 +89,8 @@ export async function seedUnreferencedBlob(booted : BootedStoreApp, bytes : Buff
             size: bytes.length,
             backend_id: location.backendID,
             storage_key: location.storageKey,
-            created_at: new Date().toISOString(),
-            deleted_at: null,
+            created: new Date().toISOString(),
+            deleted: null,
         })
         .execute();
 
@@ -138,10 +138,10 @@ export async function blobDeletedAt(booted : BootedStoreApp, sha256 : string) : 
 {
     const row = await booted.handle.db
         .selectFrom('blob')
-        .select('deleted_at')
+        .select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 export async function blobRowExists(booted : BootedStoreApp, sha256 : string) : Promise<boolean>

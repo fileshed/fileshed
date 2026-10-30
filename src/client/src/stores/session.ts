@@ -24,13 +24,13 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError, apiErrorFromAuth } from '../resource-access/apiError.ts';
+import { APIError, apiErrorFromAuth } from '../resource-access/apiError.ts';
 import { authClient } from '../resource-access/authClient.ts';
 import { deleteAvatar, uploadAvatar } from '../resource-access/avatar.ts';
 import { readDeviceViewMode, writeDeviceViewMode } from '../resource-access/browser/deviceViewMode.ts';
-import { fetchMe } from '../resource-access/me.ts';
+import { getMe } from '../resource-access/me.ts';
 import { updatePreferences } from '../resource-access/preferences.ts';
-import { fetchVersion } from '../resource-access/version.ts';
+import { getVersion } from '../resource-access/version.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -90,7 +90,7 @@ export const useSessionStore = defineStore('session', () =>
     // the configured value, so copy built on this never shows a shipped default an operator has overridden.
     const trashRetentionDays = computed(() => me.value?.limits.trashRetentionDays ?? DEFAULT_TRASH_PURGE_DAYS);
 
-    async function initialize() : Promise<void>
+    async function init() : Promise<void>
     {
         if(initialized.value) { return; }
         if(restoring) { return restoring; }
@@ -99,7 +99,7 @@ export const useSessionStore = defineStore('session', () =>
         {
             try
             {
-                me.value = await fetchMe();
+                me.value = await getMe();
             }
             catch(error)
             {
@@ -107,7 +107,7 @@ export const useSessionStore = defineStore('session', () =>
 
                 // A 401 is the ordinary signed-out case. Anything else is unexpected -- surface it, but still resolve
                 // to signed-out so boot proceeds and the guard sends the visitor to sign in.
-                if(!(error instanceof ApiError) || error.status !== 401)
+                if(!(error instanceof APIError) || error.status !== 401)
                 {
                     console.error('Session restore failed', error);
                 }
@@ -130,7 +130,7 @@ export const useSessionStore = defineStore('session', () =>
             const { error } = await authClient.signIn.email({ email, password });
             if(error) { throw apiErrorFromAuth(error, 'Unable to sign in. Check your email and password.'); }
 
-            me.value = await fetchMe();
+            me.value = await getMe();
             initialized.value = true;
         }
         finally { pending.value = false; }
@@ -144,7 +144,7 @@ export const useSessionStore = defineStore('session', () =>
             const { error } = await authClient.signUp.email({ name, email, password });
             if(error) { throw apiErrorFromAuth(error, 'Unable to create your account.'); }
 
-            me.value = await fetchMe();
+            me.value = await getMe();
             initialized.value = true;
         }
         finally { pending.value = false; }
@@ -166,14 +166,14 @@ export const useSessionStore = defineStore('session', () =>
     // throws: no caller has anything to do about a gauge that is briefly stale.
     async function refreshProfile() : Promise<void>
     {
-        try { me.value = await fetchMe(); }
+        try { me.value = await getMe(); }
         catch { /* the profile in hand stands */ }
     }
 
     async function loadVersion() : Promise<void>
     {
         if(build.value !== null) { return; }
-        build.value = await fetchVersion();
+        build.value = await getVersion();
     }
 
     // Drop the signed-in state without a sign-out round trip -- for when the server already killed the session
@@ -198,7 +198,7 @@ export const useSessionStore = defineStore('session', () =>
         const { error } = await authClient.updateUser({ name });
         if(error) { throw apiErrorFromAuth(error, 'Unable to update your name.'); }
 
-        me.value = await fetchMe();
+        me.value = await getMe();
     }
 
     // Change the sign-in password through better-auth's self-service changePassword. Nothing in /api/me depends on the
@@ -265,7 +265,7 @@ export const useSessionStore = defineStore('session', () =>
         colorMode,
         allowRemoteMedia,
         trashRetentionDays,
-        initialize,
+        init,
         signIn,
         signUp,
         signOut,

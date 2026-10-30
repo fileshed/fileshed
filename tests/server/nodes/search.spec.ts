@@ -116,7 +116,7 @@ describe('GET /api/search', () =>
 
         // The owner's own hit states what it shares; a stranger's says null -- not zeros, which would be the owner
         // answering that nothing is shared.
-        expect(body.nodes.find((node) => node.id === mine)?.sharing).toEqual({ granteeCount: 1, linkUrl: null });
+        expect(body.nodes.find((node) => node.id === mine)?.sharing).toEqual({ granteeCount: 1, linkURL: null });
         expect(body.nodes.find((node) => node.id === theirs)?.sharing).toBeNull();
     });
 

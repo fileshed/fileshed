@@ -6,7 +6,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
-import { PLAYLIST_MIME_TYPES } from '@fileshed/core';
+import { playlistMimeTypes } from '@fileshed/core';
 
 // Resource Access
 import type { BlobRA } from '../resource-access/blob/index.ts';
@@ -44,11 +44,11 @@ export class MediaTagManager
     // an existing row -- even all-null -- means a previous run already answered.
     async ensureFor(blobID : string, mimeType : string | null) : Promise<void>
     {
-        if(mimeType === null || !mimeType.startsWith('audio/') || PLAYLIST_MIME_TYPES.has(mimeType)) { return; }
+        if(mimeType === null || !mimeType.startsWith('audio/') || playlistMimeTypes.has(mimeType)) { return; }
         if(await this.#tags.get(blobID) !== undefined) { return; }
 
         const blob = await this.#blob.get(blobID);
-        if(blob === undefined || blob.deletedAt !== null) { return; }
+        if(blob === undefined || blob.deleted !== null) { return; }
 
         const stream = await this.#blob.getStream(blob);
         const tags = await extractTags(stream);

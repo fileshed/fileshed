@@ -77,7 +77,7 @@ interface SecurityScheme
     name ?: string;
 }
 
-interface OpenApiSpec
+interface OpenAPISpec
 {
     openapi : string;
     info : { title : string; version : string };
@@ -89,12 +89,12 @@ interface OpenApiSpec
     security ?: Record<string, unknown>[];
 }
 
-async function fetchSpec() : Promise<OpenApiSpec>
+async function getSpec() : Promise<OpenAPISpec>
 {
     const res = await app.request('/api/openapi.json');
     expect(res.status).toBe(200);
 
-    return await res.json() as OpenApiSpec;
+    return await res.json() as OpenAPISpec;
 }
 
 // The nonce off the one script tag that carries no src -- the inline call that starts the reference up.
@@ -111,7 +111,7 @@ describe('GET /api/openapi.json', () =>
 {
     it('emits a well-formed OpenAPI 3.x document', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         expect(spec.openapi).toMatch(/^3\./);
         expect(spec.info).toMatchObject({ title: expect.any(String), version: expect.any(String) });
@@ -120,14 +120,14 @@ describe('GET /api/openapi.json', () =>
 
     it('states the release the instance runs as the document version', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         expect(spec.info.version).toBe(rootManifest.version);
     });
 
     it('documents GET /api/nodes/{id} as a read operation', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
         const operation = spec.paths['/api/nodes/{id}']?.get;
 
         expect(operation).toBeDefined();
@@ -137,7 +137,7 @@ describe('GET /api/openapi.json', () =>
 
     it('documents POST /api/nodes as a create operation', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
         const operation = spec.paths['/api/nodes']?.post;
 
         expect(operation).toBeDefined();
@@ -146,7 +146,7 @@ describe('GET /api/openapi.json', () =>
 
     it('round-trips the createNodeRequest discriminated union into the POST request body', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
         const schema = spec.paths['/api/nodes']?.post?.requestBody?.content['application/json']?.schema;
         const branches = schema?.oneOf ?? [];
 
@@ -243,7 +243,7 @@ describe('operation coverage', () =>
     // it. Path params translate from Hono's `:id` to OpenAPI's `{id}`.
     it('documents every non-auth route as an operation with a summary', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         const registered = app.routes
             .filter((route) => route.method !== 'ALL' && route.handler.length < 2 && route.path !== '/api/auth/*')
@@ -265,7 +265,7 @@ describe('operation coverage', () =>
 
     it('emits a summary on every documented operation', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         for(const [ path, item ] of Object.entries(spec.paths))
         {
@@ -287,7 +287,7 @@ describe('security', () =>
 {
     it('declares the better-auth session cookie as the one security scheme', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         expect(spec.components?.securitySchemes?.sessionCookie).toMatchObject({
             type: 'apiKey',
@@ -298,14 +298,14 @@ describe('security', () =>
 
     it('applies the session cookie as the global default', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         expect(spec.security).toContainEqual({ sessionCookie: [] });
     });
 
     it('overrides the anonymous surfaces to require no security', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         const anonymous = [
             '/d/{token}',
@@ -324,7 +324,7 @@ describe('security', () =>
 
     it('leaves an authenticated operation to inherit the global default', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
 
         // No per-operation security means the document default applies -- the absence is the inheritance.
         expect(spec.paths['/api/me']?.get?.security).toBeUndefined();
@@ -337,7 +337,7 @@ describe('shared error component', () =>
 {
     it('hoists the error shape into components/schemas', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
         const error = spec.components?.schemas?.ErrorResponse as { properties ?: Record<string, unknown> } | undefined;
 
         expect(error).toBeDefined();
@@ -346,7 +346,7 @@ describe('shared error component', () =>
 
     it('references the hoisted error component from an error response rather than inlining it', async () =>
     {
-        const spec = await fetchSpec();
+        const spec = await getSpec();
         const schema = spec.paths['/api/nodes/{id}']?.get?.responses['404']?.content?.['application/json']?.schema;
 
         expect(schema).toEqual({ $ref: '#/components/schemas/ErrorResponse' });

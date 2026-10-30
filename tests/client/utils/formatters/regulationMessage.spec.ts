@@ -6,14 +6,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { RegulationViolation } from '@fileshed/core';
 
-import { RegulationApiError } from '@client/resource-access/apiError.ts';
+import { RegulationAPIError } from '@client/resource-access/apiError.ts';
 import { regulationMessage } from '@client/utils/formatters/regulationMessage.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function rejection(violations : RegulationViolation[], message = 'Blocked by a rule.') : RegulationApiError
+function rejection(violations : RegulationViolation[], message = 'Blocked by a rule.') : RegulationAPIError
 {
-    return new RegulationApiError(422, message, violations);
+    return new RegulationAPIError(422, message, violations);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

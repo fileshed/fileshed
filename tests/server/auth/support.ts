@@ -41,7 +41,7 @@ export const ORIGIN = 'http://localhost:3000';
 export const TEST_AUTH_SECRET = 'test-auth-secret-test-auth-secret-test';
 
 // Baked in the way an image build bakes them, so composing an app never spawns git.
-const TEST_BUILD = resolveBuildInfo({ COMMIT_SHA: 'f11e5ed5f11e5ed5f11e5ed5f11e5ed5f11e5ed5', COMMIT_REF: 'spec' });
+const testBuild = resolveBuildInfo({ COMMIT_SHA: 'f11e5ed5f11e5ed5f11e5ed5f11e5ed5f11e5ed5', COMMIT_REF: 'spec' });
 
 export function testConfig(overrides : Partial<Config> = {}) : Config
 {
@@ -116,7 +116,7 @@ export function composeTestServices(auth : Auth, handle : DatabaseHandle, config
         settings,
         mail: new MailManager({ settings, mail: new MailRA() }),
         providers: [],
-        build: TEST_BUILD,
+        build: testBuild,
         startedAt,
     });
 }

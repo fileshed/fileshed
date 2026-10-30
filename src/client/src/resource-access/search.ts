@@ -7,7 +7,7 @@
 import { type SearchResponse, searchResponseCodec } from '@fileshed/core';
 
 // Resource Access
-import { requestJson } from './request.ts';
+import { requestJSON } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -22,7 +22,7 @@ export interface SearchOptions
 
 export async function search(q : string, options : SearchOptions = {}) : Promise<SearchResponse>
 {
-    return requestJson('/api/search', {
+    return requestJSON('/api/search', {
         query: { q, limit: options.limit, offset: options.offset },
         codec: searchResponseCodec,
         ...(options.signal === undefined ? {} : { signal: options.signal }),

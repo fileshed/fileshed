@@ -44,7 +44,7 @@
             <span v-if="user.quotaLimit === null" class="text-dimmed">(default)</span>
         </td>
         <td class="hidden px-4 py-3 text-muted xl:table-cell">
-            {{ formatNodeDate(user.createdAt, session.timeFormat) }}
+            {{ formatNodeDate(user.created, session.timeFormat) }}
         </td>
         <td class="px-2 py-3 text-right">
             <UDropdownMenu :items="menuItems">

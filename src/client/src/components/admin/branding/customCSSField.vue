@@ -21,7 +21,7 @@
             to the URL — the page loads with no branding at all, so you can come back here and fix it.
         </p>
 
-        <CssEditor
+        <CSSEditor
             :model-value="modelValue ?? ''"
             :theme="session.editorTheme"
             class="mt-3"
@@ -42,7 +42,7 @@
 
     // Components
     import BrandingField from './brandingField.vue';
-    import CssEditor from './cssEditor.vue';
+    import CSSEditor from './cssEditor.vue';
 
     //------------------------------------------------------------------------------------------------------------------
 

@@ -10,7 +10,7 @@
         <template #body>
             <div class="flex flex-col gap-6">
                 <div class="flex items-center gap-3">
-                    <img :src="app.logoUrl" alt="" class="size-10 rounded">
+                    <img :src="app.logoURL" alt="" class="size-10 rounded">
                     <div class="flex flex-col">
                         <span class="text-base font-semibold text-highlighted">{{ app.name }}</span>
                         <span class="text-sm text-muted">{{ app.tagline }}</span>
@@ -67,7 +67,7 @@
                     </a>
                     <a
                         v-if="build !== null"
-                        :href="releaseNotesUrl"
+                        :href="releaseNotesURL"
                         target="_blank"
                         rel="noopener"
                         class="text-primary hover:underline"
@@ -107,7 +107,7 @@
     const open = ref(false);
 
     const build = computed(() => session.build);
-    const releaseNotesUrl = computed(() => `${ RELEASE_NOTES_URL }/v${ build.value?.version ?? '' }`);
+    const releaseNotesURL = computed(() => `${ RELEASE_NOTES_URL }/v${ build.value?.version ?? '' }`);
 
     //------------------------------------------------------------------------------------------------------------------
 

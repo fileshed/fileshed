@@ -13,7 +13,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { type QueryParams, requestJson } from './request.ts';
+import { type QueryParams, requestJSON } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -32,14 +32,14 @@ export function commitQuery(commit : UploadCommitMetadata) : QueryParams
 
 export async function claimBlob(request : ClaimRequest) : Promise<ClaimResponse>
 {
-    return requestJson('/api/blobs/claim', { method: 'POST', body: request, codec: claimResponseCodec });
+    return requestJSON('/api/blobs/claim', { method: 'POST', body: request, codec: claimResponseCodec });
 }
 
 // Answer a proof-of-possession challenge. The body carries the HMAC answer plus the commit metadata, since a successful
 // proof commits the node in the same round trip -- no bytes are uploaded.
 export async function answerChallenge(challengeID : string, request : ChallengeAnswerRequest) : Promise<NodeResponse>
 {
-    return requestJson(`/api/blobs/claim/${ challengeID }`, {
+    return requestJSON(`/api/blobs/claim/${ challengeID }`, {
         method: 'POST',
         body: request,
         codec: nodeResponseCodec,

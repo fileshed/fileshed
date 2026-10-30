@@ -10,7 +10,7 @@ export interface PublicLink
     id : string;
     nodeID : string;
     token : string;
-    createdAt : Date;
+    created : Date;
     revokedAt : Date | null;
 }
 

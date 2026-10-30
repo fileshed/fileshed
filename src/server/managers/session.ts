@@ -155,13 +155,13 @@ export class SessionManager
 
         // A 5xx from the plugin, or any other throw, is storage failing underneath it and surfaces as the 500 a
         // caller holding a good token is owed -- not a claim that the token is bad.
-        const verified = await this.#auth.verifyKey(token, configID, required);
-        if(verified === null) { throw new UnauthorizedError('Invalid access token.'); }
+        const validKey = await this.#auth.validateKey(token, configID, required);
+        if(validKey === null) { throw new UnauthorizedError('Invalid access token.'); }
 
-        const user = await this.#auth.findUser(verified.userID);
+        const user = await this.#auth.getUser(validKey.userID);
         if(user === null || user.banned === true) { throw new UnauthorizedError('Invalid access token.'); }
 
-        return { kind: 'token', user, permissions: verified.permissions };
+        return { kind: 'token', user, permissions: validKey.permissions };
     }
 }
 

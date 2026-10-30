@@ -36,7 +36,7 @@ import {
     unbanUserSpec,
 } from './admin.openapi.ts';
 import { parseQuery } from '../utils/parseQuery.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -54,7 +54,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
     router.patch('/admin/users/:id', setQuotaSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const body = await readJsonBody(ctx, setQuotaRequestCodec);
+        const body = await readJSONBody(ctx, setQuotaRequestCodec);
 
         return ctx.json(await admins.setQuota(user, ctx.req.raw.headers, ctx.req.param('id'), body.quotaLimit));
     });
@@ -62,7 +62,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
     router.post('/admin/users/:id/ban', banUserSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const body = await readJsonBody(ctx, banUserRequestCodec);
+        const body = await readJSONBody(ctx, banUserRequestCodec);
 
         return ctx.json(await admins.ban(user, ctx.req.raw.headers, ctx.req.param('id'), body));
     });
@@ -77,7 +77,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
     router.post('/admin/users/:id/role', setRoleSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const body = await readJsonBody(ctx, setRoleRequestCodec);
+        const body = await readJSONBody(ctx, setRoleRequestCodec);
 
         return ctx.json(await admins.setRole(user, ctx.req.raw.headers, ctx.req.param('id'), body.role));
     });
@@ -85,7 +85,7 @@ export function createAdminRoutes(sessions : SessionManager, admins : AdminManag
     router.post('/admin/users/:id/password', setPasswordSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const body = await readJsonBody(ctx, setPasswordRequestCodec);
+        const body = await readJSONBody(ctx, setPasswordRequestCodec);
 
         await admins.setPassword(user, ctx.req.raw.headers, ctx.req.param('id'), body.password);
 

@@ -89,8 +89,8 @@ const VARIED : readonly {
     name : string;
     size : number | null;
     mimeType : string | null;
-    createdAt : string;
-    updatedAt : string;
+    created : string;
+    updated : string;
     type : 'file' | 'link';
 }[] = [
     {
@@ -98,8 +98,8 @@ const VARIED : readonly {
         name: 'v-huge.bin',
         size: 900_000,
         mimeType: 'application/octet-stream',
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
+        created: '2026-01-01T00:00:00.000Z',
+        updated: '2026-09-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -107,8 +107,8 @@ const VARIED : readonly {
         name: 'v-tiny.txt',
         size: 1,
         mimeType: 'text/plain',
-        createdAt: '2026-06-01T00:00:00.000Z',
-        updatedAt: '2026-02-01T00:00:00.000Z',
+        created: '2026-06-01T00:00:00.000Z',
+        updated: '2026-02-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -116,8 +116,8 @@ const VARIED : readonly {
         name: 'v-empty.txt',
         size: 0,
         mimeType: 'text/plain',
-        createdAt: '2026-03-01T00:00:00.000Z',
-        updatedAt: '2026-05-01T00:00:00.000Z',
+        created: '2026-03-01T00:00:00.000Z',
+        updated: '2026-05-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -125,8 +125,8 @@ const VARIED : readonly {
         name: 'v-clip.mp4',
         size: 5000,
         mimeType: 'video/mp4',
-        createdAt: '2026-04-01T00:00:00.000Z',
-        updatedAt: '2026-04-01T00:00:00.000Z',
+        created: '2026-04-01T00:00:00.000Z',
+        updated: '2026-04-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -134,13 +134,13 @@ const VARIED : readonly {
         name: 'v-pointer',
         size: null,
         mimeType: null,
-        createdAt: '2026-05-01T00:00:00.000Z',
-        updatedAt: '2026-03-01T00:00:00.000Z',
+        created: '2026-05-01T00:00:00.000Z',
+        updated: '2026-03-01T00:00:00.000Z',
         type: 'link',
     },
 ];
 
-const SHA256 = 'c'.repeat(64);
+const sha256 = 'c'.repeat(64);
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -158,12 +158,12 @@ async function seed() : Promise<void>
     await booted.handle.db
         .insertInto('blob')
         .values({
-            sha256: SHA256,
+            sha256,
             size: 10,
             backend_id: backend.id,
             storage_key: 'seed/natural',
-            created_at: now,
-            deleted_at: null,
+            created: now,
+            deleted: null,
         } as never)
         .execute();
 
@@ -174,11 +174,11 @@ async function seed() : Promise<void>
             type: 'file' as const,
             owner_id: owner.id,
             parent_id: null,
-            blob_id: SHA256,
+            blob_id: sha256,
             size: 10,
             mime_type: 'application/octet-stream',
-            created_at: now,
-            updated_at: now,
+            created: now,
+            updated: now,
             trashed_at: null,
             target_node_id: null,
         })),
@@ -188,11 +188,11 @@ async function seed() : Promise<void>
             type: row.type,
             owner_id: owner.id,
             parent_id: null,
-            blob_id: row.type === 'file' ? SHA256 : null,
+            blob_id: row.type === 'file' ? sha256 : null,
             size: row.size,
             mime_type: row.mimeType,
-            created_at: row.createdAt,
-            updated_at: row.updatedAt,
+            created: row.created,
+            updated: row.updated,
             trashed_at: null,
             target_node_id: row.type === 'link' ? 'k-01' : null,
         })),
@@ -205,8 +205,8 @@ async function seed() : Promise<void>
             blob_id: null,
             size: null,
             mime_type: null,
-            created_at: now,
-            updated_at: now,
+            created: now,
+            updated: now,
             trashed_at: null,
             target_node_id: null,
         })),

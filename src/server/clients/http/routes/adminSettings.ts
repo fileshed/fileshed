@@ -16,7 +16,7 @@ import type { SettingsManager } from '../../../managers/settings.ts';
 
 // Routes
 import { getSettingsSpec, patchSettingsSpec } from './adminSettings.openapi.ts';
-import { readJsonBody } from '../utils/readJsonBody.ts';
+import { readJSONBody } from '../utils/readJSONBody.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -34,7 +34,7 @@ export function createAdminSettingsRoutes(sessions : SessionManager, settings : 
     router.patch('/admin/settings', patchSettingsSpec, async (ctx) =>
     {
         const user = await sessions.requireUser(ctx.req.raw.headers);
-        const request = await readJsonBody(ctx, patchSettingsRequestCodec);
+        const request = await readJSONBody(ctx, patchSettingsRequestCodec);
 
         return ctx.json(await settings.patch(user, request));
     });

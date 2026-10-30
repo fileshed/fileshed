@@ -6,8 +6,8 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Resource Access
 import { authClient } from '@client/resource-access/authClient.ts';
-import { fetchInstance } from '@client/resource-access/instance.ts';
-import { fetchMe } from '@client/resource-access/me.ts';
+import { getInstance } from '@client/resource-access/instance.ts';
+import { getMe } from '@client/resource-access/me.ts';
 
 // Support
 import { type MountedAuthPage, alertText, fillField, mountAuthPage, submit } from './authPageSupport.ts';
@@ -21,14 +21,14 @@ import SignInPage from '@client/pages/signInPage.vue';
 vi.mock('@client/resource-access/authClient.ts', () => ({
     authClient: { signIn: { email: vi.fn(), social: vi.fn() } },
 }));
-vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/instance.ts', () => ({ getInstance: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const signInEmail = authClient.signIn.email as unknown as Mock;
 const signInSocial = authClient.signIn.social as unknown as Mock;
-const fetchInstanceMock = fetchInstance as unknown as Mock;
-const fetchMeMock = fetchMe as unknown as Mock;
+const getInstanceMock = getInstance as unknown as Mock;
+const getMeMock = getMe as unknown as Mock;
 
 function openSignIn(location = '/signin') : Promise<MountedAuthPage>
 {
@@ -48,10 +48,10 @@ async function signIn(location : string) : Promise<MountedAuthPage>
 beforeEach(() =>
 {
     vi.clearAllMocks();
-    fetchInstanceMock.mockResolvedValue(instanceFixture());
+    getInstanceMock.mockResolvedValue(instanceFixture());
     signInEmail.mockResolvedValue({ error: null });
     signInSocial.mockResolvedValue({ error: null });
-    fetchMeMock.mockResolvedValue(meFixture());
+    getMeMock.mockResolvedValue(meFixture());
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -103,7 +103,7 @@ describe('SignInPage', () =>
 
     it('sends a fresh instance to the first-run wizard', async () =>
     {
-        fetchInstanceMock.mockResolvedValue(instanceFixture({ needsSetup: true }));
+        getInstanceMock.mockResolvedValue(instanceFixture({ needsSetup: true }));
 
         const { router } = await openSignIn();
 
@@ -115,14 +115,14 @@ describe('SignInPage', () =>
         const withoutMail = await openSignIn();
         expect(withoutMail.wrapper.text()).not.toContain('Forgot password?');
 
-        fetchInstanceMock.mockResolvedValue(instanceFixture({ emailEnabled: true }));
+        getInstanceMock.mockResolvedValue(instanceFixture({ emailEnabled: true }));
         const withMail = await openSignIn();
         expect(withMail.wrapper.text()).toContain('Forgot password?');
     });
 
     it('offers sign-up only when the instance takes new accounts', async () =>
     {
-        fetchInstanceMock.mockResolvedValue(instanceFixture({ signUpEnabled: false }));
+        getInstanceMock.mockResolvedValue(instanceFixture({ signUpEnabled: false }));
 
         const { wrapper } = await openSignIn();
 
@@ -131,7 +131,7 @@ describe('SignInPage', () =>
 
     it('sends a provider sign-in back to the page that sent the visitor here', async () =>
     {
-        fetchInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
+        getInstanceMock.mockResolvedValue(instanceFixture({ providers: [ 'github' ] }));
         const { wrapper } = await openSignIn('/signin?redirect=/trash');
 
         await wrapper.get('[data-label="Continue with GitHub"]').trigger('click');

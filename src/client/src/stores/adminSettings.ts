@@ -20,7 +20,7 @@ import {
 import { useAppStore } from './app.ts';
 
 // Resource Access
-import { fetchAdminSettings, patchAdminSettings } from '../resource-access/admin.ts';
+import { getAdminSettings, patchAdminSettings } from '../resource-access/admin.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -65,7 +65,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
 
         try
         {
-            adopt(await fetchAdminSettings());
+            adopt(await getAdminSettings());
         }
         catch(caught)
         {
@@ -90,7 +90,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
     {
         adopt(await patchAdminSettings(changes));
 
-        if(handshakeKeys.some((key) => key in changes)) { void useAppStore().initialize(); }
+        if(handshakeKeys.some((key) => key in changes)) { void useAppStore().init(); }
     }
 
     async function save(key : AdminSettingKey, value : SettingValue) : Promise<void>

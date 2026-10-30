@@ -91,7 +91,7 @@
     import FilePicker from '../../drive/filePicker.vue';
 
     // Resource Access
-    import { fetchNodeBlob } from '../../../resource-access/content.ts';
+    import { getNodeBlob } from '../../../resource-access/content.ts';
 
     // Utils
     import { formatBytes } from '../../../utils/formatters/index.ts';
@@ -208,7 +208,7 @@
     {
         void runMutation(async () =>
         {
-            const blob = await fetchNodeBlob(node.id);
+            const blob = await getNodeBlob(node.id);
             const type = node.type === 'file' ? node.mimeType : blob.type;
             setSource(new File([ blob ], node.name, { type }));
         }, pending);

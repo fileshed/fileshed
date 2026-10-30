@@ -54,7 +54,7 @@
             {{ node.type === 'file' ? formatBytes(node.size) : '—' }}
         </span>
         <span class="hidden truncate text-muted sm:block">
-            {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
+            {{ formatNodeDate(node.updated, session.timeFormat) }}
         </span>
         <span class="hidden truncate text-muted xl:block">{{ kindLabel }}</span>
 
@@ -132,7 +132,7 @@
     // What the metadata columns say, folded into one line for the narrow tier that has no room for them.
     const metaLine = computed(() =>
     {
-        const modified = formatNodeDate(props.node.updatedAt, session.timeFormat);
+        const modified = formatNodeDate(props.node.updated, session.timeFormat);
         if(dead.value) { return `Broken link · ${ modified }`; }
 
         return props.node.type === 'file' ? `${ formatBytes(props.node.size) } · ${ modified }` : modified;

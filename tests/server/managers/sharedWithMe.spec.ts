@@ -36,7 +36,7 @@ let handle : DatabaseHandle;
 let shares : ShareRA;
 let manager : ShareManager;
 
-const createdAt = new Date('2026-02-01T00:00:00.000Z');
+const created = new Date('2026-02-01T00:00:00.000Z');
 const grantee = testActor({ id: 'grantee' });
 
 beforeEach(async () =>
@@ -59,7 +59,7 @@ afterEach(async () =>
 
 function share(id : string, nodeID : string, granteeID : string) : Share
 {
-    return { id, nodeID, granteeUserID: granteeID, role: 'viewer', createdBy: 'owner', createdAt };
+    return { id, nodeID, granteeUserID: granteeID, role: 'viewer', createdBy: 'owner', created };
 }
 
 const unfiltered : SharedWithMeQuery = { types: [] };
@@ -116,15 +116,15 @@ describe('ShareManager.sharedWithMe — Modified filter', () =>
         await nodes.insert(fileNode({ id: 'old',
             ownerID: 'owner',
             blobID: 'sha-a',
-            updatedAt: new Date('2026-01-10T00:00:00.000Z') }));
+            updated: new Date('2026-01-10T00:00:00.000Z') }));
         await nodes.insert(fileNode({ id: 'mid',
             ownerID: 'owner',
             blobID: 'sha-a',
-            updatedAt: new Date('2026-02-10T00:00:00.000Z') }));
+            updated: new Date('2026-02-10T00:00:00.000Z') }));
         await nodes.insert(fileNode({ id: 'new',
             ownerID: 'owner',
             blobID: 'sha-a',
-            updatedAt: new Date('2026-03-10T00:00:00.000Z') }));
+            updated: new Date('2026-03-10T00:00:00.000Z') }));
         await shares.upsertShare(share('s-old', 'old', 'grantee'));
         await shares.upsertShare(share('s-mid', 'mid', 'grantee'));
         await shares.upsertShare(share('s-new', 'new', 'grantee'));

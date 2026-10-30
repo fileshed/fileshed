@@ -19,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AdminOverview } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -27,13 +27,13 @@ const ADMIN_EMAIL = 'admin@fileshed.test';
 const ADMIN_PASSWORD = 'admin-password-e2e';
 
 let server : ServerHandle;
-let admin : ApiClient;
+let admin : APIClient;
 
 beforeAll(async () =>
 {
     server = await spawnServer({ env: { FILESHED_SETUP_TOKEN: 'e2e-setup-token-1234' } });
 
-    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+    const setup = await new APIClient(server.baseURL).post('/api/setup', {
         token: 'e2e-setup-token-1234',
         name: 'Admin',
         email: ADMIN_EMAIL,
@@ -41,7 +41,7 @@ beforeAll(async () =>
     });
     if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 
-    admin = new ApiClient(server.baseURL);
+    admin = new APIClient(server.baseURL);
     const signIn = await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
     if(signIn.status !== 200) { throw new Error('setup: expected the admin sign-in to succeed'); }
 });

@@ -35,7 +35,7 @@ export interface AccessRequestResponse
     requestedRole : ShareRole;
     message : string | null;
     status : ShareRequestStatus;
-    createdAt : string;
+    created : string;
     resolvedAt : string | null;
 }
 

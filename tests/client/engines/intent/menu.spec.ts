@@ -37,7 +37,7 @@ describe('nodeMenu', () =>
 
     it('hands out an existing public link in both forms beside Share', () =>
     {
-        const shared = fileNode({ sharing: { granteeCount: 0, linkUrl: '/d/abc' } });
+        const shared = fileNode({ sharing: { granteeCount: 0, linkURL: '/d/abc' } });
 
         expect(nodeMenu(shared, ME_ID)[1]).toEqual([ 'share', 'copyLink', 'copyDownloadLink' ]);
     });

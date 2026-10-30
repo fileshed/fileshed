@@ -11,7 +11,7 @@ import { type ComputedRef, type Ref, computed, ref } from 'vue';
 import { type NodeResponse, type UploadCommitMetadata, isRoleAtLeast } from '@fileshed/core';
 
 // Resource Access
-import { ConflictApiError } from '../resource-access/apiError.ts';
+import { ConflictAPIError } from '../resource-access/apiError.ts';
 import { patchNode } from '../resource-access/nodes.ts';
 
 // Stores
@@ -19,7 +19,7 @@ import { commitFile } from './commitFile.ts';
 
 // Utils
 import { hashFile } from '../utils/hashFile.ts';
-import { describeApiError } from '../utils/runWithToast.ts';
+import { describeAPIError } from '../utils/runWithToast.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -141,8 +141,8 @@ export function createFileSaveSession() : FileSaveSession
         {
             if(started === generation)
             {
-                if(caught instanceof ConflictApiError && caught.code === 'replace.staleBlob') { conflict.value = true; }
-                else { saveError.value = describeApiError(caught); }
+                if(caught instanceof ConflictAPIError && caught.code === 'replace.staleBlob') { conflict.value = true; }
+                else { saveError.value = describeAPIError(caught); }
             }
         }
         finally

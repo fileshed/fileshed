@@ -20,7 +20,7 @@
     import { computed } from 'vue';
 
     // Resource Access
-    import { downloadUrl } from '../../resource-access/downloads.ts';
+    import { downloadURL } from '../../resource-access/downloads.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@
         nodeID : string;
     }>();
 
-    const href = computed(() => downloadUrl(props.nodeID));
+    const href = computed(() => downloadURL(props.nodeID));
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

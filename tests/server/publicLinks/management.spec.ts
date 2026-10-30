@@ -83,7 +83,7 @@ describe('POST /api/nodes/:id/links', () =>
         const link = await (await createLink(booted, owner, uploaded.node.id, { mode: 'view', disposition: 'inline' }))
             .json() as Record<string, unknown>;
 
-        expect(Object.keys(link).sort()).toEqual([ 'createdAt', 'id', 'nodeID', 'revokedAt', 'token', 'url' ]);
+        expect(Object.keys(link).sort()).toEqual([ 'created', 'id', 'nodeID', 'revokedAt', 'token', 'url' ]);
     });
 
     it('allows multiple distinct links on one node', async () =>

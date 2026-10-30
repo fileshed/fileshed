@@ -39,7 +39,7 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const NOTHING_SHARED = { granteeCount: 0, linkUrl: null };
+const NOTHING_SHARED = { granteeCount: 0, linkURL: null };
 
 let booted : BootedStoreApp;
 let owner : TestUser;
@@ -155,9 +155,9 @@ describe('sharing on a folder listing', () =>
 
         const listing = await listRoot(owner);
 
-        expect(nodeIn(listing, sharedID)?.sharing).toEqual({ granteeCount: 1, linkUrl: null });
-        expect(nodeIn(listing, linkedID)?.sharing).toEqual({ granteeCount: 0, linkUrl: `/d/${ link.token }` });
-        expect(nodeIn(listing, bothID)?.sharing).toEqual({ granteeCount: 2, linkUrl: `/d/${ bothLink.token }` });
+        expect(nodeIn(listing, sharedID)?.sharing).toEqual({ granteeCount: 1, linkURL: null });
+        expect(nodeIn(listing, linkedID)?.sharing).toEqual({ granteeCount: 0, linkURL: `/d/${ link.token }` });
+        expect(nodeIn(listing, bothID)?.sharing).toEqual({ granteeCount: 2, linkURL: `/d/${ bothLink.token }` });
         expect(nodeIn(listing, privateID)?.sharing).toEqual(NOTHING_SHARED);
     });
 
@@ -183,7 +183,7 @@ describe('sharing on a folder listing', () =>
         const nodeID = await uploadOwned('linked.bin');
         const link = await mintLink(owner, nodeID);
 
-        expect(nodeIn(await listRoot(owner), nodeID)?.sharing?.linkUrl).toBe(`/d/${ link.token }`);
+        expect(nodeIn(await listRoot(owner), nodeID)?.sharing?.linkURL).toBe(`/d/${ link.token }`);
 
         await revokeLink(booted, owner, link.id);
 
@@ -275,7 +275,7 @@ describe('sharing under an access token', () =>
 
         const listing = await (await requestAs(token, '/api/nodes/children')).json() as NodeListResponse;
 
-        expect(nodeIn(listing, nodeID)?.sharing).toEqual({ granteeCount: 1, linkUrl: `/d/${ link.token }` });
+        expect(nodeIn(listing, nodeID)?.sharing).toEqual({ granteeCount: 1, linkURL: `/d/${ link.token }` });
     });
 
     it('withholds sharing on a single-node read from a key that may read files but not shares', async () =>
@@ -307,7 +307,7 @@ describe('sharing on a single node', () =>
 
         expect(res.status).toBe(200);
         expect((await res.json() as NodeResponse).sharing)
-            .toEqual({ granteeCount: 1, linkUrl: `/d/${ link.token }` });
+            .toEqual({ granteeCount: 1, linkURL: `/d/${ link.token }` });
     });
 
     it('says null to someone who can read the node but does not own it', async () =>
@@ -335,7 +335,7 @@ describe('sharing on a single node', () =>
 
         expect(res.status).toBe(200);
         expect(renamed.name).toBe('after.bin');
-        expect(renamed.sharing).toEqual({ granteeCount: 1, linkUrl: `/d/${ link.token }` });
+        expect(renamed.sharing).toEqual({ granteeCount: 1, linkURL: `/d/${ link.token }` });
     });
 
     // A trashed node reaches no one -- its links serve nothing and recipients cannot see it -- so the single-node read

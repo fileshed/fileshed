@@ -21,10 +21,10 @@ import {
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerHandle,
     blobFileExists,
-    computeAnswer,
+    calculateAnswer,
     largeFixture,
     readBlobFile,
     sha256Of,
@@ -39,8 +39,8 @@ const PASSWORD = 'correct-horse-battery';
 
 let server : ServerHandle;
 
-let alice : ApiClient;
-let bob : ApiClient;
+let alice : APIClient;
+let bob : APIClient;
 let aliceID : string;
 let bobID : string;
 let folderID : string;
@@ -52,7 +52,7 @@ let claimIssuedTicket : boolean;
 let putStatus : number;
 let fileNode : NodeResponse;
 
-async function callerID(client : ApiClient) : Promise<string>
+async function callerID(client : APIClient) : Promise<string>
 {
     const me = await (await client.get('/api/me')).json() as MeResponse;
     return me.id;
@@ -64,7 +64,7 @@ beforeAll(async () =>
 {
     server = await spawnServer();
 
-    alice = new ApiClient(server.baseURL);
+    alice = new APIClient(server.baseURL);
     await alice.signUp('alice@example.com', PASSWORD);
     aliceID = await callerID(alice);
 
@@ -86,7 +86,7 @@ beforeAll(async () =>
     putStatus = put.status;
     fileNode = await put.json() as NodeResponse;
 
-    bob = new ApiClient(server.baseURL);
+    bob = new APIClient(server.baseURL);
     await bob.signUp('bob@example.com', PASSWORD);
     bobID = await callerID(bob);
 });
@@ -136,7 +136,7 @@ describe('fresh upload by the first owner', () =>
         expect(blob?.size).toBe(data.length);
         expect(blob?.storage_key).toBe(sha);
         expect(blob?.backend_id).toBe(backend.id);
-        expect(blob?.deleted_at).toBeNull();
+        expect(blob?.deleted).toBeNull();
     });
 
     it('owns exactly one file node and surfaces it in the folder listing with the owner role', async () =>
@@ -203,7 +203,7 @@ describe('proof-of-possession dedup by a second owner', () =>
             expect(offset + length).toBeLessThanOrEqual(data.length);
         }
 
-        const answer = computeAnswer(challenge.nonce, challenge.ranges, data);
+        const answer = calculateAnswer(challenge.nonce, challenge.ranges, data);
         const res = await bob.post(`/api/blobs/claim/${ challenge.challengeID }`, {
             answer,
             name: 'fixture-copy.bin',
@@ -262,15 +262,15 @@ describe('quota enforcement over the wire', () =>
     const LIMIT = allowance.length;
 
     let quotaServer : ServerHandle;
-    let user : ApiClient;
-    let quotaAdmin : ApiClient;
+    let user : APIClient;
+    let quotaAdmin : APIClient;
     let quotaUserID : string;
 
     beforeAll(async () =>
     {
         quotaServer = await spawnServer({ env: { FILESHED_SETUP_TOKEN: 'e2e-setup-token-1234' } });
 
-        const setup = await new ApiClient(quotaServer.baseURL).post('/api/setup', {
+        const setup = await new APIClient(quotaServer.baseURL).post('/api/setup', {
             token: 'e2e-setup-token-1234',
             name: 'Administrator',
             email: ADMIN_EMAIL,
@@ -278,16 +278,16 @@ describe('quota enforcement over the wire', () =>
         });
         if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 
-        const registrant = new ApiClient(quotaServer.baseURL);
+        const registrant = new APIClient(quotaServer.baseURL);
         await registrant.signUp('quota-user@example.com', PASSWORD);
         quotaUserID = (await (await registrant.get('/api/me')).json() as MeResponse).id;
 
-        quotaAdmin = new ApiClient(quotaServer.baseURL);
+        quotaAdmin = new APIClient(quotaServer.baseURL);
         await quotaAdmin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
         const setQuota = await quotaAdmin.patch(`/api/admin/users/${ quotaUserID }`, { quotaLimit: LIMIT });
         if(setQuota.status !== 200) { throw new Error('setup: expected the admin to set the quota'); }
 
-        user = new ApiClient(quotaServer.baseURL);
+        user = new APIClient(quotaServer.baseURL);
         await user.signIn('quota-user@example.com', PASSWORD);
     });
 
@@ -372,12 +372,12 @@ describe('quota enforcement over the wire', () =>
 
 describe('failed proof-of-possession', () =>
 {
-    let carl : ApiClient;
+    let carl : APIClient;
     let carlID : string;
 
     beforeAll(async () =>
     {
-        carl = new ApiClient(server.baseURL);
+        carl = new APIClient(server.baseURL);
         await carl.signUp('carl@example.com', PASSWORD);
         carlID = await callerID(carl);
     });
@@ -390,7 +390,7 @@ describe('failed proof-of-possession', () =>
             .json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const correct = computeAnswer(challenge.nonce, challenge.ranges, data);
+        const correct = calculateAnswer(challenge.nonce, challenge.ranges, data);
         const wrong = (correct.startsWith('0') ? 'f' : '0') + correct.slice(1);
 
         const res = await carl.post(`/api/blobs/claim/${ challenge.challengeID }`, {
@@ -449,7 +449,7 @@ describe('upload ticket and challenge misuse', () =>
     // is true.
     it('answers a reuse of a consumed upload ticket with the file it already stored', async () =>
     {
-        const uploader = new ApiClient(server.baseURL);
+        const uploader = new APIClient(server.baseURL);
         await uploader.signUp('ticket-reuse@example.com', PASSWORD);
 
         const bytes = smallFixture('ticket-reuse');
@@ -472,8 +472,8 @@ describe('upload ticket and challenge misuse', () =>
 
     it('403s a PUT of a ticket issued to a different user', async () =>
     {
-        const holder = new ApiClient(server.baseURL);
-        const intruder = new ApiClient(server.baseURL);
+        const holder = new APIClient(server.baseURL);
+        const intruder = new APIClient(server.baseURL);
         await holder.signUp('ticket-holder@example.com', PASSWORD);
         await intruder.signUp('ticket-intruder@example.com', PASSWORD);
 
@@ -488,7 +488,7 @@ describe('upload ticket and challenge misuse', () =>
 
     it('404s an answer to an unknown challenge id', async () =>
     {
-        const prober = new ApiClient(server.baseURL);
+        const prober = new APIClient(server.baseURL);
         await prober.signUp('challenge-unknown@example.com', PASSWORD);
 
         const res = await prober.post('/api/blobs/claim/nonexistent-challenge', {
@@ -511,11 +511,11 @@ describe('upload ticket and challenge misuse', () =>
 
 describe('content replace lifecycle', () =>
 {
-    let replacer : ApiClient;
+    let replacer : APIClient;
 
     beforeAll(async () =>
     {
-        replacer = new ApiClient(server.baseURL);
+        replacer = new APIClient(server.baseURL);
         await replacer.signUp('replacer@example.com', PASSWORD);
     });
 
@@ -530,8 +530,8 @@ describe('content replace lifecycle', () =>
         if(originalClaim.upload !== true) { throw new Error('setup: expected a ticket for the fresh file'); }
 
         const createParams = new URLSearchParams({ name: 'editable.txt', mimeType: 'text/plain' });
-        const createUrl = `/api/uploads/${ originalClaim.ticket }?${ createParams.toString() }`;
-        const created = await (await replacer.put(createUrl, original)).json() as NodeResponse;
+        const createURL = `/api/uploads/${ originalClaim.ticket }?${ createParams.toString() }`;
+        const created = await (await replacer.put(createURL, original)).json() as NodeResponse;
 
         // New content for the same node.
         const replacement = smallFixture('replace-new-content');
@@ -542,8 +542,8 @@ describe('content replace lifecycle', () =>
         if(replaceClaim.upload !== true) { throw new Error('setup: expected a ticket for the replacement bytes'); }
 
         const replaceParams = new URLSearchParams({ replaceNodeID: created.id });
-        const replaceUrl = `/api/uploads/${ replaceClaim.ticket }?${ replaceParams.toString() }`;
-        const res = await replacer.put(replaceUrl, replacement);
+        const replaceURL = `/api/uploads/${ replaceClaim.ticket }?${ replaceParams.toString() }`;
+        const res = await replacer.put(replaceURL, replacement);
         const replaced = await res.json() as NodeResponse;
 
         expect(res.status).toBe(200);
@@ -567,10 +567,10 @@ describe('content replace lifecycle', () =>
         // The old blob lost its only reference and is graveyarded.
         const oldBlob = await withDb(server, (db) => db
             .selectFrom('blob')
-            .select('deleted_at')
+            .select('deleted')
             .where('sha256', '=', originalSha)
             .executeTakeFirst());
-        expect(oldBlob?.deleted_at).not.toBeNull();
+        expect(oldBlob?.deleted).not.toBeNull();
     });
 
     // The editor's optimistic-concurrency guard over real sockets: a save pinned to the blob it opened from lands

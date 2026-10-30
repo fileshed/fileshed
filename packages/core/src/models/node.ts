@@ -11,8 +11,8 @@ interface NodeBase
     name : string;
     ownerID : string;
     parentID : string | null;
-    createdAt : Date;
-    updatedAt : Date;
+    created : Date;
+    updated : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

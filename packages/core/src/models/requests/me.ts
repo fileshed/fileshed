@@ -41,7 +41,7 @@ export interface MeResponse
     // The caller's avatar as a URL to fetch its bytes, or null when the account has none. Derived from the stored
     // avatar hash at serialization time -- never a persisted URL.
     image ?: string | null;
-    createdAt : string;
+    created : string;
 
     // Set only while the caller has asked for their account to be deleted and the window has yet to run out. The due
     // date is derived from the request against the instance's current window, so an admin who lengthens it moves this

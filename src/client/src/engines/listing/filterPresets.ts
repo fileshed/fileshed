@@ -46,7 +46,7 @@ export type ModifiedFilter
     = | { kind : 'preset'; preset : ModifiedPreset }
     | { kind : 'range'; after : string; before : string };
 
-// A half-open window: updated_at >= after (inclusive) and < before (exclusive). A preset with no upper bound omits
+// A half-open window: updated >= after (inclusive) and < before (exclusive). A preset with no upper bound omits
 // `before` -- nothing is updated in the future, so "today or later" is just "today".
 export interface ModifiedWindow
 {

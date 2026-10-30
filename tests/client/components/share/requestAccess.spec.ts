@@ -12,7 +12,7 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import type { AccessRequestResponse, ShareRole } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import { requestAccess } from '@client/resource-access/accessRequests.ts';
 
 // Under test
@@ -21,7 +21,7 @@ import RequestAccess from '@client/components/share/requestAccess.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/accessRequests.ts', () => ({ requestAccess: vi.fn() }));
-// describeApiError lives beside a top-level useToast import; stubbing the composables module keeps @nuxt/ui's runtime
+// describeAPIError lives beside a top-level useToast import; stubbing the composables module keeps @nuxt/ui's runtime
 // (which pulls the Nuxt-only "#imports" specifier) out of the test.
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
@@ -38,7 +38,7 @@ function pendingRequest(role : ShareRole, message : string | null = null) : Acce
         requestedRole: role,
         message,
         status: 'pending',
-        createdAt: '2026-07-01T00:00:00.000Z',
+        created: '2026-07-01T00:00:00.000Z',
         resolvedAt: null,
     };
 }
@@ -140,7 +140,7 @@ describe('RequestAccess', () =>
 
     it('surfaces a vanished node honestly and stays on the ask form', async () =>
     {
-        requestAccessMock.mockRejectedValue(new ApiError(404, 'No node n1.'));
+        requestAccessMock.mockRejectedValue(new APIError(404, 'No node n1.'));
         const wrapper = mountCard();
 
         await clickButton(wrapper, 'Request access');
@@ -152,7 +152,7 @@ describe('RequestAccess', () =>
 
     it('shows the server\'s reason when a request is refused', async () =>
     {
-        requestAccessMock.mockRejectedValue(new ApiError(400, 'You already have a pending request for this node.'));
+        requestAccessMock.mockRejectedValue(new APIError(400, 'You already have a pending request for this node.'));
         const wrapper = mountCard();
 
         await clickButton(wrapper, 'Request access');

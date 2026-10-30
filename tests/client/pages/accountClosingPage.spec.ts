@@ -27,7 +27,7 @@ import AccountClosingPage from '@client/pages/accountClosingPage.vue';
 const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }));
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
-vi.mock('@client/resource-access/me.ts', () => ({ cancelAccountDeletion: vi.fn(), fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ cancelAccountDeletion: vi.fn(), getMe: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const cancelMock = cancelAccountDeletion as unknown as Mock;

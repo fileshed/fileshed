@@ -30,7 +30,7 @@ export function createUserRoutes(sessions : SessionManager, users : UserManager)
         await sessions.requireActor(ctx.req.raw.headers, permissionDemands.sharesWrite);
         const query = parseQuery(ctx, userLookupQueryCodec);
 
-        return ctx.json(await users.lookupByEmail(query.email));
+        return ctx.json(await users.getByEmail(query.email));
     });
 
     return router;

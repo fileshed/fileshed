@@ -104,7 +104,7 @@ export const adminUserResponseCodec = userProfileCodec.extend({
     usedBytes: z.number()
         .int()
         .nonnegative(),
-    createdAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
 });
 
 typeAssert<Equals<z.output<typeof adminUserResponseCodec>, AdminUserResponse>>();
@@ -161,7 +161,7 @@ export function toAdminUserResponse(entry : AdminUserEntry) : AdminUserResponse
         banReason: profile.banReason,
         banExpires: profile.banExpires === null ? null : profile.banExpires.toISOString(),
         usedBytes,
-        createdAt: profile.createdAt.toISOString(),
+        created: profile.created.toISOString(),
     };
 }
 

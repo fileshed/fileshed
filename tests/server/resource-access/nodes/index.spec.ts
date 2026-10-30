@@ -48,7 +48,7 @@ function file(
         parentID ?: string | null;
         size ?: number;
         ownerID ?: string;
-        updatedAt ?: Date;
+        updated ?: Date;
         name ?: string;
         mimeType ?: string;
     }
@@ -344,16 +344,16 @@ describe('NodeRA.children', () =>
         expect(children.map((node) => node.id)).toEqual([ 'sizeless', 'big', 'small' ]);
     });
 
-    it('sorts by updatedAt', async () =>
+    it('sorts by updated', async () =>
     {
         await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
-        await ra.insert(file('newest', { parentID: 'p', updatedAt: new Date('2026-05-03T00:00:00.000Z') }));
-        await ra.insert(file('oldest', { parentID: 'p', updatedAt: new Date('2026-05-01T00:00:00.000Z') }));
-        await ra.insert(file('middle', { parentID: 'p', updatedAt: new Date('2026-05-02T00:00:00.000Z') }));
+        await ra.insert(file('newest', { parentID: 'p', updated: new Date('2026-05-03T00:00:00.000Z') }));
+        await ra.insert(file('oldest', { parentID: 'p', updated: new Date('2026-05-01T00:00:00.000Z') }));
+        await ra.insert(file('middle', { parentID: 'p', updated: new Date('2026-05-02T00:00:00.000Z') }));
 
         const children = await ra.children(
             { parentID: 'p', ownerID: 'u1' },
-            { pagination: { limit: 100, offset: 0 }, sort: { key: 'updatedAt', direction: 'asc' } }
+            { pagination: { limit: 100, offset: 0 }, sort: { key: 'updated', direction: 'asc' } }
         );
 
         expect(children.map((node) => node.id)).toEqual([ 'oldest', 'middle', 'newest' ]);
@@ -476,9 +476,9 @@ describe('NodeRA.children filters', () =>
     it('applies a half-open modified window — after inclusive, before exclusive', async () =>
     {
         await ra.insert(folderNode({ id: 'p', ownerID: 'u1' }));
-        await ra.insert(file('a', { parentID: 'p', updatedAt: new Date('2026-03-01T00:00:00.000Z') }));
-        await ra.insert(file('b', { parentID: 'p', updatedAt: new Date('2026-06-01T00:00:00.000Z') }));
-        await ra.insert(file('c', { parentID: 'p', updatedAt: new Date('2026-09-01T00:00:00.000Z') }));
+        await ra.insert(file('a', { parentID: 'p', updated: new Date('2026-03-01T00:00:00.000Z') }));
+        await ra.insert(file('b', { parentID: 'p', updated: new Date('2026-06-01T00:00:00.000Z') }));
+        await ra.insert(file('c', { parentID: 'p', updated: new Date('2026-09-01T00:00:00.000Z') }));
 
         const bound = new Date('2026-06-01T00:00:00.000Z');
         const after = await ra.children(at, byName, { types: [], updatedAfter: bound });

@@ -13,7 +13,7 @@ import { BadRequestError } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function readJsonBody<T>(ctx : Context, codec : ZodType<T>) : Promise<T>
+export async function readJSONBody<T>(ctx : Context, codec : ZodType<T>) : Promise<T>
 {
     let raw : unknown;
     try { raw = await ctx.req.json(); }

@@ -71,7 +71,7 @@ async function grant(nodeID : string, granteeUserID : string, role : ShareRole, 
         granteeUserID,
         role,
         createdBy,
-        createdAt: new Date('2026-02-01T00:00:00.000Z'),
+        created: new Date('2026-02-01T00:00:00.000Z'),
     };
     await shares.upsertShare(share);
 }

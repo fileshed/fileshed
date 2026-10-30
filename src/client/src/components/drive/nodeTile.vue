@@ -62,7 +62,7 @@
                 {{ node.name }}
             </p>
             <p v-if="node.type === 'file'" class="mt-0.5 truncate text-xs text-muted">
-                {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
+                {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updated, session.timeFormat) }}
             </p>
             <p v-else-if="dead" class="mt-0.5 text-xs text-dimmed">
                 Broken link

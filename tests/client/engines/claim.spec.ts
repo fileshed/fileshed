@@ -10,7 +10,7 @@ import { createHmac } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { computeProofAnswer } from '@client/engines/claim.ts';
+import { calculateProofAnswer } from '@client/engines/claim.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -36,14 +36,14 @@ function buffersOf(...windows : Uint8Array[]) : ArrayBuffer[]
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('computeProofAnswer', () =>
+describe('calculateProofAnswer', () =>
 {
     it('matches the server HMAC over a single window', async () =>
     {
         const nonce = 'a1b2c3d4';
         const window = new Uint8Array([ 0x61, 0x62, 0x63, 0x64 ]);
 
-        const answer = await computeProofAnswer(nonce, buffersOf(window));
+        const answer = await calculateProofAnswer(nonce, buffersOf(window));
 
         expect(answer).toBe(serverAnswer(nonce, [ window ]));
     });
@@ -55,7 +55,7 @@ describe('computeProofAnswer', () =>
         const second = new Uint8Array([ 250, 251 ]);
         const third = new Uint8Array([ 42 ]);
 
-        const answer = await computeProofAnswer(nonce, buffersOf(first, second, third));
+        const answer = await calculateProofAnswer(nonce, buffersOf(first, second, third));
 
         expect(answer).toBe(serverAnswer(nonce, [ first, second, third ]));
     });
@@ -66,8 +66,8 @@ describe('computeProofAnswer', () =>
         const first = new Uint8Array([ 1, 2 ]);
         const second = new Uint8Array([ 3, 4 ]);
 
-        const forward = await computeProofAnswer(nonce, buffersOf(first, second));
-        const reversed = await computeProofAnswer(nonce, buffersOf(second, first));
+        const forward = await calculateProofAnswer(nonce, buffersOf(first, second));
+        const reversed = await calculateProofAnswer(nonce, buffersOf(second, first));
 
         expect(forward).not.toBe(reversed);
     });
@@ -76,8 +76,8 @@ describe('computeProofAnswer', () =>
     {
         const window = new Uint8Array([ 9, 9, 9 ]);
 
-        const one = await computeProofAnswer('nonce-one', buffersOf(window));
-        const two = await computeProofAnswer('nonce-two', buffersOf(window));
+        const one = await calculateProofAnswer('nonce-one', buffersOf(window));
+        const two = await calculateProofAnswer('nonce-two', buffersOf(window));
 
         expect(one).not.toBe(two);
     });
@@ -86,7 +86,7 @@ describe('computeProofAnswer', () =>
     {
         const nonce = 'empty';
 
-        const answer = await computeProofAnswer(nonce, []);
+        const answer = await calculateProofAnswer(nonce, []);
 
         expect(answer).toBe(serverAnswer(nonce, []));
     });

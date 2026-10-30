@@ -102,7 +102,7 @@ async function loadBundle() : Promise<Bundle | null>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function mountOpenApiSpec(app : Hono, version : string) : void
+export function mountOpenAPISpec(app : Hono, version : string) : void
 {
     const specSpec = describeRoute({
         tags: [ 'Docs' ],
@@ -137,7 +137,7 @@ export function mountOpenApiSpec(app : Hono, version : string) : void
 // The interactive reference, which a deployment never serves. It is a developer's tool: it renders whatever the
 // running process would answer, which is exactly why it is worth having locally and worth refusing in production --
 // an instance has no business shipping an anonymous page that loads a bundle and offers to call the API from it.
-export function mountApiReference(app : Hono) : void
+export function mountAPIReference(app : Hono) : void
 {
     app.use(BUNDLE_PATH, async (ctx) =>
     {

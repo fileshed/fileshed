@@ -38,7 +38,7 @@
 
             <div v-else-if="error" class="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted">
                 <span>Couldn't load files.</span>
-                <UButton size="xs" color="neutral" variant="subtle" label="Retry" @click="fetchEntries" />
+                <UButton size="xs" color="neutral" variant="subtle" label="Retry" @click="loadEntries" />
             </div>
 
             <div
@@ -192,7 +192,7 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    async function fetchEntries() : Promise<void>
+    async function loadEntries() : Promise<void>
     {
         loading.value = true;
         error.value = false;
@@ -218,7 +218,7 @@
         if(node.type === 'folder')
         {
             path.value = [ ...path.value, node ];
-            await fetchEntries();
+            await loadEntries();
             return;
         }
 
@@ -229,10 +229,10 @@
     async function goTo(index : number) : Promise<void>
     {
         path.value = index < 0 ? [] : path.value.slice(0, index + 1);
-        await fetchEntries();
+        await loadEntries();
     }
 
-    onMounted(fetchEntries);
+    onMounted(loadEntries);
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

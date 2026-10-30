@@ -21,17 +21,17 @@
     import type { DropdownMenuItem } from '@nuxt/ui';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfViewMenu' });
+    defineOptions({ name: 'PDFViewMenu' });
 
     const emit = defineEmits<{
         present : [];
     }>();
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     //------------------------------------------------------------------------------------------------------------------
 
