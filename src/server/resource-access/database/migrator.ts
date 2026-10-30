@@ -29,6 +29,7 @@ import * as nameOrderingIndex006 from './migrations/006_name_ordering_index.ts';
 import * as publicLinkKindRemoval007 from './migrations/007_public_link_kind_removal.ts';
 import * as naturalNameCollation008 from './migrations/008_natural_name_collation.ts';
 import * as auditTimestampNames009 from './migrations/009_audit_timestamp_names.ts';
+import * as eventTimestampNames010 from './migrations/010_event_timestamp_names.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -75,6 +76,10 @@ function migrationList(kind : DatabaseKind) : Record<string, Migration>
         '009_audit_timestamp_names': {
             up: (db) => auditTimestampNames009.up(db),
             down: (db) => auditTimestampNames009.down(db),
+        },
+        '010_event_timestamp_names': {
+            up: (db) => eventTimestampNames010.up(db),
+            down: (db) => eventTimestampNames010.down(db),
         },
     };
 }

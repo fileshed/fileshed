@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Public Link Resource Access
 //
-// getByToken fetches regardless of revoked_at: a revoked token still resolves, to a dead link, and the manager decides
+// getByToken fetches regardless of revoked: a revoked token still resolves, to a dead link, and the manager decides
 // what a dead link serves. Listings order by created, never by id (cuid2 is non-monotonic); id appears only as a
 // tiebreak, so two links sharing a timestamp do not alternate between reads.
 //----------------------------------------------------------------------------------------------------------------------
@@ -26,7 +26,7 @@ function linkFromRow(row : Selectable<PublicLinkTable>) : PublicLink
         nodeID: row.node_id,
         token: row.token,
         created: new Date(row.created),
-        revokedAt: row.revoked_at === null ? null : new Date(row.revoked_at),
+        revoked: row.revoked === null ? null : new Date(row.revoked),
     };
 }
 
@@ -56,8 +56,8 @@ export class PublicLinkRA
         return row === undefined ? undefined : linkFromRow(row);
     }
 
-    // Resolve a token to its link REGARDLESS of revoked_at: a revoked token still resolves, to a dead link. The
-    // manager reads revokedAt and decides what -- if anything -- a dead link serves.
+    // Resolve a token to its link REGARDLESS of revoked: a revoked token still resolves, to a dead link. The
+    // manager reads revoked and decides what -- if anything -- a dead link serves.
     async getByToken(token : string) : Promise<PublicLink | undefined>
     {
         const row = await this.#db
@@ -94,7 +94,7 @@ export class PublicLinkRA
             .selectFrom('public_link')
             .selectAll()
             .where('node_id', 'in', nodeIDs)
-            .where('revoked_at', 'is', null)
+            .where('revoked', 'is', null)
             .orderBy('created', 'asc')
             .orderBy('id', 'asc')
             .execute();
@@ -121,20 +121,20 @@ export class PublicLinkRA
                 node_id: link.nodeID,
                 token: link.token,
                 created: link.created.toISOString(),
-                revoked_at: link.revokedAt === null ? null : link.revokedAt.toISOString(),
+                revoked: link.revoked === null ? null : link.revoked.toISOString(),
             })
             .execute();
     }
 
-    // Set revoked_at, but only on a still-live link -- the guard keeps a second revoke from moving the kill timestamp
+    // Set revoked, but only on a still-live link -- the guard keeps a second revoke from moving the kill timestamp
     // (links are revocable). The manager has already checked ownership and existence.
     async revoke(id : string) : Promise<void>
     {
         await this.#db
             .updateTable('public_link')
-            .set({ revoked_at: new Date().toISOString() })
+            .set({ revoked: new Date().toISOString() })
             .where('id', '=', id)
-            .where('revoked_at', 'is', null)
+            .where('revoked', 'is', null)
             .execute();
     }
 
@@ -145,8 +145,8 @@ export class PublicLinkRA
     {
         const result = await this.#db
             .updateTable('public_link')
-            .set({ revoked_at: new Date().toISOString() })
-            .where('revoked_at', 'is', null)
+            .set({ revoked: new Date().toISOString() })
+            .where('revoked', 'is', null)
             .where((eb) => eb.exists(
                 eb.selectFrom('node')
                     .select('node.id')

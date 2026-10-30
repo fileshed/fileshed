@@ -58,7 +58,7 @@ export function nodeFromRow(row : Selectable<NodeTable>) : Node
                 blobID: row.blob_id,
                 size: row.size,
                 mimeType: row.mime_type,
-                trashedAt: toNullableDate(row.trashed_at),
+                trashed: toNullableDate(row.trashed),
             };
         }
 
@@ -72,14 +72,14 @@ export function nodeFromRow(row : Selectable<NodeTable>) : Node
             return {
                 ...base,
                 type: 'folder',
-                trashedAt: toNullableDate(row.trashed_at),
+                trashed: toNullableDate(row.trashed),
             };
         }
 
         case 'link':
         {
             if(row.target_node_id === null || row.blob_id !== null || row.size !== null || row.mime_type !== null
-                || row.trashed_at !== null)
+                || row.trashed !== null)
             {
                 throw new RowCorruptionError('node', row.id, `a link must carry a target and no file or trash `
                     + 'fields');
@@ -119,7 +119,7 @@ export function rowFromNode(node : Node) : Insertable<NodeTable>
                 size: node.size,
                 mime_type: node.mimeType,
                 target_node_id: null,
-                trashed_at: node.trashedAt === null ? null : node.trashedAt.toISOString(),
+                trashed: node.trashed === null ? null : node.trashed.toISOString(),
             };
 
         case 'folder':
@@ -129,7 +129,7 @@ export function rowFromNode(node : Node) : Insertable<NodeTable>
                 size: null,
                 mime_type: null,
                 target_node_id: null,
-                trashed_at: node.trashedAt === null ? null : node.trashedAt.toISOString(),
+                trashed: node.trashed === null ? null : node.trashed.toISOString(),
             };
 
         case 'link':
@@ -139,7 +139,7 @@ export function rowFromNode(node : Node) : Insertable<NodeTable>
                 size: null,
                 mime_type: null,
                 target_node_id: node.targetNodeID,
-                trashed_at: null,
+                trashed: null,
             };
     }
 }

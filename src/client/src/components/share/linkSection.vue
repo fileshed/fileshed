@@ -116,7 +116,7 @@
 
     async function refresh() : Promise<void>
     {
-        links.value = (await listLinksForNode(props.node.id)).links.filter((link) => link.revokedAt === null);
+        links.value = (await listLinksForNode(props.node.id)).links.filter((link) => link.revoked === null);
     }
 
     async function load() : Promise<void>

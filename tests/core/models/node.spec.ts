@@ -23,7 +23,7 @@ describe('nodeCodec', () =>
             size: 2048,
             created: new Date('2026-01-01T00:00:00.000Z'),
             updated: new Date('2026-01-02T00:00:00.000Z'),
-            trashedAt: null,
+            trashed: null,
         };
 
         const result = nodeCodec.safeParse(fileNode);
@@ -41,7 +41,7 @@ describe('nodeCodec', () =>
             parentID: null,
             created: new Date('2026-01-01T00:00:00.000Z'),
             updated: new Date('2026-01-01T00:00:00.000Z'),
-            trashedAt: null,
+            trashed: null,
         };
 
         const result = nodeCodec.safeParse(folderNode);
@@ -99,7 +99,7 @@ describe('nodeCodec', () =>
             size: 4096,
             created: new Date('2026-01-01T00:00:00.000Z'),
             updated: new Date('2026-01-01T00:00:00.000Z'),
-            trashedAt: null,
+            trashed: null,
         };
 
         const result = nodeCodec.safeParse(malformedFolder);
@@ -119,7 +119,7 @@ describe('nodeCodec', () =>
             mimeType: 'inode/directory',
             created: new Date('2026-01-01T00:00:00.000Z'),
             updated: new Date('2026-01-01T00:00:00.000Z'),
-            trashedAt: null,
+            trashed: null,
         };
 
         const result = nodeCodec.safeParse(malformedFolder);
@@ -129,7 +129,7 @@ describe('nodeCodec', () =>
 
     // links are deleted directly, never trashed -- dead links persist as stubs, not trash entries. A trashed link is an
     // unrepresentable state.
-    it('rejects a link node carrying a trashedAt', () =>
+    it('rejects a link node carrying a trashed timestamp', () =>
     {
         const malformedLink = {
             id: 'node_link_3',
@@ -140,7 +140,7 @@ describe('nodeCodec', () =>
             targetNodeID: 'node_file_1',
             created: new Date('2026-01-03T00:00:00.000Z'),
             updated: new Date('2026-01-03T00:00:00.000Z'),
-            trashedAt: null,
+            trashed: null,
         };
 
         const result = nodeCodec.safeParse(malformedLink);
@@ -171,7 +171,7 @@ describe('nodeCodec', () =>
 
 describe('isHiddenTrash', () =>
 {
-    const folder = (trashedAt : Date | null) : FolderNode => ({
+    const folder = (trashed : Date | null) : FolderNode => ({
         id: 'node_folder',
         type: 'folder',
         name: 'Shared',
@@ -179,7 +179,7 @@ describe('isHiddenTrash', () =>
         parentID: null,
         created: new Date('2026-01-01T00:00:00.000Z'),
         updated: new Date('2026-01-01T00:00:00.000Z'),
-        trashedAt,
+        trashed,
     });
 
     it('hides a trashed node from anyone but its direct owner', () =>

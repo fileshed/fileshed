@@ -25,7 +25,7 @@
 
     const props = defineProps<{ provider : SocialProviderID }>();
 
-    const SPECIFIC_FIELDS : Partial<Record<SocialProviderID, Component>> = {
+    const specificFields : Partial<Record<SocialProviderID, Component>> = {
         apple: AppleProviderFields,
         cognito: CognitoProviderFields,
         gitlab: GitlabProviderFields,
@@ -33,7 +33,7 @@
         tiktok: TiktokProviderFields,
     };
 
-    const fieldsComponent = computed(() => SPECIFIC_FIELDS[props.provider] ?? GenericProviderFields);
+    const fieldsComponent = computed(() => specificFields[props.provider] ?? GenericProviderFields);
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

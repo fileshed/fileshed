@@ -16,7 +16,7 @@ import type {
 // virtualized surface would render nothing at all under test. This stand-in keeps the scroller's contract -- items in,
 // one scoped slot per item, each wrapped in the item element a click looks for -- and renders every row, leaving the
 // spec free to assert on what the surface does rather than on what a scroller chose to mount.
-export const SCROLL_AREA_STUB = {
+export const scrollAreaStub = {
     props: [ 'items' ],
     template: '<div class="scroll-area">'
         + '<div v-for="(item, index) in items" :key="index" data-slot="item">'
@@ -72,7 +72,7 @@ export function fileNode(overrides : Partial<FileNodeResponse> = {}) : FileNodeR
         blobID: 'b1',
         size: 100,
         mimeType: 'text/plain',
-        trashedAt: null,
+        trashed: null,
         ...overrides,
     };
 }
@@ -91,7 +91,7 @@ export function folderNode(overrides : Partial<FolderNodeResponse> = {}) : Folde
         role: 'owner',
         sharing: null,
         type: 'folder',
-        trashedAt: null,
+        trashed: null,
         ...overrides,
     };
 }

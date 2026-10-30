@@ -36,7 +36,7 @@ beforeEach(async () =>
         handle: booted.handle,
         config: booted.config,
         box: new SecretBox(TEST_AUTH_SECRET),
-        startedAt: new Date(),
+        started: new Date(),
     });
 });
 
@@ -93,7 +93,7 @@ describe('SettingsManager', () =>
             handle: booted.handle,
             config: { ...booted.config, GITHUB_CLIENT_ID: 'gh-from-env' },
             box: new SecretBox(TEST_AUTH_SECRET),
-            startedAt: new Date(),
+            started: new Date(),
         });
 
         const view = await configured.adminView(admin);
@@ -234,23 +234,23 @@ describe('SettingsManager', () =>
 
     it('flags a restart once a restart-tier key changes, until a restart absorbs it', async () =>
     {
-        function managerStartedAt(startedAt : Date) : SettingsManager
+        function managerStarted(started : Date) : SettingsManager
         {
             return new SettingsManager({
                 handle: booted.handle,
                 config: booted.config,
                 box: new SecretBox(TEST_AUTH_SECRET),
-                startedAt,
+                started,
             });
         }
 
         // A process that booted before the change sees it as pending; one that booted after (a restart) sees the
         // same row as settled history.
-        const runningSinceEarlier = managerStartedAt(new Date(Date.now() - 60_000));
+        const runningSinceEarlier = managerStarted(new Date(Date.now() - 60_000));
         const view = await runningSinceEarlier.patch(admin, { changes: { EMAIL_VERIFICATION_REQUIRED: true } });
         expect(view.restartRequired).toBe(true);
 
-        const restarted = managerStartedAt(new Date(Date.now() + 60_000));
+        const restarted = managerStarted(new Date(Date.now() + 60_000));
         expect((await restarted.adminView(admin)).restartRequired).toBe(false);
     });
 

@@ -58,7 +58,7 @@ export const meResponseCodec = z.strictObject({
         .optional(),
     created: isoDateTimeCodec,
     deletion: z.strictObject({
-        requestedAt: isoDateTimeCodec,
+        requested: isoDateTimeCodec,
         scheduledFor: isoDateTimeCodec,
     }).nullable(),
 });

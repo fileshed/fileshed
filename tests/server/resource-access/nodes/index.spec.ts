@@ -64,16 +64,16 @@ async function idsInTable() : Promise<string[]>
     return rows.map((row) => row.id);
 }
 
-// Whether each of the given ids currently has trashed_at set, in the order asked.
+// Whether each of the given ids currently has trashed set, in the order asked.
 async function trashedFlags(ids : string[]) : Promise<boolean[]>
 {
     const rows = await db
         .selectFrom('node')
-        .select([ 'id', 'trashed_at' ])
+        .select([ 'id', 'trashed' ])
         .where('id', 'in', ids)
         .execute();
 
-    const flags = new Map(rows.map((row) => [ row.id, row.trashed_at !== null ]));
+    const flags = new Map(rows.map((row) => [ row.id, row.trashed !== null ]));
     return ids.map((id) => flags.get(id) ?? false);
 }
 
@@ -883,12 +883,12 @@ describe('NodeRA.setTrashed', () =>
         await ra.setTrashed('f', new Date('2026-04-01T00:00:00.000Z'));
 
         expect(await trashedFlags([ 'f', 'cf', 'sf', 'sff' ])).toEqual([ true, true, true, true ]);
-        // The link inside the trashed folder keeps trashed_at NULL (the variant CHECK forbids it); it hides
+        // The link inside the trashed folder keeps trashed NULL (the variant CHECK forbids it); it hides
         // transitively via its trashed ancestor.
         expect(await trashedFlags([ 'lk' ])).toEqual([ false ]);
     });
 
-    it('restore clears trashed_at across the subtree', async () =>
+    it('restore clears trashed across the subtree', async () =>
     {
         await buildTree();
         await ra.setTrashed('f', new Date('2026-04-01T00:00:00.000Z'));

@@ -102,14 +102,14 @@ export interface ServiceDeps
     mail : MailManager;
     providers : SocialProviderID[];
     build : BuildInfo;
-    startedAt : Date;
+    started : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
 export function composeServices(deps : ServiceDeps) : AppServices
 {
-    const { config, handle, settings, mail, providers, build, startedAt } = deps;
+    const { config, handle, settings, mail, providers, build, started } = deps;
 
     const auth = new AuthRA(deps.auth, handle);
     const blobRA = new BlobRA(handle);
@@ -203,7 +203,7 @@ export function composeServices(deps : ServiceDeps) : AppServices
             blob: blobRA,
             tracker,
             build,
-            startedAt,
+            started,
             activeProviders: providers.length,
             emailEnabled: () => mail.isConfigured(),
             signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),

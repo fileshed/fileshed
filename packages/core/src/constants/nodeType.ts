@@ -2,7 +2,7 @@
 // Node Type Constants
 //
 // Folders and links are node-type families rather than mime families, so they never appear here. The server's listing
-// filter builds its query from MIME_FAMILY_SPECS, and familyOfMimeType (utils/mimeType.ts) classifies from the same
+// filter builds its query from mimeFamilySpecs, and familyOfMimeType (utils/mimeType.ts) classifies from the same
 // table, so a mime type resolves to the same family on both sides of the wire.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -45,7 +45,7 @@ export interface MimeFamilySpec
     exact : readonly string[];
 }
 
-export const MIME_FAMILY_SPECS : Readonly<Record<MimeFamily, MimeFamilySpec>> = {
+export const mimeFamilySpecs : Readonly<Record<MimeFamily, MimeFamilySpec>> = {
     documents: {
         prefixes: [ 'text/' ],
         exact: [

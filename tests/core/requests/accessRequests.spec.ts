@@ -76,7 +76,7 @@ describe('accessRequestListEntryCodec', () =>
         message: null,
         status: 'pending' as const,
         created: '2026-01-01T00:00:00.000Z',
-        resolvedAt: null,
+        resolved: null,
     };
     const requester = { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com', image: null };
 
@@ -110,7 +110,7 @@ describe('accessRequestListResponseCodec', () =>
             message: null,
             status: 'pending',
             created: '2026-01-01T00:00:00.000Z',
-            resolvedAt: null,
+            resolved: null,
         };
 
         expect(accessRequestListResponseCodec.safeParse({
@@ -131,7 +131,7 @@ describe('accessRequestListResponseCodec', () =>
             message: null,
             status: 'pending',
             created: '2026-01-01T00:00:00.000Z',
-            resolvedAt: null,
+            resolved: null,
         };
 
         expect(accessRequestListResponseCodec.safeParse({ incoming: [], outgoing: [ request ] }).success).toBe(true);
@@ -150,7 +150,7 @@ describe('toAccessRequestListEntry', () =>
             message: 'Could you share this with me?',
             status: 'pending',
             created: new Date('2026-01-01T00:00:00.000Z'),
-            resolvedAt: null,
+            resolved: null,
         };
         const requester = { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com', image: null };
 

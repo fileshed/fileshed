@@ -320,7 +320,7 @@ const authOptionsShape = {
             // the request rather than the date it comes due: the window is an instance setting read live, so the due
             // date is derived from this and moves when an admin moves the setting. input:false -- it is written only
             // through the app's own deletion routes.
-            deletionRequestedAt: {
+            deletionRequested: {
                 type: 'date',
                 required: false,
                 input: false,

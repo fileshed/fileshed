@@ -49,7 +49,7 @@ describe('shareCodec', () =>
             role: 'viewer',
             createdBy: 'user_1',
             created: new Date('2026-01-01T00:00:00.000Z'),
-            expiresAt: new Date('2026-02-01T00:00:00.000Z'),
+            expires: new Date('2026-02-01T00:00:00.000Z'),
         };
 
         expect(shareCodec.safeParse(foreign).success).toBe(false);

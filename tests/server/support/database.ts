@@ -24,13 +24,13 @@ import type { Config } from '@server/utils/config.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const adminURL = process.env.FILESHED_TEST_DATABASE_URL;
+const ADMIN_URL = process.env.FILESHED_TEST_DATABASE_URL;
 
 // The dialect this run targets. Mirrors the handle's own `kind`, but answerable before a handle exists -- which is
 // what a fixture needs when the value it is about to bind depends on the dialect (a boolean, a column type).
 export function testDatabaseKind() : Config['DATABASE_KIND']
 {
-    return adminURL ? 'postgres' : 'sqlite';
+    return ADMIN_URL ? 'postgres' : 'sqlite';
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -56,7 +56,7 @@ async function adminClient() : Promise<Client>
 {
     if(admin !== null) { return admin; }
 
-    const client = new Client({ connectionString: adminURL });
+    const client = new Client({ connectionString: ADMIN_URL });
     await client.connect();
     admin = client;
 
@@ -89,7 +89,7 @@ export async function onAdmin(run : (client : Client) => Promise<void>) : Promis
 // Swap the database name into the admin URL, keeping credentials, host and query parameters exactly as given.
 function urlFor(database : string) : string
 {
-    const url = new URL(adminURL ?? '');
+    const url = new URL(ADMIN_URL ?? '');
     url.pathname = `/${ database }`;
 
     return url.toString();
@@ -200,7 +200,7 @@ export async function dropProvisionedDatabases() : Promise<void>
 // Postgres refuses to drop a database anyone is attached to, so the worst this can do to it is nothing.
 export async function dropOrphanedDatabases() : Promise<void>
 {
-    if(!adminURL) { return; }
+    if(!ADMIN_URL) { return; }
 
     await onAdmin(async (client) =>
     {
@@ -216,7 +216,7 @@ export async function dropOrphanedDatabases() : Promise<void>
 
 export async function openTestDatabase(config : Config) : Promise<TestDatabase>
 {
-    if(!adminURL)
+    if(!ADMIN_URL)
     {
         const handle = createDatabase(config);
 

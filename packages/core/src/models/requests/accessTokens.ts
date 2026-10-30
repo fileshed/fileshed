@@ -28,8 +28,8 @@ export interface AccessTokenResponse
     start : string | null;
     scopes : AccessTokenScope[];
     created : string;
-    lastUsedAt : string | null;
-    expiresAt : string | null;
+    lastUsed : string | null;
+    expires : string | null;
 }
 
 export interface CreateAccessTokenResponse
@@ -56,7 +56,7 @@ export interface PlaybackTokenResponse
 {
     id : string;
     token : string;
-    expiresAt : string;
+    expires : string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

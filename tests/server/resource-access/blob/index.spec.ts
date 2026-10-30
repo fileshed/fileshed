@@ -28,7 +28,7 @@ let handle : DatabaseHandle;
 let db : Kysely<Database>;
 let ra : BlobRA;
 
-const past = new Date('2020-01-01T00:00:00.000Z').toISOString();
+const PAST = new Date('2020-01-01T00:00:00.000Z').toISOString();
 
 async function seedBlobRow(sha256 : string, deleted : string | null) : Promise<void>
 {
@@ -83,11 +83,11 @@ describe('BlobRA.graveyardUnreferenced', () =>
 
     it('does not reset the grace clock of an already-graveyarded blob', async () =>
     {
-        await seedBlobRow('sha-old', past);
+        await seedBlobRow('sha-old', PAST);
 
         await ra.graveyardUnreferenced([ 'sha-old' ]);
 
-        expect((await deletedAtOf('sha-old'))?.toISOString()).toBe(past);
+        expect((await deletedAtOf('sha-old'))?.toISOString()).toBe(PAST);
     });
 });
 
@@ -160,7 +160,7 @@ describe('BlobRA resurrection', () =>
 {
     it('clears the graveyard marker when insertOrResurrect meets an existing graveyarded record', async () =>
     {
-        await seedBlobRow('sha-dead', past);
+        await seedBlobRow('sha-dead', PAST);
 
         await ra.insertOrResurrect({ sha256: 'sha-dead', size: 128, backendID: 'be1', storageKey: 'sha-dead' });
 
@@ -178,7 +178,7 @@ describe('BlobRA resurrection', () =>
 
     it('clears the graveyard marker via resurrect', async () =>
     {
-        await seedBlobRow('sha-dead', past);
+        await seedBlobRow('sha-dead', PAST);
 
         await ra.resurrect('sha-dead');
 
@@ -193,7 +193,7 @@ describe('BlobRA GC selection', () =>
     it('lists only records graveyarded before the cutoff', async () =>
     {
         const cutoff = new Date();
-        await seedBlobRow('sha-expired', past);
+        await seedBlobRow('sha-expired', PAST);
         await seedBlobRow('sha-in-grace', new Date(cutoff.getTime() + 60_000).toISOString());
         await seedBlobRow('sha-live', null);
 
@@ -204,7 +204,7 @@ describe('BlobRA GC selection', () =>
 
     it('hard-deletes a record still past the cutoff and reports the removal', async () =>
     {
-        await seedBlobRow('sha-expired', past);
+        await seedBlobRow('sha-expired', PAST);
 
         const removed = await ra.hardDeleteRow('sha-expired', new Date());
 
@@ -235,12 +235,12 @@ describe('BlobRA.adoptOrphan', () =>
 
     it('graveyards an unknown address, dated when its bytes stopped being relied on', async () =>
     {
-        const stoppedAt = new Date(Date.now() - 3_600_000);
+        const stopped = new Date(Date.now() - 3_600_000);
 
-        const adopted = await ra.adoptOrphan(orphan, stoppedAt);
+        const adopted = await ra.adoptOrphan(orphan, stopped);
 
         expect(adopted).toBe(true);
-        expect(await deletedAtOf('sha-orphan')).toEqual(stoppedAt);
+        expect(await deletedAtOf('sha-orphan')).toEqual(stopped);
     });
 
     // The record that beat it is a live blob somebody is using: a commit for the same content got there first, and

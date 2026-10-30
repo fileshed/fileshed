@@ -15,7 +15,7 @@ import { composeNodeApp, seedShareRow, userIDByEmail } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+type JSON = Record<string, unknown>;
 
 async function request(app : Hono, method : string, path : string, cookie ?: string) : Promise<Response>
 {
@@ -57,7 +57,7 @@ describe('GET /api/search', () =>
         await createFolder(app, cookieB, 'Gamma Report');
 
         const res = await request(app, 'GET', '/api/search?q=report', cookieA);
-        const body = await res.json() as { nodes : Json[]; total : number };
+        const body = await res.json() as { nodes : JSON[]; total : number };
 
         expect(res.status).toBe(200);
         expect(body.total).toBe(1);
@@ -74,7 +74,7 @@ describe('GET /api/search', () =>
         await createFolder(app, cookie, 'Alpha Report');
 
         const res = await request(app, 'GET', '/api/search?q=REPORT', cookie);
-        const body = await res.json() as { nodes : Json[]; total : number };
+        const body = await res.json() as { nodes : JSON[]; total : number };
 
         expect(res.status).toBe(200);
         expect(body.total).toBe(1);
@@ -110,7 +110,7 @@ describe('GET /api/search', () =>
         await seedShareRow(booted, { nodeID: theirs, granteeID: idA, role: 'viewer', createdBy: idB });
 
         const res = await request(app, 'GET', '/api/search?q=report', cookieA);
-        const body = await res.json() as { nodes : { id : string; sharing : Json }[] };
+        const body = await res.json() as { nodes : { id : string; sharing : JSON }[] };
 
         expect(body.nodes).toHaveLength(2);
 

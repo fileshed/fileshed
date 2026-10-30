@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Request Codec
 //
-// The status variants are strict objects in a discriminated union: the pending variant pins resolvedAt to null and the
-// resolved variant requires a date, so a mismatched status/resolvedAt pairing fails at parse time.
+// The status variants are strict objects in a discriminated union: the pending variant pins resolved to null and the
+// resolved variant requires a date, so a mismatched status/resolved pairing fails at parse time.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';
@@ -34,13 +34,13 @@ const shareRequestBaseShape = {
 const pendingShareRequestCodec = z.strictObject({
     ...shareRequestBaseShape,
     status: z.literal('pending'),
-    resolvedAt: z.null(),
+    resolved: z.null(),
 });
 
 const resolvedShareRequestCodec = z.strictObject({
     ...shareRequestBaseShape,
     status: z.enum(resolvedShareRequestStatuses),
-    resolvedAt: z.date(),
+    resolved: z.date(),
 });
 
 //----------------------------------------------------------------------------------------------------------------------

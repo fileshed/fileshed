@@ -123,7 +123,7 @@ export async function seedLinkRow(
             mime_type: null,
             created: now,
             updated: now,
-            trashed_at: null,
+            trashed: null,
         })
         .execute();
 }

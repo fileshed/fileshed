@@ -15,7 +15,7 @@ const SUMMARY : UserSummary = { id: 'u1', name: 'Ada Lovelace', email: 'ada@exam
 
 // The real primitive opens its content on hover/focus via a floating portal, which jsdom can't meaningfully drive --
 // the stub renders both slots unconditionally so the trigger wiring and the content markup are both assertable.
-const STUBS = {
+const stubs = {
     UPopover: {
         props: [ 'mode' ],
         template: '<div class="popover" :data-mode="mode"><slot />'
@@ -29,7 +29,7 @@ function mountHover(summary : UserSummary = SUMMARY) : VueWrapper
     return mount(UserSummaryHover, {
         props: { summary },
         slots: { default: '<span class="trigger-content"></span>' },
-        global: { stubs: STUBS },
+        global: { stubs },
     });
 }
 

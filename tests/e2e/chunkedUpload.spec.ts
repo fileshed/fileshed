@@ -249,25 +249,25 @@ describe('a chunk cut off mid-flight', () =>
 {
     // Small chunks: the interruption has to land inside a chunk, and tearing a multi-megabyte request would spend most
     // of the test moving bytes. Offsets are the client's to choose, so the server behaves the same at any size.
-    const CHUNK = 64 * 1024;
+    const chunk = 64 * 1024;
 
-    const data = randomBytes(CHUNK * 3);
+    const data = randomBytes(chunk * 3);
     const sha = sha256Of(data);
 
     it('drops what the torn attempt delivered and stores the file exactly once it is sent again', async () =>
     {
         const { ticket } = await ticketFor(alice, data);
 
-        expect((await putChunk(alice, ticket, 'torn.bin', data, 0, CHUNK)).status).toBe(202);
+        expect((await putChunk(alice, ticket, 'torn.bin', data, 0, chunk)).status).toBe(202);
 
         // The second chunk starts arriving and the connection dies before it is whole. The outcome is captured either
         // way rather than left floating, so a request that fails before its bytes are ever pulled cannot surface as an
         // unhandled rejection or hang the spec waiting for a handover that will never come.
         const controller = new AbortController();
-        const torn = hangingBody(data.subarray(CHUNK, CHUNK + 1024));
+        const torn = hangingBody(data.subarray(chunk, chunk + 1024));
 
         const request = alice
-            .putStream(`/api/uploads/${ ticket }?${ uploadQuery('torn.bin', CHUNK) }`, torn.body, controller.signal)
+            .putStream(`/api/uploads/${ ticket }?${ uploadQuery('torn.bin', chunk) }`, torn.body, controller.signal)
             .then(() => 'completed', () => 'failed');
 
         await Promise.race([ torn.onWire, request ]);
@@ -276,14 +276,14 @@ describe('a chunk cut off mid-flight', () =>
         expect(await request).toBe('failed');
 
         // The same chunk, sent again in full: the upload picks up exactly where it stood, not where the tear left it.
-        const retried = await putChunkOnceReceiving(alice, ticket, 'torn.bin', data, CHUNK, CHUNK);
+        const retried = await putChunkOnceReceiving(alice, ticket, 'torn.bin', data, chunk, chunk);
         expect(retried.status).toBe(202);
         expect(await retried.json() as UploadChunkAccepted).toEqual({
-            receivedBytes: CHUNK * 2,
+            receivedBytes: chunk * 2,
             totalBytes: data.length,
         });
 
-        const last = await putChunk(alice, ticket, 'torn.bin', data, CHUNK * 2, CHUNK);
+        const last = await putChunk(alice, ticket, 'torn.bin', data, chunk * 2, chunk);
         expect(last.status).toBe(200);
 
         const stored = await readBlobFile(server.storageRoot, sha);
@@ -296,9 +296,9 @@ describe('a chunk cut off mid-flight', () =>
 
 describe('a chunk the upload disagrees with', () =>
 {
-    const CHUNK = 64 * 1024;
+    const chunk = 64 * 1024;
 
-    const data = randomBytes(CHUNK * 2);
+    const data = randomBytes(chunk * 2);
 
     // The other conflict, and the one that must never be waited out: the client sent bytes for ground the upload has
     // not reached. It arrives over the same status as a chunk still in flight, so the code is the only thing telling a
@@ -310,7 +310,7 @@ describe('a chunk the upload disagrees with', () =>
 
         expect((await putChunk(alice, ticket, 'skip.bin', data, 0, 1024)).status).toBe(202);
 
-        const skipped = await putChunk(alice, ticket, 'skip.bin', data, CHUNK, CHUNK);
+        const skipped = await putChunk(alice, ticket, 'skip.bin', data, chunk, chunk);
 
         expect(skipped.status).toBe(409);
         expect(await skipped.json()).toMatchObject({ code: 'upload.offsetConflict', receivedBytes: 1024 });
@@ -321,9 +321,9 @@ describe('a chunk the upload disagrees with', () =>
 
 describe('a client that has lost track of where its upload stands', () =>
 {
-    const CHUNK = 64 * 1024;
+    const chunk = 64 * 1024;
 
-    const data = randomBytes(CHUNK * 3);
+    const data = randomBytes(chunk * 3);
     const sha = sha256Of(data);
 
     // A chunk the server already holds is the shape a torn request leaves behind when it delivered everything before
@@ -333,10 +333,10 @@ describe('a client that has lost track of where its upload stands', () =>
     {
         const { ticket } = await ticketFor(alice, data);
 
-        expect((await putChunk(alice, ticket, 'resume.bin', data, 0, CHUNK)).status).toBe(202);
-        expect((await putChunk(alice, ticket, 'resume.bin', data, CHUNK, CHUNK)).status).toBe(202);
+        expect((await putChunk(alice, ticket, 'resume.bin', data, 0, chunk)).status).toBe(202);
+        expect((await putChunk(alice, ticket, 'resume.bin', data, chunk, chunk)).status).toBe(202);
 
-        const replayed = await putChunk(alice, ticket, 'resume.bin', data, CHUNK, CHUNK);
+        const replayed = await putChunk(alice, ticket, 'resume.bin', data, chunk, chunk);
         expect(replayed.status).toBe(409);
 
         const refusal = await replayed.json() as { code : string; receivedBytes : number };

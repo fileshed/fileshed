@@ -9,7 +9,7 @@
 import type { NodeResponse, UploadCommitMetadata } from '@fileshed/core';
 
 // Engines
-import { calculateProofAnswer } from '../engines/claim.ts';
+import { buildProofAnswer } from '../engines/claim.ts';
 
 // Resource Access
 import { answerChallenge, claimBlob } from '../resource-access/blobs.ts';
@@ -58,7 +58,7 @@ async function deliver(file : File, commit : UploadCommitMetadata, options : Com
 
     onPhase?.('proving');
     const windows = await readSampleWindows(file, claim.ranges);
-    const answer = await calculateProofAnswer(claim.nonce, windows);
+    const answer = await buildProofAnswer(claim.nonce, windows);
     if(signal?.aborted) { throw new DOMException('Upload cancelled', 'AbortError'); }
 
     return answerChallenge(claim.challengeID, { answer, ...commit });

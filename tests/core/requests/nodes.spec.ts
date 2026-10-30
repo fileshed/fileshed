@@ -199,7 +199,7 @@ describe('nodeResponseCodec', () =>
         ownerID: 'user_1',
         parentID: null,
         type: 'folder' as const,
-        trashedAt: null,
+        trashed: null,
         created: '2026-01-01T00:00:00.000Z',
         updated: '2026-01-01T00:00:00.000Z',
         sharing: null,
@@ -363,7 +363,7 @@ describe('toNodeResponse', () =>
             parentID: null,
             created,
             updated,
-            trashedAt: null,
+            trashed: null,
         };
 
         const response = toNodeResponse(folder, { role: 'owner' });
@@ -403,7 +403,7 @@ describe('toNodeResponse', () =>
             blobID: 'sha',
             size: 2048,
             mimeType: 'image/jpeg',
-            trashedAt: null,
+            trashed: null,
         };
 
         const response = toNodeResponse(link, { role: 'owner', target });
@@ -444,7 +444,7 @@ describe('toNodeResponse', () =>
             parentID: null,
             created,
             updated,
-            trashedAt: null,
+            trashed: null,
         };
 
         const response = toNodeResponse(link, { role: 'viewer', target });

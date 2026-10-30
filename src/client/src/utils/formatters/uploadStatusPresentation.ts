@@ -16,7 +16,7 @@ export interface UploadStatusPresentation
     color : string;
 }
 
-const STATUS_PRESENTATION : Readonly<Record<UploadStatus, UploadStatusPresentation>> = {
+const statusPresentation : Readonly<Record<UploadStatus, UploadStatusPresentation>> = {
     queued: { label: 'Waiting', icon: 'i-lucide-file-up', color: 'text-primary' },
     hashing: { label: 'Preparing', icon: 'i-lucide-file-up', color: 'text-primary' },
     checking: { label: 'Preparing', icon: 'i-lucide-file-up', color: 'text-primary' },
@@ -33,7 +33,7 @@ const STATUS_PRESENTATION : Readonly<Record<UploadStatus, UploadStatusPresentati
 
 export function uploadStatusPresentation(status : UploadStatus) : UploadStatusPresentation
 {
-    return STATUS_PRESENTATION[status];
+    return statusPresentation[status];
 }
 
 //----------------------------------------------------------------------------------------------------------------------

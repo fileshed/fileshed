@@ -50,7 +50,7 @@ export interface SettingsManagerDeps
     handle : DatabaseHandle;
     config : Config;
     box : SecretBox;
-    startedAt : Date;
+    started : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -60,14 +60,14 @@ export class SettingsManager
     readonly #ra : SettingsRA;
     readonly #config : Config;
     readonly #box : SecretBox;
-    readonly #startedAt : Date;
+    readonly #started : Date;
 
     constructor(deps : SettingsManagerDeps)
     {
         this.#ra = new SettingsRA(deps.handle);
         this.#config = deps.config;
         this.#box = deps.box;
-        this.#startedAt = deps.startedAt;
+        this.#started = deps.started;
     }
 
     // The config-side default for a key: the loaded yaml value when the key has a config twin, else the
@@ -194,7 +194,7 @@ export class SettingsManager
         // A stored row can carry a key this version no longer defines.
         const restartRequired = rows.some((row) => isOneOf(adminSettingKeys, row.key)
             && settingDefinitions[row.key].requiresRestart === true
-            && row.updated > this.#startedAt);
+            && row.updated > this.#started);
 
         return { settings, restartRequired };
     }

@@ -45,12 +45,12 @@ function link(overrides : Partial<PublicLinkResponse> = {}) : PublicLinkResponse
         token: 'tok123',
         url: '/d/tok123',
         created: ISO,
-        revokedAt: null,
+        revoked: null,
         ...overrides,
     };
 }
 
-const STUBS = {
+const stubs = {
     UButton: {
         props: [ 'label', 'loading' ],
         template: '<button class="ubtn" @click="$emit(\'click\')">{{ label }}</button>',
@@ -60,7 +60,7 @@ const STUBS = {
 
 function mountSection() : VueWrapper
 {
-    return mount(LinkSection, { props: { node: fileNode() }, global: { stubs: STUBS } });
+    return mount(LinkSection, { props: { node: fileNode() }, global: { stubs } });
 }
 
 function clickButton(wrapper : VueWrapper, label : string) : Promise<void>
@@ -93,7 +93,7 @@ describe('LinkSection', () =>
         listLinksMock.mockResolvedValue({
             links: [
                 link({ id: 'live', token: 'aaa', url: '/d/aaa' }),
-                link({ id: 'dead', token: 'bbb', url: '/d/bbb', revokedAt: ISO }),
+                link({ id: 'dead', token: 'bbb', url: '/d/bbb', revoked: ISO }),
             ],
         });
         const wrapper = mountSection();

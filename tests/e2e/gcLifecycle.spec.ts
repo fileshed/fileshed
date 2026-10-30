@@ -201,11 +201,11 @@ describe('state staged under open grace windows', () =>
     {
         const node = await withDb(stagingServer, (db) => db
             .selectFrom('node')
-            .select('trashed_at')
+            .select('trashed')
             .where('id', '=', lingeringNodeID)
             .executeTakeFirst());
         expect(node).toBeDefined();
-        expect(node?.trashed_at).not.toBeNull();
+        expect(node?.trashed).not.toBeNull();
 
         // A trashed file is still a reference: nothing about its blob has changed.
         const blob = await withDb(stagingServer, (db) => db

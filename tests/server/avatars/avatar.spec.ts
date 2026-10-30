@@ -26,7 +26,7 @@ import { sha256Of } from '../support/sha256.ts';
 import {
     type BootedStoreApp,
     avatarRow,
-    blobDeletedAt,
+    blobDeleted,
     blobRowExists,
     bootStoreApp,
     bytesExist,
@@ -152,8 +152,8 @@ describe('POST /api/me/avatar', () =>
         await postAvatar(booted.app, user.cookie, second, 'image/jpeg');
 
         expect((await avatarRow(booted, user.id)).avatar_sha256).toBe(secondSha);
-        expect(await blobDeletedAt(booted, firstSha)).not.toBeNull();
-        expect(await blobDeletedAt(booted, secondSha)).toBeNull();
+        expect(await blobDeleted(booted, firstSha)).not.toBeNull();
+        expect(await blobDeleted(booted, secondSha)).toBeNull();
     });
 
     it('does not graveyard a replaced blob still held as another user\'s avatar', async () =>
@@ -169,7 +169,7 @@ describe('POST /api/me/avatar', () =>
         await postAvatar(booted.app, two.cookie, shared, 'image/png');
         await postAvatar(booted.app, one.cookie, pngBytes('a different image'), 'image/png');
 
-        expect(await blobDeletedAt(booted, sharedSha)).toBeNull();
+        expect(await blobDeleted(booted, sharedSha)).toBeNull();
         expect(await bytesExist(booted, sharedSha)).toBe(true);
     });
 });
@@ -190,7 +190,7 @@ describe('DELETE /api/me/avatar', () =>
 
         expect(res.status).toBe(200);
         expect(await avatarRow(booted, user.id)).toEqual({ avatar_sha256: null, avatar_mime: null });
-        expect(await blobDeletedAt(booted, sha256)).not.toBeNull();
+        expect(await blobDeleted(booted, sha256)).not.toBeNull();
     });
 
     it('clears the derived image on the me profile', async () =>

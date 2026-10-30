@@ -108,7 +108,7 @@ async function offerRows() : Promise<{ offeree_id : string, name : string, sha25
         .execute();
 }
 
-async function blobDeletedAt(sha256 : string) : Promise<string | Date | null>
+async function blobDeleted(sha256 : string) : Promise<string | Date | null>
 {
     const row = await handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256)
@@ -128,7 +128,7 @@ async function seedOffer(init : Partial<DeletionOffer> = {}) : Promise<string>
         size: 10,
         createdBy: 'alice',
         created: new Date(),
-        expiresAt: new Date(Date.now() + GRACE_MS),
+        expires: new Date(Date.now() + GRACE_MS),
         ...init,
     } ]);
     return id;
@@ -157,7 +157,7 @@ describe('NodeManager.hardDelete offer minting', () =>
 
         // The delete itself happened, and the now-unreferenced blob is graveyarded pending GC.
         expect(await ra.get('doc')).toBeUndefined();
-        expect(await blobDeletedAt('sha-a')).not.toBeNull();
+        expect(await blobDeleted('sha-a')).not.toBeNull();
     });
 
     it('stamps the offer expiry with the GC grace window', async () =>
@@ -167,13 +167,13 @@ describe('NodeManager.hardDelete offer minting', () =>
 
         await nodes.hardDelete(testActor({ id: 'alice' }), 'doc', { offerCopies: true });
 
-        const row = await handle.db.selectFrom('deletion_offer').select('expires_at')
+        const row = await handle.db.selectFrom('deletion_offer').select('expires')
             .where('offeree_id', '=', 'bob')
             .executeTakeFirstOrThrow();
-        const expiresAt = new Date(row.expires_at).getTime();
+        const expires = new Date(row.expires).getTime();
 
-        expect(expiresAt).toBeGreaterThanOrEqual(before + GRACE_MS);
-        expect(expiresAt).toBeLessThanOrEqual(Date.now() + GRACE_MS);
+        expect(expires).toBeGreaterThanOrEqual(before + GRACE_MS);
+        expect(expires).toBeLessThanOrEqual(Date.now() + GRACE_MS);
     });
 
     it('mints nothing without the opt-in', async () =>
@@ -223,7 +223,7 @@ describe('DeletionOfferManager', () =>
     {
         await seedOffer({ id: 'mine' });
         await seedOffer({ id: 'theirs', offereeID: 'carol' });
-        await seedOffer({ id: 'stale', expiresAt: new Date(Date.now() - 1000) });
+        await seedOffer({ id: 'stale', expires: new Date(Date.now() - 1000) });
 
         const listed = await offers.list(testActor({ id: 'bob' }));
 
@@ -246,11 +246,11 @@ describe('DeletionOfferManager', () =>
             parentID: null,
             name: 'report.pdf',
             role: 'owner',
-            trashedAt: null,
+            trashed: null,
         });
         expect((node as { blobID : string }).blobID).toBe('sha-a');
 
-        expect(await blobDeletedAt('sha-a')).toBeNull();
+        expect(await blobDeleted('sha-a')).toBeNull();
         expect(await handle.db.selectFrom('deletion_offer').select('id')
             .where('id', '=', offerID)
             .executeTakeFirst()).toBeUndefined();
@@ -295,7 +295,7 @@ describe('DeletionOfferManager', () =>
         expect(await handle.db.selectFrom('deletion_offer').select('id')
             .where('id', '=', offerID)
             .executeTakeFirst()).toBeDefined();
-        expect(await blobDeletedAt('sha-a')).not.toBeNull();
+        expect(await blobDeleted('sha-a')).not.toBeNull();
         expect(await ra.ownedBytes('bob')).toBe(0);
     });
 
@@ -322,7 +322,7 @@ describe('DeletionOfferManager', () =>
 
     it('treats an expired offer as absent', async () =>
     {
-        const offerID = await seedOffer({ expiresAt: new Date(Date.now() - 1000) });
+        const offerID = await seedOffer({ expires: new Date(Date.now() - 1000) });
 
         expect(await caught(offers.accept(testActor({ id: 'bob' }), offerID, { parentID: null })))
             .toBeInstanceOf(NotFoundError);

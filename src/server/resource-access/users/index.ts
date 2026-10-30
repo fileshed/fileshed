@@ -363,7 +363,7 @@ export class UserRA
 
     // Stamp or clear the request. Cancelling is this with null, and it restores nothing else -- what the request
     // revoked stays revoked.
-    async setDeletionRequestedAt(userID : string, at : Date | null) : Promise<void>
+    async setDeletionRequested(userID : string, at : Date | null) : Promise<void>
     {
         await this.#db
             .updateTable('user')

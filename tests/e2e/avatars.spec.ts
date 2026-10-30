@@ -65,7 +65,7 @@ async function avatarShaOf(email : string) : Promise<string | null>
     });
 }
 
-async function blobDeletedAt(sha256 : string) : Promise<string | null>
+async function blobDeleted(sha256 : string) : Promise<string | null>
 {
     return withDb(server, async (db) =>
     {
@@ -116,8 +116,8 @@ describe('avatar upload and serve', () =>
         await client.postBytes('/api/me/avatar', second, 'image/jpeg');
 
         expect(await avatarShaOf('avatar-replace@example.com')).toBe(secondSha);
-        expect(await blobDeletedAt(firstSha)).not.toBeNull();
-        expect(await blobDeletedAt(secondSha)).toBeNull();
+        expect(await blobDeleted(firstSha)).not.toBeNull();
+        expect(await blobDeleted(secondSha)).toBeNull();
     });
 });
 
@@ -137,7 +137,7 @@ describe('shared avatar blobs', () =>
         await one.postBytes('/api/me/avatar', avatarBytes('shared-moved-on'), 'image/png');
 
         // User two still references the shared blob, so user one moving on must not graveyard it.
-        expect(await blobDeletedAt(sharedSha)).toBeNull();
+        expect(await blobDeleted(sharedSha)).toBeNull();
         expect(await blobFileExists(server.storageRoot, sharedSha)).toBe(true);
 
         // It is still served, because two's avatar references it.

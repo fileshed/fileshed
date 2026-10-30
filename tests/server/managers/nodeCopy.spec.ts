@@ -281,24 +281,24 @@ describe('NodeManager.copy', () =>
     // too: the copy lands live, the source stays exactly where it was -- in the trash.
     it('lets the owner copy their own trashed file, leaving the source trashed', async () =>
     {
-        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashedAt: new Date() }));
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashed: new Date() }));
 
         const copy = await manager().copy(testActor({ id: 'alice' }), 'src', { parentID: null });
 
         expect(copy).toMatchObject({ type: 'file', ownerID: 'alice', role: 'owner' });
-        expect(copy.type === 'file' ? copy.trashedAt : undefined).toBeNull();
+        expect(copy.type === 'file' ? copy.trashed : undefined).toBeNull();
 
-        const source = await handle.db.selectFrom('node').select('trashed_at')
+        const source = await handle.db.selectFrom('node').select('trashed')
             .where('id', '=', 'src')
             .executeTakeFirstOrThrow();
-        expect(source.trashed_at).not.toBeNull();
+        expect(source.trashed).not.toBeNull();
     });
 
     // Trash hides a node from recipients; a grant resolves a role regardless of trash state, so the guard -- not the
     // resolver -- is what keeps a trashed source absent for everyone but its owner.
     it('treats a trashed source as absent for a viewer holding a grant on it', async () =>
     {
-        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashedAt: new Date() }));
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashed: new Date() }));
         await seedShare('src', 'bob', 'viewer');
 
         const error = await caught(manager().copy(testActor({ id: 'bob' }), 'src', { parentID: null }));

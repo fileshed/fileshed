@@ -129,7 +129,7 @@ function uniquePath(taken : Set<string>, path : string) : string
 function omissionFor(node : Node, readable : boolean) : string | null
 {
     if(!readable) { return OMITTED_UNREADABLE; }
-    if(node.type !== 'link' && node.trashedAt !== null) { return OMITTED_TRASHED; }
+    if(node.type !== 'link' && node.trashed !== null) { return OMITTED_TRASHED; }
 
     return null;
 }
@@ -199,7 +199,7 @@ export function planArchive(input : ArchivePlanInput) : ArchivePlan
             const target = input.targets.get(node.targetNodeID);
             const targetReadable = target !== undefined && readable(target.id);
 
-            if(target !== undefined && targetReadable && target.type === 'file' && target.trashedAt === null)
+            if(target !== undefined && targetReadable && target.type === 'file' && target.trashed === null)
             {
                 taken.add(path);
                 plan.files.push({ nodeID: target.id, blobID: target.blobID, size: target.size, path });

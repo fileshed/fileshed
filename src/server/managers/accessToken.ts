@@ -47,8 +47,8 @@ function toAccessToken(key : AccessKey, name : string) : AccessToken
         start: key.start,
         scopes: scopesFromStatement(key.permissions),
         created: key.created,
-        lastUsedAt: key.lastUsedAt,
-        expiresAt: key.expiresAt,
+        lastUsed: key.lastUsed,
+        expires: key.expires,
     };
 }
 
@@ -129,12 +129,12 @@ export class AccessTokenManager
             permissions: scopeStatements['files:download'],
         });
 
-        if(created.key.expiresAt === null)
+        if(created.key.expires === null)
         {
             throw new Error('Playback key minted without the config-default expiry.');
         }
 
-        return toPlaybackTokenResponse({ id: created.key.id, token: created.token, expiresAt: created.key.expiresAt });
+        return toPlaybackTokenResponse({ id: created.key.id, token: created.token, expires: created.key.expires });
     }
 }
 

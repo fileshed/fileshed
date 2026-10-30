@@ -17,7 +17,7 @@ describe('publicLinkCodec', () =>
             nodeID: 'node_1',
             token: 'a'.repeat(43),
             created: new Date('2026-01-01T00:00:00.000Z'),
-            revokedAt: null,
+            revoked: null,
         };
 
         expect(publicLinkCodec.safeParse(link).success).toBe(true);
@@ -30,7 +30,7 @@ describe('publicLinkCodec', () =>
             nodeID: 'node_1',
             token: 'b'.repeat(43),
             created: new Date('2026-01-01T00:00:00.000Z'),
-            revokedAt: new Date('2026-02-01T00:00:00.000Z'),
+            revoked: new Date('2026-02-01T00:00:00.000Z'),
         };
 
         expect(publicLinkCodec.safeParse(link).success).toBe(true);
@@ -46,7 +46,7 @@ describe('publicLinkCodec', () =>
             token: 'c'.repeat(43),
             disposition: 'attachment',
             created: new Date('2026-01-01T00:00:00.000Z'),
-            revokedAt: null,
+            revoked: null,
         };
 
         expect(publicLinkCodec.safeParse(link).success).toBe(false);

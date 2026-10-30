@@ -21,7 +21,7 @@ export const LISTING_GRID_GAP = 12;
 // How many tiles a row of the grid holds: two at the narrowest, widening by the same tiers the grid laid out with
 // before the tiles were virtualized. Widest first, so the first tier a viewport clears is the one it gets.
 export const LISTING_GRID_BASE_COLUMNS = 2;
-export const LISTING_GRID_TIERS = [
+export const listingGridTiers = [
     { minWidth: 1280, columns: 6 },
     { minWidth: 1024, columns: 5 },
     { minWidth: 768, columns: 4 },

@@ -235,7 +235,7 @@ describe('GET /api/docs', () =>
 
 describe('operation coverage', () =>
 {
-    const HTTP_METHODS : HttpMethod[] = [ 'get', 'post', 'put', 'patch', 'delete' ];
+    const httpMethods : HttpMethod[] = [ 'get', 'post', 'put', 'patch', 'delete' ];
 
     // The drift backstop. Every registered route but better-auth's delegated wildcard must be documented, and an
     // undecorated route is simply absent from the emitted paths -- so this fails the moment a route is added without a
@@ -269,7 +269,7 @@ describe('operation coverage', () =>
 
         for(const [ path, item ] of Object.entries(spec.paths))
         {
-            for(const method of HTTP_METHODS)
+            for(const method of httpMethods)
             {
                 const operation = item[method];
                 if(operation !== undefined)

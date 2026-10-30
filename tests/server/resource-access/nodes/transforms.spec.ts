@@ -59,7 +59,7 @@ async function roundTrip(id : string) : Promise<ReturnType<typeof nodeFromRow>>
 
 describe('node transforms round-trip', () =>
 {
-    it('round-trips a file node, preserving blob, size, mime type and trashed_at', async () =>
+    it('round-trips a file node, preserving blob, size, mime type and trashed', async () =>
     {
         const node = fileNode({
             id: 'f1',
@@ -67,7 +67,7 @@ describe('node transforms round-trip', () =>
             blobID: 'sha-a',
             size: 4096,
             mimeType: 'application/pdf',
-            trashedAt: new Date('2026-02-03T04:05:06.000Z'),
+            trashed: new Date('2026-02-03T04:05:06.000Z'),
         });
 
         await db.insertInto('node').values(rowFromNode(node))
@@ -117,7 +117,7 @@ function fileRow() : Selectable<NodeTable>
         mime_type: 'text/plain',
         created: '2026-01-02T03:04:05.678Z',
         updated: '2026-01-02T03:04:05.678Z',
-        trashed_at: null,
+        trashed: null,
     };
 }
 
@@ -144,7 +144,7 @@ describe('nodeFromRow corruption detection', () =>
         expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 
-    it('throws when a link row carries a trashed_at (links are never trashed)', () =>
+    it('throws when a link row carries a trashed timestamp (links are never trashed)', () =>
     {
         const row : Selectable<NodeTable> = {
             ...fileRow(),
@@ -153,7 +153,7 @@ describe('nodeFromRow corruption detection', () =>
             blob_id: null,
             size: null,
             mime_type: null,
-            trashed_at: '2026-02-03T04:05:06.000Z',
+            trashed: '2026-02-03T04:05:06.000Z',
         };
 
         expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);

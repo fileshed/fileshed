@@ -45,7 +45,7 @@ function envelope(nodes : NodeResponse[], locations : Record<string, NodeLocatio
 }
 
 // The real UInput is a wrapper; this stub is the input element the component binds and listens to.
-const STUBS = {
+const stubs = {
     UInput: {
         props: [ 'modelValue' ],
         emits: [ 'update:modelValue' ],
@@ -70,7 +70,7 @@ async function mountBox() : Promise<{ wrapper : VueWrapper; router : Router }>
     await router.push('/');
     await router.isReady();
 
-    const wrapper = mount(SearchBox, { global: { plugins: [ router ], stubs: STUBS }, attachTo: document.body });
+    const wrapper = mount(SearchBox, { global: { plugins: [ router ], stubs }, attachTo: document.body });
 
     return { wrapper, router };
 }

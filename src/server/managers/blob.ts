@@ -85,7 +85,7 @@ interface Ticket
     sha256 : string;
     size : number;
     ownerID : string;
-    expiresAt : number;
+    expires : number;
 
     // How much of the claimed size has landed in staging. A whole-file PUT never touches it; a chunked upload advances
     // it as each chunk lands and finalizes on the chunk that carries it to `size`.
@@ -125,7 +125,7 @@ class TicketStore
             sha256,
             size,
             ownerID,
-            expiresAt: Date.now() + TICKET_TTL_MS,
+            expires: Date.now() + TICKET_TTL_MS,
             receivedBytes: 0,
             inFlight: false,
             spent: false,
@@ -142,7 +142,7 @@ class TicketStore
         const ticket = this.#tickets.get(id);
         if(ticket === undefined) { return undefined; }
 
-        if(ticket.expiresAt <= Date.now())
+        if(ticket.expires <= Date.now())
         {
             this.#drop(ticket);
             return undefined;
@@ -161,7 +161,7 @@ class TicketStore
 
         for(const ticket of this.#byOwner.get(ownerID) ?? [])
         {
-            if(ticket.expiresAt <= now)
+            if(ticket.expires <= now)
             {
                 this.#drop(ticket);
             }
@@ -209,7 +209,7 @@ class TicketStore
         const landed = receivedBytes > ticket.receivedBytes;
 
         ticket.receivedBytes = receivedBytes;
-        if(landed) { ticket.expiresAt = Date.now() + TICKET_TTL_MS; }
+        if(landed) { ticket.expires = Date.now() + TICKET_TTL_MS; }
     }
 
     sweep() : void
@@ -217,7 +217,7 @@ class TicketStore
         const now = Date.now();
         for(const ticket of this.#tickets.values())
         {
-            if(ticket.expiresAt <= now) { this.#drop(ticket); }
+            if(ticket.expires <= now) { this.#drop(ticket); }
         }
     }
 
@@ -255,7 +255,7 @@ interface Challenge
     nonce : string;
     ranges : [ number, number ][];
     location : BlobLocation;
-    expiresAt : number;
+    expires : number;
 }
 
 // Single-use proof-of-possession challenges. Same consume-once, expire-fast contract as tickets.
@@ -263,9 +263,9 @@ class ChallengeStore
 {
     readonly #challenges = new Map<string, Challenge>();
 
-    issue(init : Omit<Challenge, 'id' | 'expiresAt'>) : Challenge
+    issue(init : Omit<Challenge, 'id' | 'expires'>) : Challenge
     {
-        const challenge : Challenge = { ...init, id: createId(), expiresAt: Date.now() + CHALLENGE_TTL_MS };
+        const challenge : Challenge = { ...init, id: createId(), expires: Date.now() + CHALLENGE_TTL_MS };
         this.#challenges.set(challenge.id, challenge);
         return challenge;
     }
@@ -276,7 +276,7 @@ class ChallengeStore
         if(challenge === undefined) { return undefined; }
 
         this.#challenges.delete(id);
-        return challenge.expiresAt > Date.now() ? challenge : undefined;
+        return challenge.expires > Date.now() ? challenge : undefined;
     }
 
     sweep() : void
@@ -284,7 +284,7 @@ class ChallengeStore
         const now = Date.now();
         for(const [ id, challenge ] of this.#challenges)
         {
-            if(challenge.expiresAt <= now) { this.#challenges.delete(id); }
+            if(challenge.expires <= now) { this.#challenges.delete(id); }
         }
     }
 }
@@ -348,7 +348,7 @@ function randomRanges(size : number) : [ number, number ][]
 // The expected answer: read the same windows the challenge named, in order, and HMAC-SHA256 their concatenation keyed
 // by the nonce. Keying by the per-challenge nonce is what stops an answer captured on one challenge from
 // satisfying another.
-async function calculateProof(
+async function buildProof(
     blob : BlobRA,
     location : BlobLocation,
     ranges : [ number, number ][],
@@ -666,7 +666,7 @@ export class BlobManager
         let expected : string;
         try
         {
-            expected = await calculateProof(this.#blob, challenge.location, challenge.ranges, challenge.nonce);
+            expected = await buildProof(this.#blob, challenge.location, challenge.ranges, challenge.nonce);
         }
         catch(error)
         {
@@ -1064,7 +1064,7 @@ export class BlobManager
             mimeType: metadata.mimeType,
             created: now,
             updated: now,
-            trashedAt: null,
+            trashed: null,
         };
 
         const limitBytes = await this.#admission.resolveLimit(user.id);

@@ -96,7 +96,7 @@ export function judgeParentEdge(facts : ParentEdgeFacts) : RegulationResult
 
     const violations : RegulationViolation[] = [];
 
-    if(parent.trashedAt !== null)
+    if(parent.trashed !== null)
     {
         violations.push({
             code: 'parent.trashed',

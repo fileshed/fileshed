@@ -18,7 +18,7 @@ import { composeNodeApp, seedLinkRow, seedShareRow, userIDByEmail } from './supp
 
 //----------------------------------------------------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+type JSON = Record<string, unknown>;
 
 async function request(
     app : Hono,
@@ -84,7 +84,7 @@ describe('POST /api/nodes (folders)', () =>
         const ownerID = await userIDByEmail(booted, 'a@example.com');
 
         const res = await request(app, 'POST', '/api/nodes', cookie, { type: 'folder', name: 'Docs', parentID: null });
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(201);
         expect(body).toMatchObject({ type: 'folder', name: 'Docs', parentID: null, ownerID, role: 'owner' });
@@ -98,7 +98,7 @@ describe('POST /api/nodes (folders)', () =>
 
         const parent = await createFolder(app, cookie, 'Parent');
         const res = await postNode(app, cookie, { type: 'folder', name: 'Child', parentID: parent.id });
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(201);
         expect(body.parentID).toBe(parent.id);
@@ -132,7 +132,7 @@ describe('POST /api/nodes (links)', () =>
 
         const target = await createFolder(app, cookie, 'Photos');
         const res = await createLink(app, cookie, target.id);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(201);
         expect(body).toMatchObject({ type: 'link', name: 'Photos', targetNodeID: target.id, role: 'owner' });
@@ -146,7 +146,7 @@ describe('POST /api/nodes (links)', () =>
         const cookie = await signedUp(app, 'a@example.com');
 
         const folder = await createFolder(app, cookie, 'Folder');
-        const link = await (await createLink(app, cookie, folder.id)).json() as Json;
+        const link = await (await createLink(app, cookie, folder.id)).json() as JSON;
 
         const res = await createLink(app, cookie, link.id as string);
         const body = await res.json() as { violations : { code : string }[] };
@@ -168,7 +168,7 @@ describe('GET /api/nodes/:id', () =>
 
         const folder = await createFolder(app, cookie, 'Docs');
         const res = await request(app, 'GET', `/api/nodes/${ folder.id }`, cookie);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body).toMatchObject({ id: folder.id, role: 'owner' });
@@ -202,7 +202,7 @@ describe('GET /api/nodes children listing', () =>
         await createLink(app, cookie, folder.id);
 
         const res = await request(app, 'GET', '/api/nodes/children', cookie);
-        const body = await res.json() as { nodes : Json[]; total : number };
+        const body = await res.json() as { nodes : JSON[]; total : number };
 
         expect(res.status).toBe(200);
         expect(body.total).toBe(2);
@@ -225,7 +225,7 @@ describe('GET /api/nodes children listing', () =>
         await seedLinkRow(booted, { id: 'deadlink', ownerID: ownerA, targetNodeID: foreign.id, name: 'Was Shared' });
 
         const res = await request(app, 'GET', '/api/nodes/children', cookieA);
-        const body = await res.json() as { nodes : Json[] };
+        const body = await res.json() as { nodes : JSON[] };
 
         const link = body.nodes.find((node) => node.id === 'deadlink');
         expect(link).toMatchObject({ type: 'link', name: 'Was Shared', target: null });
@@ -241,7 +241,7 @@ describe('GET /api/nodes children listing', () =>
         const child = await createFolder(app, cookie, 'Child', parent.id);
 
         const res = await request(app, 'GET', `/api/nodes/${ parent.id }/children`, cookie);
-        const body = await res.json() as { nodes : Json[]; total : number };
+        const body = await res.json() as { nodes : JSON[]; total : number };
 
         expect(body.total).toBe(1);
         expect(body.nodes[0]?.id).toBe(child.id);
@@ -257,7 +257,7 @@ describe('GET /api/nodes children listing', () =>
         await request(app, 'POST', `/api/nodes/${ folder.id }/trash`, cookie);
 
         const res = await request(app, 'GET', '/api/nodes/children', cookie);
-        const body = await res.json() as { nodes : Json[]; total : number };
+        const body = await res.json() as { nodes : JSON[]; total : number };
 
         expect(body.total).toBe(0);
         expect(body.nodes).toHaveLength(0);
@@ -270,12 +270,12 @@ describe('GET /api/nodes children listing', () =>
         const cookie = await signedUp(app, 'a@example.com');
 
         const folder = await createFolder(app, cookie, 'Photos');
-        const link = await (await createLink(app, cookie, folder.id)).json() as Json;
+        const link = await (await createLink(app, cookie, folder.id)).json() as JSON;
 
         const folders = await (await request(app, 'GET', '/api/nodes/children?types=folders', cookie))
-            .json() as { nodes : Json[]; total : number };
+            .json() as { nodes : JSON[]; total : number };
         const links = await (await request(app, 'GET', '/api/nodes/children?types=links', cookie))
-            .json() as { nodes : Json[]; total : number };
+            .json() as { nodes : JSON[]; total : number };
 
         expect(folders.nodes.map((node) => node.id)).toEqual([ folder.id ]);
         expect(folders.total).toBe(1);
@@ -346,7 +346,7 @@ describe('GET /api/nodes/:id/children through a folder link', () =>
         });
 
         const res = await request(app, 'GET', '/api/nodes/alicelink/children', cookieAlice);
-        const body = await res.json() as { nodes : Json[]; total : number };
+        const body = await res.json() as { nodes : JSON[]; total : number };
 
         expect(res.status).toBe(200);
         expect(body.total).toBe(1);
@@ -382,7 +382,7 @@ describe('PATCH /api/nodes/:id', () =>
 
         const folder = await createFolder(app, cookie, 'Old Name');
         const res = await request(app, 'PATCH', `/api/nodes/${ folder.id }`, cookie, { name: 'New Name' });
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body.name).toBe('New Name');
@@ -399,7 +399,7 @@ describe('PATCH /api/nodes/:id', () =>
         const child = await createFolder(app, cookie, 'Child', from.id);
 
         const res = await request(app, 'PATCH', `/api/nodes/${ child.id }`, cookie, { parentID: to.id });
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body.parentID).toBe(to.id);
@@ -446,7 +446,7 @@ describe('POST /api/nodes/:id/trash', () =>
         const cookie = await signedUp(app, 'a@example.com');
 
         const folder = await createFolder(app, cookie, 'Folder');
-        const link = await (await createLink(app, cookie, folder.id)).json() as Json;
+        const link = await (await createLink(app, cookie, folder.id)).json() as JSON;
 
         const res = await request(app, 'POST', `/api/nodes/${ link.id }/trash`, cookie);
         const body = await res.json() as { violations : { code : string }[] };
@@ -486,7 +486,7 @@ describe('POST /api/nodes/:id/restore', () =>
 
         await request(app, 'POST', `/api/nodes/${ child.id }/trash`, cookie);
         const res = await request(app, 'POST', `/api/nodes/${ child.id }/restore`, cookie);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body.parentID).toBe(parent.id);
@@ -505,7 +505,7 @@ describe('POST /api/nodes/:id/restore', () =>
         await request(app, 'POST', `/api/nodes/${ parent.id }/trash`, cookie);
 
         const res = await request(app, 'POST', `/api/nodes/${ child.id }/restore`, cookie);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body.parentID).toBe(null);
@@ -523,7 +523,7 @@ describe('DELETE /api/nodes/:id', () =>
         const cookie = await signedUp(app, 'a@example.com');
 
         const target = await createFolder(app, cookie, 'Target');
-        const link = await (await createLink(app, cookie, target.id)).json() as Json;
+        const link = await (await createLink(app, cookie, target.id)).json() as JSON;
 
         const del = await request(app, 'DELETE', `/api/nodes/${ link.id }`, cookie);
         expect(del.status).toBe(204);

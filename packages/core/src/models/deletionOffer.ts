@@ -3,7 +3,7 @@
 //
 // A time-boxed "save a copy" offer minted when an owner hard-deletes a shared file with recipients-may-copy enabled.
 // name/mimeType/size snapshot the deleted node, since the node itself is gone by the time the offeree sees this.
-// expiresAt is the blob's GC grace deadline -- accept before then and the claim path can still resurrect the blob.
+// expires is the blob's GC grace deadline -- accept before then and the claim path can still resurrect the blob.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface DeletionOffer
@@ -16,7 +16,7 @@ export interface DeletionOffer
     size : number;
     createdBy : string;
     created : Date;
-    expiresAt : Date;
+    expires : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

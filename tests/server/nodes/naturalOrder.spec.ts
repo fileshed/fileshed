@@ -140,7 +140,7 @@ const VARIED : readonly {
     },
 ];
 
-const sha256 = 'c'.repeat(64);
+const SHA256 = 'c'.repeat(64);
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -158,7 +158,7 @@ async function seed() : Promise<void>
     await booted.handle.db
         .insertInto('blob')
         .values({
-            sha256,
+            sha256: SHA256,
             size: 10,
             backend_id: backend.id,
             storage_key: 'seed/natural',
@@ -174,12 +174,12 @@ async function seed() : Promise<void>
             type: 'file' as const,
             owner_id: owner.id,
             parent_id: null,
-            blob_id: sha256,
+            blob_id: SHA256,
             size: 10,
             mime_type: 'application/octet-stream',
             created: now,
             updated: now,
-            trashed_at: null,
+            trashed: null,
             target_node_id: null,
         })),
         ...VARIED.map((row) => ({
@@ -188,12 +188,12 @@ async function seed() : Promise<void>
             type: row.type,
             owner_id: owner.id,
             parent_id: null,
-            blob_id: row.type === 'file' ? sha256 : null,
+            blob_id: row.type === 'file' ? SHA256 : null,
             size: row.size,
             mime_type: row.mimeType,
             created: row.created,
             updated: row.updated,
-            trashed_at: null,
+            trashed: null,
             target_node_id: row.type === 'link' ? 'k-01' : null,
         })),
         ...FOLDERS.map((folder) => ({
@@ -207,7 +207,7 @@ async function seed() : Promise<void>
             mime_type: null,
             created: now,
             updated: now,
-            trashed_at: null,
+            trashed: null,
             target_node_id: null,
         })),
     ];

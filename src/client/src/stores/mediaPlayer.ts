@@ -116,7 +116,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     // never before -- in-page playback is a same-origin request that carries the session cookie, so a key would only
     // put a credential in a URL that never needed one, where every proxy log on the way records it. Refreshed on a
     // track change inside the final window; a failed mint leaves it null and in-page playback is unbothered.
-    const playbackToken = ref<{ id : string; token : string; expiresAt : number } | null>(null);
+    const playbackToken = ref<{ id : string; token : string; expires : number } | null>(null);
     let tokenMintInFlight = false;
 
     // Embedded tags by node, read lazily as tracks join the queue. An entry is absent until the read settles and
@@ -178,7 +178,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         try
         {
             const minted = await mintPlaybackToken(previousID);
-            playbackToken.value = { id: minted.id, token: minted.token, expiresAt: Date.parse(minted.expiresAt) };
+            playbackToken.value = { id: minted.id, token: minted.token, expires: Date.parse(minted.expires) };
         }
         catch { /* in-page playback still rides the cookie; the next track change retries */ }
         finally
@@ -204,7 +204,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
         const stamp = playbackToken.value;
         if(stamp === null) { return; }
 
-        if(stamp.expiresAt - Date.now() > PLAYBACK_TOKEN_REFRESH_WINDOW_MS) { return; }
+        if(stamp.expires - Date.now() > PLAYBACK_TOKEN_REFRESH_WINDOW_MS) { return; }
 
         void mintToken(stamp.id);
     }
@@ -432,7 +432,7 @@ export const useMediaPlayerStore = defineStore('mediaPlayer', () =>
     function onTrackError() : void
     {
         const stamp = playbackToken.value;
-        if(stamp !== null && stamp.expiresAt <= Date.now())
+        if(stamp !== null && stamp.expires <= Date.now())
         {
             playbackToken.value = null;
             void mintToken(stamp.id).then(() =>

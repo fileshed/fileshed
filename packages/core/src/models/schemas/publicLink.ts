@@ -17,7 +17,7 @@ export const publicLinkCodec = z.strictObject({
     nodeID: z.string(),
     token: z.string(),
     created: z.date(),
-    revokedAt: z.date().nullable(),
+    revoked: z.date().nullable(),
 });
 
 typeAssert<Equals<z.output<typeof publicLinkCodec>, PublicLink>>();

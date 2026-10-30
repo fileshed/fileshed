@@ -39,11 +39,11 @@ function pendingRequest(role : ShareRole, message : string | null = null) : Acce
         message,
         status: 'pending',
         created: '2026-07-01T00:00:00.000Z',
-        resolvedAt: null,
+        resolved: null,
     };
 }
 
-const STUBS = {
+const stubs = {
     UButton: {
         props: [ 'label' ],
         emits: [ 'click' ],
@@ -67,7 +67,7 @@ const STUBS = {
 
 function mountCard() : VueWrapper
 {
-    return mount(RequestAccess, { props: { nodeID: 'n1' }, global: { stubs: STUBS } });
+    return mount(RequestAccess, { props: { nodeID: 'n1' }, global: { stubs } });
 }
 
 function clickButton(wrapper : VueWrapper, label : string) : Promise<void>

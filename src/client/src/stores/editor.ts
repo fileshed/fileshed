@@ -218,7 +218,7 @@ export const useEditorStore = defineStore('editor', () =>
         saving: file.saving,
         saveError: file.saveError,
         conflict: file.conflict,
-        lastSavedAt: file.lastSavedAt,
+        lastSaved: file.lastSaved,
         dirty,
         readOnly: file.readOnly,
         open,

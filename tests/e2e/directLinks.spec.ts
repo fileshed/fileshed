@@ -117,7 +117,7 @@ describe('link creation', () =>
         expect(createStatus).toBe(201);
         expect(link.nodeID).toBe(fileID);
         expect(link.url).toBe(`/d/${ link.token }`);
-        expect(link.revokedAt).toBeNull();
+        expect(link.revoked).toBeNull();
     });
 
     it('records two public_link rows with distinct, >=128-bit tokens', async () =>

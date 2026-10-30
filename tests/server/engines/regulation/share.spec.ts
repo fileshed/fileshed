@@ -28,7 +28,7 @@ function file(overrides : Partial<FileNode> = {}) : FileNode
         mimeType: 'application/pdf',
         created: at,
         updated: at,
-        trashedAt: null,
+        trashed: null,
         ...overrides,
     };
 }
@@ -57,7 +57,7 @@ function pendingRequest(overrides : Partial<PendingShareRequest> = {}) : Pending
         requesterID: 'user_requester',
         requestedRole: 'viewer',
         message: null,
-        resolvedAt: null,
+        resolved: null,
         created: at,
         ...overrides,
     };
@@ -72,7 +72,7 @@ function resolvedRequest(overrides : Partial<ResolvedShareRequest> = {}) : Resol
         requesterID: 'user_requester',
         requestedRole: 'viewer',
         message: null,
-        resolvedAt: at,
+        resolved: at,
         created: at,
         ...overrides,
     };
@@ -176,7 +176,7 @@ describe('judgeShareRequestResolution', () =>
     it('rejects resolving an already-resolved request', () =>
     {
         const result = judgeShareRequestResolution({
-            request: resolvedRequest({ status: 'granted', resolvedAt: at }),
+            request: resolvedRequest({ status: 'granted', resolved: at }),
             targetOwnerID: 'user_owner',
             actorID: 'user_owner',
         });

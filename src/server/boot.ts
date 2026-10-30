@@ -160,12 +160,12 @@ export async function bootApp(options : BootOptions = {}) : Promise<BootedServer
         settings: settingsRA,
     });
 
-    const startedAt = new Date();
+    const started = new Date();
     const settings = new SettingsManager({
         handle,
         config,
         box: new SecretBox(authSecret),
-        startedAt,
+        started,
     });
     const mail = new MailManager({ settings, mail: new MailRA() });
 
@@ -205,7 +205,7 @@ export async function bootApp(options : BootOptions = {}) : Promise<BootedServer
         mail,
         providers: activeProviderIDs(providerValues),
         build: resolveBuildInfo(),
-        startedAt,
+        started,
     });
     await services.setup.announce(config.BASE_URL);
 

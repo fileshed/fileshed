@@ -70,7 +70,7 @@ async function listOffers(cookie : string) : Promise<DeletionOfferListResponse>
     return await res.json() as DeletionOfferListResponse;
 }
 
-async function blobDeletedAt() : Promise<string | Date | null>
+async function blobDeleted() : Promise<string | Date | null>
 {
     const row = await booted.handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256Of(bytes))
@@ -85,7 +85,7 @@ describe('deletion offers over HTTP', () =>
     it('walks the full lifecycle: delete with opt-in, list, accept into an owned live copy', async () =>
     {
         await deleteSharedFileWithOffer();
-        expect(await blobDeletedAt()).not.toBeNull();
+        expect(await blobDeleted()).not.toBeNull();
 
         const listed = await listOffers(bob.cookie);
         expect(listed.offers).toHaveLength(1);
@@ -106,7 +106,7 @@ describe('deletion offers over HTTP', () =>
         expect(node).toMatchObject({ type: 'file', ownerID: bob.id, name: 'report.bin', role: 'owner' });
 
         // The copy references the original bytes, un-graveyarded, and the offer is consumed.
-        expect(await blobDeletedAt()).toBeNull();
+        expect(await blobDeleted()).toBeNull();
         expect((await listOffers(bob.cookie)).offers).toEqual([]);
 
         const retry = await request(booted.app, 'POST', acceptPath, bob.cookie, { parentID: null });
@@ -123,7 +123,7 @@ describe('deletion offers over HTTP', () =>
 
         expect(res.status).toBe(204);
         expect((await listOffers(bob.cookie)).offers).toEqual([]);
-        expect(await blobDeletedAt()).not.toBeNull();
+        expect(await blobDeleted()).not.toBeNull();
     });
 
     it('mints no offers when the owner deletes without the opt-in', async () =>

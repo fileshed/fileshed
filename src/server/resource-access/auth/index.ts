@@ -50,8 +50,8 @@ export interface AccessKey
     start : string | null;
     permissions : PermissionStatement;
     created : Date;
-    lastUsedAt : Date | null;
-    expiresAt : Date | null;
+    lastUsed : Date | null;
+    expires : Date | null;
 }
 
 export interface KeyRequest
@@ -71,7 +71,7 @@ export interface MintedKey
     key : AccessKey;
 }
 
-export interface ValidKey
+export interface VerifiedKey
 {
     userID : string;
     permissions : PermissionStatement;
@@ -260,8 +260,8 @@ export class AuthRA
                 start: created.start ?? null,
                 permissions: permissionsOf(created.permissions),
                 created: created.createdAt,
-                lastUsedAt: null,
-                expiresAt: created.expiresAt ?? null,
+                lastUsed: null,
+                expires: created.expiresAt ?? null,
             },
         };
     }
@@ -277,8 +277,8 @@ export class AuthRA
             start: key.start ?? null,
             permissions: permissionsOf(key.permissions),
             created: key.createdAt,
-            lastUsedAt: key.lastRequest ?? null,
-            expiresAt: key.expiresAt ?? null,
+            lastUsed: key.lastRequest ?? null,
+            expires: key.expiresAt ?? null,
         }));
     }
 
@@ -305,7 +305,7 @@ export class AuthRA
     // Null for any key the plugin will not vouch for, under-scoped for `required` included -- every 4xx it answers a
     // verify with means the same thing to the caller. One plugin call, never getSession, which would count the key's
     // use twice.
-    async validateKey(token : string, configID : string, required ?: PermissionStatement) : Promise<ValidKey | null>
+    async verifyKey(token : string, configID : string, required ?: PermissionStatement) : Promise<VerifiedKey | null>
     {
         let result;
         try

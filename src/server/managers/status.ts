@@ -43,7 +43,7 @@ export interface StatusManagerDeps
     tracker : LastRunTracker;
 
     build : BuildInfo;
-    startedAt : Date;
+    started : Date;
     activeProviders : number;
 
     emailEnabled : () => Promise<boolean>;
@@ -123,7 +123,7 @@ export class StatusManager
                 databaseKind: this.#deps.handle.kind,
                 // Clamped at zero: a host clock stepping backwards would otherwise report a negative uptime, which
                 // the response codec rejects outright -- one bad NTP correction should not blank the whole readout.
-                uptimeSeconds: Math.max(0, Math.floor((Date.now() - this.#deps.startedAt.getTime()) / MS_PER_SECOND)),
+                uptimeSeconds: Math.max(0, Math.floor((Date.now() - this.#deps.started.getTime()) / MS_PER_SECOND)),
                 emailEnabled,
                 activeProviders: this.#deps.activeProviders,
                 signUpEnabled,

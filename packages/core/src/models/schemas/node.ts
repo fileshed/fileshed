@@ -2,7 +2,7 @@
 // Node Codec
 //
 // Each variant is a strict object, so a field that doesn't belong to that variant (a folder's size or mimeType, a
-// link's blobID or trashedAt) fails validation instead of being silently stripped.
+// link's blobID or trashed) fails validation instead of being silently stripped.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';
@@ -34,13 +34,13 @@ const fileNodeCodec = z.strictObject({
     blobID: z.string(),
     size: z.number(),
     mimeType: z.string(),
-    trashedAt: z.date().nullable(),
+    trashed: z.date().nullable(),
 });
 
 const folderNodeCodec = z.strictObject({
     ...nodeBaseShape,
     type: z.literal('folder'),
-    trashedAt: z.date().nullable(),
+    trashed: z.date().nullable(),
 });
 
 const linkNodeCodec = z.strictObject({

@@ -278,7 +278,7 @@ export async function answerReplace(
 // Client-side proof, computed from the fixture bytes the way a possessing client would.
 //----------------------------------------------------------------------------------------------------------------------
 
-export function calculateAnswer(nonce : string, ranges : [ number, number ][], data : Buffer) : string
+export function buildAnswer(nonce : string, ranges : [ number, number ][], data : Buffer) : string
 {
     const hmac = createHmac('sha256', nonce);
     for(const [ offset, length ] of ranges)
@@ -354,7 +354,7 @@ export async function blobRowCount(handle : DatabaseHandle, sha256 : string) : P
 }
 
 // The GC graveyard marker for a blob: null when live, a timestamp once its last reference is gone.
-export async function blobDeletedAt(handle : DatabaseHandle, sha256 : string) : Promise<Date | string | null>
+export async function blobDeleted(handle : DatabaseHandle, sha256 : string) : Promise<Date | string | null>
 {
     const row = await handle.db
         .selectFrom('blob')
@@ -369,7 +369,7 @@ interface NodeContentRow
     blob_id : string | null;
     size : number | null;
     mime_type : string | null;
-    trashed_at : Date | string | null;
+    trashed : Date | string | null;
     name : string;
     parent_id : string | null;
 }
@@ -379,7 +379,7 @@ export async function nodeContentRow(handle : DatabaseHandle, id : string) : Pro
 {
     return handle.db
         .selectFrom('node')
-        .select([ 'blob_id', 'size', 'mime_type', 'trashed_at', 'name', 'parent_id' ])
+        .select([ 'blob_id', 'size', 'mime_type', 'trashed', 'name', 'parent_id' ])
         .where('id', '=', id)
         .executeTakeFirstOrThrow();
 }

@@ -15,7 +15,7 @@ import { fileNode, linkNode } from '../../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const STUBS = {
+const stubs = {
     UContextMenu: { template: '<div><slot /></div>' },
     UDropdownMenu: { template: '<div><slot /></div>' },
     UButton: { template: '<button class="ubtn" />' },
@@ -27,7 +27,7 @@ function mountTile(node : NodeResponse, selected = false) : VueWrapper
 {
     return mount(NodeTile, {
         props: { node, selected, menuItems: [ [ { label: 'x' } ] ] },
-        global: { stubs: STUBS },
+        global: { stubs },
     });
 }
 

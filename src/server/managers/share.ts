@@ -235,7 +235,7 @@ export class ShareManager
             requestedRole: request.requestedRole,
             message: request.message ?? null,
             status: 'pending',
-            resolvedAt: null,
+            resolved: null,
             created: new Date(),
         };
         await this.#shares.insertRequest(pending);
@@ -311,7 +311,7 @@ export class ShareManager
                 message: request.message,
                 created: request.created,
                 status: decision === 'grant' ? 'granted' : 'declined',
-                resolvedAt: now,
+                resolved: now,
             };
             return outcome;
         });

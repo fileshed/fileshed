@@ -206,7 +206,7 @@
     }
 
     // The card's bar baselines use the accented tokens because the muted ones vanish against the elevated card.
-    const VARIANT_STYLES : Record<MediaControlsVariant, VariantStyle> = {
+    const variantStyles : Record<MediaControlsVariant, VariantStyle> = {
         card: {
             root: '',
             focusRing: 'has-[:focus-visible]:outline-primary',
@@ -261,7 +261,7 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    const styles = computed(() => VARIANT_STYLES[props.variant]);
+    const styles = computed(() => variantStyles[props.variant]);
 
     const playedPercent = computed(() =>
     {

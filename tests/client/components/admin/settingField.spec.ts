@@ -35,7 +35,7 @@ vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 const patchMock = patchAdminSettings as unknown as Mock;
 const runSweepMock = runSweep as unknown as Mock;
 
-const SWEPT = {
+const swept = {
     sweep: 'gc' as const,
     ranAt: '2026-08-12T10:00:00.000Z',
     summary: { candidates: 0, deleted: 0, kept: 0, bytesFailed: 0, bytesFreed: 0 },
@@ -460,7 +460,7 @@ describe('SettingField', () =>
         const wrapper = mountGoverningField(entry);
 
         patchMock.mockResolvedValue(response([ { ...entry, value: 30, source: 'override' } ]));
-        runSweepMock.mockResolvedValue(SWEPT);
+        runSweepMock.mockResolvedValue(swept);
 
         await wrapper.find('.value-input').setValue('30');
         await wrapper.find('.btn-save').trigger('click');

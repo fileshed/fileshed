@@ -134,7 +134,7 @@ export async function bytesExist(booted : BootedStoreApp, sha256 : string) : Pro
 }
 
 // The GC graveyard marker for a blob: null when live, a timestamp once its last reference is gone.
-export async function blobDeletedAt(booted : BootedStoreApp, sha256 : string) : Promise<Date | string | null>
+export async function blobDeleted(booted : BootedStoreApp, sha256 : string) : Promise<Date | string | null>
 {
     const row = await booted.handle.db
         .selectFrom('blob')

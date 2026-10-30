@@ -24,7 +24,7 @@ let handle : DatabaseHandle;
 let db : Kysely<Database>;
 let ra : NodeRA;
 
-const trashedAt = new Date('2026-03-01T00:00:00.000Z');
+const trashed = new Date('2026-03-01T00:00:00.000Z');
 const byName = { pagination: { limit: 100, offset: 0 }, sort: { key: 'name' as const, direction: 'asc' as const } };
 
 beforeEach(async () =>
@@ -60,21 +60,21 @@ describe('NodeRA.trashedRoots', () =>
     {
         await ra.insert(folderNode({ id: 'live', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'gone', ownerID: 'u1' }));
-        await ra.setTrashed('gone', trashedAt);
+        await ra.setTrashed('gone', trashed);
 
         const roots = await ra.trashedRoots('u1', byName);
 
         expect(roots.map((node) => node.id)).toEqual([ 'gone' ]);
     });
 
-    // setTrashed stamps the whole subtree, so a trashed folder's descendants each carry a trashed_at. Only the root
+    // setTrashed stamps the whole subtree, so a trashed folder's descendants each carry a trashed. Only the root
     // may list -- a child whose parent is also trashed would double-list the same removal.
     it('lists a trashed folder once and never its trashed descendants', async () =>
     {
         await ra.insert(folderNode({ id: 'folder', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'sub', ownerID: 'u1', parentID: 'folder' }));
         await ra.insert(file('child', { parentID: 'folder' }));
-        await ra.setTrashed('folder', trashedAt);
+        await ra.setTrashed('folder', trashed);
 
         const roots = await ra.trashedRoots('u1', byName);
 
@@ -87,7 +87,7 @@ describe('NodeRA.trashedRoots', () =>
     {
         await ra.insert(folderNode({ id: 'keep', ownerID: 'u1' }));
         await ra.insert(file('doc', { parentID: 'keep' }));
-        await ra.setTrashed('doc', trashedAt);
+        await ra.setTrashed('doc', trashed);
 
         const roots = await ra.trashedRoots('u1', byName);
 
@@ -98,22 +98,22 @@ describe('NodeRA.trashedRoots', () =>
     {
         await ra.insert(folderNode({ id: 'mine', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'theirs', ownerID: 'u2' }));
-        await ra.setTrashed('mine', trashedAt);
-        await ra.setTrashed('theirs', trashedAt);
+        await ra.setTrashed('mine', trashed);
+        await ra.setTrashed('theirs', trashed);
 
         const roots = await ra.trashedRoots('u1', byName);
 
         expect(roots.map((node) => node.id)).toEqual([ 'mine' ]);
     });
 
-    // A link never carries trashed_at (setTrashed skips it), so trashing its parent folder hides the link
+    // A link never carries trashed (setTrashed skips it), so trashing its parent folder hides the link
     // transitively while its own row stays live -- the trash view lists the folder root alone.
     it('lists a trashed folder holding a link, and not the link', async () =>
     {
         await ra.insert(folderNode({ id: 'holder', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'target', ownerID: 'u1' }));
         await ra.insert(linkNode({ id: 'lk', ownerID: 'u1', parentID: 'holder', targetNodeID: 'target' }));
-        await ra.setTrashed('holder', trashedAt);
+        await ra.setTrashed('holder', trashed);
 
         const roots = await ra.trashedRoots('u1', byName);
 
@@ -127,9 +127,9 @@ describe('NodeRA.trashedRoots', () =>
         await ra.insert(folderNode({ id: 'zeta', ownerID: 'u1', name: 'zeta' }));
         await ra.insert(file('apple', { name: 'apple' }));
         await ra.insert(file('mango', { name: 'mango' }));
-        await ra.setTrashed('zeta', trashedAt);
-        await ra.setTrashed('apple', trashedAt);
-        await ra.setTrashed('mango', trashedAt);
+        await ra.setTrashed('zeta', trashed);
+        await ra.setTrashed('apple', trashed);
+        await ra.setTrashed('mango', trashed);
 
         const roots = await ra.trashedRoots('u1', byName);
 
@@ -142,9 +142,9 @@ describe('NodeRA.trashedRoots', () =>
         await ra.insert(file('t-banana', { name: 'Banana' }));
         await ra.insert(file('t-cherry', { name: 'cherry' }));
         await ra.insert(file('t-apple', { name: 'apple' }));
-        await ra.setTrashed('t-banana', trashedAt);
-        await ra.setTrashed('t-cherry', trashedAt);
-        await ra.setTrashed('t-apple', trashedAt);
+        await ra.setTrashed('t-banana', trashed);
+        await ra.setTrashed('t-cherry', trashed);
+        await ra.setTrashed('t-apple', trashed);
 
         const roots = await ra.trashedRoots('u1', byName);
 
@@ -156,9 +156,9 @@ describe('NodeRA.trashedRoots', () =>
         await ra.insert(file('a', { name: 'a' }));
         await ra.insert(file('b', { name: 'b' }));
         await ra.insert(file('c', { name: 'c' }));
-        await ra.setTrashed('a', trashedAt);
-        await ra.setTrashed('b', trashedAt);
-        await ra.setTrashed('c', trashedAt);
+        await ra.setTrashed('a', trashed);
+        await ra.setTrashed('b', trashed);
+        await ra.setTrashed('c', trashed);
 
         const sort = { key: 'name' as const, direction: 'asc' as const };
         const page1 = await ra.trashedRoots('u1', { pagination: { limit: 2, offset: 0 }, sort });
@@ -182,9 +182,9 @@ describe('NodeRA.trashedRoots — Type and Modified filters', () =>
         await ra.insert(fileNode({ id: 'pic', ownerID: 'u1', blobID: 'sha-a', mimeType: 'image/png' }));
         await ra.insert(fileNode({ id: 'doc', ownerID: 'u1', blobID: 'sha-a', mimeType: 'application/pdf' }));
         await ra.insert(folderNode({ id: 'dir', ownerID: 'u1' }));
-        await ra.setTrashed('pic', trashedAt);
-        await ra.setTrashed('doc', trashedAt);
-        await ra.setTrashed('dir', trashedAt);
+        await ra.setTrashed('pic', trashed);
+        await ra.setTrashed('doc', trashed);
+        await ra.setTrashed('dir', trashed);
 
         const images : NodeFilters = { types: [ 'images' ] };
 
@@ -205,7 +205,7 @@ describe('NodeRA.trashedRoots — Type and Modified filters', () =>
             parentID: 'album',
             blobID: 'sha-a',
             mimeType: 'image/png' }));
-        await ra.setTrashed('album', trashedAt);
+        await ra.setTrashed('album', trashed);
 
         expect((await ra.trashedRoots('u1', byName, { types: [ 'images' ] })).map((node) => node.id)).toEqual([]);
         expect((await ra.trashedRoots('u1', byName, { types: [ 'folders' ] })).map((node) => node.id))
@@ -226,9 +226,9 @@ describe('NodeRA.trashedRoots — Type and Modified filters', () =>
             ownerID: 'u1',
             blobID: 'sha-a',
             updated: new Date('2026-03-10T00:00:00.000Z') }));
-        await ra.setTrashed('old', trashedAt);
-        await ra.setTrashed('mid', trashedAt);
-        await ra.setTrashed('new', trashedAt);
+        await ra.setTrashed('old', trashed);
+        await ra.setTrashed('mid', trashed);
+        await ra.setTrashed('new', trashed);
 
         const window : NodeFilters = {
             types: [],
@@ -244,8 +244,8 @@ describe('NodeRA.trashedRoots — Type and Modified filters', () =>
     {
         await ra.insert(fileNode({ id: 'mine', ownerID: 'u1', blobID: 'sha-a', mimeType: 'image/png' }));
         await ra.insert(fileNode({ id: 'theirs', ownerID: 'u2', blobID: 'sha-a', mimeType: 'image/png' }));
-        await ra.setTrashed('mine', trashedAt);
-        await ra.setTrashed('theirs', trashedAt);
+        await ra.setTrashed('mine', trashed);
+        await ra.setTrashed('theirs', trashed);
 
         const roots = await ra.trashedRoots('u1', byName, { types: [ 'images' ] });
 
@@ -262,8 +262,8 @@ describe('NodeRA.countTrashedRoots', () =>
         await ra.insert(folderNode({ id: 'f1', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'f1-sub', ownerID: 'u1', parentID: 'f1' }));
         await ra.insert(folderNode({ id: 'f2', ownerID: 'u1' }));
-        await ra.setTrashed('f1', trashedAt);
-        await ra.setTrashed('f2', trashedAt);
+        await ra.setTrashed('f1', trashed);
+        await ra.setTrashed('f2', trashed);
 
         expect(await ra.countTrashedRoots('u1')).toBe(2);
     });
@@ -284,19 +284,19 @@ describe('NodeRA.trashedRootIDs', () =>
     {
         await ra.insert(folderNode({ id: 'live', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'gone', ownerID: 'u1' }));
-        await ra.setTrashed('gone', trashedAt);
+        await ra.setTrashed('gone', trashed);
 
         expect(await ra.trashedRootIDs('u1')).toEqual([ 'gone' ]);
     });
 
-    // setTrashed stamps the whole subtree, so a trashed folder's descendants each carry a trashed_at too -- only the
-    // root's id may appear, the same root definition trashedRoots pages by.
+    // setTrashed stamps the whole subtree, so a trashed folder's descendants each carry a trashed timestamp too -- only
+    // the root's id may appear, the same root definition trashedRoots pages by.
     it('lists a trashed folder\'s id once, never its trashed descendants', async () =>
     {
         await ra.insert(folderNode({ id: 'folder', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'sub', ownerID: 'u1', parentID: 'folder' }));
         await ra.insert(file('child', { parentID: 'folder' }));
-        await ra.setTrashed('folder', trashedAt);
+        await ra.setTrashed('folder', trashed);
 
         expect(await ra.trashedRootIDs('u1')).toEqual([ 'folder' ]);
     });
@@ -305,8 +305,8 @@ describe('NodeRA.trashedRootIDs', () =>
     {
         await ra.insert(folderNode({ id: 'mine', ownerID: 'u1' }));
         await ra.insert(folderNode({ id: 'theirs', ownerID: 'u2' }));
-        await ra.setTrashed('mine', trashedAt);
-        await ra.setTrashed('theirs', trashedAt);
+        await ra.setTrashed('mine', trashed);
+        await ra.setTrashed('theirs', trashed);
 
         expect(await ra.trashedRootIDs('u1')).toEqual([ 'mine' ]);
     });

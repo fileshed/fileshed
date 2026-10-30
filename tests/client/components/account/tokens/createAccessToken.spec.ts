@@ -105,8 +105,8 @@ function mintedResponse(token = 'fspat_secret123') : unknown
             start: 'fspat_secret',
             scopes: [ 'files:read' ],
             created: '2026-07-27T00:00:00.000Z',
-            lastUsedAt: null,
-            expiresAt: null,
+            lastUsed: null,
+            expires: null,
         },
     };
 }

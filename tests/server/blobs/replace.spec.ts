@@ -23,10 +23,10 @@ import {
     type BootedStoreApp,
     type TestUser,
     answerReplace,
-    blobDeletedAt,
+    blobDeleted,
     blobRowCount,
     bootBlobApp,
-    calculateAnswer,
+    buildAnswer,
     claim,
     fileNodesForBlob,
     grantShare,
@@ -174,14 +174,14 @@ describe('replace via upload ticket — owner', () =>
         const originalSha = sha256Of(original);
         const file = await uploadOwned(owner, original);
 
-        expect(await blobDeletedAt(booted.handle, originalSha)).toBeNull();
+        expect(await blobDeleted(booted.handle, originalSha)).toBeNull();
 
         const replacement = randomBytes(2048);
         const res = await replaceViaUpload(owner, replacement, file.id);
         expect(res.status).toBe(200);
 
         // The node no longer references the old blob and nothing else does -- it is graveyarded.
-        expect(await blobDeletedAt(booted.handle, originalSha)).not.toBeNull();
+        expect(await blobDeleted(booted.handle, originalSha)).not.toBeNull();
         expect(await blobRowCount(booted.handle, sha256Of(replacement))).toBe(1);
     });
 
@@ -201,7 +201,7 @@ describe('replace via upload ticket — owner', () =>
         expect(res.status).toBe(200);
 
         // The other node still references the shared blob, so the replace must NOT graveyard it.
-        expect(await blobDeletedAt(booted.handle, sharedSha)).toBeNull();
+        expect(await blobDeleted(booted.handle, sharedSha)).toBeNull();
         const stillOnShared = (await fileNodesForBlob(booted.handle, sharedSha)).map((row) => row.id);
         expect(stillOnShared).toEqual([ otherFile.id ]);
     });
@@ -398,8 +398,8 @@ describe('replace rejections', () =>
         if(node.type !== 'file') { throw new Error('expected a file node'); }
         expect(node.blobID).toBe(sha256Of(replacement));
         // The replace overwrites content only; a trashed file stays trashed.
-        expect(node.trashedAt).not.toBeNull();
-        expect((await nodeContentRow(booted.handle, file.id)).trashed_at).not.toBeNull();
+        expect(node.trashed).not.toBeNull();
+        expect((await nodeContentRow(booted.handle, file.id)).trashed).not.toBeNull();
     });
 });
 
@@ -429,7 +429,7 @@ describe('replace via proof-of-possession', () =>
         expect(challenge.upload).toBe(false);
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const answer = calculateAnswer(challenge.nonce, challenge.ranges, known);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, known);
         const res = await answerReplace(booted.app, owner.cookie, challenge.challengeID, answer, file.id);
         const node = await res.json() as NodeResponse;
 
@@ -442,7 +442,7 @@ describe('replace via proof-of-possession', () =>
         // Still one row for the known blob (both the held file and the replaced target reference it); the small blob
         // the target used to hold is now unreferenced and graveyarded.
         expect(await blobRowCount(booted.handle, knownSha)).toBe(1);
-        expect(await blobDeletedAt(booted.handle, originalSha)).not.toBeNull();
+        expect(await blobDeleted(booted.handle, originalSha)).not.toBeNull();
     });
 });
 

@@ -16,14 +16,14 @@ import SharingBadges from '@client/components/share/sharingBadges.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const STUBS = {
+const stubs = {
     UTooltip: { props: [ 'text' ], template: '<span class="badge" :data-text="text"><slot /></span>' },
     UIcon: { props: [ 'name' ], template: '<i :data-icon="name" />' },
 };
 
 function mountBadges(sharing : NodeSharing | null) : VueWrapper
 {
-    return mount(SharingBadges, { props: { sharing }, global: { stubs: STUBS } });
+    return mount(SharingBadges, { props: { sharing }, global: { stubs } });
 }
 
 function labels(wrapper : VueWrapper) : string[]

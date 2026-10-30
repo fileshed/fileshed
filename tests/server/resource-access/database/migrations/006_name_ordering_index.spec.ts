@@ -64,7 +64,7 @@ function nameOrderedSearchQuery(db : Kysely<Database>, kind : DatabaseKind, term
         .selectFrom('node')
         .leftJoin('media_tags', 'media_tags.blob_id', 'node.blob_id')
         .selectAll('node')
-        .where('node.trashed_at', 'is', null)
+        .where('node.trashed', 'is', null)
         .where((eb) => eb.or([
             matches('node.name'),
             matches('media_tags.title'),
@@ -108,7 +108,7 @@ async function seedNamedRows(db : Kysely<Database>) : Promise<void>
             mime_type: 'text/plain',
             created: stamp,
             updated: stamp,
-            trashed_at: null,
+            trashed: null,
         };
     });
     /* eslint-enable camelcase */

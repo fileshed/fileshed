@@ -26,8 +26,8 @@ export interface AccessToken
     start : string | null;
     scopes : AccessTokenScope[];
     created : Date;
-    lastUsedAt : Date | null;
-    expiresAt : Date | null;
+    lastUsed : Date | null;
+    expires : Date | null;
 }
 
 // A freshly minted PAT: the secret, shown this once, and the record it lists as from then on.
@@ -42,7 +42,7 @@ export interface MintedPlaybackToken
 {
     id : string;
     token : string;
-    expiresAt : Date;
+    expires : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

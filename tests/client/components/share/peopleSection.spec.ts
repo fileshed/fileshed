@@ -70,7 +70,7 @@ function accessRequest(
 ) : AccessRequestResponse
 {
     return {
-        id, nodeID, requesterID, requestedRole: role, message, status: 'pending', created: ISO, resolvedAt: null,
+        id, nodeID, requesterID, requestedRole: role, message, status: 'pending', created: ISO, resolved: null,
     };
 }
 
@@ -99,7 +99,7 @@ function shareEntry(role : 'viewer' | 'editor', grantee : UserSummary = GRACE) :
 
 // UInput/UButton/USelect/UAvatar reduced to plain elements: v-model round-trips through native events, buttons carry
 // their label as text and pass aria-label/disabled through, and the select emits update:model-value on change.
-const STUBS = {
+const stubs = {
     UInput: {
         props: [ 'modelValue' ],
         emits: [ 'update:modelValue' ],
@@ -126,7 +126,7 @@ function mountSection(owner : UserSummary | null = OWNER) : VueWrapper
 {
     return mount(PeopleSection, {
         props: { node: fileNode({ ownerID: OWNER.id }), owner },
-        global: { stubs: STUBS },
+        global: { stubs },
     });
 }
 

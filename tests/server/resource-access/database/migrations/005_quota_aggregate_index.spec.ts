@@ -96,7 +96,7 @@ async function seedChargeableRows(db : Kysely<Database>) : Promise<void>
             mime_type: 'application/octet-stream',
             created: stamp,
             updated: stamp,
-            trashed_at: null,
+            trashed: null,
         }))))
         .execute();
     /* eslint-enable camelcase */

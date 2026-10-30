@@ -14,7 +14,7 @@
             <SaveIndicator
                 :saving="editor.saving"
                 :dirty="editor.dirty"
-                :last-saved-at="editor.lastSavedAt"
+                :last-saved="editor.lastSaved"
                 :save-error="editor.saveError"
             />
 

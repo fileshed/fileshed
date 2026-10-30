@@ -30,7 +30,7 @@
                         {{ offer.name }}
                     </p>
                     <p class="truncate text-xs text-muted">
-                        {{ formatBytes(offer.size) }} · save before {{ deadline(offer.expiresAt) }}
+                        {{ formatBytes(offer.size) }} · save before {{ deadline(offer.expires) }}
                     </p>
                 </div>
 
@@ -106,9 +106,9 @@
         offers.value = offers.value.filter((offer) => offer.id !== id);
     }
 
-    function deadline(expiresAt : string) : string
+    function deadline(expires : string) : string
     {
-        return formatNodeDate(expiresAt, session.timeFormat);
+        return formatNodeDate(expires, session.timeFormat);
     }
 
     // Accept places the copy in My Files (root); the copy is fully independent of the deleted original thereafter --

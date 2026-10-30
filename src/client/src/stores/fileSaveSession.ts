@@ -37,7 +37,7 @@ export interface FileSaveSession
     saving : Ref<boolean>;
     saveError : Ref<string | null>;
     conflict : Ref<boolean>;
-    lastSavedAt : Ref<number | null>;
+    lastSaved : Ref<number | null>;
 
     // A viewer (or no loaded node) saves nothing. Editor-or-owner saves.
     readOnly : ComputedRef<boolean>;
@@ -66,7 +66,7 @@ export function createFileSaveSession() : FileSaveSession
     const saving = ref(false);
     const saveError = ref<string | null>(null);
     const conflict = ref(false);
-    const lastSavedAt = ref<number | null>(null);
+    const lastSaved = ref<number | null>(null);
 
     const readOnly = computed(() => node.value === null || !isRoleAtLeast(node.value.role, 'editor'));
 
@@ -78,7 +78,7 @@ export function createFileSaveSession() : FileSaveSession
         saving.value = false;
         saveError.value = null;
         conflict.value = false;
-        lastSavedAt.value = null;
+        lastSaved.value = null;
 
         return generation;
     }
@@ -118,7 +118,7 @@ export function createFileSaveSession() : FileSaveSession
 
             node.value = saved;
             if(saved.type === 'file') { loadedBlobID.value = saved.blobID; }
-            lastSavedAt.value = Date.now();
+            lastSaved.value = Date.now();
             conflict.value = false;
 
             return true;
@@ -173,7 +173,7 @@ export function createFileSaveSession() : FileSaveSession
         saving,
         saveError,
         conflict,
-        lastSavedAt,
+        lastSaved,
         readOnly,
         begin,
         isCurrent,

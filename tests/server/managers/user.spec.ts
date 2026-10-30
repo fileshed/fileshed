@@ -69,7 +69,7 @@ describe('UserManager.me', () =>
     it('charges owned file nodes including trashed, excluding folders and links', async () =>
     {
         await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
-        await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', blobID: 'sha-a', size: 500, trashedAt: new Date() }));
+        await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', blobID: 'sha-a', size: 500, trashed: new Date() }));
         await ra.insert(folderNode({ id: 'dir', ownerID: 'alice' }));
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'alice', targetNodeID: 'dir' }));
 

@@ -29,7 +29,7 @@ const PROBES = [ 'track-10.mp3', 'track-9.mp3' ];
 // Filler sorts after both probes under either ordering, so the probes stay on the first page whichever one is running.
 const FILLER_PREFIX = 'zz-filler';
 
-const sha256 = 'd'.repeat(64);
+const SHA256 = 'd'.repeat(64);
 // Rows per insert. SQLite caps bound parameters per statement -- 32,766 since 3.32, and a node row binds twelve
 // columns -- so this stays far enough under that a build with a lower cap than the one it was written on still
 // seeds. 5,000 rows was 60,000 parameters and only worked by the grace of whichever SQLite the runtime shipped.
@@ -51,7 +51,7 @@ async function seedFolder(total : number) : Promise<void>
     await booted.handle.db
         .insertInto('blob')
         .values({
-            sha256,
+            sha256: SHA256,
             size: 10,
             backend_id: backend.id,
             storage_key: 'seed/guard',
@@ -74,12 +74,12 @@ async function seedFolder(total : number) : Promise<void>
         type: 'file' as const,
         owner_id: owner.id,
         parent_id: null,
-        blob_id: sha256,
+        blob_id: SHA256,
         size: 10,
         mime_type: 'application/octet-stream',
         created: now,
         updated: now,
-        trashed_at: null,
+        trashed: null,
         target_node_id: null,
     }));
 
@@ -106,12 +106,12 @@ async function seedOverlongNames(count : number, length : number) : Promise<void
         type: 'file' as const,
         owner_id: owner.id,
         parent_id: null,
-        blob_id: sha256,
+        blob_id: SHA256,
         size: 10,
         mime_type: 'application/octet-stream',
         created: now,
         updated: now,
-        trashed_at: null,
+        trashed: null,
         target_node_id: null,
     }));
 

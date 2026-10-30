@@ -12,8 +12,6 @@
 // Kysely, identical on Postgres and SQLite.
 //----------------------------------------------------------------------------------------------------------------------
 
-/* eslint-disable camelcase -- queries and the CTE column list name snake_case DB columns (house convention) */
-
 import { sql } from 'kysely';
 
 // Models
@@ -335,7 +333,7 @@ export class ShareRA
             .selectFrom('share')
             .innerJoin('node', 'node.id', 'share.node_id')
             .where('share.grantee_user_id', '=', granteeID)
-            .where('node.trashed_at', 'is', null)
+            .where('node.trashed', 'is', null)
             .select((eb) => [
                 'share.id as id',
                 'share.node_id as node_id',
@@ -404,12 +402,12 @@ export class ShareRA
         return row === undefined ? undefined : shareRequestFromRow(row);
     }
 
-    // Resolve a request: move it off 'pending' and stamp resolved_at together, satisfying the paired CHECK.
-    async resolveRequest(id : string, status : ResolvedShareRequestStatus, resolvedAt : Date) : Promise<void>
+    // Resolve a request: move it off 'pending' and stamp resolved together, satisfying the paired CHECK.
+    async resolveRequest(id : string, status : ResolvedShareRequestStatus, resolved : Date) : Promise<void>
     {
         await this.#db
             .updateTable('share_request')
-            .set({ status, resolved_at: resolvedAt.toISOString() })
+            .set({ status, resolved: resolved.toISOString() })
             .where('id', '=', id)
             .execute();
     }

@@ -13,7 +13,7 @@ import { createPinia, setActivePinia } from 'pinia';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const AUTH_STUBS = {
+const authStubs = {
     UCard: { template: '<section><slot name="header" /><slot /><slot name="footer" /></section>' },
     UForm: {
         props: [ 'state', 'schema' ],
@@ -65,7 +65,7 @@ export async function mountAuthPage(page : Component, path : string, location : 
     await router.push(location);
     await router.isReady();
 
-    const wrapper = mount(page, { global: { plugins: [ router ], stubs: AUTH_STUBS } });
+    const wrapper = mount(page, { global: { plugins: [ router ], stubs: authStubs } });
     await flushPromises();
 
     return { wrapper, router };

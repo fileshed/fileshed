@@ -42,7 +42,7 @@ const getMeMock = getMe as unknown as Mock;
 //----------------------------------------------------------------------------------------------------------------------
 
 const ISO = '2026-07-01T00:00:00.000Z';
-const trashed = { trashedAt: ISO };
+const TRASHED = { trashed: ISO };
 
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
@@ -63,8 +63,8 @@ describe('useTrashStore.emptyAll', () =>
     {
         const store = useTrashStore();
         listTrashMock.mockResolvedValue(page([
-            folderNode({ ...trashed, id: 'a' }),
-            folderNode({ ...trashed, id: 'b' }),
+            folderNode({ ...TRASHED, id: 'a' }),
+            folderNode({ ...TRASHED, id: 'b' }),
         ]));
         await store.load();
 
@@ -80,7 +80,7 @@ describe('useTrashStore.emptyAll', () =>
     it('leaves the listing untouched when the purge itself fails', async () =>
     {
         const store = useTrashStore();
-        listTrashMock.mockResolvedValue(page([ folderNode({ ...trashed, id: 'a' }) ]));
+        listTrashMock.mockResolvedValue(page([ folderNode({ ...TRASHED, id: 'a' }) ]));
         await store.load();
 
         emptyTrashMock.mockRejectedValue(new Error('boom'));
@@ -97,7 +97,7 @@ describe('useTrashStore.emptyAll', () =>
         getMeMock.mockResolvedValue(refreshedProfile);
 
         const store = useTrashStore();
-        listTrashMock.mockResolvedValue(page([ folderNode({ ...trashed, id: 'a' }) ]));
+        listTrashMock.mockResolvedValue(page([ folderNode({ ...TRASHED, id: 'a' }) ]));
         await store.load();
 
         emptyTrashMock.mockResolvedValue({ purged: 1 });
@@ -122,8 +122,8 @@ describe('useTrashStore — filters', () =>
     it('narrows the listing in hand by type without asking the server', async () =>
     {
         listTrashMock.mockResolvedValue(page([
-            fileNode({ ...trashed, id: 'doc', mimeType: 'text/plain' }),
-            fileNode({ ...trashed, id: 'pic', mimeType: 'image/png' }),
+            fileNode({ ...TRASHED, id: 'doc', mimeType: 'text/plain' }),
+            fileNode({ ...TRASHED, id: 'pic', mimeType: 'image/png' }),
         ]));
         const store = useTrashStore();
         await store.load();
@@ -139,8 +139,8 @@ describe('useTrashStore — filters', () =>
 
     it('narrows the listing in hand by modified date without asking the server', async () =>
     {
-        const recent = fileNode({ ...trashed, id: 'recent', updated: new Date().toISOString() });
-        listTrashMock.mockResolvedValue(page([ fileNode({ ...trashed, id: 'ancient' }), recent ]));
+        const recent = fileNode({ ...TRASHED, id: 'recent', updated: new Date().toISOString() });
+        listTrashMock.mockResolvedValue(page([ fileNode({ ...TRASHED, id: 'ancient' }), recent ]));
         const store = useTrashStore();
         await store.load();
         listTrashMock.mockClear();
@@ -154,8 +154,8 @@ describe('useTrashStore — filters', () =>
     it('brings back every filtered-out row on clearFilters', async () =>
     {
         listTrashMock.mockResolvedValue(page([
-            fileNode({ ...trashed, id: 'doc', mimeType: 'text/plain' }),
-            fileNode({ ...trashed, id: 'pic', mimeType: 'image/png' }),
+            fileNode({ ...TRASHED, id: 'doc', mimeType: 'text/plain' }),
+            fileNode({ ...TRASHED, id: 'pic', mimeType: 'image/png' }),
         ]));
         const store = useTrashStore();
         await store.load();

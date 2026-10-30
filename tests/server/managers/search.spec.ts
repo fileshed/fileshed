@@ -169,7 +169,7 @@ describe('NodeManager.search', () =>
     {
         await ra.insert(fileNode({ id: 'live', ownerID: 'alice', blobID: 'sha-a', name: 'live-report' }));
         await ra.insert(fileNode({
-            id: 'gone', ownerID: 'alice', blobID: 'sha-a', name: 'trashed-report', trashedAt: new Date(),
+            id: 'gone', ownerID: 'alice', blobID: 'sha-a', name: 'trashed-report', trashed: new Date(),
         }));
 
         const result = await search('alice', 'report');

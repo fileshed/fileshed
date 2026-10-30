@@ -109,7 +109,7 @@ describe('MediaPlayer surfaces', () =>
     it('appends the session playback token to drive srcs', () =>
     {
         const store = useMediaPlayerStore();
-        store.playbackToken = { id: 'k1', token: 'fsplay_sessionkey', expiresAt: Date.now() + 3_600_000 };
+        store.playbackToken = { id: 'k1', token: 'fsplay_sessionkey', expires: Date.now() + 3_600_000 };
 
         const wrapper = mountPlayer(fileNode(AUDIO));
         const src = wrapper.get('audio').attributes('src') ?? '';

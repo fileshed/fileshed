@@ -23,7 +23,7 @@ export interface CreateAccessRequest
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Access request response -- the domain ShareRequest (models/shareRequest.ts) serialized. resolvedAt is null exactly
+// Access request response -- the domain ShareRequest (models/shareRequest.ts) serialized. resolved is null exactly
 // when the request is still pending (the paired invariant), preserved here as a nullable ISO string.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -36,7 +36,7 @@ export interface AccessRequestResponse
     message : string | null;
     status : ShareRequestStatus;
     created : string;
-    resolvedAt : string | null;
+    resolved : string | null;
 }
 
 // One request incoming to the caller as an owner, paired with the requester's display summary.

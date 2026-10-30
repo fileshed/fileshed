@@ -13,7 +13,7 @@ export interface PublicLinkResponse
     token : string;
     url : string;
     created : string;
-    revokedAt : string | null;
+    revoked : string | null;
 }
 
 export interface PublicLinkListResponse

@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Row <-> Domain Transforms
 //
-// A share request is a discriminated union on status where resolvedAt exists exactly when the request is resolved. The
-// paired CHECK of migration 001 makes any other pairing unstorable, so a resolved row with a null resolved_at is store
+// A share request is a discriminated union on status where resolved exists exactly when the request is resolved. The
+// paired CHECK of migration 001 makes any other pairing unstorable, so a resolved row with a null resolved is store
 // corruption, surfaced as a typed error rather than silently coerced to the epoch.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -69,21 +69,25 @@ export function shareRequestFromRow(row : Selectable<ShareRequestTable>) : Share
 
     if(row.status === 'pending')
     {
-        return { ...base, status: 'pending', resolvedAt: null };
+        return { ...base, status: 'pending', resolved: null };
     }
 
     // The paired CHECK makes this unreachable from a well-formed store; a resolved row without a resolution means the
-    // constraint was bypassed out from under us, so we refuse to fabricate an epoch resolvedAt.
-    if(row.resolved_at === null)
+    // constraint was bypassed out from under us, so we refuse to fabricate an epoch resolved timestamp.
+    if(row.resolved === null)
     {
-        throw new RowCorruptionError('share_request', row.id, `a ${ row.status } request must carry a resolved_at`);
+        throw new RowCorruptionError(
+            'share_request',
+            row.id,
+            `a ${ row.status } request must carry a resolved timestamp`
+        );
     }
 
-    return { ...base, status: row.status, resolvedAt: toDate(row.resolved_at) };
+    return { ...base, status: row.status, resolved: toDate(row.resolved) };
 }
 
 // Only a pending request is ever inserted -- resolution is an update, never an insert, so the row always lands with
-// status 'pending' and a null resolved_at.
+// status 'pending' and a null resolved.
 export function rowFromPendingShareRequest(request : PendingShareRequest) : Insertable<ShareRequestTable>
 {
     return {
@@ -94,7 +98,7 @@ export function rowFromPendingShareRequest(request : PendingShareRequest) : Inse
         message: request.message,
         status: 'pending',
         created: request.created.toISOString(),
-        resolved_at: null,
+        resolved: null,
     };
 }
 

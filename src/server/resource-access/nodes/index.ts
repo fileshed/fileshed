@@ -17,7 +17,6 @@ import {
     type ListingOrderRow,
     type ListingSortField,
     MAX_TREE_DEPTH,
-    MIME_FAMILY_SPECS,
     NATURAL_ORDER_COLLATION,
     type Node,
     type NodeSortKey,
@@ -29,6 +28,7 @@ import {
     type SortDirection,
     type UserSummary,
     compareListingNodes,
+    mimeFamilySpecs,
 } from '@fileshed/core';
 
 // Resource Access
@@ -198,7 +198,7 @@ function playlistCondition(eb : NodeExpressionBuilder) : Expression<SqlBool>
 }
 
 // The WHERE fragment one type-family selects. 'folders' and 'links' select by node type outright; every other family
-// selects file nodes and narrows by mime, built from the same MIME_FAMILY_SPECS the client classifies with -- a LIKE
+// selects file nodes and narrows by mime, built from the same mimeFamilySpecs the client classifies with -- a LIKE
 // prefix per prefix spec (text/%, image/%) OR-ed with an IN over the exact mimes. The mime patterns are literal (no
 // user input), so no LIKE escaping is needed. Playlists and audio are the one entangled pair: playlist mimes match
 // the audio/ prefix, so audio explicitly excludes what playlists claims -- filtering by Audio must not surface the
@@ -209,7 +209,7 @@ function familyCondition(eb : NodeExpressionBuilder, family : NodeTypeFamily) : 
     if(family === 'links') { return eb('type', '=', 'link'); }
     if(family === 'playlists') { return eb.and([ eb('type', '=', 'file'), playlistCondition(eb) ]); }
 
-    const spec = MIME_FAMILY_SPECS[family];
+    const spec = mimeFamilySpecs[family];
 
     // Lowercased because a media type is case-insensitive and nothing upstream normalizes one an API client supplied.
     // It also settles a dialect split: Postgres LIKE is case-sensitive where SQLite's is not, so an uppercased mime
@@ -279,18 +279,18 @@ function accessRootCondition(eb : AccessRootExpressionBuilder, scope : AccessSco
 
 // The predicate isolating one owner's trashed subtree ROOTS: a trashed node they own whose parent is not itself
 // trashed (or which sits at root level). setTrashed stamps a whole subtree, so a trashed folder's descendants each
-// carry a trashed_at too; the NOT EXISTS drops any node whose parent is trashed, leaving only the top of each trashed
-// subtree -- the same root definition expiredTrashRootIDs uses, so a nested trashed child never double-lists.
+// carry a trashed timestamp too; the NOT EXISTS drops any node whose parent is trashed, leaving only the top of each
+// trashed subtree -- the same root definition expiredTrashRootIDs uses, so a nested trashed child never double-lists.
 function trashedRootConditions(eb : NodeExpressionBuilder, ownerID : string) : Expression<SqlBool>[]
 {
     return [
         eb('owner_id', '=', ownerID),
-        eb('trashed_at', 'is not', null),
+        eb('trashed', 'is not', null),
         eb.not(eb.exists(
             eb.selectFrom('node as ancestor')
                 .select(sql`1`.as('present'))
                 .whereRef('ancestor.id', '=', 'node.parent_id')
-                .where('ancestor.trashed_at', 'is not', null)
+                .where('ancestor.trashed', 'is not', null)
         )),
     ];
 }
@@ -300,7 +300,7 @@ function trashedRootConditions(eb : NodeExpressionBuilder, ownerID : string) : E
 // per-user trees begin.
 function locationConditions(eb : NodeExpressionBuilder, query : ListingRoot) : Expression<SqlBool>[]
 {
-    const conditions = [ eb('trashed_at', 'is', null) ];
+    const conditions = [ eb('trashed', 'is', null) ];
 
     if(query.parentID === null)
     {
@@ -741,7 +741,7 @@ export class NodeRA
             .selectFrom('node')
             .leftJoin('media_tags', 'media_tags.blob_id', 'node.blob_id')
             .selectAll('node')
-            .where('node.trashed_at', 'is', null)
+            .where('node.trashed', 'is', null)
             .where((eb) => eb.or([
                 matches('node.name'),
                 matches('media_tags.title'),
@@ -759,20 +759,20 @@ export class NodeRA
 
     // The ids of trashed subtree ROOTS whose grace window has lapsed -- the set the auto-purge sweep permanently
     // deletes. A root is a trashed node whose parent is NOT itself trashed (or which sits at root level). setTrashed
-    // stamps a whole subtree in one shot, so every node inside a trashed folder also carries a trashed_at; selecting
-    // only the roots -- and letting the parent_id cascade take their descendants -- is what keeps the sweep from
-    // trying to delete a child that its own root already removed. trashed_at is stored as an ISO string on both
-    // dialects, so the cutoff is compared in its ISO form (a null trashed_at never satisfies `< cutoff`).
+    // stamps a whole subtree in one shot, so every node inside a trashed folder also carries a trashed timestamp;
+    // selecting only the roots -- and letting the parent_id cascade take their descendants -- is what keeps the sweep
+    // from trying to delete a child that its own root already removed. trashed is stored as an ISO string on both
+    // dialects, so the cutoff is compared in its ISO form (a null trashed never satisfies `< cutoff`).
     async expiredTrashRootIDs(cutoff : Date) : Promise<string[]>
     {
         const rows = await this.#db
             .selectFrom('node as n')
             .leftJoin('node as parent', 'parent.id', 'n.parent_id')
             .select('n.id as id')
-            .where('n.trashed_at', '<', cutoff.toISOString())
+            .where('n.trashed', '<', cutoff.toISOString())
             .where((eb) => eb.or([
                 eb('n.parent_id', 'is', null),
-                eb('parent.trashed_at', 'is', null),
+                eb('parent.trashed', 'is', null),
             ]))
             .execute();
 
@@ -803,7 +803,7 @@ export class NodeRA
     // The caller's Trash view: the ROOTS of their own trashed subtrees, one page at a time, paged and sorted exactly
     // as a folder listing is -- folders pinned above the file partition, the sort key within each, the id tiebreaker
     // for determinism. Owner-scoped, so only the caller's own trashed nodes appear; roots-only, so a trashed folder
-    // lists once while everything inside it travels with it. Links never carry trashed_at, so none reach here.
+    // lists once while everything inside it travels with it. Links never carry a trashed timestamp, so none reach here.
     async trashedRoots(ownerID : string, options : ChildrenOptions, filters ?: NodeFilters) : Promise<Node[]>
     {
         return this.#page((eb) =>
@@ -895,15 +895,15 @@ export class NodeRA
 
     // Trash (a Date) or restore (null) the whole subtree rooted at `id` as a unit, so a folder and everything under it
     // hide and reappear together. Links are skipped by the `type <> 'link'` guard because a link may never carry
-    // trashed_at (the variant CHECK) -- a link inside a trashed folder is hidden transitively by its trashed ancestor,
+    // trashed (the variant CHECK) -- a link inside a trashed folder is hidden transitively by its trashed ancestor,
     // its own row untouched.
-    async setTrashed(id : string, trashedAt : Date | null) : Promise<void>
+    async setTrashed(id : string, trashed : Date | null) : Promise<void>
     {
-        const value = trashedAt === null ? null : trashedAt.toISOString();
+        const value = trashed === null ? null : trashed.toISOString();
 
         await this.#descendants([ id ])
             .updateTable('node')
-            .set({ trashed_at: value })
+            .set({ trashed: value })
             .where('id', 'in', (eb) => eb.selectFrom('subtree').select('id'))
             .where('type', '<>', 'link')
             .execute();
@@ -991,14 +991,14 @@ export class NodeRA
                 sql<string | number>`coalesce(sum(case when type = 'file' then 1 else 0 end), 0)`.as('files'),
                 sql<string | number>`coalesce(sum(case when type = 'folder' then 1 else 0 end), 0)`.as('folders'),
             ])
-            .where('trashed_at', 'is', null)
+            .where('trashed', 'is', null)
             .executeTakeFirstOrThrow();
 
         return { files: Number(row.files), folders: Number(row.folders) };
     }
 
     // What is sitting in trash instance-wide: file nodes trashed but not yet purged, and the bytes they still charge.
-    // Every node in a trashed subtree carries its own trashed_at, so nested files are counted individually.
+    // Every node in a trashed subtree carries its own trashed timestamp, so nested files are counted individually.
     async trashedFileTotals() : Promise<{ count : number; bytes : number }>
     {
         const row = await this.#db
@@ -1008,7 +1008,7 @@ export class NodeRA
                 sql<string | number>`coalesce(sum(size), 0)`.as('bytes'),
             ])
             .where('type', '=', 'file')
-            .where('trashed_at', 'is not', null)
+            .where('trashed', 'is not', null)
             .executeTakeFirstOrThrow();
 
         return { count: Number(row.count), bytes: Number(row.bytes) };

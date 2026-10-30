@@ -30,7 +30,7 @@ import { search } from '@client/resource-access/search.ts';
 import { useSessionStore } from '@client/stores/session.ts';
 
 // Support
-import { ME_ID, SCROLL_AREA_STUB, fileNode, folderNode, linkNode, meFixture } from '../support.ts';
+import { ME_ID, fileNode, folderNode, linkNode, meFixture, scrollAreaStub } from '../support.ts';
 
 // Under test
 import SearchPage from '@client/pages/searchPage.vue';
@@ -63,8 +63,8 @@ function envelope(nodes : NodeResponse[], overrides : Partial<SearchResponse> = 
     return { nodes, total: nodes.length, limit: 50, offset: 0, owners: [], locations, ...overrides };
 }
 
-const STUBS = {
-    UScrollArea: SCROLL_AREA_STUB,
+const stubs = {
+    UScrollArea: scrollAreaStub,
     UButton: {
         // Declared, so the stub's own $emit is the only click the parent hears -- without it the native click
         // falls through as a second one and every action runs twice.
@@ -124,7 +124,7 @@ async function mountSearch(query ?: string) : Promise<{ wrapper : VueWrapper; ro
 
     useSessionStore().me = meFixture();
 
-    const wrapper = mount(SearchPage, { global: { plugins: [ pinia, router ], stubs: STUBS } });
+    const wrapper = mount(SearchPage, { global: { plugins: [ pinia, router ], stubs } });
     await flushPromises();
 
     return { wrapper, router };
@@ -547,7 +547,8 @@ describe('SearchPage selection', () =>
         opened.mockRestore();
     });
 
-    // Links carry no trashed_at, so a links-only selection is removed rather than trashed, and the button says so.
+    // Links carry no trashed timestamp, so a links-only selection is removed rather than trashed, and the button says
+    // so.
     it('removes a links-only selection instead of trashing it', async () =>
     {
         const link = linkNode({ id: 'l1', name: 'shortcut', targetNodeID: 'f9' });

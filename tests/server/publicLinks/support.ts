@@ -206,7 +206,7 @@ export async function seedEmptyFile(booted : BootedStoreApp, user : TestUser, na
         mimeType: 'application/octet-stream',
         created: now,
         updated: now,
-        trashedAt: null,
+        trashed: null,
     });
 
     return id;

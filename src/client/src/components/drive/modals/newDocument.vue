@@ -35,7 +35,7 @@
 
     type DocumentKind = 'markdown' | 'text';
 
-    const DOC_CONFIG = {
+    const docConfig = {
         markdown: { title: 'New Markdown file', initial: 'Untitled.md', extension: '.md', mimeType: 'text/markdown' },
         text: { title: 'New text file', initial: 'Untitled.txt', extension: '.txt', mimeType: 'text/plain' },
     } as const;
@@ -48,7 +48,7 @@
     const open = ref(false);
     const pending = ref(false);
     const kind = ref<DocumentKind>('markdown');
-    const config = computed(() => DOC_CONFIG[kind.value]);
+    const config = computed(() => docConfig[kind.value]);
 
     // A markdown or text request is ours; a folder request is left untouched for the folder modal to consume.
     watch(() => newItem.request, (request) =>

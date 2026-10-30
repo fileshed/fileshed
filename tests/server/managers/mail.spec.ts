@@ -65,7 +65,7 @@ beforeEach(async () =>
         handle: booted.handle,
         config: booted.config,
         box: new SecretBox(TEST_AUTH_SECRET),
-        startedAt: new Date(),
+        started: new Date(),
     });
     transport = new RecordingMailRA();
     mail = new MailManager({ settings, mail: transport as unknown as MailRA });

@@ -70,7 +70,7 @@ class FakeXHR
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const NODE_JSON = {
+const nodeJSON = {
     id: 'n1',
     name: 'f.txt',
     ownerID: 'u1',
@@ -82,7 +82,7 @@ const NODE_JSON = {
     blobID: 'b1',
     size: 10,
     mimeType: 'text/plain',
-    trashedAt: null,
+    trashed: null,
 
     // A node fresh off an upload has nothing granted and nothing published.
     sharing: { granteeCount: 0, linkURL: null },
@@ -126,7 +126,7 @@ describe('uploadWithProgress', () =>
         expect(xhr.withCredentials).toBe(true);
         expect(xhr.headers['content-type']).toBe('application/octet-stream');
 
-        xhr.complete(200, JSON.stringify(NODE_JSON));
+        xhr.complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 
@@ -140,7 +140,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest())).toEqual({ name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' });
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 
@@ -154,7 +154,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest())).toEqual({ replaceNodeID: 'n9', mimeType: 'image/png' });
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 
@@ -169,7 +169,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest()).offset).toBe('8192');
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await chunked;
 
         const whole = uploadWithProgress({
@@ -180,7 +180,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest())).not.toHaveProperty('offset');
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await whole;
     });
 
@@ -192,7 +192,7 @@ describe('uploadWithProgress', () =>
             commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
         });
 
-        lastRequest().complete(201, JSON.stringify(NODE_JSON));
+        lastRequest().complete(201, JSON.stringify(nodeJSON));
 
         const outcome = await promise;
         expect(outcome.committed).toBe(true);
@@ -410,7 +410,7 @@ describe('uploadWithProgress', () =>
         lastRequest().emitProgress(40, 100);
         expect(onProgress).toHaveBeenLastCalledWith({ sentBytes: 40, totalBytes: 100 });
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 

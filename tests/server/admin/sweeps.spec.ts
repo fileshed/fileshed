@@ -75,7 +75,7 @@ async function bootAdmin(runners ?: Partial<SweepRunners>) : Promise<void>
                     blob,
                     tracker,
                     build: { version: '0.0.0-sweep-spec', commit: null, branch: null },
-                    startedAt: new Date(),
+                    started: new Date(),
                     activeProviders: 0,
                     emailEnabled: async () => false,
                     signUpEnabled: async () => true,
@@ -231,13 +231,13 @@ describe('POST /api/admin/sweeps/:sweep/run', () =>
 
         const sha = await seedGraveyardedBlob(512, null);
         await nodeRA.insert(folderNode({ id: 'keep', ownerID: owner.id }));
-        await nodeRA.insert(folderNode({ id: 'doomed', ownerID: owner.id, trashedAt: lapsed }));
+        await nodeRA.insert(folderNode({ id: 'doomed', ownerID: owner.id, trashed: lapsed }));
         await nodeRA.insert(fileNode({
             id: 'doomed-file',
             ownerID: owner.id,
             parentID: 'doomed',
             blobID: sha,
-            trashedAt: lapsed,
+            trashed: lapsed,
         }));
 
         const res = await runSweep('trashPurge', cookie);

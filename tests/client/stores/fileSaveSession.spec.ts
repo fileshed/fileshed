@@ -95,7 +95,7 @@ describe('createFileSaveSession', () =>
         });
         expect(session.node.value).toEqual(saved);
         expect(session.loadedBlobID.value).toBe('b1');
-        expect(session.lastSavedAt.value).not.toBeNull();
+        expect(session.lastSaved.value).not.toBeNull();
     });
 
     it('drops the guard when the save is forced', async () =>
@@ -189,7 +189,7 @@ describe('createFileSaveSession', () =>
 
         expect(session.node.value).toEqual(next);
         expect(session.loadedBlobID.value).toBe('c0');
-        expect(session.lastSavedAt.value).toBeNull();
+        expect(session.lastSaved.value).toBeNull();
         expect(await writer?.(textFile('next file text'), false)).toBe(false);
     });
 

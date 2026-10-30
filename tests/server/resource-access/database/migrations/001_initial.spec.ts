@@ -222,7 +222,7 @@ describe('migration 001 — node variant constraints', () =>
         await expect(insert).rejects.toThrow(/node_variant_fields_check/);
     });
 
-    it('rejects a link that carries a trashed_at (links are deleted, never trashed)', async () =>
+    it('rejects a link that carries a trashed timestamp (links are deleted, never trashed)', async () =>
     {
         await insertUser(db, 'u1');
         await insertFolder(db, 'target', 'u1');
@@ -235,7 +235,7 @@ describe('migration 001 — node variant constraints', () =>
                 name: 'l1',
                 owner_id: 'u1',
                 target_node_id: 'target',
-                trashed_at: isoNow(),
+                trashed: isoNow(),
                 created: isoNow(),
                 updated: isoNow(),
             })
@@ -306,7 +306,7 @@ describe('migration 001 — share and share_request constraints', () =>
         await expect(duplicate).rejects.toThrow(/unique/i);
     });
 
-    it('rejects a pending share_request that already carries a resolved_at', async () =>
+    it('rejects a pending share_request that already carries a resolved timestamp', async () =>
     {
         await insertUser(db, 'requester');
         await insertUser(db, 'owner');
@@ -321,7 +321,7 @@ describe('migration 001 — share and share_request constraints', () =>
                 requested_role: 'viewer',
                 status: 'pending',
                 created: isoNow(),
-                resolved_at: isoNow(),
+                resolved: isoNow(),
             })
             .execute();
 
@@ -392,7 +392,7 @@ describe('migration 001 — foreign keys and cascades', () =>
                 size: 10,
                 created_by: 'u1',
                 created: isoNow(),
-                expires_at: isoNow(),
+                expires: isoNow(),
             })
             .execute();
 
@@ -429,7 +429,7 @@ describe('migration 001 — foreign keys and cascades', () =>
                 size: 10,
                 created_by: 'creator',
                 created: isoNow(),
-                expires_at: isoNow(),
+                expires: isoNow(),
             })
             .execute();
 

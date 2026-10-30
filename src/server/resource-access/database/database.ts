@@ -163,7 +163,7 @@ export interface NodeTable
     mime_type : string | null;
     created : Timestamp;
     updated : Timestamp;
-    trashed_at : Timestamp | null;
+    trashed : Timestamp | null;
 }
 
 export interface ShareTable
@@ -185,7 +185,7 @@ export interface ShareRequestTable
     message : string | null;
     status : ShareRequestStatus;
     created : Timestamp;
-    resolved_at : Timestamp | null;
+    resolved : Timestamp | null;
 }
 
 export interface PublicLinkTable
@@ -194,7 +194,7 @@ export interface PublicLinkTable
     node_id : string;
     token : string;
     created : Timestamp;
-    revoked_at : Timestamp | null;
+    revoked : Timestamp | null;
 }
 
 export interface DeletionOfferTable
@@ -207,7 +207,7 @@ export interface DeletionOfferTable
     size : number;
     created_by : string;
     created : Timestamp;
-    expires_at : Timestamp;
+    expires : Timestamp;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

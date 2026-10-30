@@ -456,7 +456,7 @@ describe('MediaPlayerStore.playToken', () =>
 
 describe('MediaPlayerStore playlist files', () =>
 {
-    const DIALECT = [
+    const dialect = [
         '#EXTM3U',
         '#PLAYLIST:Road Mix',
         '#FILESHED:node=a1',
@@ -474,7 +474,7 @@ describe('MediaPlayerStore playlist files', () =>
 
     function mockPlaylistWorld() : void
     {
-        getNodeBlobMock.mockResolvedValue(new Blob([ DIALECT ]));
+        getNodeBlobMock.mockResolvedValue(new Blob([ dialect ]));
 
         getNodeMock.mockImplementation((id : string) =>
         {
@@ -817,9 +817,9 @@ describe('MediaPlayerStore tags', () =>
 
 const HOUR_MS = 60 * 60 * 1000;
 
-function tokenResponse(id : string, msUntilExpiry : number) : { id : string; token : string; expiresAt : string }
+function tokenResponse(id : string, msUntilExpiry : number) : { id : string; token : string; expires : string }
 {
-    return { id, token: `fsplay_${ id }`, expiresAt: new Date(Date.now() + msUntilExpiry).toISOString() };
+    return { id, token: `fsplay_${ id }`, expires: new Date(Date.now() + msUntilExpiry).toISOString() };
 }
 
 describe('MediaPlayerStore playback token', () =>

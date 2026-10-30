@@ -11,7 +11,7 @@ export interface DeletionOfferResponse
     size : number;
     createdBy : string;
     created : string;
-    expiresAt : string;
+    expires : string;
 }
 
 export interface DeletionOfferListResponse

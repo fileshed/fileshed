@@ -150,7 +150,7 @@ interface FolderInit
     name ?: string;
     created ?: Date;
     updated ?: Date;
-    trashedAt ?: Date | null;
+    trashed ?: Date | null;
 }
 
 export function folderNode(init : FolderInit) : FolderNode
@@ -163,7 +163,7 @@ export function folderNode(init : FolderInit) : FolderNode
         parentID: init.parentID ?? null,
         created: init.created ?? epoch,
         updated: init.updated ?? epoch,
-        trashedAt: init.trashedAt ?? null,
+        trashed: init.trashed ?? null,
     };
 }
 
@@ -178,7 +178,7 @@ interface FileInit
     name ?: string;
     created ?: Date;
     updated ?: Date;
-    trashedAt ?: Date | null;
+    trashed ?: Date | null;
 }
 
 export function fileNode(init : FileInit) : FileNode
@@ -194,7 +194,7 @@ export function fileNode(init : FileInit) : FileNode
         mimeType: init.mimeType ?? 'text/plain',
         created: init.created ?? epoch,
         updated: init.updated ?? epoch,
-        trashedAt: init.trashedAt ?? null,
+        trashed: init.trashed ?? null,
     };
 }
 

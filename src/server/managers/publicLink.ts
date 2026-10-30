@@ -90,7 +90,7 @@ export class PublicLinkManager
             throw new BadRequestError('A public link can only target a file node.');
         }
 
-        const live = (await this.#links.listByNode(nodeID)).filter((existing) => existing.revokedAt === null);
+        const live = (await this.#links.listByNode(nodeID)).filter((existing) => existing.revoked === null);
         if(live.length >= MAX_LINKS_PER_NODE)
         {
             throw new BadRequestError(
@@ -103,7 +103,7 @@ export class PublicLinkManager
             nodeID,
             token: randomBytes(PUBLIC_LINK_TOKEN_BYTES).toString('base64url'),
             created: new Date(),
-            revokedAt: null,
+            revoked: null,
         };
         await this.#links.insert(link);
 
@@ -138,7 +138,7 @@ export class PublicLinkManager
 
     // GET /d/:token -- anonymous, no auth. The token resolves to a link; a dead link (unknown token, revoked,
     // or a target that is gone, not a file, or trashed) serves nothing. A trashed target must never serve publicly:
-    // a trashed node is hidden from everyone, and setTrashed marks the whole subtree, so the node's own trashedAt
+    // a trashed node is hidden from everyone, and setTrashed marks the whole subtree, so the node's own trashed
     // catches an ancestor-trashed file too. Every dead outcome is a 404 that never distinguishes "revoked" from "gone"
     // -- the same reads-as-absent idiom the node manager uses for no-access reads.
     //
@@ -146,10 +146,10 @@ export class PublicLinkManager
     {
         const link = await this.#links.getByToken(token);
         if(link === undefined) { throw new NotFoundError('No such link.'); }
-        if(link.revokedAt !== null) { throw new NotFoundError('This link is no longer available.'); }
+        if(link.revoked !== null) { throw new NotFoundError('This link is no longer available.'); }
 
         const node = await this.#nodes.get(link.nodeID);
-        if(node === undefined || node.type !== 'file' || node.trashedAt !== null)
+        if(node === undefined || node.type !== 'file' || node.trashed !== null)
         {
             throw new NotFoundError('This link is no longer available.');
         }

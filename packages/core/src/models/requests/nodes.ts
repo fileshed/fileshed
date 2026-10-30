@@ -196,13 +196,13 @@ export interface FileNodeResponse extends NodeResponseBase
     blobID : string;
     size : number;
     mimeType : string;
-    trashedAt : string | null;
+    trashed : string | null;
 }
 
 export interface FolderNodeResponse extends NodeResponseBase
 {
     type : 'folder';
-    trashedAt : string | null;
+    trashed : string | null;
 }
 
 export interface LinkNodeResponse extends NodeResponseBase

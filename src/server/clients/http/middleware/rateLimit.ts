@@ -74,7 +74,7 @@ function prune(buckets : Map<string, Bucket>, windowMs : number, now : number) :
 {
     for(const [ key, bucket ] of buckets)
     {
-        if(now - bucket.startedAt >= windowMs) { buckets.delete(key); }
+        if(now - bucket.started >= windowMs) { buckets.delete(key); }
     }
 
     for(const key of buckets.keys())

@@ -15,7 +15,7 @@ import { fileNode, linkNode } from '../../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const STUBS = {
+const stubs = {
     UContextMenu: { template: '<div><slot /></div>' },
     UDropdownMenu: { template: '<div><slot /></div>' },
     UButton: { template: '<button class="ubtn" />' },
@@ -33,7 +33,7 @@ async function mountRow(node : NodeResponse, owners : UserSummary[]) : Promise<V
 {
     const wrapper = mount(NodeRow, {
         props: { node, selected: false, menuItems: [ [ { label: 'x' } ] ], owners },
-        global: { stubs: STUBS },
+        global: { stubs },
     });
 
     await wrapper.find('.group').trigger('mouseenter');
@@ -105,7 +105,7 @@ describe('NodeRow — controls the pointer has not reached', () =>
         const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
         const wrapper = mount(NodeRow, {
             props: { node: fileNode({ ownerID: 'u1' }), selected: false, menuItems: [ [ { label: 'x' } ] ], owners },
-            global: { stubs: STUBS },
+            global: { stubs },
         });
 
         expect(wrapper.find('.user-summary-hover').exists()).toBe(false);
@@ -127,7 +127,7 @@ describe('NodeRow — controls the pointer has not reached', () =>
     {
         const wrapper = mount(NodeRow, {
             props: { node: fileNode(), selected: false, menuItems: [ [ { label: 'x' } ] ], owners: [] },
-            global: { stubs: STUBS },
+            global: { stubs },
         });
 
         await wrapper.find('.group').trigger('focusin');

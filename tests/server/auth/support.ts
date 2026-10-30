@@ -101,12 +101,12 @@ export interface BootedApp
 // which is what lets the route-table and OpenAPI specs use it unmigrated.
 export function composeTestServices(auth : Auth, handle : DatabaseHandle, config : Config) : AppServices
 {
-    const startedAt = new Date();
+    const started = new Date();
     const settings = new SettingsManager({
         handle,
         config,
         box: new SecretBox(TEST_AUTH_SECRET),
-        startedAt,
+        started,
     });
 
     return composeServices({
@@ -117,7 +117,7 @@ export function composeTestServices(auth : Auth, handle : DatabaseHandle, config
         mail: new MailManager({ settings, mail: new MailRA() }),
         providers: [],
         build: testBuild,
-        startedAt,
+        started,
     });
 }
 

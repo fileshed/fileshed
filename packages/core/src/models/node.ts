@@ -25,19 +25,19 @@ export interface FileNode extends NodeBase
     blobID : string;
     size : number;
     mimeType : string;
-    trashedAt : Date | null;
+    trashed : Date | null;
 }
 
 export interface FolderNode extends NodeBase
 {
     type : 'folder';
-    trashedAt : Date | null;
+    trashed : Date | null;
 }
 
 // A link is the recipient-side placement of a shared item: an ordinary node, owned by the recipient, pointing at
 // someone else's node. Links may not target links (enforced by managers/engines, not this type). Links carry no
-// mimeType (it derives from the target) and no trashedAt -- links are deleted directly, never trashed; dead links
-// persist as stubs.
+// mimeType (it derives from the target) and no trashed timestamp -- links are deleted directly, never trashed; dead
+// links persist as stubs.
 export interface LinkNode extends NodeBase
 {
     type : 'link';
@@ -67,7 +67,7 @@ export function isDirectOwner(node : Node, userID : string) : boolean
 // their trash. A link is never trashed on its own account.
 export function isHiddenTrash(node : Node, userID : string) : boolean
 {
-    return node.type !== 'link' && node.trashedAt !== null && !isDirectOwner(node, userID);
+    return node.type !== 'link' && node.trashed !== null && !isDirectOwner(node, userID);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

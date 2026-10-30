@@ -305,7 +305,7 @@ describe('restore to root', () =>
         expect(restore.status).toBe(200);
         expect(restored.parentID).toBeNull();
         if(restored.type !== 'file') { throw new Error('expected a file node'); }
-        expect(restored.trashedAt).toBeNull();
+        expect(restored.trashed).toBeNull();
 
         // It reappears in the caller's root listing, no longer under the trashed folder.
         const root = await (await user.get('/api/nodes/children')).json() as NodeListResponse;

@@ -21,7 +21,7 @@ export const deletionOfferCodec = z.strictObject({
     size: z.number(),
     createdBy: z.string(),
     created: z.date(),
-    expiresAt: z.date(),
+    expires: z.date(),
 });
 
 typeAssert<Equals<z.output<typeof deletionOfferCodec>, DeletionOffer>>();

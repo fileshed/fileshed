@@ -85,7 +85,7 @@ function assertNotClosing(user : SessionUser, options : ActorOptions) : void
 {
     if(options.allowClosing === true) { return; }
 
-    if(user.deletionRequestedAt)
+    if(user.deletionRequested)
     {
         throw new ForbiddenError('This account is scheduled for deletion. Cancel the deletion to use it again.');
     }
@@ -155,13 +155,13 @@ export class SessionManager
 
         // A 5xx from the plugin, or any other throw, is storage failing underneath it and surfaces as the 500 a
         // caller holding a good token is owed -- not a claim that the token is bad.
-        const validKey = await this.#auth.validateKey(token, configID, required);
-        if(validKey === null) { throw new UnauthorizedError('Invalid access token.'); }
+        const verified = await this.#auth.verifyKey(token, configID, required);
+        if(verified === null) { throw new UnauthorizedError('Invalid access token.'); }
 
-        const user = await this.#auth.getUser(validKey.userID);
+        const user = await this.#auth.getUser(verified.userID);
         if(user === null || user.banned === true) { throw new UnauthorizedError('Invalid access token.'); }
 
-        return { kind: 'token', user, permissions: validKey.permissions };
+        return { kind: 'token', user, permissions: verified.permissions };
     }
 }
 

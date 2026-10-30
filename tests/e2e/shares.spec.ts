@@ -364,7 +364,7 @@ describe('access request lifecycle', () =>
 
         expect(grantRes.status).toBe(200);
         expect(resolved.status).toBe('granted');
-        expect(resolved.resolvedAt).not.toBeNull();
+        expect(resolved.resolved).not.toBeNull();
 
         const readRes = await stranger.get(`/api/nodes/${ folderID }`);
         const node = await readRes.json() as NodeResponse;
@@ -443,7 +443,7 @@ describe('declining an access request', () =>
         const declined = await declineRes.json() as AccessRequestResponse;
         expect(declineRes.status).toBe(200);
         expect(declined.status).toBe('declined');
-        expect(declined.resolvedAt).not.toBeNull();
+        expect(declined.resolved).not.toBeNull();
 
         // A decline grants nothing: the requester still reads the node as absent.
         expect((await seeker.get(`/api/nodes/${ folderID }`)).status).toBe(404);

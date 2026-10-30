@@ -129,7 +129,7 @@ describe('NodeManager trashed visibility', () =>
     async function seedTrashedSharedFolder() : Promise<void>
     {
         await seedUser(handle.db, 'bob');
-        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', trashedAt: new Date() }));
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', trashed: new Date() }));
         await handle.db.insertInto('share').values({
             id: 'share_dir_bob',
             node_id: 'dir',
@@ -411,7 +411,7 @@ describe('NodeManager.children through a folder link', () =>
     it('answers 404 when the link\'s target is a trashed folder owned by another user', async () =>
     {
         await seedUser(handle.db, 'carol');
-        await ra.insert(folderNode({ id: 'ct', ownerID: 'carol', trashedAt: new Date() }));
+        await ra.insert(folderNode({ id: 'ct', ownerID: 'carol', trashed: new Date() }));
         await seedShare('ct', 'alice', 'viewer', 'carol');
         await ra.insert(linkNode({ id: 'trlnk', ownerID: 'alice', targetNodeID: 'ct' }));
 

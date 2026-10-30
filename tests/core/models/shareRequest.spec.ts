@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
-// Share Request Codec -- status/resolvedAt union
+// Share Request Codec -- status/resolved union
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -21,9 +21,9 @@ const baseFields = {
 
 describe('shareRequestCodec', () =>
 {
-    it('parses a pending request with a null resolvedAt', () =>
+    it('parses a pending request with a null resolved timestamp', () =>
     {
-        const pending = { ...baseFields, status: 'pending', resolvedAt: null };
+        const pending = { ...baseFields, status: 'pending', resolved: null };
 
         expect(shareRequestCodec.safeParse(pending).success).toBe(true);
     });
@@ -32,39 +32,39 @@ describe('shareRequestCodec', () =>
     it('parses a pending request carrying a requester message', () =>
     {
         const pending = {
-            ...baseFields, message: 'Could I get viewer access please?', status: 'pending', resolvedAt: null,
+            ...baseFields, message: 'Could I get viewer access please?', status: 'pending', resolved: null,
         };
 
         expect(shareRequestCodec.safeParse(pending).success).toBe(true);
     });
 
-    it('parses a granted request with a resolvedAt timestamp', () =>
+    it('parses a granted request with a resolved timestamp', () =>
     {
-        const granted = { ...baseFields, status: 'granted', resolvedAt: new Date('2026-01-02T00:00:00.000Z') };
+        const granted = { ...baseFields, status: 'granted', resolved: new Date('2026-01-02T00:00:00.000Z') };
 
         expect(shareRequestCodec.safeParse(granted).success).toBe(true);
     });
 
-    it('parses a declined request with a resolvedAt timestamp', () =>
+    it('parses a declined request with a resolved timestamp', () =>
     {
-        const declined = { ...baseFields, status: 'declined', resolvedAt: new Date('2026-01-02T00:00:00.000Z') };
+        const declined = { ...baseFields, status: 'declined', resolved: new Date('2026-01-02T00:00:00.000Z') };
 
         expect(shareRequestCodec.safeParse(declined).success).toBe(true);
     });
 
-    // resolvedAt is set exactly when the request leaves pending. A pending request that already carries a resolution
+    // resolved is set exactly when the request leaves pending. A pending request that already carries a resolution
     // time is an illegal state the union must reject.
-    it('rejects a pending request that carries a resolvedAt', () =>
+    it('rejects a pending request that carries a resolved timestamp', () =>
     {
-        const bogus = { ...baseFields, status: 'pending', resolvedAt: new Date('2026-01-02T00:00:00.000Z') };
+        const bogus = { ...baseFields, status: 'pending', resolved: new Date('2026-01-02T00:00:00.000Z') };
 
         expect(shareRequestCodec.safeParse(bogus).success).toBe(false);
     });
 
     // the mirror illegal state -- a resolved request without a resolution time.
-    it('rejects a granted request with a null resolvedAt', () =>
+    it('rejects a granted request with a null resolved timestamp', () =>
     {
-        const bogus = { ...baseFields, status: 'granted', resolvedAt: null };
+        const bogus = { ...baseFields, status: 'granted', resolved: null };
 
         expect(shareRequestCodec.safeParse(bogus).success).toBe(false);
     });
@@ -72,7 +72,7 @@ describe('shareRequestCodec', () =>
     // a request asks for a grantable role -- viewer or editor, never owner.
     it('rejects a request for the owner role', () =>
     {
-        const ownerAsk = { ...baseFields, requestedRole: 'owner', status: 'pending', resolvedAt: null };
+        const ownerAsk = { ...baseFields, requestedRole: 'owner', status: 'pending', resolved: null };
 
         expect(shareRequestCodec.safeParse(ownerAsk).success).toBe(false);
     });

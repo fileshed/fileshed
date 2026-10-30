@@ -48,11 +48,11 @@ function offer(id : string, name = 'report.pdf') : DeletionOfferResponse
         size: 2048,
         createdBy: 'owner1',
         created: ISO,
-        expiresAt: '2026-07-28T00:00:00.000Z',
+        expires: '2026-07-28T00:00:00.000Z',
     };
 }
 
-const STUBS = {
+const stubs = {
     UButton: {
         props: [ 'label', 'loading', 'disabled' ],
         template: '<button class="ubtn" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
@@ -65,7 +65,7 @@ function mountSection() : VueWrapper
     const pinia = createPinia();
     setActivePinia(pinia);
 
-    return mount(OffersSection, { global: { plugins: [ pinia ], stubs: STUBS } });
+    return mount(OffersSection, { global: { plugins: [ pinia ], stubs } });
 }
 
 async function clickButton(wrapper : VueWrapper, label : string) : Promise<void>

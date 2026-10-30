@@ -37,8 +37,8 @@
                     </div>
                     <p class="mt-1 text-xs text-dimmed">
                         Created {{ formatDate(token.created) }}
-                        · {{ token.lastUsedAt ? `last used ${ formatDate(token.lastUsedAt) }` : 'never used' }}
-                        · {{ token.expiresAt ? `expires ${ formatDate(token.expiresAt) }` : 'no expiry' }}
+                        · {{ token.lastUsed ? `last used ${ formatDate(token.lastUsed) }` : 'never used' }}
+                        · {{ token.expires ? `expires ${ formatDate(token.expires) }` : 'no expiry' }}
                     </p>
                 </div>
 

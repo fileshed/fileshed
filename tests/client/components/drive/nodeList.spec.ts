@@ -8,15 +8,15 @@ import { type VueWrapper, mount } from '@vue/test-utils';
 import type { NodeResponse, UserSummary } from '@fileshed/core';
 
 // Support
-import { SCROLL_AREA_STUB, folderNode } from '../../support.ts';
+import { folderNode, scrollAreaStub } from '../../support.ts';
 
 // Under test
 import NodeList from '@client/components/drive/nodeList.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const STUBS = {
-    UScrollArea: SCROLL_AREA_STUB,
+const stubs = {
+    UScrollArea: scrollAreaStub,
     UIcon: true,
     NodeRow: {
         props: [ 'node', 'selected', 'menuItems', 'owners' ],
@@ -36,7 +36,7 @@ function mountList(nodes : NodeResponse[], owners : UserSummary[]) : VueWrapper
             buildMenu: () => [ [ { label: 'x' } ] ],
             owners,
         },
-        global: { stubs: STUBS },
+        global: { stubs },
     });
 }
 

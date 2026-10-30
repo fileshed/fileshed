@@ -49,7 +49,7 @@ function mountButton(blockedReason ?: string) : VueWrapper
     });
 }
 
-const RECLAIMED : SweepRunResponse = {
+const reclaimed : SweepRunResponse = {
     sweep: 'gc',
     ranAt: '2026-08-12T10:00:00.000Z',
     summary: { candidates: 4, deleted: 3, kept: 1, bytesFailed: 0, bytesFreed: 2_500_000 },
@@ -67,7 +67,7 @@ describe('RunSweepButton', () =>
 
     it('reports the counts the sweep returned, not a bare acknowledgement', async () =>
     {
-        runSweepMock.mockResolvedValue(RECLAIMED);
+        runSweepMock.mockResolvedValue(reclaimed);
         const wrapper = mountButton();
 
         await wrapper.find('.run').trigger('click');
@@ -80,7 +80,7 @@ describe('RunSweepButton', () =>
 
     it('tells the host to refresh once the sweep has finished', async () =>
     {
-        runSweepMock.mockResolvedValue(RECLAIMED);
+        runSweepMock.mockResolvedValue(reclaimed);
         const wrapper = mountButton();
 
         await wrapper.find('.run').trigger('click');
@@ -99,7 +99,7 @@ describe('RunSweepButton', () =>
 
         expect(wrapper.find('.run').attributes('data-loading')).toBe('true');
 
-        release(RECLAIMED);
+        release(reclaimed);
         await flushPromises();
 
         expect(wrapper.find('.run').attributes('data-loading')).toBe('false');

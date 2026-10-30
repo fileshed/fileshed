@@ -194,11 +194,9 @@ describe('migration 007 — public link kind removal', () =>
 
         await migrateTo(db, kind, THIS_ONE);
 
-        const rows = await db
-            .selectFrom('public_link')
-            .select([ 'id', 'revoked_at' ])
-            .orderBy('id', 'asc')
-            .execute();
+        const { rows } = await sql<{ id : string; revoked_at : string | null }>`
+            select id, revoked_at from public_link order by id asc
+        `.execute(db);
 
         expect(rows.map((row) => row.id)).toEqual([ 'dead', 'live' ]);
         expect(rows[0]?.revoked_at).not.toBeNull();

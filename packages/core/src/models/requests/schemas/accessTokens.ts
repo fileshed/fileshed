@@ -62,8 +62,8 @@ export const accessTokenResponseCodec = z.strictObject({
     start: z.string().nullable(),
     scopes: z.array(z.enum(accessTokenScopes)),
     created: isoDateTimeCodec,
-    lastUsedAt: isoDateTimeCodec.nullable(),
-    expiresAt: isoDateTimeCodec.nullable(),
+    lastUsed: isoDateTimeCodec.nullable(),
+    expires: isoDateTimeCodec.nullable(),
 });
 
 typeAssert<Equals<z.output<typeof accessTokenResponseCodec>, AccessTokenResponse>>();
@@ -93,7 +93,7 @@ typeAssert<Equals<z.output<typeof createPlaybackTokenRequestCodec>, CreatePlayba
 export const playbackTokenResponseCodec = z.strictObject({
     id: z.string(),
     token: z.string(),
-    expiresAt: isoDateTimeCodec,
+    expires: isoDateTimeCodec,
 });
 
 typeAssert<Equals<z.output<typeof playbackTokenResponseCodec>, PlaybackTokenResponse>>();
@@ -110,8 +110,8 @@ export function toAccessTokenResponse(token : AccessToken) : AccessTokenResponse
         start: token.start,
         scopes: token.scopes,
         created: token.created.toISOString(),
-        lastUsedAt: token.lastUsedAt === null ? null : token.lastUsedAt.toISOString(),
-        expiresAt: token.expiresAt === null ? null : token.expiresAt.toISOString(),
+        lastUsed: token.lastUsed === null ? null : token.lastUsed.toISOString(),
+        expires: token.expires === null ? null : token.expires.toISOString(),
     };
 }
 
@@ -127,7 +127,7 @@ export function toCreateAccessTokenResponse(minted : MintedAccessToken) : Create
 
 export function toPlaybackTokenResponse(minted : MintedPlaybackToken) : PlaybackTokenResponse
 {
-    return { id: minted.id, token: minted.token, expiresAt: minted.expiresAt.toISOString() };
+    return { id: minted.id, token: minted.token, expires: minted.expires.toISOString() };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

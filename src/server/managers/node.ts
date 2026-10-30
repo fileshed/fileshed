@@ -348,7 +348,7 @@ export class NodeManager
         {
             if(isDirectOwner(node, actor.user.id) && node.type !== 'link')
             {
-                if(node.trashedAt === null) { liveIDs.push(node.id); }
+                if(node.trashed === null) { liveIDs.push(node.id); }
                 else { sharing.set(node.id, NOTHING_SHARED); }
             }
         }
@@ -460,7 +460,7 @@ export class NodeManager
             parentID: request.parentID,
             created: now,
             updated: now,
-            trashedAt: null,
+            trashed: null,
         };
         await this.#nodes.insert(node);
 
@@ -664,7 +664,7 @@ export class NodeManager
         const granteeIDs = await this.#shares.granteeIDsFor(chain);
 
         const now = new Date();
-        const expiresAt = new Date(now.getTime() + await this.#offerGraceMs());
+        const expires = new Date(now.getTime() + await this.#offerGraceMs());
 
         return granteeIDs
             .filter((granteeID) => granteeID !== node.ownerID)
@@ -677,7 +677,7 @@ export class NodeManager
                 size: node.size,
                 createdBy: user.id,
                 created: now,
-                expiresAt,
+                expires,
             }));
     }
 
@@ -830,7 +830,7 @@ export class NodeManager
             mimeType: snapshot.mimeType,
             created: now,
             updated: now,
-            trashedAt: null,
+            trashed: null,
         };
 
         await inTransaction(this.#handle, async (tx) =>
@@ -852,10 +852,10 @@ export class NodeManager
         const parent = await this.#nodes.get(node.parentID);
 
         // Gone (FK cascade makes this branch defensive) or a folder still in the trash: nowhere live to return to.
-        return parent === undefined || (parent.type !== 'link' && parent.trashedAt !== null);
+        return parent === undefined || (parent.type !== 'link' && parent.trashed !== null);
     }
 
-    // Re-read after a write so the response carries the RA-stamped updated (and cleared/set trashed_at). The row is
+    // Re-read after a write so the response carries the RA-stamped updated (and cleared/set trashed). The row is
     // the one we just wrote as owner, so 'owner' is the effective role.
     async #reread(actor : Actor, id : string) : Promise<NodeResponse>
     {

@@ -221,13 +221,13 @@ const fileNodeResponseCodec = z.strictObject({
     blobID: z.string(),
     size: z.number(),
     mimeType: z.string(),
-    trashedAt: isoDateTimeCodec.nullable(),
+    trashed: isoDateTimeCodec.nullable(),
 });
 
 const folderNodeResponseCodec = z.strictObject({
     ...nodeResponseBaseShape,
     type: z.literal('folder'),
-    trashedAt: isoDateTimeCodec.nullable(),
+    trashed: isoDateTimeCodec.nullable(),
 });
 
 const linkNodeResponseCodec = z.strictObject({
@@ -322,14 +322,14 @@ export function toNodeResponse(
                 blobID: node.blobID,
                 size: node.size,
                 mimeType: node.mimeType,
-                trashedAt: node.trashedAt === null ? null : node.trashedAt.toISOString(),
+                trashed: node.trashed === null ? null : node.trashed.toISOString(),
             };
 
         case 'folder':
             return {
                 ...base,
                 type: 'folder',
-                trashedAt: node.trashedAt === null ? null : node.trashedAt.toISOString(),
+                trashed: node.trashed === null ? null : node.trashed.toISOString(),
             };
 
         case 'link':

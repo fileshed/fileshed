@@ -45,14 +45,14 @@ afterEach(async () =>
     await db.destroy();
 });
 
-function link(init : { id : string; nodeID : string; created : Date; revokedAt ?: Date | null }) : PublicLink
+function link(init : { id : string; nodeID : string; created : Date; revoked ?: Date | null }) : PublicLink
 {
     return {
         id: init.id,
         nodeID: init.nodeID,
         token: `token-${ init.id }`,
         created: init.created,
-        revokedAt: init.revokedAt ?? null,
+        revoked: init.revoked ?? null,
     };
 }
 

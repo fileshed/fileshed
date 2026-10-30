@@ -92,7 +92,7 @@ const SPREAD_MODE : Record<SpreadModeName, number>
 // Handed nothing, the toolbar silently falls back to a delete button alone and a highlight can never be recoloured
 // after it is drawn. pdf.js parses the list itself, as comma-separated name=#hex pairs, so the swatches the params
 // popover offers are reused here rather than a second palette being written down beside them.
-const highlightPalette = highlightColors
+const HIGHLIGHT_PALETTE = highlightColors
     .map(({ name, value }) => `${ name.toLowerCase() }=${ value }`)
     .join(',');
 
@@ -284,7 +284,7 @@ export async function openPDFSession(options : PDFSessionOptions) : Promise<PDFS
         linkService,
         findController,
         annotationEditorMode: readOnly ? AnnotationEditorType.DISABLE : AnnotationEditorType.NONE,
-        annotationEditorHighlightColors: highlightPalette,
+        annotationEditorHighlightColors: HIGHLIGHT_PALETTE,
         altTextManager,
     } as ViewerOptions);
     linkService.setViewer(pdfViewer);

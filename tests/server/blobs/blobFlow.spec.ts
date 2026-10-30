@@ -28,8 +28,8 @@ import {
     answerChallenge,
     blobRowCount,
     bootBlobApp,
+    buildAnswer,
     bytesExist,
-    calculateAnswer,
     claim,
     fileNodesForBlob,
     makeUser,
@@ -206,7 +206,7 @@ describe('POST /api/blobs/claim + PUT /api/uploads/:ticket', () =>
     {
         const user = await makeUser(booted, 'trashed-parent@example.com');
         await new NodeRA(booted.handle).insert(
-            folderNode({ id: 'folder-trashed', ownerID: user.id, trashedAt: new Date() })
+            folderNode({ id: 'folder-trashed', ownerID: user.id, trashed: new Date() })
         );
         const data = randomBytes(2048);
 
@@ -350,7 +350,7 @@ describe('proof-of-possession dedup', () =>
         const challenge = await (await claim(booted.app, claimant.cookie, sha256, data.length)).json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a challenge'); }
 
-        const answer = calculateAnswer(challenge.nonce, challenge.ranges, data);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, data);
         const res = await answerChallenge(booted.app, claimant.cookie, challenge.challengeID, answer);
         const node = await res.json() as NodeResponse;
 
@@ -386,7 +386,7 @@ describe('proof-of-possession dedup', () =>
 
         const challenge = await (await claim(booted.app, claimant.cookie, sha256, data.length)).json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a challenge'); }
-        const answer = calculateAnswer(challenge.nonce, challenge.ranges, data);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, data);
 
         const first = await answerChallenge(booted.app, claimant.cookie, challenge.challengeID, answer);
         const replay = await answerChallenge(booted.app, claimant.cookie, challenge.challengeID, answer);
@@ -410,7 +410,7 @@ describe('proof-of-possession dedup', () =>
             // Challenges live 60s. Jump just past that; the session cookie (minted before, ~5 min) is still
             // valid, so only the challenge has expired.
             vi.setSystemTime(new Date(Date.now() + 61_000));
-            const answer = calculateAnswer(challenge.nonce, challenge.ranges, data);
+            const answer = buildAnswer(challenge.nonce, challenge.ranges, data);
             const res = await answerChallenge(booted.app, claimant.cookie, challenge.challengeID, answer);
 
             expect(res.status).toBe(404);
@@ -575,7 +575,7 @@ describe('graveyard resurrection', () =>
         const challenge = await (await claim(booted.app, claimant.cookie, sha256, data.length)).json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a challenge'); }
 
-        const answer = calculateAnswer(challenge.nonce, challenge.ranges, data);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, data);
         const res = await answerChallenge(booted.app, claimant.cookie, challenge.challengeID, answer);
 
         expect(res.status).toBe(200);

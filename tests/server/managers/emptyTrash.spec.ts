@@ -55,7 +55,7 @@ afterEach(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-async function blobDeletedAt(sha256 : string) : Promise<string | Date | null>
+async function blobDeleted(sha256 : string) : Promise<string | Date | null>
 {
     const row = await handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256)
@@ -81,8 +81,8 @@ describe('NodeManager.emptyTrash', () =>
         expect(await ra.get('dir')).toBeUndefined();
         expect(await ra.get('f1')).toBeUndefined();
         expect(await ra.get('solo')).toBeUndefined();
-        expect(await blobDeletedAt('sha-a')).not.toBeNull();
-        expect(await blobDeletedAt('sha-b')).not.toBeNull();
+        expect(await blobDeleted('sha-a')).not.toBeNull();
+        expect(await blobDeleted('sha-b')).not.toBeNull();
     });
 
     it('leaves an untrashed subtree alone -- only trashed roots are counted and purged', async () =>
@@ -95,7 +95,7 @@ describe('NodeManager.emptyTrash', () =>
         expect(result).toEqual({ purged: 0 });
         expect(await ra.get('live')).toBeDefined();
         expect(await ra.get('f1')).toBeDefined();
-        expect(await blobDeletedAt('sha-a')).toBeNull();
+        expect(await blobDeleted('sha-a')).toBeNull();
     });
 
     it('is a harmless no-op when the caller has nothing trashed', async () =>

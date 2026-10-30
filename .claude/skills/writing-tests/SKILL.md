@@ -41,9 +41,9 @@ it('charges owned file nodes including trashed, excluding purged', () =>
 {
     const nodes =
     [
-        ownedFile({ size: 1000, trashedAt: null }),
-        ownedFile({ size: 500, trashedAt: new Date() }),   // trashed still counts
-        ownedFile({ size: 999, purgedAt: new Date() }),    // purged does not
+        ownedFile({ size: 1000, trashed: null }),
+        ownedFile({ size: 500, trashed: new Date() }),   // trashed still counts
+        ownedFile({ size: 999, purged: new Date() }),    // purged does not
     ];
 
     expect(usageFor(userID, nodes)).toBe(1500);

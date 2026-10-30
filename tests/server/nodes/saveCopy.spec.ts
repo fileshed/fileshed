@@ -23,7 +23,7 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+type JSON = Record<string, unknown>;
 
 let booted : BootedStoreApp;
 let owner : TestUser;
@@ -42,9 +42,9 @@ afterEach(async () =>
 });
 
 // Upload a file owned by `owner` and share it to `grantee`, returning the shared file node.
-async function shareFile(bytes : Buffer, grantee : TestUser, role : 'viewer' | 'editor' = 'viewer') : Promise<Json>
+async function shareFile(bytes : Buffer, grantee : TestUser, role : 'viewer' | 'editor' = 'viewer') : Promise<JSON>
 {
-    const file = await (await uploadSmallFile(booted.app, owner.cookie, bytes, null, 'shared.bin')).json() as Json;
+    const file = await (await uploadSmallFile(booted.app, owner.cookie, bytes, null, 'shared.bin')).json() as JSON;
     await grantShare(booted.app, owner.cookie, file.id as string, grantee.id, role);
 
     return file;
@@ -72,7 +72,7 @@ describe('POST /api/nodes/:id/copy', () =>
             recipient.cookie,
             { parentID: null }
         );
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(201);
         expect(body).toMatchObject({
@@ -98,14 +98,14 @@ describe('POST /api/nodes/:id/copy', () =>
             `/api/nodes/${ file.id }/copy`, 
             recipient.cookie,
             { parentID: null, name: 'my copy.bin' }
-        )).json() as Json;
+        )).json() as JSON;
         const defaulted = await (await request(
             booted.app, 
             'POST', 
             `/api/nodes/${ file.id }/copy`, 
             recipient.cookie,
             { parentID: null }
-        )).json() as Json;
+        )).json() as JSON;
 
         expect(named.name).toBe('my copy.bin');
         expect(defaulted.name).toBe(file.name);
@@ -125,7 +125,7 @@ describe('POST /api/nodes/:id/copy', () =>
     it('returns 404 when the caller cannot resolve the source', async () =>
     {
         const uploaded = await uploadSmallFile(booted.app, owner.cookie, Buffer.from('private'), null);
-        const file = await uploaded.json() as Json;
+        const file = await uploaded.json() as JSON;
 
         const res = await request(
             booted.app, 

@@ -93,7 +93,7 @@ export const useSearchStore = defineStore('search', () =>
         await retry();
     }
 
-    // A dead link is removed rather than trashed: links carry no trashed_at, so removal is the only way out of a
+    // A dead link is removed rather than trashed: links carry no trashed timestamp, so removal is the only way out of a
     // listing for one.
     async function removeDeadLink(id : string) : Promise<void>
     {

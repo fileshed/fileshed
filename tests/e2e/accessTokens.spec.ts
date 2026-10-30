@@ -183,7 +183,7 @@ describe('playback tokens over the wire', () =>
 
         expect(playback.token.startsWith(PLAYBACK_TOKEN_PREFIX)).toBe(true);
 
-        const expiresIn = Date.parse(playback.expiresAt) - Date.now();
+        const expiresIn = Date.parse(playback.expires) - Date.now();
         expect(expiresIn).toBeGreaterThan(4.5 * MS_PER_HOUR);
         expect(expiresIn).toBeLessThan(5.5 * MS_PER_HOUR);
 

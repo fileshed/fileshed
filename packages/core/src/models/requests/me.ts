@@ -52,7 +52,7 @@ export interface MeResponse
 // What the caller sees of their own pending deletion.
 export interface AccountDeletionSchedule
 {
-    requestedAt : string;
+    requested : string;
     scheduledFor : string;
 }
 

@@ -677,7 +677,7 @@ export const usePDFAnnotatorStore = defineStore('pdfAnnotator', () =>
         printing,
         printError,
         conflict: file.conflict,
-        lastSavedAt: file.lastSavedAt,
+        lastSaved: file.lastSaved,
         dirty,
         readOnly: file.readOnly,
         scrollMode,

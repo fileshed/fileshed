@@ -69,7 +69,7 @@ const TOGGLE_CLICK = { metaKey: true, ctrlKey: false, shiftKey: false };
 
 // UButton renders its label as text; aria-label and disabled fall through as attributes so the action buttons stay
 // queryable. The four modals are stubbed away -- their own specs cover them; here Rename/Move expose an open spy.
-const STUBS = {
+const stubs = {
     UButton: { props: [ 'label' ], template: '<button class="ubtn" @click="$emit(\'click\')">{{ label }}</button>' },
     UTooltip: { template: '<div><slot /></div>' },
     UFieldGroup: { template: '<div><slot /></div>' },
@@ -147,7 +147,7 @@ async function mountDrive(
     router.push(at);
     await router.isReady();
 
-    const wrapper = mount(DrivePage, { global: { plugins: [ pinia, router ], stubs: STUBS } });
+    const wrapper = mount(DrivePage, { global: { plugins: [ pinia, router ], stubs } });
     await flushPromises();
 
     return wrapper;

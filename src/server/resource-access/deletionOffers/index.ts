@@ -2,7 +2,7 @@
 // Deletion Offer Resource Access
 //
 // Expiry is enforced at read time, so an expired row reads as absent. Rows past their window need no sweeper of their
-// own: expires_at is the blob's GC grace deadline, so when GC hard-deletes the blob row, the sha256 FK cascade removes
+// own: expires is the blob's GC grace deadline, so when GC hard-deletes the blob row, the sha256 FK cascade removes
 // every offer on it.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -42,7 +42,7 @@ export class DeletionOfferRA
             .selectFrom('deletion_offer')
             .selectAll()
             .where('offeree_id', '=', offereeID)
-            .where('expires_at', '>', now.toISOString())
+            .where('expires', '>', now.toISOString())
             .orderBy('created', 'asc')
             .execute();
 
@@ -56,7 +56,7 @@ export class DeletionOfferRA
             .selectAll()
             .where('id', '=', id)
             .where('offeree_id', '=', offereeID)
-            .where('expires_at', '>', now.toISOString())
+            .where('expires', '>', now.toISOString())
             .executeTakeFirst();
 
         return row === undefined ? undefined : offerFromRow(row);

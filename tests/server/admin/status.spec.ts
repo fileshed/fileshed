@@ -51,7 +51,7 @@ beforeEach(async () =>
                 blob,
                 tracker,
                 build: INJECTED_BUILD,
-                startedAt: new Date(),
+                started: new Date(),
                 activeProviders: 0,
                 emailEnabled: async () => false,
                 signUpEnabled: async () => true,

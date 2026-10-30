@@ -20,7 +20,7 @@ function ownerSummary(id : string, name : string) : UserSummary
 }
 
 // UPopover renders its trigger AND its content so both the marker and the hover card are queryable in one mount.
-const STUBS = {
+const stubs = {
     UPopover: { template: '<div class="popover"><slot /><slot name="content" /></div>' },
     UIcon: { props: [ 'name' ], template: '<i :data-icon="name" />' },
     UAvatar: { props: [ 'src', 'alt' ], template: '<span class="avatar" :data-alt="alt" />' },
@@ -29,7 +29,7 @@ const STUBS = {
 
 function mountCard(node : NodeResponse, owner : UserSummary | null) : VueWrapper
 {
-    return mount(LinkCrumbCard, { props: { node, owner }, global: { stubs: STUBS } });
+    return mount(LinkCrumbCard, { props: { node, owner }, global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

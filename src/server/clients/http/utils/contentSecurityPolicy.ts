@@ -62,7 +62,7 @@ function serialize(directives : Directives) : string
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export const appContentSecurityPolicy = serialize(APP_DIRECTIVES);
+export const APP_CONTENT_SECURITY_POLICY = serialize(APP_DIRECTIVES);
 
 // The reference UI is a different application under the same roof: one bundle of ours, plus the inline call that
 // starts it, which is what the nonce authorizes. What it still reaches for on its own account -- a search against

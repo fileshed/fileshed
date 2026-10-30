@@ -63,7 +63,7 @@ beforeEach(async () =>
         blob,
         tracker: new LastRunTracker(),
         build: { version: '9.9.9', commit: 'a0931ee', branch: 'topic-branch' },
-        startedAt: new Date(Date.now() - (UPTIME_SECONDS * MS_PER_SECOND)),
+        started: new Date(Date.now() - (UPTIME_SECONDS * MS_PER_SECOND)),
         activeProviders: 2,
         emailEnabled: async () => emailConfigured,
         signUpEnabled: async () => signUpsOpen,
@@ -164,7 +164,7 @@ describe('StatusManager.status', () =>
         await nodes.insert(folderNode({ id: 'folder-1', ownerID }));
         await nodes.insert(fileNode({ id: 'file-1', ownerID, blobID: 'sha-live' }));
         await nodes.insert(fileNode({ id: 'file-2', ownerID, blobID: 'sha-live' }));
-        await nodes.insert(fileNode({ id: 'file-trashed', ownerID, blobID: 'sha-live', trashedAt: new Date() }));
+        await nodes.insert(fileNode({ id: 'file-trashed', ownerID, blobID: 'sha-live', trashed: new Date() }));
         await nodes.insert(linkNode({ id: 'link-1', ownerID, targetNodeID: 'file-1' }));
 
         const view = await overview();
@@ -184,7 +184,7 @@ describe('StatusManager.status', () =>
             ownerID,
             blobID: 'sha-tossed',
             size: 500,
-            trashedAt: new Date(),
+            trashed: new Date(),
         }));
 
         const view = await overview();
@@ -223,7 +223,7 @@ describe('StatusManager.status', () =>
             ownerID: bob,
             blobID: 'sha-bob',
             size: 700,
-            trashedAt: new Date(),
+            trashed: new Date(),
         }));
 
         const view = await overview();
@@ -267,7 +267,7 @@ describe('StatusManager.status', () =>
             requestedRole: 'viewer',
             message: null,
             status: 'pending',
-            resolvedAt: null,
+            resolved: null,
             created: new Date(),
         });
         await shares.insertRequest({
@@ -277,7 +277,7 @@ describe('StatusManager.status', () =>
             requestedRole: 'viewer',
             message: null,
             status: 'pending',
-            resolvedAt: null,
+            resolved: null,
             created: new Date(),
         });
         await shares.insertRequest({
@@ -287,7 +287,7 @@ describe('StatusManager.status', () =>
             requestedRole: 'editor',
             message: null,
             status: 'pending',
-            resolvedAt: null,
+            resolved: null,
             created: new Date(),
         });
         await shares.resolveRequest('request-settled', 'granted', new Date());

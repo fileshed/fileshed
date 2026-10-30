@@ -115,9 +115,9 @@ export class AccountDeletionManager
     // here rather than read, so it always answers the window in force right now.
     async scheduleFor(userID : string) : Promise<AccountDeletionSchedule | null>
     {
-        const requestedAt = await this.#users.deletionRequestedAtOf(userID);
+        const requested = await this.#users.deletionRequestedAtOf(userID);
 
-        return requestedAt === null ? null : this.#scheduleAt(requestedAt);
+        return requested === null ? null : this.#scheduleAt(requested);
     }
 
     // Ask for the account to be deleted. Everything the account can reach outward dies now -- the grants it handed
@@ -135,18 +135,18 @@ export class AccountDeletionManager
             throw new BadRequestError('You are the only admin. Promote somebody else before deleting your account.');
         }
 
-        const requestedAt = new Date();
-        await this.#users.setDeletionRequestedAt(user.id, requestedAt);
+        const requested = new Date();
+        await this.#users.setDeletionRequested(user.id, requested);
         await this.#revokeReach(user.id);
 
-        return this.#scheduleAt(requestedAt);
+        return this.#scheduleAt(requested);
     }
 
     // Change your mind. The account comes back exactly as it was -- its files, its settings, its quota -- and none of
     // what the request revoked comes back with it.
     async cancel(user : SessionUser) : Promise<void>
     {
-        await this.#users.setDeletionRequestedAt(user.id, null);
+        await this.#users.setDeletionRequested(user.id, null);
     }
 
     // Everything this account reaches other people through. Ordered by how much it would cost to be wrong about it:
@@ -162,13 +162,13 @@ export class AccountDeletionManager
         await this.#auth.deleteUserSessions(userID);
     }
 
-    async #scheduleAt(requestedAt : Date) : Promise<AccountDeletionSchedule>
+    async #scheduleAt(requested : Date) : Promise<AccountDeletionSchedule>
     {
         const days = await this.#deletionDays();
 
         return {
-            requestedAt: requestedAt.toISOString(),
-            scheduledFor: new Date(requestedAt.getTime() + (days * MS_PER_DAY)).toISOString(),
+            requested: requested.toISOString(),
+            scheduledFor: new Date(requested.getTime() + (days * MS_PER_DAY)).toISOString(),
         };
     }
 }

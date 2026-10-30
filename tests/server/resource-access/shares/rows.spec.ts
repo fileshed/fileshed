@@ -3,7 +3,7 @@
 //
 // Drives the share and share_request row methods against a real in-memory SQLite database (production factory +
 // migrator, zero mocks). Expectations: a grant is (node, grantee, role, created_by), one per pair; requests route
-// to the target's owner and resolution stamps status + resolved_at together; and Shared with me lists active shares
+// to the target's owner and resolution stamps status + resolved together; and Shared with me lists active shares
 // with a placement flag, hiding a trashed target.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -72,7 +72,7 @@ function pendingRequest(
     message : string | null = null
 ) : PendingShareRequest
 {
-    return { id, nodeID, requesterID, requestedRole: role, message, status: 'pending', resolvedAt: null, created };
+    return { id, nodeID, requesterID, requestedRole: role, message, status: 'pending', resolved: null, created };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -328,17 +328,17 @@ describe('ShareRA share request rows', () =>
         expect((await shares.getRequestByID('r1'))?.message).toBe('Could I get viewer access please?');
     });
 
-    it('resolves a request by stamping status and resolved_at together', async () =>
+    it('resolves a request by stamping status and resolved together', async () =>
     {
         await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
         await shares.insertRequest(pendingRequest('r1', 'f', 'requester', 'editor'));
-        const resolvedAt = new Date('2026-04-01T00:00:00.000Z');
+        const resolved = new Date('2026-04-01T00:00:00.000Z');
 
-        await shares.resolveRequest('r1', 'granted', resolvedAt);
+        await shares.resolveRequest('r1', 'granted', resolved);
 
-        const resolved = await shares.getRequestByID('r1');
-        expect(resolved?.status).toBe('granted');
-        expect(resolved?.resolvedAt).toEqual(resolvedAt);
+        const stored = await shares.getRequestByID('r1');
+        expect(stored?.status).toBe('granted');
+        expect(stored?.resolved).toEqual(resolved);
     });
 
     it('routes pending requests to the target owner, excluding requests on other owners\' nodes', async () =>

@@ -14,7 +14,7 @@
             <SaveIndicator
                 :saving="store.saving"
                 :dirty="store.dirty"
-                :last-saved-at="store.lastSavedAt"
+                :last-saved="store.lastSaved"
                 :save-error="store.saveError"
             />
 

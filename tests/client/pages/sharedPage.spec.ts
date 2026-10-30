@@ -27,7 +27,7 @@ import { updatePreferences } from '@client/resource-access/preferences.ts';
 import { leaveShare, listSharedWithMe } from '@client/resource-access/shares.ts';
 
 // Support
-import { ME_ID, SCROLL_AREA_STUB, meFixture } from '../support.ts';
+import { ME_ID, meFixture, scrollAreaStub } from '../support.ts';
 
 // Under test
 import SharedPage from '@client/pages/sharedPage.vue';
@@ -79,8 +79,8 @@ function entry(target : SharedTarget, role : ShareRole = 'viewer', placed = fals
     };
 }
 
-const STUBS = {
-    UScrollArea: SCROLL_AREA_STUB,
+const stubs = {
+    UScrollArea: scrollAreaStub,
     UButton: {
         props: [ 'label' ],
         template: '<button class="ubtn" :aria-label="$attrs[\'aria-label\']" @click="$emit(\'click\')">'
@@ -134,7 +134,7 @@ async function mountShared(
     router.push('/');
     await router.isReady();
 
-    const wrapper = mount(SharedPage, { global: { plugins: [ pinia, router ], stubs: STUBS } });
+    const wrapper = mount(SharedPage, { global: { plugins: [ pinia, router ], stubs } });
     await flushPromises();
 
     return { wrapper, router };

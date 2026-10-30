@@ -114,7 +114,7 @@ export interface RateLimitRule
 export interface Bucket
 {
     count : number;
-    startedAt : number;
+    started : number;
 }
 
 export interface RateLimitDecision
@@ -134,19 +134,19 @@ export function consume(bucket : Bucket | undefined, rule : RateLimitRule, now :
 {
     const windowMs = rule.windowSeconds * 1000;
 
-    if(bucket === undefined || now - bucket.startedAt >= windowMs)
+    if(bucket === undefined || now - bucket.started >= windowMs)
     {
-        return { allowed: true, retryAfterSeconds: 0, bucket: { count: 1, startedAt: now } };
+        return { allowed: true, retryAfterSeconds: 0, bucket: { count: 1, started: now } };
     }
 
     if(bucket.count >= rule.max)
     {
-        const remainingMs = bucket.startedAt + windowMs - now;
+        const remainingMs = bucket.started + windowMs - now;
 
         return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)), bucket };
     }
 
-    return { allowed: true, retryAfterSeconds: 0, bucket: { count: bucket.count + 1, startedAt: bucket.startedAt } };
+    return { allowed: true, retryAfterSeconds: 0, bucket: { count: bucket.count + 1, started: bucket.started } };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

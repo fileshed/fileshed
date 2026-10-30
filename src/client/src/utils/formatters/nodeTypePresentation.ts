@@ -24,7 +24,7 @@ export interface NodeTypePresentation
 }
 
 // label is the plural filter-menu form; noun is the singular a single node's Type column reads.
-const FAMILY_PRESENTATION : Readonly<Record<NodeTypeFamily, NodeTypePresentation>> = {
+const presentationByFamily : Readonly<Record<NodeTypeFamily, NodeTypePresentation>> = {
     folders: { label: 'Folders', noun: 'Folder', icon: 'i-lucide-folder', color: 'text-amber-500' },
     documents: { label: 'Documents', noun: 'Document', icon: 'i-lucide-file-text', color: 'text-blue-500' },
     pdfs: { label: 'PDFs', noun: 'PDF', icon: 'i-lucide-file-type', color: 'text-red-500' },
@@ -53,7 +53,7 @@ const DEAD_LINK_PRESENTATION : NodeTypePresentation
 
 export function familyPresentation(family : NodeTypeFamily) : NodeTypePresentation
 {
-    return FAMILY_PRESENTATION[family];
+    return presentationByFamily[family];
 }
 
 function fileMimePresentation(mimeType : string, name : string) : NodeTypePresentation
@@ -61,7 +61,7 @@ function fileMimePresentation(mimeType : string, name : string) : NodeTypePresen
     if(isPlaylistFile(mimeType, name)) { return PLAYLIST_PRESENTATION; }
 
     const family = familyOfMimeType(mimeType);
-    return family === null ? NEUTRAL_PRESENTATION : FAMILY_PRESENTATION[family];
+    return family === null ? NEUTRAL_PRESENTATION : presentationByFamily[family];
 }
 
 // A link with a null target -- the row it pointed at is gone, or access was lost. Rendered dimmed with a broken glyph.
@@ -75,7 +75,7 @@ export function nodePresentation(node : NodeResponse) : NodeTypePresentation
     switch (node.type)
     {
         case 'folder':
-            return FAMILY_PRESENTATION.folders;
+            return presentationByFamily.folders;
 
         case 'file':
             return fileMimePresentation(node.mimeType, node.name);
@@ -84,7 +84,7 @@ export function nodePresentation(node : NodeResponse) : NodeTypePresentation
             if(node.target === null) { return DEAD_LINK_PRESENTATION; }
 
             return node.target.type === 'folder'
-                ? FAMILY_PRESENTATION.folders
+                ? presentationByFamily.folders
                 : fileMimePresentation(node.target.mimeType ?? '', node.target.name);
     }
 }
@@ -94,7 +94,7 @@ export function nodePresentation(node : NodeResponse) : NodeTypePresentation
 export function sharedTargetPresentation(target : SharedTarget) : NodeTypePresentation
 {
     return target.type === 'folder'
-        ? FAMILY_PRESENTATION.folders
+        ? presentationByFamily.folders
         : fileMimePresentation(target.mimeType ?? '', target.name);
 }
 

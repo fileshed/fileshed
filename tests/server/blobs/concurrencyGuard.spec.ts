@@ -25,7 +25,7 @@ import {
     answerReplace,
     blobRowCount,
     bootBlobApp,
-    calculateAnswer,
+    buildAnswer,
     claim,
     makeUser,
     nodeContentRow,
@@ -187,7 +187,7 @@ describe('replace ifBlobID guard — proof of possession', () =>
         const challenge = await challengeRes.json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const answer = calculateAnswer(challenge.nonce, challenge.ranges, known);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, known);
         const res = await answerReplace(
             booted.app,
             owner.cookie,
@@ -226,7 +226,7 @@ describe('replace ifBlobID guard — proof of possession', () =>
         const challenge = await challengeRes.json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const answer = calculateAnswer(challenge.nonce, challenge.ranges, known);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, known);
         const res = await answerReplace(
             booted.app,
             owner.cookie,

@@ -32,13 +32,13 @@ interface ShareRequestBase
 export interface PendingShareRequest extends ShareRequestBase
 {
     status : 'pending';
-    resolvedAt : null;
+    resolved : null;
 }
 
 export interface ResolvedShareRequest extends ShareRequestBase
 {
     status : ResolvedShareRequestStatus;
-    resolvedAt : Date;
+    resolved : Date;
 }
 
 export type ShareRequest = PendingShareRequest | ResolvedShareRequest;

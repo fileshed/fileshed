@@ -24,7 +24,7 @@ import {
     APIClient,
     type ServerHandle,
     blobFileExists,
-    calculateAnswer,
+    buildAnswer,
     largeFixture,
     readBlobFile,
     sha256Of,
@@ -203,7 +203,7 @@ describe('proof-of-possession dedup by a second owner', () =>
             expect(offset + length).toBeLessThanOrEqual(data.length);
         }
 
-        const answer = calculateAnswer(challenge.nonce, challenge.ranges, data);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, data);
         const res = await bob.post(`/api/blobs/claim/${ challenge.challengeID }`, {
             answer,
             name: 'fixture-copy.bin',
@@ -254,12 +254,12 @@ describe('proof-of-possession dedup by a second owner', () =>
 
 describe('quota enforcement over the wire', () =>
 {
-    const ADMIN_EMAIL = 'quota-admin@fileshed.test';
-    const ADMIN_PASSWORD = 'admin-password-e2e';
+    const adminEmail = 'quota-admin@fileshed.test';
+    const adminPassword = 'admin-password-e2e';
 
     // A single small fixture is the user's entire allowance; a second, larger payload cannot fit alongside it.
     const allowance = smallFixture('quota-exact');
-    const LIMIT = allowance.length;
+    const limit = allowance.length;
 
     let quotaServer : ServerHandle;
     let user : APIClient;
@@ -273,8 +273,8 @@ describe('quota enforcement over the wire', () =>
         const setup = await new APIClient(quotaServer.baseURL).post('/api/setup', {
             token: 'e2e-setup-token-1234',
             name: 'Administrator',
-            email: ADMIN_EMAIL,
-            password: ADMIN_PASSWORD,
+            email: adminEmail,
+            password: adminPassword,
         });
         if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 
@@ -283,8 +283,8 @@ describe('quota enforcement over the wire', () =>
         quotaUserID = (await (await registrant.get('/api/me')).json() as MeResponse).id;
 
         quotaAdmin = new APIClient(quotaServer.baseURL);
-        await quotaAdmin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
-        const setQuota = await quotaAdmin.patch(`/api/admin/users/${ quotaUserID }`, { quotaLimit: LIMIT });
+        await quotaAdmin.signIn(adminEmail, adminPassword);
+        const setQuota = await quotaAdmin.patch(`/api/admin/users/${ quotaUserID }`, { quotaLimit: limit });
         if(setQuota.status !== 200) { throw new Error('setup: expected the admin to set the quota'); }
 
         user = new APIClient(quotaServer.baseURL);
@@ -333,8 +333,8 @@ describe('quota enforcement over the wire', () =>
         expect(put.status).toBe(200);
 
         const me = await (await user.get('/api/me')).json() as MeResponse;
-        expect(me.quota.used).toBe(LIMIT);
-        expect(me.quota.limit).toBe(LIMIT);
+        expect(me.quota.used).toBe(limit);
+        expect(me.quota.limit).toBe(limit);
     });
 
     // The user is full and stays signed in throughout: their session (cookie cache included) still carries the old
@@ -342,7 +342,7 @@ describe('quota enforcement over the wire', () =>
     // next upload, and the profile must report the new number rather than the one the session was issued with.
     it('lets an admin-raised quota through on the very next upload, with no re-authentication', async () =>
     {
-        const raised = await quotaAdmin.patch(`/api/admin/users/${ quotaUserID }`, { quotaLimit: LIMIT * 4 });
+        const raised = await quotaAdmin.patch(`/api/admin/users/${ quotaUserID }`, { quotaLimit: limit * 4 });
         expect(raised.status).toBe(200);
 
         const extra = smallFixture('quota-after-raise');
@@ -357,8 +357,8 @@ describe('quota enforcement over the wire', () =>
         expect((await user.put(`/api/uploads/${ claim.ticket }?${ params.toString() }`, extra)).status).toBe(200);
 
         const me = await (await user.get('/api/me')).json() as MeResponse;
-        expect(me.quota.used).toBe(LIMIT + extra.length);
-        expect(me.quota.limit).toBe(LIMIT * 4);
+        expect(me.quota.used).toBe(limit + extra.length);
+        expect(me.quota.limit).toBe(limit * 4);
     });
 });
 
@@ -390,7 +390,7 @@ describe('failed proof-of-possession', () =>
             .json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const correct = calculateAnswer(challenge.nonce, challenge.ranges, data);
+        const correct = buildAnswer(challenge.nonce, challenge.ranges, data);
         const wrong = (correct.startsWith('0') ? 'f' : '0') + correct.slice(1);
 
         const res = await carl.post(`/api/blobs/claim/${ challenge.challengeID }`, {

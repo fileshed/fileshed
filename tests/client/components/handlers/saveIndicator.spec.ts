@@ -19,13 +19,13 @@ interface State
 {
     saving : boolean;
     dirty : boolean;
-    lastSavedAt : number | null;
+    lastSaved : number | null;
     saveError : string | null;
 }
 
 function mountIndicator(overrides : Partial<State> = {}) : VueWrapper
 {
-    const props : State = { saving: false, dirty: false, lastSavedAt: null, saveError: null, ...overrides };
+    const props : State = { saving: false, dirty: false, lastSaved: null, saveError: null, ...overrides };
 
     return mount(SaveIndicator, { props });
 }
@@ -43,14 +43,14 @@ describe('SaveIndicator', () =>
 
     it('reads "Saved" once a save has landed and nothing is pending', () =>
     {
-        const wrapper = mountIndicator({ lastSavedAt: Date.now() });
+        const wrapper = mountIndicator({ lastSaved: Date.now() });
 
         expect(wrapper.text()).toBe('Saved');
     });
 
     it('reads "Unsaved changes" while the buffer is dirty', () =>
     {
-        const wrapper = mountIndicator({ dirty: true, lastSavedAt: Date.now() });
+        const wrapper = mountIndicator({ dirty: true, lastSaved: Date.now() });
 
         expect(wrapper.text()).toBe('Unsaved changes');
     });

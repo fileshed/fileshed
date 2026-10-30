@@ -60,7 +60,7 @@ function nameOrderedListingQuery(db : Kysely<Database>) : CompiledQuery
     return db
         .selectFrom('node')
         .selectAll()
-        .where('trashed_at', 'is', null)
+        .where('trashed', 'is', null)
         .where('parent_id', '=', PARENT_ID)
         .orderBy(sql`case when ${ sql.ref('type') } = 'folder' then 0 else 1 end`, 'asc')
         .orderBy(sql`${ sql.ref('name') } collate ${ sql.ref(NATURAL_ORDER_COLLATION) }`, 'asc')
@@ -93,7 +93,7 @@ async function seedFolder(db : Kysely<Database>) : Promise<void>
             mime_type: null,
             created: stamp,
             updated: stamp,
-            trashed_at: null,
+            trashed: null,
         } as never)
         .execute();
 
@@ -110,7 +110,7 @@ async function seedFolder(db : Kysely<Database>) : Promise<void>
         mime_type: 'audio/mpeg',
         created: stamp,
         updated: stamp,
-        trashed_at: null,
+        trashed: null,
     }));
 
     for(let start = 0; start < rows.length; start += INSERT_BATCH)

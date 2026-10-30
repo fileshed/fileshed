@@ -32,7 +32,7 @@ function folder(overrides : Partial<FolderNode> = {}) : FolderNode
         parentID: null,
         created: at,
         updated: at,
-        trashedAt: null,
+        trashed: null,
         ...overrides,
     };
 }
@@ -50,7 +50,7 @@ function file(overrides : Partial<FileNode> = {}) : FileNode
         mimeType: 'application/pdf',
         created: at,
         updated: at,
-        trashedAt: null,
+        trashed: null,
         ...overrides,
     };
 }
@@ -165,7 +165,7 @@ describe('judgeParentEdge', () =>
     {
         const result = judgeParentEdge({
             creatorID: 'user_owner',
-            parent: folder({ trashedAt: at }),
+            parent: folder({ trashed: at }),
             creatorRoleOnParent: 'owner',
         });
 

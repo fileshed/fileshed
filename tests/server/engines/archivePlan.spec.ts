@@ -199,7 +199,7 @@ describe('planArchive', () =>
                 ownerID: OWNER,
                 parentID: 'd1',
                 blobID: 'sha-2',
-                trashedAt: new Date('2026-01-01T00:00:00.000Z'),
+                trashed: new Date('2026-01-01T00:00:00.000Z'),
             }),
         ];
 
@@ -284,7 +284,7 @@ describe('planArchive', () =>
             name: 'binned.pdf',
             ownerID: OWNER,
             blobID: 'sha-9',
-            trashedAt: new Date('2026-01-01T00:00:00.000Z'),
+            trashed: new Date('2026-01-01T00:00:00.000Z'),
         });
 
         expect(plan([ 'l1' ], nodes, undefined, [ target ]).omissions).toEqual([

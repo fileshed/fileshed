@@ -130,7 +130,7 @@ async function makeFile(ownerID : string, name : string) : Promise<string>
         mimeType: 'application/octet-stream',
         created: now,
         updated: now,
-        trashedAt: null,
+        trashed: null,
     });
 
     return id;
@@ -163,9 +163,9 @@ async function nodeCount(ownerID : string) : Promise<number>
     return rows.length;
 }
 
-async function stampRequestedAt(userID : string, at : Date) : Promise<void>
+async function stampRequested(userID : string, at : Date) : Promise<void>
 {
-    await new UserRA(booted.handle).setDeletionRequestedAt(userID, at);
+    await new UserRA(booted.handle).setDeletionRequested(userID, at);
 }
 
 // The sweep, on the same database, with the window a spec chooses.
@@ -225,9 +225,9 @@ describe('POST /api/me/deletion', () =>
         expect(res.status).toBe(200);
         expect(body.deletion).not.toBeNull();
 
-        const requestedAt = new Date(body.deletion?.requestedAt ?? '').getTime();
+        const requested = new Date(body.deletion?.requested ?? '').getTime();
         const scheduledFor = new Date(body.deletion?.scheduledFor ?? '').getTime();
-        expect(scheduledFor - requestedAt).toBe(14 * MS_PER_DAY);
+        expect(scheduledFor - requested).toBe(14 * MS_PER_DAY);
     });
 
     // Asking twice is a double-click, not a decision to start over. Restarting the window would let a thief who kept
@@ -243,7 +243,7 @@ describe('POST /api/me/deletion', () =>
         const body = await second.json() as MeResponse;
 
         expect(second.status).toBe(200);
-        expect(body.deletion?.requestedAt).toBe(first.deletion?.requestedAt);
+        expect(body.deletion?.requested).toBe(first.deletion?.requested);
     });
 
     // An instance whose only admin deletes themselves has no way back short of the database.
@@ -329,7 +329,7 @@ describe('what the request revokes immediately', () =>
 
         const links = await new PublicLinkRA(booted.handle).listByNode(fileID);
         expect(links).toHaveLength(1);
-        expect(links[0]?.revokedAt).not.toBeNull();
+        expect(links[0]?.revoked).not.toBeNull();
     });
 
     it('ends the sessions the account holds, including the one that asked', async () =>
@@ -435,7 +435,7 @@ describe('cancelling', () =>
         await cancelDeletion(await signInAgain(leaving.email));
 
         expect(await new ShareRA(booted.handle).listByNode(fileID)).toHaveLength(0);
-        expect((await new PublicLinkRA(booted.handle).listByNode(fileID))[0]?.revokedAt).not.toBeNull();
+        expect((await new PublicLinkRA(booted.handle).listByNode(fileID))[0]?.revoked).not.toBeNull();
     });
 
     it('leaves the files and folders untouched', async () =>
@@ -462,7 +462,7 @@ describe('the sweep that carries deletions out', () =>
         const leaving = await register('due@example.com');
         await makeFolder(leaving.cookie, 'Going With Me');
 
-        await stampRequestedAt(leaving.id, new Date(Date.now() - (31 * MS_PER_DAY)));
+        await stampRequested(leaving.id, new Date(Date.now() - (31 * MS_PER_DAY)));
 
         expect(await runSweep(30)).toEqual({ candidates: 1, deleted: 1, failed: 0 });
 
@@ -478,7 +478,7 @@ describe('the sweep that carries deletions out', () =>
         booted = await bootTestApp();
         const leaving = await register('not-yet@example.com');
 
-        await stampRequestedAt(leaving.id, new Date(Date.now() - (2 * MS_PER_DAY)));
+        await stampRequested(leaving.id, new Date(Date.now() - (2 * MS_PER_DAY)));
 
         expect(await runSweep(30)).toEqual({ candidates: 0, deleted: 0, failed: 0 });
         expect(await nodeCount(leaving.id)).toBe(0);
@@ -502,7 +502,7 @@ describe('the sweep that carries deletions out', () =>
         booted = await bootTestApp();
         const leaving = await register('reprieved@example.com');
 
-        await stampRequestedAt(leaving.id, new Date(Date.now() - (31 * MS_PER_DAY)));
+        await stampRequested(leaving.id, new Date(Date.now() - (31 * MS_PER_DAY)));
 
         expect(await runSweep(60)).toEqual({ candidates: 0, deleted: 0, failed: 0 });
         expect(await me(await signInAgain(leaving.email))).toMatchObject({ id: leaving.id });
