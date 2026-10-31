@@ -1,21 +1,19 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Media Tags Resource Access
 //
-// Reads the embedded tags (ID3, MP4 atoms, Vorbis comments) of a media node off the same Range-supporting inline
-// download endpoint the players stream from. Tags live at the front of most files, so the fetch is aborted the
-// moment the parser has them -- a read costs header bytes, not the download. Untagged, unparseable, and unreadable
-// files all resolve to null rather than throwing: tags are garnish, and a file that yields none plays under its
-// own name. Artwork is handed out as an object URL; the caller owns its lifetime and releases it through
-// releaseMediaTags when the session ends.
+// Tags sit at the front of most files, so the fetch is aborted the moment the parser has them; a read costs header
+// bytes, not the download. Untagged, unparseable, and unreadable files all resolve to null rather than throwing, since
+// a file without tags plays under its own name. Artwork is handed out as an object URL whose lifetime the caller owns,
+// releasing it through releaseMediaTags when the session ends.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { parseWebStream, selectCover } from 'music-metadata';
 
 // Models
-import { ARTWORK_MIME_TYPES } from '@fileshed/core';
+import { ARTWORK_MIME_TYPES, isOneOf } from '@fileshed/core';
 
 // Resource Access
-import { downloadUrl } from './downloads.ts';
+import { downloadURL } from './downloads.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -24,7 +22,7 @@ export interface MediaTags
     title : string | null;
     artist : string | null;
     album : string | null;
-    artworkUrl : string | null;
+    artworkURL : string | null;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -32,10 +30,10 @@ export interface MediaTags
 // An object URL takes its type from whatever is handed to it, and the cover's format comes off the tag frame verbatim.
 // A blob: URL has no HTTP response, so no header can ever say what it is -- the allowlist is the only thing that can.
 // A cover claiming anything else is dropped rather than coerced: it would not render under a corrected type anyway.
-function artworkUrlOf(data : Uint8Array<ArrayBuffer>, format : string) : string | null
+function artworkURLOf(data : Uint8Array<ArrayBuffer>, format : string) : string | null
 {
     const [ media ] = format.toLowerCase().split(';');
-    if(media === undefined || !(ARTWORK_MIME_TYPES as readonly string[]).includes(media.trim())) { return null; }
+    if(media === undefined || !isOneOf(ARTWORK_MIME_TYPES, media.trim())) { return null; }
 
     return URL.createObjectURL(new Blob([ data ], { type: media.trim() }));
 }
@@ -48,7 +46,7 @@ export async function readMediaTags(nodeID : string) : Promise<MediaTags | null>
 
     try
     {
-        const response = await fetch(downloadUrl(nodeID, 'inline'), { signal: controller.signal });
+        const response = await fetch(downloadURL(nodeID, 'inline'), { signal: controller.signal });
         if(!response.ok || response.body === null) { return null; }
 
         const declaredSize = Number(response.headers.get('content-length') ?? '');
@@ -68,10 +66,10 @@ export async function readMediaTags(nodeID : string) : Promise<MediaTags | null>
             title: common.title?.trim() || null,
             artist: (common.artist ?? common.artists?.[0])?.trim() || null,
             album: common.album?.trim() || null,
-            artworkUrl: cover === null ? null : artworkUrlOf(new Uint8Array(cover.data), cover.format),
+            artworkURL: cover === null ? null : artworkURLOf(new Uint8Array(cover.data), cover.format),
         };
 
-        const empty = tags.title === null && tags.artist === null && tags.album === null && tags.artworkUrl === null;
+        const empty = tags.title === null && tags.artist === null && tags.album === null && tags.artworkURL === null;
 
         return empty ? null : tags;
     }
@@ -87,7 +85,7 @@ export async function readMediaTags(nodeID : string) : Promise<MediaTags | null>
 
 export function releaseMediaTags(tags : MediaTags) : void
 {
-    if(tags.artworkUrl !== null) { URL.revokeObjectURL(tags.artworkUrl); }
+    if(tags.artworkURL !== null) { URL.revokeObjectURL(tags.artworkURL); }
 }
 
 //----------------------------------------------------------------------------------------------------------------------

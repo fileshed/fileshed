@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // User Profile Domain Model
 //
-// The app-side surface of a user. BetterAuth owns identity and its own columns; core carries only the profile the app
-// reasons about. role here is the account role (admin/user), distinct from the permission Role. quotaLimit is a byte
-// cap, or null for unlimited.
+// BetterAuth owns identity and its own columns; core carries only the profile the app reasons about. role is the
+// account role (admin/user), distinct from the permission Role. quotaLimit is the account's own setting rather than the
+// effective cap: null inherits the instance default and 0 is explicitly unlimited.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const userRoles = [ 'admin', 'user' ] as const;
@@ -23,7 +23,7 @@ export interface UserProfile
     banReason : string | null;
     banExpires : Date | null;
 
-    createdAt : Date;
+    created : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -9,7 +9,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { DeletionOfferResponse } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import {
     acceptDeletionOffer,
     declineDeletionOffer,
@@ -47,12 +47,12 @@ function offer(id : string, name = 'report.pdf') : DeletionOfferResponse
         mimeType: 'application/pdf',
         size: 2048,
         createdBy: 'owner1',
-        createdAt: ISO,
-        expiresAt: '2026-07-28T00:00:00.000Z',
+        created: ISO,
+        expires: '2026-07-28T00:00:00.000Z',
     };
 }
 
-const STUBS = {
+const stubs = {
     UButton: {
         props: [ 'label', 'loading', 'disabled' ],
         template: '<button class="ubtn" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
@@ -65,7 +65,7 @@ function mountSection() : VueWrapper
     const pinia = createPinia();
     setActivePinia(pinia);
 
-    return mount(OffersSection, { global: { plugins: [ pinia ], stubs: STUBS } });
+    return mount(OffersSection, { global: { plugins: [ pinia ], stubs } });
 }
 
 async function clickButton(wrapper : VueWrapper, label : string) : Promise<void>
@@ -137,7 +137,7 @@ describe('OffersSection', () =>
     it('keeps the offer and toasts the error when a save-a-copy is rejected', async () =>
     {
         listMock.mockResolvedValue({ offers: [ offer('o1', 'budget.xlsx') ] });
-        acceptMock.mockRejectedValue(new ApiError(403, 'That would exceed your storage quota.'));
+        acceptMock.mockRejectedValue(new APIError(403, 'That would exceed your storage quota.'));
         const wrapper = mountSection();
         await flushPromises();
 

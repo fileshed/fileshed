@@ -12,11 +12,11 @@ import { describe, expect, it } from 'vitest';
 
 import { NotFoundError, UnauthorizedError } from '@fileshed/core';
 
-// Resource Access
-import { UserRA } from '@server/resource-access/users/index.ts';
-
 // Managers
 import { SetupManager } from '@server/managers/setup.ts';
+
+// Resource Access
+import { AuthRA } from '@server/resource-access/auth/index.ts';
 
 // Support
 import { type BootedApp, bootTestApp, signUp } from '../auth/support.ts';
@@ -26,9 +26,8 @@ import { type BootedApp, bootTestApp, signUp } from '../auth/support.ts';
 function makeSetup(booted : BootedApp, operatorToken : string | null = null) : SetupManager
 {
     return new SetupManager({
-        auth: booted.auth,
+        auth: new AuthRA(booted.auth, booted.handle),
         handle: booted.handle,
-        users: new UserRA(booted.handle),
         operatorToken,
     });
 }

@@ -35,6 +35,7 @@ function mountPanel(state : PanelState = {}) : VueWrapper
     for(let index = 0; index < (state.done ?? 0); index += 1)
     {
         store.items.push({
+            kind: 'file',
             id: `upload-${ index }`,
             file: new File([ new Uint8Array(3) ], `report-${ index }.txt`, { type: 'text/plain' }),
             folderID: null,

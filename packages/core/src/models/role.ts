@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Role Domain Model
 //
-// Permission roles and the share-grantable subset. A share confers access, never ownership, so roles is built from
-// shareRoles by construction -- an owner-grant is unrepresentable and the two vocabularies cannot drift. The arrays are
-// the single source: the types derive from them, the Zod codecs consume them, and the DB CHECK constraints are
-// generated from them.
+// A share confers access, never ownership, so roles is built from shareRoles by construction; an owner grant is
+// unrepresentable and the two vocabularies cannot drift. The types derive from these arrays, the Zod codecs consume
+// them, and the DB CHECK constraints are generated from them.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const shareRoles = [ 'viewer', 'editor' ] as const;

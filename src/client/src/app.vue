@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- FileShed — Root Component
-  --
-  -- The root also owns the instance-wide side effects no page should: the document title follows the instance
-  -- name, and the color mode re-resolves whenever the branding facts or the signed-in user's preference change.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -24,15 +21,15 @@
     // Engines
     import { resolveColorMode } from './engines/colorMode.ts';
 
-    // Resource Access
-    import { applyColorMode } from './resource-access/colorModeControl.ts';
+    // Utils
+    import { applyColorMode } from './utils/colorModeControl.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
     const app = useAppStore();
     const session = useSessionStore();
 
-    onMounted(() => { void app.initialize(); });
+    onMounted(() => { void app.init(); });
 
     watchEffect(() =>
     {
@@ -41,7 +38,7 @@
 
     watchEffect(() =>
     {
-        document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href', app.logoUrl);
+        document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href', app.logoURL);
     });
 
     // Until the handshake answers, the stored localStorage mode from the last visit keeps applying on its own --

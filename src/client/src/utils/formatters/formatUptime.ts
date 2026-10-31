@@ -1,8 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Uptime Formatting
 //
-// A process age at a glance: at most two units, largest first, and the smaller one dropped when it is zero. Nobody
-// reading "how long has this thing been up" wants the seconds of a five-day run.
+// At most two units, largest first, since nobody reading an uptime wants the seconds of a five-day run.
 //----------------------------------------------------------------------------------------------------------------------
 
 const SECONDS_PER_MINUTE = 60;

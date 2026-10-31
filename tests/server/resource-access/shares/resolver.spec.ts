@@ -19,7 +19,7 @@ import type { Share, ShareRole } from '@fileshed/core';
 
 // Resource Access
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
 
 // Support
@@ -71,7 +71,7 @@ async function grant(nodeID : string, granteeUserID : string, role : ShareRole, 
         granteeUserID,
         role,
         createdBy,
-        createdAt: new Date('2026-02-01T00:00:00.000Z'),
+        created: new Date('2026-02-01T00:00:00.000Z'),
     };
     await shares.upsertShare(share);
 }

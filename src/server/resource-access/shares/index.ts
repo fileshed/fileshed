@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Resource Access
 //
-// The query surface over the `share` and `share_request` tables, and -- the point of the whole layer -- the permission
-// resolver every authenticated request leans on: effectiveRole(user, node) as the max of ownership, a direct grant, and
-// any inherited grant, in one recursive walk. A batch variant resolves a page of nodes in a single round trip so
-// children listings never fan out into N+1 queries.
+// The permission resolver every authenticated request depends on lives here: effectiveRole(user, node) is the max of
+// ownership, a direct grant, and any inherited grant, in one recursive walk. effectiveRoles resolves a page of nodes in
+// a single round trip so children listings never fan out into N+1 queries.
 //
 // The resolver walks parent edges only, never target_node_id, so a link never conducts permission: a share on a folder
 // that contains a link grants nothing on that link's target, because the target is resolved against its OWN real
@@ -12,8 +11,6 @@
 // leaf, so a folder owner keeps access to the cross-owner contributions placed inside it. Both walks are one query in
 // Kysely, identical on Postgres and SQLite.
 //----------------------------------------------------------------------------------------------------------------------
-
-/* eslint-disable camelcase -- queries and the CTE column list name snake_case DB columns (house convention) */
 
 import { sql } from 'kysely';
 
@@ -56,14 +53,14 @@ export interface SharedTargetSummary
 }
 
 // One active share granted to the caller, with its target summary and whether the caller has placed a link to it --
-// placement is independent of the grant. `updatedAt` is the target's last-modified time, carried alongside the
+// placement is independent of the grant. `updated` is the target's last-modified time, carried alongside the
 // wire-shaped summary rather than inside it, so the caller's Modified filter has a value to test without widening the
 // wire target.
 export interface SharedWithMeRow
 {
     share : Share;
     target : SharedTargetSummary;
-    updatedAt : Date;
+    updated : Date;
     placed : boolean;
 }
 
@@ -247,7 +244,7 @@ export class ShareRA
         return shareFromRow(row);
     }
 
-    async getShareById(id : string) : Promise<Share | undefined>
+    async getShareByID(id : string) : Promise<Share | undefined>
     {
         const row = await this.#db
             .selectFrom('share')
@@ -313,7 +310,7 @@ export class ShareRA
         return Number(result?.numDeletedRows ?? 0);
     }
 
-    // Every grant on a node, for the owner's share list. Ordered by created_at -- cuid2 ids are non-monotonic, so id
+    // Every grant on a node, for the owner's share list. Ordered by created -- cuid2 ids are non-monotonic, so id
     // is never a stand-in for insertion order.
     async listByNode(nodeID : string) : Promise<Share[]>
     {
@@ -321,7 +318,7 @@ export class ShareRA
             .selectFrom('share')
             .selectAll()
             .where('node_id', '=', nodeID)
-            .orderBy('created_at', 'asc')
+            .orderBy('created', 'asc')
             .execute();
 
         return rows.map(shareFromRow);
@@ -336,20 +333,20 @@ export class ShareRA
             .selectFrom('share')
             .innerJoin('node', 'node.id', 'share.node_id')
             .where('share.grantee_user_id', '=', granteeID)
-            .where('node.trashed_at', 'is', null)
+            .where('node.trashed', 'is', null)
             .select((eb) => [
                 'share.id as id',
                 'share.node_id as node_id',
                 'share.grantee_user_id as grantee_user_id',
                 'share.role as role',
                 'share.created_by as created_by',
-                'share.created_at as created_at',
+                'share.created as created',
                 'node.type as target_type',
                 'node.name as target_name',
                 'node.owner_id as target_owner_id',
                 'node.mime_type as target_mime_type',
                 'node.size as target_size',
-                'node.updated_at as target_updated_at',
+                'node.updated as target_updated',
                 eb.exists(eb
                     .selectFrom('node as link')
                     .select('link.id')
@@ -357,7 +354,7 @@ export class ShareRA
                     .where('link.owner_id', '=', granteeID)
                     .where('link.type', '=', 'link')).as('placed'),
             ])
-            .orderBy('share.created_at', 'asc')
+            .orderBy('share.created', 'asc')
             .execute();
 
         return rows.map((row) => ({
@@ -367,7 +364,7 @@ export class ShareRA
                 granteeUserID: row.grantee_user_id,
                 role: row.role,
                 createdBy: row.created_by,
-                createdAt: new Date(row.created_at),
+                created: new Date(row.created),
             },
             target: {
                 id: row.node_id,
@@ -377,7 +374,7 @@ export class ShareRA
                 mimeType: row.target_mime_type ?? undefined,
                 size: row.target_size ?? undefined,
             },
-            updatedAt: new Date(row.target_updated_at),
+            updated: new Date(row.target_updated),
             placed: toBool(row.placed),
         }));
     }
@@ -394,7 +391,7 @@ export class ShareRA
             .execute();
     }
 
-    async getRequestById(id : string) : Promise<ShareRequest | undefined>
+    async getRequestByID(id : string) : Promise<ShareRequest | undefined>
     {
         const row = await this.#db
             .selectFrom('share_request')
@@ -405,12 +402,12 @@ export class ShareRA
         return row === undefined ? undefined : shareRequestFromRow(row);
     }
 
-    // Resolve a request: move it off 'pending' and stamp resolved_at together, satisfying the paired CHECK.
-    async resolveRequest(id : string, status : ResolvedShareRequestStatus, resolvedAt : Date) : Promise<void>
+    // Resolve a request: move it off 'pending' and stamp resolved together, satisfying the paired CHECK.
+    async resolveRequest(id : string, status : ResolvedShareRequestStatus, resolved : Date) : Promise<void>
     {
         await this.#db
             .updateTable('share_request')
-            .set({ status, resolved_at: resolvedAt.toISOString() })
+            .set({ status, resolved: resolved.toISOString() })
             .where('id', '=', id)
             .execute();
     }
@@ -425,7 +422,7 @@ export class ShareRA
             .where('node.owner_id', '=', ownerID)
             .where('share_request.status', '=', 'pending')
             .selectAll('share_request')
-            .orderBy('share_request.created_at', 'asc')
+            .orderBy('share_request.created', 'asc')
             .execute();
 
         return rows.map(shareRequestFromRow);
@@ -437,7 +434,7 @@ export class ShareRA
             .selectFrom('share_request')
             .selectAll()
             .where('requester_id', '=', requesterID)
-            .orderBy('created_at', 'asc')
+            .orderBy('created', 'asc')
             .execute();
 
         return rows.map(shareRequestFromRow);
@@ -458,7 +455,7 @@ export class ShareRA
 
     // The caller's outstanding request on a node, if any -- the manager's guard against a duplicate pending request per
     // (node, requester) (the partial-unique constraint was deferred, so this is manager-enforced).
-    async findPendingByNodeRequester(nodeID : string, requesterID : string) : Promise<ShareRequest | undefined>
+    async getPendingByNodeRequester(nodeID : string, requesterID : string) : Promise<ShareRequest | undefined>
     {
         const row = await this.#db
             .selectFrom('share_request')

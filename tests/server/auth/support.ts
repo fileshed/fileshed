@@ -8,58 +8,26 @@
 
 import type { Hono } from 'hono';
 
-import {
-    DEFAULT_SKIPPED_UPLOAD_NAMES,
-    DEFAULT_UPLOAD_CHUNK_BYTES,
-    MS_PER_DAY,
-    UNLIMITED_QUOTA,
-    parseSkippedNames,
-} from '@fileshed/core';
+import { DEFAULT_UPLOAD_CHUNK_BYTES } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { type Auth, type AuthExtras, authOptions, createAuth } from '@server/resource-access/auth.ts';
-import { initialize } from '@server/resource-access/boot.ts';
-import { BlobRA } from '@server/resource-access/blob/index.ts';
+import { type Auth, type AuthExtras, authOptions, createAuth } from '@server/resource-access/auth/instance.ts';
 import { MailRA } from '@server/resource-access/mail/index.ts';
-import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
-import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
-import { SettingsRA } from '@server/resource-access/settings/index.ts';
-import { ShareRA } from '@server/resource-access/shares/index.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Managers
-import { AdminManager } from '@server/managers/admin.ts';
-import { ArchiveManager } from '@server/managers/archive.ts';
-import { AccountDeletionManager, deleteAccount } from '@server/managers/accountDeletion.ts';
-import { runAccountDeletionOnce } from '@server/managers/accountDeletionSweep.ts';
-import { AvatarManager } from '@server/managers/avatar.ts';
-import { BlobManager } from '@server/managers/blob.ts';
-import { BrandingManager } from '@server/managers/branding.ts';
-import { CredentialManager } from '@server/managers/credentials.ts';
-import { DeletionOfferManager } from '@server/managers/deletionOffer.ts';
-import { LastRunTracker } from '@server/managers/lastRun.ts';
 import { MailManager } from '@server/managers/mail.ts';
-import { MediaTagManager } from '@server/managers/mediaTags.ts';
-import { NodeManager } from '@server/managers/node.ts';
-import { PublicLinkManager } from '@server/managers/publicLink.ts';
 import { SettingsManager } from '@server/managers/settings.ts';
-import { SetupManager } from '@server/managers/setup.ts';
-import { ShareManager } from '@server/managers/share.ts';
-import { StatusManager } from '@server/managers/status.ts';
-import { SweepManager } from '@server/managers/sweeps.ts';
-import { UserManager } from '@server/managers/user.ts';
-import { runGcOnce } from '@server/managers/gc.ts';
-import { runTrashPurgeOnce } from '@server/managers/trashPurge.ts';
 
 // App
-import { createApp } from '@server/app.ts';
+import { migrateDatabase } from '@server/boot.ts';
+import { createApp } from '@server/clients/http/app.ts';
+import { type AppServices, composeServices } from '@server/services.ts';
 
 // Utils
 import type { Config } from '@server/utils/config.ts';
 import { SecretBox } from '@server/utils/secretBox.ts';
-import { BUILD_INFO } from '@server/utils/version.ts';
+import { resolveBuildInfo } from '@server/utils/version.ts';
 
 // Test support
 import { openTestDatabase } from '../support/database.ts';
@@ -71,6 +39,9 @@ export const ORIGIN = 'http://localhost:3000';
 // The explicit secret every in-process spec boots with, standing in for a deployment that sets AUTH_SECRET. Specs
 // about resolving an UNSET one drive the resolver directly.
 export const TEST_AUTH_SECRET = 'test-auth-secret-test-auth-secret-test';
+
+// Baked in the way an image build bakes them, so composing an app never spawns git.
+const testBuild = resolveBuildInfo({ COMMIT_SHA: 'f11e5ed5f11e5ed5f11e5ed5f11e5ed5f11e5ed5', COMMIT_REF: 'spec' });
 
 export function testConfig(overrides : Partial<Config> = {}) : Config
 {
@@ -125,180 +96,58 @@ export interface BootedApp
     app : Hono;
 }
 
-export async function bootTestApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
+// The composition bootApp serves, over the one handle: the settings manager the routes patch is the one the gate
+// middleware and every settings-backed supplier read. Composing touches neither the database nor the storage root,
+// which is what lets the route-table and OpenAPI specs use it unmigrated.
+export function composeTestServices(auth : Auth, handle : DatabaseHandle, config : Config) : AppServices
 {
-    const { config, handle } = await openTestDatabase(testConfig(overrides));
-    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
+    const started = new Date();
+    const settings = new SettingsManager({
+        handle,
+        config,
+        box: new SecretBox(TEST_AUTH_SECRET),
+        started,
+    });
 
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
-
-    return { config, handle, auth, app: createApp(auth, undefined, { handle }) };
+    return composeServices({
+        config,
+        handle,
+        auth,
+        settings,
+        mail: new MailManager({ settings, mail: new MailRA() }),
+        providers: [],
+        build: testBuild,
+        started,
+    });
 }
 
-//----------------------------------------------------------------------------------------------------------------------
-// Full composition
-//----------------------------------------------------------------------------------------------------------------------
-
-// bootApp's service composition in miniature: every manager over the one handle, with the settings manager feeding
-// the app's own instance -- so a patch through a route is what the gate middleware reads. Composition alone touches
-// neither the database nor the storage root, which is what lets the route-table and OpenAPI specs use it unmigrated.
 export interface ComposeOptions
 {
-    // The interactive reference, which the composition root never mounts. A spec asserting on it has to ask, the
-    // same way a developer does at the command line.
+    // The interactive reference, which bootApp mounts only on request. A spec asserting on it has to ask, the same way
+    // a developer does at the command line.
     apiReference ?: boolean;
 }
 
-export function composeFullApp(
+export function composeTestApp(
     auth : Auth,
     handle : DatabaseHandle,
     config : Config,
     options : ComposeOptions = {}
 ) : Hono
 {
-    const blob = new BlobRA(handle);
-    const nodeRA = new NodeRA(handle);
-    const shareRA = new ShareRA(handle);
-    const userRA = new UserRA(handle);
-    const settingsRA = new SettingsRA(handle);
+    const services = composeTestServices(auth, handle, config);
 
-    const startedAt = new Date();
-    const settings = new SettingsManager({
-        settings: settingsRA,
-        config,
-        box: new SecretBox(TEST_AUTH_SECRET),
-        startedAt,
-    });
-    const mail = new MailManager({ settings, mail: new MailRA() });
-
-    // The same settings-backed suppliers bootApp wires, so a spec can patch a cap through the admin route and see
-    // the very next request obey it -- a harness reading config directly would freeze them at composition.
-    const uploadMaxBytes = () : Promise<number> => settings.numberValue('UPLOAD_MAX_BYTES', config.UPLOAD_MAX_BYTES);
-    const skippedUploadNames = async () : Promise<string[]> =>
-        parseSkippedNames(await settings.stringValue('SKIPPED_UPLOAD_NAMES', DEFAULT_SKIPPED_UPLOAD_NAMES));
-    const avatarMaxBytes = () : Promise<number> => settings.numberValue('AVATAR_MAX_BYTES', config.AVATAR_MAX_BYTES);
-    const defaultQuota = () : Promise<number> => settings.numberValue('DEFAULT_QUOTA_BYTES', UNLIMITED_QUOTA);
-
-    const publicLinkRA = new PublicLinkRA(handle);
-    const avatars = new AvatarManager({ handle, blob, avatarMaxBytes });
-    const accountDeletionDays = () : Promise<number> =>
-        settings.numberValue('ACCOUNT_DELETION_DAYS', config.ACCOUNT_DELETION_DAYS);
-
-    const accountDeletions = new AccountDeletionManager({
-        auth,
-        handle,
-        users: userRA,
-        shares: shareRA,
-        links: publicLinkRA,
-        deletionDays: accountDeletionDays,
-    });
-
-    const nodes = new NodeManager(handle, nodeRA, blob, {
-        defaultQuota,
-        accountDeletionDays,
-        deletionSchedule: (userID) => accountDeletions.scheduleFor(userID),
-    });
-
-    const purgeAccount = (userID : string) : Promise<void> => deleteAccount({
-        auth,
-        nodes: nodeRA,
-        shares: shareRA,
-        purger: nodes,
-        avatars,
-    }, userID);
-    const tracker = new LastRunTracker();
-
-    // The same suppliers bootApp wires, so a spec can lower a retention through the settings route and have the very
-    // next sweep run obey it.
-    const gcGraceMs = async () : Promise<number> => await settings.numberValue('GC_GRACE_DAYS', config.GC_GRACE_DAYS)
-        * MS_PER_DAY;
-    const trashGraceMs = async () : Promise<number> =>
-        await settings.numberValue('TRASH_PURGE_DAYS', config.TRASH_PURGE_DAYS) * MS_PER_DAY;
-
-    return createApp(auth, {
-        blobs: new BlobManager({
-            handle,
-            blob,
-            uploadMaxBytes,
-            skippedUploadNames,
-            uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
-            defaultQuota,
-        }),
-        mediaTags: new MediaTagManager({ blob, tags: new MediaTagsRA(handle) }),
-        credentials: new CredentialManager({ auth, handle }),
-        setup: new SetupManager({ auth, handle, users: userRA, operatorToken: null }),
-        avatars,
-        nodes,
-        shares: new ShareManager(handle, nodeRA, shareRA, userRA),
-        publicLinks: new PublicLinkManager(nodeRA, blob, publicLinkRA, (userID, nodeID) =>
-            shareRA.effectiveRole(userID, nodeID)),
-        archives: new ArchiveManager({
-            nodes: nodeRA,
-            blob,
-            resolveRoles: (userID, nodeIDs) => shareRA.effectiveRoles(userID, nodeIDs),
-        }),
-        deletionOffers: new DeletionOfferManager(handle, nodes),
-        adminStatus: new StatusManager({
-            blob,
-            nodes: nodeRA,
-            users: userRA,
-            shares: shareRA,
-            tracker,
-            build: BUILD_INFO,
-            databaseKind: handle.kind,
-            startedAt,
-            activeProviders: 0,
-            emailEnabled: () => mail.isConfigured(),
-            signUpEnabled: () => settings.booleanValue('SIGN_UP_ENABLED', true),
-        }),
-        sweeps: new SweepManager({
-            runners: {
-                gc: () => runGcOnce({ blob, graceMs: gcGraceMs }),
-                trashPurge: () => runTrashPurgeOnce({ nodes: nodeRA, purger: nodes, graceMs: trashGraceMs }),
-                partials: async () => ({ candidates: 0, reclaimed: 0, failed: 0, bytesFreed: 0 }),
-                accountDeletion: () => runAccountDeletionOnce({
-                    users: userRA,
-                    deleteAccount: purgeAccount,
-                    windowMs: async () => await accountDeletionDays() * MS_PER_DAY,
-                }),
-            },
-            tracker,
-        }),
-        users: new UserManager(userRA),
-        settings,
-        branding: new BrandingManager({ settings: settingsRA, handle, blob, maxBytes: avatarMaxBytes }),
-        accountDeletions,
-        admins: new AdminManager({
-            auth,
-            users: userRA,
-            usage: (ownerIDs) => nodeRA.ownedBytesByOwner(ownerIDs),
-            deleteAccount: purgeAccount,
-            defaultQuota,
-        }),
-        mail,
-        limits: async () =>
-        {
-            const [ upload, avatar, skipped ] = await Promise.all([
-                uploadMaxBytes(),
-                avatarMaxBytes(),
-                skippedUploadNames(),
-            ]);
-
-            return { uploadMaxBytes: upload, avatarMaxBytes: avatar, skippedUploadNames: skipped };
-        },
-        providers: [],
-    }, { apiReference: options.apiReference });
+    return createApp({ auth, services }, { apiReference: options.apiReference });
 }
 
-// The fully-serviced counterpart to bootTestApp, for specs that drive real requests through the whole app.
-export async function bootFullApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
+export async function bootTestApp(overrides : Partial<Config> = {}, extras : AuthExtras = {}) : Promise<BootedApp>
 {
     const { config, handle } = await openTestDatabase(testConfig(overrides));
-    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
+    await migrateDatabase(handle, authOptions(handle, config, TEST_AUTH_SECRET));
 
     const auth = createAuth(handle, config, TEST_AUTH_SECRET, extras);
 
-    return { config, handle, auth, app: composeFullApp(auth, handle, config) };
+    return { config, handle, auth, app: composeTestApp(auth, handle, config) };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

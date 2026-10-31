@@ -7,37 +7,19 @@
 // failure propagates instead of reporting success, and running the whole thing twice costs nothing.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { isAPIError } from 'better-auth/api';
-
-// Models
-import { UnauthorizedError } from '@fileshed/core';
-
 // Resource Access
-import {
-    type Auth,
-    type SessionUser,
-    deleteAccessTokensFor,
-    deletePendingAccountActionsFor,
-} from '../resource-access/auth.ts';
-import type { DatabaseHandle } from '../resource-access/database/database.ts';
+import type { AuthRA } from '../resource-access/auth/index.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export interface CredentialManagerDeps
-{
-    auth : Auth;
-    handle : DatabaseHandle;
-}
-
 export class CredentialManager
 {
-    readonly #auth : Auth;
-    readonly #handle : DatabaseHandle;
+    readonly #auth : AuthRA;
 
-    constructor(deps : CredentialManagerDeps)
+    constructor(auth : AuthRA)
     {
-        this.#auth = deps.auth;
-        this.#handle = deps.handle;
+        this.#auth = auth;
     }
 
     // Every way into the account that does not require the password, gone at once: all its access tokens (both
@@ -48,28 +30,12 @@ export class CredentialManager
     // takeover that no amount of session revocation touches, and someone reaching for this button is trying to stop
     // exactly that. Linked OAuth accounts are deliberately left: unlinking would lock out an account whose only
     // credential is the provider.
-    async revokeAll(actor : SessionUser, headers : Headers) : Promise<void>
+    async revokeAll(user : SessionUser, headers : Headers) : Promise<void>
     {
-        await deleteAccessTokensFor(this.#handle, actor.id);
-        await deletePendingAccountActionsFor(this.#handle, actor.id);
+        await this.#auth.deleteAccessTokens(user.id);
+        await this.#auth.deletePendingAccountActions(user.id);
 
-        try
-        {
-            await this.#auth.api.revokeSessions({ headers });
-        }
-        catch(error)
-        {
-            // The session died between the route's check and this call. better-auth answers with its own APIError,
-            // which nothing downstream maps, so it would surface as a 500 where 401 is the honest answer. Only its
-            // 401 means that: the same class carries a failed session delete, and calling THAT 401 would tell the
-            // caller they are signed out everywhere while every session they asked to end is still alive.
-            if(isAPIError(error) && error.statusCode === 401)
-            {
-                throw new UnauthorizedError('Sign-in required.');
-            }
-
-            throw error;
-        }
+        await this.#auth.revokeOwnSessions(headers);
     }
 }
 

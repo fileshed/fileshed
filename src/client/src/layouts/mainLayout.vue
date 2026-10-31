@@ -1,15 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Main Layout
   --
-  -- The primary authenticated chrome: the drive sidebar over the shared app shell. Auth pages render outside this
-  -- layout (sibling routes), so it can assume a signed-in user.
+  -- Auth pages are sibling routes outside this layout, so it can assume a signed-in user.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <AppShell>
         <template #sidebar>
             <RouterLink to="/" class="mb-6 flex items-center gap-2 px-2 text-xl font-bold">
-                <img :src="app.logoUrl" alt="" class="size-8">
+                <img :src="app.logoURL" alt="" class="size-8">
                 {{ app.name }}
             </RouterLink>
 

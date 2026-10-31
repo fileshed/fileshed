@@ -52,8 +52,8 @@ export const accessRequestResponseCodec = z.strictObject({
     requestedRole: shareRoleCodec,
     message: z.string().nullable(),
     status: z.enum(shareRequestStatuses),
-    createdAt: isoDateTimeCodec,
-    resolvedAt: isoDateTimeCodec.nullable(),
+    created: isoDateTimeCodec,
+    resolved: isoDateTimeCodec.nullable(),
 });
 
 typeAssert<Equals<z.output<typeof accessRequestResponseCodec>, AccessRequestResponse>>();
@@ -74,7 +74,7 @@ typeAssert<Equals<z.output<typeof accessRequestListResponseCodec>, AccessRequest
 
 //----------------------------------------------------------------------------------------------------------------------
 // Serialization -- the single domain ShareRequest -> wire crossing. Both timestamps become ISO strings here; the union
-// on status guarantees resolvedAt is a Date exactly when the request is resolved, null when pending.
+// on status guarantees resolved is a Date exactly when the request is resolved, null when pending.
 //----------------------------------------------------------------------------------------------------------------------
 
 export function toAccessRequestResponse(request : ShareRequest) : AccessRequestResponse
@@ -86,8 +86,8 @@ export function toAccessRequestResponse(request : ShareRequest) : AccessRequestR
         requestedRole: request.requestedRole,
         message: request.message,
         status: request.status,
-        createdAt: request.createdAt.toISOString(),
-        resolvedAt: request.resolvedAt === null ? null : request.resolvedAt.toISOString(),
+        created: request.created.toISOString(),
+        resolved: request.resolved === null ? null : request.resolved.toISOString(),
     };
 }
 

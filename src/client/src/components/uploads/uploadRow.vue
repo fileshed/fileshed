@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Upload Row
   --
-  -- One item in the upload panel: its name, a status line, and a progress bar while it moves. A running item can be
-  -- cancelled; a failed one shows its error and offers a retry. Determinate progress is shown while hashing or sending
-  -- (the two phases whose byte counts are known); the brief claim/verify steps in between animate indeterminately.
+  -- Progress is determinate while hashing or sending, the two phases whose byte counts are known; the brief claim and
+  -- verify steps in between animate indeterminately.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -21,7 +20,6 @@
                 :model-value="barValue"
                 :max="100"
                 size="2xs"
-                :color="item.status === 'error' ? 'error' : 'primary'"
                 class="mt-1.5"
             />
             <p
@@ -43,7 +41,7 @@
             @click="emit('cancel', item.id)"
         />
         <UButton
-            v-else-if="item.status === 'error'"
+            v-else-if="item.kind === 'file' && item.status === 'error'"
             icon="i-lucide-rotate-ccw"
             color="neutral"
             variant="ghost"
@@ -59,8 +57,11 @@
 <script setup lang="ts">
     import { computed } from 'vue';
 
+    // Engines
+    import { isActiveStatus } from '../../engines/uploads/status.ts';
+
     // Stores
-    import { type UploadItem, isActiveStatus } from '../../stores/uploads.ts';
+    import type { UploadItem } from '../../stores/uploads.ts';
 
     // Utils
     import { uploadStatusPresentation } from '../../utils/formatters/index.ts';
@@ -83,6 +84,8 @@
     // A known-byte phase drives a determinate bar; every other active phase animates (null modelValue).
     const barValue = computed<number | null>(() =>
     {
+        if(props.item.kind !== 'file') { return null; }
+
         const { status, progress } = props.item;
         if(progress.totalBytes <= 0) { return null; }
 

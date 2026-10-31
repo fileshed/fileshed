@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Setup Page
   --
-  -- The first-run wizard: create the instance's admin account, gated by the one-time code the server printed to its
-  -- console. Success signs the new admin straight in and lands them in the admin section to configure the rest. On
-  -- an instance that is already set up this page bounces to sign-in -- the server would refuse anyway; the bounce
-  -- just spares the visitor a dead form.
+  -- The one-time code is the one the server printed to its console. On an instance that is already set up the page
+  -- bounces to sign-in; the server would refuse anyway, so the bounce only spares the visitor a dead form.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -94,7 +92,10 @@
     import { useSessionStore } from '../stores/session.ts';
 
     // Resource Access
-    import { completeSetup, fetchInstance } from '../resource-access/instance.ts';
+    import { completeSetup, getInstance } from '../resource-access/instance.ts';
+
+    // Utils
+    import { describeAPIError } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
     // Setup
@@ -125,7 +126,7 @@
     {
         try
         {
-            const instance = await fetchInstance();
+            const instance = await getInstance();
             if(!instance.needsSetup) { await router.replace('/signin'); }
         }
         catch { /* an unreachable API leaves the form up; submitting will surface the real error */ }
@@ -155,7 +156,7 @@
         }
         catch(error)
         {
-            errorMessage.value = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+            errorMessage.value = describeAPIError(error);
         }
         finally
         {

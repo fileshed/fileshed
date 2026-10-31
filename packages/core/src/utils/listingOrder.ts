@@ -34,8 +34,8 @@ export interface ListingOrderRow
     id : string;
     name : string;
     type : NodeType;
-    createdAt : string;
-    updatedAt : string;
+    created : string;
+    updated : string;
     size ?: number | null;
     mimeType ?: string | null;
 }
@@ -43,7 +43,7 @@ export interface ListingOrderRow
 //----------------------------------------------------------------------------------------------------------------------
 
 // The fields a listing may be ordered by. Domain names: the server maps each to the column holding it.
-export const listingSortFields = [ 'name', 'size', 'createdAt', 'updatedAt', 'type', 'mimeType' ] as const;
+export const listingSortFields = [ 'name', 'size', 'created', 'updated', 'type', 'mimeType' ] as const;
 export type ListingSortField = typeof listingSortFields[number];
 
 // What each sort key compares, in order. `kind` is three fields deep because "type" alone leaves every file in one
@@ -51,8 +51,8 @@ export type ListingSortField = typeof listingSortFields[number];
 export const LISTING_SORT_FIELDS : Record<NodeSortKey, readonly ListingSortField[]> = {
     name: [ 'name' ],
     size: [ 'size' ],
-    createdAt: [ 'createdAt' ],
-    updatedAt: [ 'updatedAt' ],
+    created: [ 'created' ],
+    updated: [ 'updated' ],
     kind: [ 'type', 'mimeType', 'name' ],
 };
 
@@ -93,8 +93,8 @@ function compareField(field : ListingSortField, left : ListingOrderRow, right : 
     switch (field)
     {
         case 'name': return compareNames(left.name, right.name);
-        case 'createdAt': return compareText(left.createdAt, right.createdAt);
-        case 'updatedAt': return compareText(left.updatedAt, right.updatedAt);
+        case 'created': return compareText(left.created, right.created);
+        case 'updated': return compareText(left.updated, right.updated);
         case 'type': return compareText(left.type, right.type);
 
         case 'size':

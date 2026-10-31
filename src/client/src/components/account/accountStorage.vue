@@ -1,10 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Account Storage
   --
-  -- The account-page storage summary, read from the same session quota the sidebar gauge uses so the two never drift.
-  -- Unlike the sidebar's compact label, this always shows the denominator -- "Unlimited" when nothing caps the account
-  -- -- so the possibility of a cap is visible even on uncapped accounts. The denominator is the effective cap, with
-  -- the instance default already folded in, never the account's own raw setting.
+  -- Unlike the sidebar's compact label this always shows the denominator ("Unlimited" when nothing caps the account),
+  -- so the possibility of a cap is visible on uncapped accounts too. The denominator is the effective cap, with the
+  -- instance default folded in, never the account's own raw setting.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -12,19 +12,19 @@ import { type ImageFormat, mimeMatchesBytes, sniffImageFormat } from '@server/en
 
 // Support
 import {
-    REAL_PNG,
     bmpBytes,
     gifBytes,
     icoBytes,
     jpegBytes,
     pngBytes,
+    realPNG,
     svgBytes,
     webpBytes,
 } from '../support/imageBytes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const HTML = Buffer.from('<!DOCTYPE html><html><body><script>alert(1)</script></body></html>', 'utf8');
+const htmlBytes = Buffer.from('<!DOCTYPE html><html><body><script>alert(1)</script></body></html>', 'utf8');
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -47,12 +47,12 @@ describe('sniffImageFormat', () =>
 
     it('names a complete real image, not just a shaped header', () =>
     {
-        expect(sniffImageFormat(REAL_PNG)).toBe('png');
+        expect(sniffImageFormat(realPNG)).toBe('png');
     });
 
     it('names nothing for bytes that are no image at all', () =>
     {
-        expect(sniffImageFormat(HTML)).toBeNull();
+        expect(sniffImageFormat(htmlBytes)).toBeNull();
         expect(sniffImageFormat(Buffer.from('an avatar image, pretend it is a PNG', 'utf8'))).toBeNull();
         expect(sniffImageFormat(Buffer.alloc(0))).toBeNull();
     });
@@ -105,8 +105,8 @@ describe('mimeMatchesBytes', () =>
 
     it('refuses HTML declared as an image', () =>
     {
-        expect(mimeMatchesBytes('image/png', HTML)).toBe(false);
-        expect(mimeMatchesBytes('image/svg+xml', HTML)).toBe(false);
+        expect(mimeMatchesBytes('image/png', htmlBytes)).toBe(false);
+        expect(mimeMatchesBytes('image/svg+xml', htmlBytes)).toBe(false);
     });
 
     // One container, two registered spellings -- refusing either would refuse a legitimate favicon.

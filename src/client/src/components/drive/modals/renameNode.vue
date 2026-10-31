@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Rename Modal
-  --
-  -- The Rename prompt, opened imperatively by the drive page for one node. The field prefills with the node's current
-  -- name and stays open until the rename resolves, so a rejection can toast without the dialog vanishing under it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

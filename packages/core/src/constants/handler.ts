@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Handler Limits
 //
-// The size ceilings the in-app file handlers open up to. Over its ceiling a file falls back to the native path --
-// browser preview or download -- rather than opening in a handler that would wedge the tab.
+// Over its handler's ceiling, a file falls back to browser preview or download rather than opening in a handler that
+// would hang the tab.
 //----------------------------------------------------------------------------------------------------------------------
 
 // One 3.5-inch HD floppy, to the byte. If a text file won't fit on a floppy, you have no business hand-editing it in a

@@ -77,7 +77,7 @@ describe('readMediaTags', () =>
             title: 'Neon Skyline',
             artist: 'The Sample Band',
             album: 'Fixtures',
-            artworkUrl: 'blob:fake-cover',
+            artworkURL: 'blob:fake-cover',
         });
     });
 
@@ -91,7 +91,7 @@ describe('readMediaTags', () =>
 
         const tags = await readMediaTags('n1');
 
-        expect(tags?.artworkUrl).toBeNull();
+        expect(tags?.artworkURL).toBeNull();
         expect(createObjectURLMock).not.toHaveBeenCalled();
     });
 
@@ -102,7 +102,7 @@ describe('readMediaTags', () =>
 
         const tags = await readMediaTags('n1');
 
-        expect(tags?.artworkUrl).toBe('blob:fake-cover');
+        expect(tags?.artworkURL).toBe('blob:fake-cover');
         expect(createObjectURLMock.mock.calls[0]?.[0]).toMatchObject({ type: 'image/jpeg' });
     });
 
@@ -153,10 +153,10 @@ describe('releaseMediaTags', () =>
 {
     it('revokes the artwork URL, and tolerates tags without one', () =>
     {
-        releaseMediaTags({ title: 't', artist: null, album: null, artworkUrl: 'blob:fake-cover' });
+        releaseMediaTags({ title: 't', artist: null, album: null, artworkURL: 'blob:fake-cover' });
         expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:fake-cover');
 
-        releaseMediaTags({ title: 't', artist: null, album: null, artworkUrl: null });
+        releaseMediaTags({ title: 't', artist: null, album: null, artworkURL: null });
         expect(revokeObjectURLMock).toHaveBeenCalledTimes(1);
     });
 });

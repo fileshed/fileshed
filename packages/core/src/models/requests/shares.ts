@@ -1,10 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share API DTOs
-//
-// Request/response contracts for the sharing endpoints. A grant names a grantee and a ShareRole
-// -- 'owner' is unrepresentable here, since owner authority is ownership, never a share row. Shared-with-me
-// carries a target summary and a placement flag: whether the caller has placed a link to the shared item.
-// Dates serialize as ISO strings.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -25,7 +20,7 @@ export interface GrantShareRequest
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Share response -- the domain Share (models/share.ts) with its createdAt serialized.
+// Share response -- the domain Share (models/share.ts) with its created serialized.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface ShareResponse
@@ -35,7 +30,7 @@ export interface ShareResponse
     granteeUserID : string;
     role : ShareRole;
     createdBy : string;
-    createdAt : string;
+    created : string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

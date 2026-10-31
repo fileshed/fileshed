@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
 import { NodeManager } from '@server/managers/node.ts';
@@ -34,8 +34,8 @@ import { testNodePolicy } from '../nodes/support.ts';
 
 const GRACE_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Comfortably older than any cutoff GRACE_MS produces -- a trashed_at the sweep must treat as lapsed.
-const EXPIRED = new Date('2020-01-01T00:00:00.000Z');
+// Comfortably older than any cutoff GRACE_MS produces -- a trashed the sweep must treat as lapsed.
+const expired = new Date('2020-01-01T00:00:00.000Z');
 
 let handle : DatabaseHandle;
 let ra : NodeRA;
@@ -45,7 +45,7 @@ beforeEach(async () =>
 {
     handle = await createTestDatabase();
     ra = new NodeRA(handle);
-    nodes = new NodeManager(handle, ra, new BlobRA(handle), testNodePolicy());
+    nodes = new NodeManager({ handle, orphanedBlobs: (tx) => new BlobRA(tx), policy: testNodePolicy() });
 
     await seedUser(handle.db, 'alice');
     await seedUser(handle.db, 'bob');
@@ -61,12 +61,12 @@ afterEach(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-async function blobDeletedAt(sha256 : string) : Promise<string | Date | null>
+async function blobDeleted(sha256 : string) : Promise<string | Date | null>
 {
-    const row = await handle.db.selectFrom('blob').select('deleted_at')
+    const row = await handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -79,10 +79,10 @@ describe('runTrashPurgeOnce', () =>
     it('purges an expired trashed subtree whole and graveyards its blobs, counting only the root', async () =>
     {
         await ra.insert(folderNode({ id: 'home', ownerID: 'alice' }));
-        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', parentID: 'home', trashedAt: EXPIRED }));
-        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashedAt: EXPIRED }));
-        await ra.insert(folderNode({ id: 'sub', ownerID: 'alice', parentID: 'dir', trashedAt: EXPIRED }));
-        await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', parentID: 'sub', blobID: 'sha-b', trashedAt: EXPIRED }));
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', parentID: 'home', trashed: expired }));
+        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashed: expired }));
+        await ra.insert(folderNode({ id: 'sub', ownerID: 'alice', parentID: 'dir', trashed: expired }));
+        await ra.insert(fileNode({ id: 'f2', ownerID: 'alice', parentID: 'sub', blobID: 'sha-b', trashed: expired }));
 
         const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
@@ -94,14 +94,14 @@ describe('runTrashPurgeOnce', () =>
         expect(await ra.get('f2')).toBeUndefined();
         expect(await ra.get('home')).toBeDefined();
 
-        expect(await blobDeletedAt('sha-a')).not.toBeNull();
-        expect(await blobDeletedAt('sha-b')).not.toBeNull();
+        expect(await blobDeleted('sha-a')).not.toBeNull();
+        expect(await blobDeleted('sha-b')).not.toBeNull();
     });
 
     // A root-level trashed item (parent_id null) is a candidate too -- the "no parent" case of "parent not trashed".
     it('purges a root-level trashed item whose grace window has lapsed', async () =>
     {
-        await ra.insert(fileNode({ id: 'solo', ownerID: 'alice', blobID: 'sha-a', trashedAt: EXPIRED }));
+        await ra.insert(fileNode({ id: 'solo', ownerID: 'alice', blobID: 'sha-a', trashed: expired }));
 
         const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
@@ -112,15 +112,15 @@ describe('runTrashPurgeOnce', () =>
     it('leaves a trashed item still inside its grace window untouched', async () =>
     {
         const now = new Date();
-        await ra.insert(folderNode({ id: 'fresh', ownerID: 'alice', trashedAt: now }));
-        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'fresh', blobID: 'sha-a', trashedAt: now }));
+        await ra.insert(folderNode({ id: 'fresh', ownerID: 'alice', trashed: now }));
+        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'fresh', blobID: 'sha-a', trashed: now }));
 
         const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
 
         expect(summary).toEqual({ candidates: 0, purged: 0, failed: 0 });
         expect(await ra.get('fresh')).toBeDefined();
         expect(await ra.get('f1')).toBeDefined();
-        expect(await blobDeletedAt('sha-a')).toBeNull();
+        expect(await blobDeleted('sha-a')).toBeNull();
     });
 
     it('leaves an untrashed subtree untouched', async () =>
@@ -137,11 +137,11 @@ describe('runTrashPurgeOnce', () =>
 
     // A link pointing into a purged subtree dies with its target by FK cascade -- the same permanent death a manual
     // hard delete produces. The link lives in another user's live tree and is never itself a candidate (links carry no
-    // trashed_at); it goes only because its target does.
+    // trashed); it goes only because its target does.
     it('removes links pointing into a purged subtree by cascade', async () =>
     {
-        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', trashedAt: EXPIRED }));
-        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashedAt: EXPIRED }));
+        await ra.insert(folderNode({ id: 'dir', ownerID: 'alice', trashed: expired }));
+        await ra.insert(fileNode({ id: 'f1', ownerID: 'alice', parentID: 'dir', blobID: 'sha-a', trashed: expired }));
         await ra.insert(linkNode({ id: 'lnk', ownerID: 'bob', targetNodeID: 'f1' }));
 
         const summary = await runTrashPurgeOnce({ nodes: ra, purger: nodes, graceMs: async () => GRACE_MS });
@@ -155,8 +155,8 @@ describe('runTrashPurgeOnce', () =>
     // summary reports the failure honestly rather than the whole sweep aborting.
     it('isolates a failing root, purging the rest and counting the failure', async () =>
     {
-        await ra.insert(folderNode({ id: 'alpha', ownerID: 'alice', trashedAt: EXPIRED }));
-        await ra.insert(folderNode({ id: 'beta', ownerID: 'alice', trashedAt: EXPIRED }));
+        await ra.insert(folderNode({ id: 'alpha', ownerID: 'alice', trashed: expired }));
+        await ra.insert(folderNode({ id: 'beta', ownerID: 'alice', trashed: expired }));
 
         const purger : SubtreePurger = {
             async purgeSubtree(rootID : string) : Promise<void>

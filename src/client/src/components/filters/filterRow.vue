@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Filter Row
-  --
-  -- The Type + Modified filter row the Shared and Trash surfaces share -- the same two chips the drive's own bar carries,
-  -- minus the owner facet and sort menu those surfaces have no use for. Store-agnostic: the page passes the current
-  -- filter state and wires the changes back to whichever store owns the listing, so one row serves both surfaces.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -37,8 +33,8 @@
     import TypeFilter from './typeFilter.vue';
     import ModifiedFilter from './modifiedFilter.vue';
 
-    // Utils
-    import type { ModifiedFilter as ModifiedFilterValue } from '../../utils/filterPresets.ts';
+    // Engines
+    import type { ModifiedFilter as ModifiedFilterValue } from '../../engines/listing/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

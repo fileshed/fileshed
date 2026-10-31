@@ -1,13 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- New Link Modal
   --
-  -- The target half of placing a link: the caller is standing in the folder the pointer goes in, and this asks what to
-  -- point at. Self-subscribed to the sidebar's create signal, like the other New dialogs, and creating in whichever
-  -- folder is open when the request lands.
-  --
-  -- A folder is as linkable as a file, so folder rows carry a Link button of their own beside the navigation the row
-  -- already does -- entering a folder and choosing it are different intents and both have to be reachable. The picker
-  -- omits links entirely, which is also the rule the server would enforce: a link may not point at another link.
+  -- Folder rows carry a Link button beside the row's own navigation, since entering a folder and choosing it are
+  -- different intents. Links are left out of the picker because the server refuses a link that points at another link.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Domain Model
-//
-// Canonical domain type for a node -- a file, folder, or link in a user's tree (their "My Drive"). Modeled as a
-// discriminated union on `type` rather than one interface with a pile of nullables, so that a variant's exclusive
-// fields (blobID, size, mimeType, targetNodeID, trashedAt) simply don't exist on the wrong shape.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const nodeTypes = [ 'file', 'folder', 'link' ] as const;
@@ -15,8 +11,8 @@ interface NodeBase
     name : string;
     ownerID : string;
     parentID : string | null;
-    createdAt : Date;
-    updatedAt : Date;
+    created : Date;
+    updated : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -29,19 +25,19 @@ export interface FileNode extends NodeBase
     blobID : string;
     size : number;
     mimeType : string;
-    trashedAt : Date | null;
+    trashed : Date | null;
 }
 
 export interface FolderNode extends NodeBase
 {
     type : 'folder';
-    trashedAt : Date | null;
+    trashed : Date | null;
 }
 
 // A link is the recipient-side placement of a shared item: an ordinary node, owned by the recipient, pointing at
 // someone else's node. Links may not target links (enforced by managers/engines, not this type). Links carry no
-// mimeType (it derives from the target) and no trashedAt -- links are deleted directly, never trashed; dead links
-// persist as stubs.
+// mimeType (it derives from the target) and no trashed timestamp -- links are deleted directly, never trashed; dead
+// links persist as stubs.
 export interface LinkNode extends NodeBase
 {
     type : 'link';
@@ -64,6 +60,14 @@ export type Node = FileNode | FolderNode | LinkNode;
 export function isDirectOwner(node : Node, userID : string) : boolean
 {
     return node.ownerID === userID;
+}
+
+// Whether a node is in the trash and `userID` is not the one whose trash it is. Such a node reads as absent: a
+// recipient gets a 404, not a reply that confirms the node still exists, while its direct owner keeps seeing it in
+// their trash. A link is never trashed on its own account.
+export function isHiddenTrash(node : Node, userID : string) : boolean
+{
+    return node.type !== 'link' && node.trashed !== null && !isDirectOwner(node, userID);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

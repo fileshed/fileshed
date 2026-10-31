@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Provider Fields
-  --
-  -- The one component the Authentication tab mounts per provider: it takes the provider id and switches to the
-  -- component that fits -- a specific one where the provider's OAuth contract wants more than a credential pair,
-  -- the generic two-field one everywhere else. Adding provider-specific handling is adding a component to the map,
-  -- nothing more.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -30,7 +25,7 @@
 
     const props = defineProps<{ provider : SocialProviderID }>();
 
-    const SPECIFIC_FIELDS : Partial<Record<SocialProviderID, Component>> = {
+    const specificFields : Partial<Record<SocialProviderID, Component>> = {
         apple: AppleProviderFields,
         cognito: CognitoProviderFields,
         gitlab: GitlabProviderFields,
@@ -38,7 +33,7 @@
         tiktok: TiktokProviderFields,
     };
 
-    const fieldsComponent = computed(() => SPECIFIC_FIELDS[props.provider] ?? GenericProviderFields);
+    const fieldsComponent = computed(() => specificFields[props.provider] ?? GenericProviderFields);
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

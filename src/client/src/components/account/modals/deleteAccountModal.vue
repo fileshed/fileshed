@@ -1,12 +1,13 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Delete Account Modal
   --
-  -- The confirm behind "Delete my account". Two things have to be clear before the click, because they happen at
-  -- different times and only one of them is reversible: the files wait out the window and come back if the person
-  -- changes their mind, while the shares, links, and tokens are gone the moment they ask and stay gone.
+  -- Two things have to be clear before the click, because they happen at different times and only one of them is
+  -- reversible: the files wait out the window and come back if the user changes their mind, while the shares, links,
+  -- and tokens are gone the moment they ask and stay gone.
   --
-  -- Every session ends with the request, this one included, so the signed-in state is dropped before the navigation
-  -- and /signin says why -- the same road revoke-everywhere takes. A failure leaves the dialog open to toast under.
+  -- Every session ends with the request, this one included, so the signed-in state is dropped before navigating to
+  -- /signin; otherwise the auth guard would bounce a visitor it still thinks is signed in. /signin says why, the same
+  -- way revoke-everywhere does.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

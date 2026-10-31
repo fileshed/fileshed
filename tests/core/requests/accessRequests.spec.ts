@@ -75,8 +75,8 @@ describe('accessRequestListEntryCodec', () =>
         requestedRole: 'viewer' as const,
         message: null,
         status: 'pending' as const,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        resolvedAt: null,
+        created: '2026-01-01T00:00:00.000Z',
+        resolved: null,
     };
     const requester = { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com', image: null };
 
@@ -109,8 +109,8 @@ describe('accessRequestListResponseCodec', () =>
             requestedRole: 'viewer',
             message: null,
             status: 'pending',
-            createdAt: '2026-01-01T00:00:00.000Z',
-            resolvedAt: null,
+            created: '2026-01-01T00:00:00.000Z',
+            resolved: null,
         };
 
         expect(accessRequestListResponseCodec.safeParse({
@@ -130,8 +130,8 @@ describe('accessRequestListResponseCodec', () =>
             requestedRole: 'viewer',
             message: null,
             status: 'pending',
-            createdAt: '2026-01-01T00:00:00.000Z',
-            resolvedAt: null,
+            created: '2026-01-01T00:00:00.000Z',
+            resolved: null,
         };
 
         expect(accessRequestListResponseCodec.safeParse({ incoming: [], outgoing: [ request ] }).success).toBe(true);
@@ -149,8 +149,8 @@ describe('toAccessRequestListEntry', () =>
             requestedRole: 'editor',
             message: 'Could you share this with me?',
             status: 'pending',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            resolvedAt: null,
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            resolved: null,
         };
         const requester = { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com', image: null };
 

@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Reveal Token Modal
   --
-  -- The one-time reveal: the only place a minted token's value ever exists client-side. Deliberately not dismissible
-  -- by overlay or escape -- a stray click must not eat a secret that cannot be shown again -- so the only way out is
-  -- Done, and closing clears the value from the modal's state.
+  -- The only place a minted token's value exists client-side. The overlay and Escape don't dismiss it, because a stray
+  -- click must not lose a secret that can't be shown again; Done is the only way out, and closing clears the value.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

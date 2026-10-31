@@ -28,7 +28,7 @@ import type {
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerDirs,
     type ServerHandle,
     blobFileExists,
@@ -75,7 +75,7 @@ let dirs : ServerDirs;
 let doomedNodeID : string;
 let lingeringNodeID : string;
 
-let admin : ApiClient;
+let admin : APIClient;
 let sweeps : BootSweeps;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -87,7 +87,7 @@ function ensureOk(status : number, step : string) : void
     if(status !== 200) { throw new Error(`setup: ${ step } (HTTP ${ status })`); }
 }
 
-async function uploadFile(client : ApiClient, name : string, bytes : Buffer) : Promise<NodeResponse>
+async function uploadFile(client : APIClient, name : string, bytes : Buffer) : Promise<NodeResponse>
 {
     const claim = await (await client.post('/api/blobs/claim', { sha256: sha256Of(bytes), size: bytes.length }))
         .json() as ClaimResponse;
@@ -138,7 +138,7 @@ beforeAll(async () =>
     stagingServer = await spawnServer({ env: { FILESHED_SETUP_TOKEN: SETUP_TOKEN, ...WINDOWS_HELD_OPEN } });
     dirs = { dataDir: stagingServer.dataDir, storageRoot: stagingServer.storageRoot };
 
-    const setup = await new ApiClient(stagingServer.baseURL).post('/api/setup', {
+    const setup = await new APIClient(stagingServer.baseURL).post('/api/setup', {
         token: SETUP_TOKEN,
         name: 'Admin',
         email: ADMIN_EMAIL,
@@ -146,7 +146,7 @@ beforeAll(async () =>
     });
     ensureOk(setup.status, 'expected first-run setup to succeed');
 
-    const stagingAdmin = new ApiClient(stagingServer.baseURL);
+    const stagingAdmin = new APIClient(stagingServer.baseURL);
     ensureOk((await stagingAdmin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).status, 'expected the admin sign-in to succeed');
 
     // Trashed and then emptied out: the node is purged and the blob it was the only reference to is graveyarded.
@@ -187,11 +187,11 @@ describe('state staged under open grace windows', () =>
 
         const blob = await withDb(stagingServer, (db) => db
             .selectFrom('blob')
-            .select([ 'sha256', 'deleted_at' ])
+            .select([ 'sha256', 'deleted' ])
             .where('sha256', '=', doomedSha)
             .executeTakeFirst());
         expect(blob).toBeDefined();
-        expect(blob?.deleted_at).not.toBeNull();
+        expect(blob?.deleted).not.toBeNull();
 
         // The graveyard marker is not a delete. The bytes survive the window so a claim can still resurrect them.
         expect(await blobFileExists(stagingServer.storageRoot, doomedSha)).toBe(true);
@@ -201,19 +201,19 @@ describe('state staged under open grace windows', () =>
     {
         const node = await withDb(stagingServer, (db) => db
             .selectFrom('node')
-            .select('trashed_at')
+            .select('trashed')
             .where('id', '=', lingeringNodeID)
             .executeTakeFirst());
         expect(node).toBeDefined();
-        expect(node?.trashed_at).not.toBeNull();
+        expect(node?.trashed).not.toBeNull();
 
         // A trashed file is still a reference: nothing about its blob has changed.
         const blob = await withDb(stagingServer, (db) => db
             .selectFrom('blob')
-            .select('deleted_at')
+            .select('deleted')
             .where('sha256', '=', lingeringSha)
             .executeTakeFirst());
-        expect(blob?.deleted_at).toBeNull();
+        expect(blob?.deleted).toBeNull();
         expect(await blobFileExists(stagingServer.storageRoot, lingeringSha)).toBe(true);
     });
 });
@@ -228,7 +228,7 @@ describe('a restart with both windows closed', () =>
     {
         sweepingServer = await spawnServer({ dirs, env: WINDOWS_CLOSED });
 
-        admin = new ApiClient(sweepingServer.baseURL);
+        admin = new APIClient(sweepingServer.baseURL);
         ensureOk(
             (await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).status,
             'expected the account to survive the restart'
@@ -272,7 +272,7 @@ describe('a restart with both windows closed', () =>
             .selectFrom('blob')
             .select('sha256')
             .where('sha256', '=', lingeringSha)
-            .where('deleted_at', 'is', null)
+            .where('deleted', 'is', null)
             .executeTakeFirst());
         expect(live).toBeUndefined();
     });

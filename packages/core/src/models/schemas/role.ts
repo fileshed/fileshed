@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Role Codec
-//
-// Reusable enum codecs for the permission role and its share-grantable subset. shareRoleCodec omits 'owner' so a share
-// or share request cannot validate an owner grant.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { z } from 'zod';

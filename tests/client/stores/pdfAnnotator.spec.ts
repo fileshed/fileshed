@@ -1,95 +1,55 @@
 //----------------------------------------------------------------------------------------------------------------------
 // PDF Annotator Store
 //
-// Drives the load / annotate / save / conflict pipeline with the resource-access, hashing, and proof seams mocked, and
-// the pdf.js boundary standing in as a registered save source that yields known bytes. Each test asserts an observable
-// outcome -- the bytes and read-only state after a load, the guard carried on the commit, the no-op when the annotated
-// bytes already hash to the stored blob, the conflict a 409 raises, the guard dropped on an overwrite -- never merely
-// that a mock was called. Expectations come from the store's contract, not its internals.
+// Drives the load / annotate / save / conflict pipeline with the node and content calls, hashing, and commitFile
+// mocked, and the pdf.js boundary standing in as a registered save source that yields known bytes.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import { type NodeResponse, PDF_ANNOTATOR_MAX_BYTES, type Role } from '@fileshed/core';
+import { PDF_ANNOTATOR_MAX_BYTES } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { ConflictAPIError } from '@client/resource-access/apiError.ts';
 import { getNode, patchNode } from '@client/resource-access/nodes.ts';
-import { fetchNodeBlob } from '@client/resource-access/content.ts';
-import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
+import { getNodeBlob } from '@client/resource-access/content.ts';
 import { saveBytes, showBytesIn } from '@client/resource-access/downloads.ts';
 
-// Engines
-import { computeProofAnswer } from '@client/engines/claim.ts';
-
 // Utils
-import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
+import { hashFile } from '@client/utils/hashFile.ts';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { commitFile } from '@client/stores/commitFile.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
-// Components
-import type { DocumentProperties, OutlineEntry } from '@client/components/handlers/pdf/types.ts';
+// Engines
+import type { DocumentProperties, OutlineEntry } from '@client/engines/pdf/types.ts';
+
+// Support
+import { fileNode, folderNode } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn(), patchNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(),
-    uploadTicket: vi.fn(),
-    answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
+vi.mock('@client/stores/commitFile.ts', () => ({ commitFile: vi.fn() }));
 vi.mock('@client/resource-access/downloads.ts', () => ({
-    downloadUrl: vi.fn(() => '/api/nodes/f1/download?disposition=inline'),
+    downloadURL: vi.fn(() => '/api/nodes/f1/download?disposition=inline'),
     saveBytes: vi.fn(),
     showBytesIn: vi.fn(),
 }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
+vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const getNodeMock = getNode as unknown as Mock;
-const fetchBlobMock = fetchNodeBlob as unknown as Mock;
-const claimBlobMock = claimBlob as unknown as Mock;
-const uploadTicketMock = uploadTicket as unknown as Mock;
-const answerChallengeMock = answerChallenge as unknown as Mock;
-const proofMock = computeProofAnswer as unknown as Mock;
+const getBlobMock = getNodeBlob as unknown as Mock;
+const commitMock = commitFile as unknown as Mock;
 const hashFileMock = hashFile as unknown as Mock;
-const readWindowsMock = readSampleWindows as unknown as Mock;
 const saveBytesMock = saveBytes as unknown as Mock;
 const showBytesInMock = showBytesIn as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function fileNode(overrides : Partial<{
-    id : string;
-    name : string;
-    role : Role;
-    blobID : string;
-    size : number;
-    mimeType : string;
-}> = {}) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'f1',
-        name: overrides.name ?? 'contract.pdf',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: overrides.role ?? 'owner',
-        type: 'file',
-        blobID: overrides.blobID ?? 'b1',
-        size: overrides.size ?? 2048,
-        mimeType: overrides.mimeType ?? 'application/pdf',
-        trashedAt: null,
-    };
-}
 
 function outlineEntry() : OutlineEntry
 {
@@ -116,7 +76,7 @@ function documentProperties() : DocumentProperties
 
 // Stands in for the live renderer. Every call is recorded so a test can assert the store reached the document at all;
 // save and serialize yield fixed bytes, since hashFile is mocked and the byte content never matters to the assertions.
-function documentAccess(overrides : Partial<PdfAccessDouble> = {}) : PdfAccessDouble
+function documentAccess(overrides : Partial<PDFAccessDouble> = {}) : PDFAccessDouble
 {
     return {
         save: vi.fn(() => Promise.resolve(new Uint8Array([ 1, 2, 3, 4 ]))),
@@ -131,7 +91,7 @@ function documentAccess(overrides : Partial<PdfAccessDouble> = {}) : PdfAccessDo
     };
 }
 
-interface PdfAccessDouble
+interface PDFAccessDouble
 {
     save : () => Promise<Uint8Array>;
     serialize : () => Promise<Uint8Array>;
@@ -144,20 +104,29 @@ interface PdfAccessDouble
 }
 
 // A store loaded and ready over a PDF file with blob 'b1'. Document access is registered by default, standing in for
-// the live renderer -- it yields fixed bytes, since hashFile is mocked and the byte content never matters to
-// the assertions. Save defaults to a fresh-content ticket commit landing a node whose blob is 'b2'.
+// the live renderer: like pdf.js, its save reports the marks clean as it serializes them. Save defaults to a commit
+// landing a node whose blob is 'b2'.
 async function openReady(
     overrides : Parameters<typeof fileNode>[0] = {},
     withAccess = true
-) : Promise<ReturnType<typeof usePdfAnnotatorStore>>
+) : Promise<ReturnType<typeof usePDFAnnotatorStore>>
 {
     getNodeMock.mockResolvedValue(fileNode(overrides));
-    fetchBlobMock.mockResolvedValue(new Blob([ new Uint8Array([ 37, 80, 68, 70 ]) ]));
+    getBlobMock.mockResolvedValue(new Blob([ new Uint8Array([ 37, 80, 68, 70 ]) ]));
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
     await store.open('f1');
 
-    if(withAccess) { store.setDocumentAccess(documentAccess()); }
+    if(withAccess)
+    {
+        store.setDocumentAccess(documentAccess({
+            save: vi.fn(async () =>
+            {
+                store.setDirty(false);
+                return new Uint8Array([ 1, 2, 3, 4 ]);
+            }),
+        }));
+    }
     return store;
 }
 
@@ -166,20 +135,37 @@ beforeEach(() =>
     setActivePinia(createPinia());
     vi.clearAllMocks();
 
-    claimBlobMock.mockResolvedValue({ upload: true, ticket: 'tk' });
-    uploadTicketMock.mockResolvedValue(fileNode({ blobID: 'b2' }));
-    answerChallengeMock.mockResolvedValue(fileNode({ blobID: 'b2' }));
+    commitMock.mockResolvedValue(fileNode({ blobID: 'b2' }));
     hashFileMock.mockResolvedValue('freshsha');
-    proofMock.mockResolvedValue('proof-answer');
-    readWindowsMock.mockResolvedValue([]);
 });
 
 //----------------------------------------------------------------------------------------------------------------------
 // Load
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore.open', () =>
+describe('usePDFAnnotatorStore.open', () =>
 {
+    it('lands nothing from an open that a later open overtook', async () =>
+    {
+        let slowBytes : (blob : Blob) => void = () => undefined;
+        getNodeMock
+            .mockResolvedValueOnce(fileNode({ id: 'f1', blobID: 'b1' }))
+            .mockResolvedValueOnce(fileNode({ id: 'f2', blobID: 'c1' }));
+        getBlobMock
+            .mockImplementationOnce(() => new Promise((resolve) => { slowBytes = resolve; }))
+            .mockResolvedValueOnce(new Blob([ new Uint8Array([ 2 ]) ]));
+        const store = usePDFAnnotatorStore();
+
+        const first = store.open('f1');
+        await vi.waitFor(() => { expect(getBlobMock).toHaveBeenCalledTimes(1); });
+        await store.open('f2');
+        slowBytes(new Blob([ new Uint8Array([ 1 ]) ]));
+        await first;
+
+        expect(store.node?.id).toBe('f2');
+        expect(store.bytes).toEqual(new Uint8Array([ 2 ]));
+    });
+
     it('loads a PDF into a ready session an owner can annotate', async () =>
     {
         const store = await openReady();
@@ -207,13 +193,13 @@ describe('usePdfAnnotatorStore.open', () =>
 
     it('refuses a node that is not a file', async () =>
     {
-        getNodeMock.mockResolvedValue({ ...fileNode(), type: 'folder' });
+        getNodeMock.mockResolvedValue(folderNode({ id: 'f1' }));
 
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         await store.open('f1');
 
         expect(store.loadState).toBe('error');
-        expect(fetchBlobMock).not.toHaveBeenCalled();
+        expect(getBlobMock).not.toHaveBeenCalled();
     });
 
     it('refuses a PDF over the annotator cap without fetching its bytes', async () =>
@@ -221,7 +207,7 @@ describe('usePdfAnnotatorStore.open', () =>
         const store = await openReady({ size: PDF_ANNOTATOR_MAX_BYTES + 1 });
 
         expect(store.loadState).toBe('error');
-        expect(fetchBlobMock).not.toHaveBeenCalled();
+        expect(getBlobMock).not.toHaveBeenCalled();
     });
 });
 
@@ -229,7 +215,7 @@ describe('usePdfAnnotatorStore.open', () =>
 // Annotation mode
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore annotation mode', () =>
+describe('usePDFAnnotatorStore annotation mode', () =>
 {
     it('starts a fresh session in select mode', async () =>
     {
@@ -271,7 +257,7 @@ describe('usePdfAnnotatorStore annotation mode', () =>
 // Save
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore.save', () =>
+describe('usePDFAnnotatorStore.save', () =>
 {
     it('carries the loaded blob as the concurrency guard on the commit', async () =>
     {
@@ -280,7 +266,7 @@ describe('usePdfAnnotatorStore.save', () =>
         store.setDirty(true);
         await store.save();
 
-        const commit = uploadTicketMock.mock.calls[0]?.[2];
+        const commit = commitMock.mock.calls[0]?.[1];
         expect(commit).toEqual({ replaceNodeID: 'f1', ifBlobID: 'b1' });
         expect(store.dirty).toBe(false);
     });
@@ -293,25 +279,27 @@ describe('usePdfAnnotatorStore.save', () =>
         store.setDirty(true);
         await store.save();
 
-        expect(claimBlobMock).not.toHaveBeenCalled();
-        expect(uploadTicketMock).not.toHaveBeenCalled();
+        expect(commitMock).not.toHaveBeenCalled();
         expect(store.dirty).toBe(false);
     });
 
-    it('saves a known blob through the proof-of-possession path, carrying the guard', async () =>
+    // pdf.js raises its modified flag only on the clean-to-modified edge, so a mark made after the save serialized the
+    // document is the only signal that mark will ever send.
+    it('keeps a mark made while the save was on the wire unsaved', async () =>
     {
         const store = await openReady();
-        claimBlobMock.mockResolvedValue({ upload: false, challengeID: 'c1', nonce: 'n1', ranges: [ [ 0, 4 ] ] });
+        let land : (node : unknown) => void = () => undefined;
+        commitMock.mockImplementationOnce(() => new Promise((resolve) => { land = resolve; }));
 
         store.setDirty(true);
-        await store.save();
+        const saving = store.save();
+        await vi.waitFor(() => { expect(commitMock).toHaveBeenCalled(); });
 
-        expect(uploadTicketMock).not.toHaveBeenCalled();
-        expect(answerChallengeMock).toHaveBeenCalledWith('c1', {
-            answer: 'proof-answer',
-            replaceNodeID: 'f1',
-            ifBlobID: 'b1',
-        });
+        store.setDirty(true);
+        land(fileNode({ blobID: 'b2' }));
+        await saving;
+
+        expect(store.dirty).toBe(true);
     });
 
     it('re-arms the guard with the newly written blob on each successful save', async () =>
@@ -319,7 +307,7 @@ describe('usePdfAnnotatorStore.save', () =>
         const store = await openReady();
 
         hashFileMock.mockResolvedValueOnce('shaV2').mockResolvedValueOnce('shaV3');
-        uploadTicketMock
+        commitMock
             .mockResolvedValueOnce(fileNode({ blobID: 'b2' }))
             .mockResolvedValueOnce(fileNode({ blobID: 'b3' }));
 
@@ -327,8 +315,8 @@ describe('usePdfAnnotatorStore.save', () =>
         await store.save();
 
         // The first save pinned the loaded blob; the second pinned what the first save wrote.
-        expect(uploadTicketMock.mock.calls[0]?.[2].ifBlobID).toBe('b1');
-        expect(uploadTicketMock.mock.calls[1]?.[2].ifBlobID).toBe('b2');
+        expect(commitMock.mock.calls[0]?.[1].ifBlobID).toBe('b1');
+        expect(commitMock.mock.calls[1]?.[1].ifBlobID).toBe('b2');
     });
 
     it('does not save a read-only session', async () =>
@@ -338,7 +326,7 @@ describe('usePdfAnnotatorStore.save', () =>
         store.setDirty(true);
         await store.save();
 
-        expect(claimBlobMock).not.toHaveBeenCalled();
+        expect(commitMock).not.toHaveBeenCalled();
     });
 
     it('does not save when no live document has registered a save source', async () =>
@@ -348,7 +336,7 @@ describe('usePdfAnnotatorStore.save', () =>
         store.setDirty(true);
         await store.save();
 
-        expect(claimBlobMock).not.toHaveBeenCalled();
+        expect(commitMock).not.toHaveBeenCalled();
     });
 });
 
@@ -356,12 +344,14 @@ describe('usePdfAnnotatorStore.save', () =>
 // Conflict
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore conflict', () =>
+describe('usePDFAnnotatorStore conflict', () =>
 {
     it('raises the conflict state on a 409 and keeps the marks unsaved', async () =>
     {
         const store = await openReady();
-        uploadTicketMock.mockRejectedValueOnce(new ApiError(409, 'The file changed since you opened it.'));
+        commitMock.mockRejectedValueOnce(
+            new ConflictAPIError('The file changed since you opened it.', 'replace.staleBlob')
+        );
 
         store.setDirty(true);
         await store.save();
@@ -373,8 +363,8 @@ describe('usePdfAnnotatorStore conflict', () =>
     it('overwrite retries the save without the guard and clears the conflict', async () =>
     {
         const store = await openReady();
-        uploadTicketMock
-            .mockRejectedValueOnce(new ApiError(409, 'stale'))
+        commitMock
+            .mockRejectedValueOnce(new ConflictAPIError('stale', 'replace.staleBlob'))
             .mockResolvedValueOnce(fileNode({ blobID: 'b2' }));
 
         store.setDirty(true);
@@ -384,7 +374,7 @@ describe('usePdfAnnotatorStore conflict', () =>
         await store.overwrite();
 
         // The retry drops the ifBlobID guard entirely -- last-write-wins.
-        expect(uploadTicketMock.mock.calls[1]?.[2]).toEqual({ replaceNodeID: 'f1' });
+        expect(commitMock.mock.calls[1]?.[1]).toEqual({ replaceNodeID: 'f1' });
         expect(store.conflict).toBe(false);
         expect(store.dirty).toBe(false);
     });
@@ -392,7 +382,7 @@ describe('usePdfAnnotatorStore conflict', () =>
     it('reload discards local annotations and restores the server bytes', async () =>
     {
         const store = await openReady();
-        uploadTicketMock.mockRejectedValueOnce(new ApiError(409, 'stale'));
+        commitMock.mockRejectedValueOnce(new ConflictAPIError('stale', 'replace.staleBlob'));
 
         store.setDirty(true);
         await store.save();
@@ -410,7 +400,7 @@ describe('usePdfAnnotatorStore conflict', () =>
 // Rotation
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore rotation', () =>
+describe('usePDFAnnotatorStore rotation', () =>
 {
     it('starts un-rotated', async () =>
     {
@@ -457,7 +447,7 @@ describe('usePdfAnnotatorStore rotation', () =>
 // Editor parameters
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore editor params', () =>
+describe('usePDFAnnotatorStore editor params', () =>
 {
     it('starts with pdf.js\'s own editor defaults', async () =>
     {
@@ -505,7 +495,7 @@ describe('usePdfAnnotatorStore editor params', () =>
 // Zoom stepping
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore zoom stepping', () =>
+describe('usePDFAnnotatorStore zoom stepping', () =>
 {
     it('steps up one absolute rung', async () =>
     {
@@ -561,7 +551,7 @@ describe('usePdfAnnotatorStore zoom stepping', () =>
 // Page navigation
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore page navigation', () =>
+describe('usePDFAnnotatorStore page navigation', () =>
 {
     it('clamps a jump past the last page to the last page', async () =>
     {
@@ -637,7 +627,7 @@ describe('usePdfAnnotatorStore page navigation', () =>
 // Find
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore page stepping', () =>
+describe('usePDFAnnotatorStore page stepping', () =>
 {
     it('steps forward and back a page at a time', async () =>
     {
@@ -674,7 +664,7 @@ describe('usePdfAnnotatorStore page stepping', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore find', () =>
+describe('usePDFAnnotatorStore find', () =>
 {
     it('opens the find bar', async () =>
     {
@@ -802,11 +792,11 @@ describe('usePdfAnnotatorStore find', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfAnnotatorStore.rename', () =>
+describe('PDFAnnotatorStore.rename', () =>
 {
     it('renames the loaded node and adopts the server response', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.node = fileNode({ name: 'contract.pdf' });
         (patchNode as unknown as Mock).mockResolvedValue(fileNode({ name: 'signed.pdf' }));
 
@@ -815,34 +805,11 @@ describe('PdfAnnotatorStore.rename', () =>
         expect(store.node?.name).toBe('signed.pdf');
         expect(patchNode).toHaveBeenCalledWith('f1', { name: 'signed.pdf' });
     });
-
-    it('refuses to rename a read-only session', async () =>
-    {
-        const store = usePdfAnnotatorStore();
-        store.node = fileNode({ name: 'contract.pdf', role: 'viewer' });
-
-        await store.rename('renamed.pdf');
-
-        expect(store.node?.name).toBe('contract.pdf');
-        expect(patchNode).not.toHaveBeenCalled();
-    });
-
-    it('ignores blank and unchanged names', async () =>
-    {
-        const store = usePdfAnnotatorStore();
-        store.node = fileNode({ name: 'contract.pdf' });
-
-        await store.rename('   ');
-        await store.rename('contract.pdf');
-
-        expect(store.node?.name).toBe('contract.pdf');
-        expect(patchNode).not.toHaveBeenCalled();
-    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore sidebar', () =>
+describe('usePDFAnnotatorStore sidebar', () =>
 {
     it('opens the rail when a tab is chosen from a closed one', async () =>
     {
@@ -877,7 +844,7 @@ describe('usePdfAnnotatorStore sidebar', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore layout', () =>
+describe('usePDFAnnotatorStore layout', () =>
 {
     it('clears the layout back to a single vertical column on a fresh load', async () =>
     {
@@ -896,7 +863,7 @@ describe('usePdfAnnotatorStore layout', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore editor history', () =>
+describe('usePDFAnnotatorStore editor history', () =>
 {
     it('steps the renderer back and forward for an editor', async () =>
     {
@@ -963,7 +930,7 @@ describe('usePdfAnnotatorStore editor history', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore alt text', () =>
+describe('usePDFAnnotatorStore alt text', () =>
 {
     it('opens the dialog on the description the annotation already carries', async () =>
     {
@@ -1014,7 +981,7 @@ describe('usePdfAnnotatorStore alt text', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore attachments', () =>
+describe('usePDFAnnotatorStore attachments', () =>
 {
     it('saves the bytes the renderer holds for an embedded file', async () =>
     {
@@ -1039,7 +1006,7 @@ describe('usePdfAnnotatorStore attachments', () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('usePdfAnnotatorStore print', () =>
+describe('usePDFAnnotatorStore print', () =>
 {
     it('hands the tab the annotated document without declaring the marks saved', async () =>
     {

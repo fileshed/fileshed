@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- New Document Modal
-  --
-  -- The New Markdown / New text prompt, self-subscribed to the sidebar's create signal. It defaults to an extensioned
-  -- name and enforces that extension on whatever the user types, then creates an empty file in the open folder. Stays
-  -- open until the create resolves, so a rejection can toast without the dialog vanishing under it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -32,14 +28,14 @@
     import NameDialog from '../nameDialog.vue';
 
     // Utils
-    import { ensureExtension } from '../../../utils/formatters/index.ts';
+    import { ensureExtension } from '../../../utils/ensureExtension.ts';
     import { useRunWithToast } from '../../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
     type DocumentKind = 'markdown' | 'text';
 
-    const DOC_CONFIG = {
+    const docConfig = {
         markdown: { title: 'New Markdown file', initial: 'Untitled.md', extension: '.md', mimeType: 'text/markdown' },
         text: { title: 'New text file', initial: 'Untitled.txt', extension: '.txt', mimeType: 'text/plain' },
     } as const;
@@ -52,7 +48,7 @@
     const open = ref(false);
     const pending = ref(false);
     const kind = ref<DocumentKind>('markdown');
-    const config = computed(() => DOC_CONFIG[kind.value]);
+    const config = computed(() => docConfig[kind.value]);
 
     // A markdown or text request is ours; a folder request is left untouched for the folder modal to consume.
     watch(() => newItem.request, (request) =>

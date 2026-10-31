@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Resource Access
-import { resolveIpAddressPolicy } from '@server/resource-access/auth.ts';
+import { resolveIpAddressPolicy } from '@server/resource-access/auth/instance.ts';
 
 // Test support
 import { bootTestApp, testConfig } from './support.ts';

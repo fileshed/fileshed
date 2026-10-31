@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Kysely, Selectable } from 'kysely';
 
 // Models
-import { NodeRowCorruptionError } from '@fileshed/core';
+import { RowCorruptionError } from '@fileshed/core';
 
 // Resource Access
 import type { Database, DatabaseHandle, NodeTable } from '@server/resource-access/database/database.ts';
@@ -59,7 +59,7 @@ async function roundTrip(id : string) : Promise<ReturnType<typeof nodeFromRow>>
 
 describe('node transforms round-trip', () =>
 {
-    it('round-trips a file node, preserving blob, size, mime type and trashed_at', async () =>
+    it('round-trips a file node, preserving blob, size, mime type and trashed', async () =>
     {
         const node = fileNode({
             id: 'f1',
@@ -67,7 +67,7 @@ describe('node transforms round-trip', () =>
             blobID: 'sha-a',
             size: 4096,
             mimeType: 'application/pdf',
-            trashedAt: new Date('2026-02-03T04:05:06.000Z'),
+            trashed: new Date('2026-02-03T04:05:06.000Z'),
         });
 
         await db.insertInto('node').values(rowFromNode(node))
@@ -115,9 +115,9 @@ function fileRow() : Selectable<NodeTable>
         target_node_id: null,
         size: 10,
         mime_type: 'text/plain',
-        created_at: '2026-01-02T03:04:05.678Z',
-        updated_at: '2026-01-02T03:04:05.678Z',
-        trashed_at: null,
+        created: '2026-01-02T03:04:05.678Z',
+        updated: '2026-01-02T03:04:05.678Z',
+        trashed: null,
     };
 }
 
@@ -127,24 +127,24 @@ describe('nodeFromRow corruption detection', () =>
     {
         const row : Selectable<NodeTable> = { ...fileRow(), blob_id: null };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 
     it('throws when a folder row carries a size', () =>
     {
         const row : Selectable<NodeTable> = { ...fileRow(), type: 'folder', blob_id: null, mime_type: null, size: 10 };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 
     it('throws when a link row carries a blob', () =>
     {
         const row : Selectable<NodeTable> = { ...fileRow(), type: 'link', target_node_id: 'd1', blob_id: 'sha-a' };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 
-    it('throws when a link row carries a trashed_at (links are never trashed)', () =>
+    it('throws when a link row carries a trashed timestamp (links are never trashed)', () =>
     {
         const row : Selectable<NodeTable> = {
             ...fileRow(),
@@ -153,10 +153,10 @@ describe('nodeFromRow corruption detection', () =>
             blob_id: null,
             size: null,
             mime_type: null,
-            trashed_at: '2026-02-03T04:05:06.000Z',
+            trashed: '2026-02-03T04:05:06.000Z',
         };
 
-        expect(() => nodeFromRow(row)).toThrow(NodeRowCorruptionError);
+        expect(() => nodeFromRow(row)).toThrow(RowCorruptionError);
     });
 });
 

@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Access Token List
   --
-  -- The caller's tokens: name, identifying start characters, scopes, and lifecycle dates -- never a value. Revoke is
-  -- two-click: the button arms into a confirm state and disarms on its own, since a revoked credential cannot be
-  -- un-revoked, only re-created.
+  -- Revoke takes two clicks, arming into a confirm state that disarms on its own, since a revoked token can't be
+  -- restored, only re-created.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -37,9 +36,9 @@
                         </UBadge>
                     </div>
                     <p class="mt-1 text-xs text-dimmed">
-                        Created {{ formatDate(token.createdAt) }}
-                        · {{ token.lastUsedAt ? `last used ${ formatDate(token.lastUsedAt) }` : 'never used' }}
-                        · {{ token.expiresAt ? `expires ${ formatDate(token.expiresAt) }` : 'no expiry' }}
+                        Created {{ formatDate(token.created) }}
+                        · {{ token.lastUsed ? `last used ${ formatDate(token.lastUsed) }` : 'never used' }}
+                        · {{ token.expires ? `expires ${ formatDate(token.expires) }` : 'no expiry' }}
                     </p>
                 </div>
 

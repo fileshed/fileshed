@@ -10,19 +10,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
-import { type BootedUserApp, type TestUser, bootUserApp, makeUser, request } from './support.ts';
+import { type BootedStoreApp, type TestUser, bootStoreApp, makeUser, request } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+type JSON = Record<string, unknown>;
 
-let booted : BootedUserApp;
+let booted : BootedStoreApp;
 let caller : TestUser;
 let target : TestUser;
 
 beforeEach(async () =>
 {
-    booted = await bootUserApp();
+    booted = await bootStoreApp();
     caller = await makeUser(booted, 'caller@example.com', 'Ada Caller');
     target = await makeUser(booted, 'grace@example.com', 'Grace Hopper');
 });
@@ -39,7 +39,7 @@ describe('GET /api/users/lookup', () =>
     it('resolves an exact email to that user\'s summary', async () =>
     {
         const res = await request(booted.app, 'GET', '/api/users/lookup?email=grace@example.com', caller.cookie);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body).toEqual({
@@ -53,7 +53,7 @@ describe('GET /api/users/lookup', () =>
     it('matches the whole email case-insensitively', async () =>
     {
         const res = await request(booted.app, 'GET', '/api/users/lookup?email=Grace@Example.COM', caller.cookie);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body.id).toBe(target.id);

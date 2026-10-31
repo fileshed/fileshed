@@ -16,7 +16,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminSettingsResponse, AdminUserPageResponse, AdminUserResponse } from '@fileshed/core';
 
 // Resource Access
-import { fetchAdminSettings, listUsers, setUserRole } from '@client/resource-access/admin.ts';
+import { getAdminSettings, listUsers, setUserRole } from '@client/resource-access/admin.ts';
 
 // Stores
 import { useAdminSettingsStore } from '@client/stores/adminSettings.ts';
@@ -38,14 +38,14 @@ vi.mock('@client/resource-access/admin.ts', () => ({
     setUserPassword: vi.fn(),
     revokeUserSessions: vi.fn(),
     deleteUser: vi.fn(),
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
 }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const listUsersMock = listUsers as unknown as Mock;
 const setUserRoleMock = setUserRole as unknown as Mock;
-const fetchSettingsMock = fetchAdminSettings as unknown as Mock;
+const getSettingsMock = getAdminSettings as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -62,7 +62,7 @@ function row(overrides : Partial<AdminUserResponse> = {}) : AdminUserResponse
         banReason: null,
         banExpires: null,
         usedBytes: 0,
-        createdAt: '2026-07-01T00:00:00.000Z',
+        created: '2026-07-01T00:00:00.000Z',
         ...overrides,
     };
 }
@@ -206,18 +206,18 @@ describe('Admin UsersTab', () =>
         await joined.trigger('click');
         await flushPromises();
         expect(listUsersMock).toHaveBeenLastCalledWith(
-            expect.objectContaining({ sortBy: 'createdAt', sortDirection: 'asc' })
+            expect.objectContaining({ sortKey: 'created', sortDirection: 'asc' })
         );
 
         await joined.trigger('click');
         await flushPromises();
         expect(listUsersMock).toHaveBeenLastCalledWith(
-            expect.objectContaining({ sortBy: 'createdAt', sortDirection: 'desc' })
+            expect.objectContaining({ sortKey: 'created', sortDirection: 'desc' })
         );
 
         await joined.trigger('click');
         await flushPromises();
-        expect(listUsersMock).toHaveBeenLastCalledWith(expect.not.objectContaining({ sortBy: 'createdAt' }));
+        expect(listUsersMock).toHaveBeenLastCalledWith(expect.not.objectContaining({ sortKey: 'created' }));
     });
 
     it('merges an action\'s refreshed row in place without refetching', async () =>
@@ -246,14 +246,14 @@ describe('Admin UsersTab', () =>
     it('costs no settings round trip when the instance default is already in hand', async () =>
     {
         listUsersMock.mockResolvedValue(pageFixture([ row() ]));
-        fetchSettingsMock.mockResolvedValue(settingsView(20_000));
+        getSettingsMock.mockResolvedValue(settingsView(20_000));
         await useAdminSettingsStore().load();
-        fetchSettingsMock.mockClear();
+        getSettingsMock.mockClear();
 
         const wrapper = mountTab();
         await flushPromises();
 
-        expect(fetchSettingsMock).not.toHaveBeenCalled();
+        expect(getSettingsMock).not.toHaveBeenCalled();
         expect(quotaModalDefault(wrapper)).toBe(20_000);
     });
 
@@ -261,7 +261,7 @@ describe('Admin UsersTab', () =>
     it('gets the instance default when the settings were never loaded this session', async () =>
     {
         listUsersMock.mockResolvedValue(pageFixture([ row() ]));
-        fetchSettingsMock.mockResolvedValue(settingsView(20_000));
+        getSettingsMock.mockResolvedValue(settingsView(20_000));
 
         const wrapper = mountTab();
         await flushPromises();

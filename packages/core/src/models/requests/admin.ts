@@ -1,15 +1,17 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin API DTOs
 //
-// The admin-only surface for managing other users. Setting a quota carries a single field: a byte cap of this user's
-// own, 0 for explicitly unlimited, or null to inherit the instance default. The successful response is the updated
-// user's UserProfile -- the same row shape the admin listing returns.
+// A quota of 0 is explicitly unlimited and null inherits the instance default; any other value is a byte cap of the
+// user's own.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
 import type { DatabaseKind } from '../database.ts';
 import type { StorageBackendKind } from '../storageBackend.ts';
 import type { UserProfile, UserRole } from '../userProfile.ts';
+
+// Requests
+import type { SortDirection } from './nodes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Set quota (PATCH /api/admin/users/:id)
@@ -57,11 +59,23 @@ export interface TestEmailResponse
 // Listing query (GET /api/admin/users)
 //----------------------------------------------------------------------------------------------------------------------
 
-export const adminUserSortKeys = [ 'name', 'email', 'createdAt' ] as const;
+export const adminUserSortKeys = [ 'name', 'email', 'created' ] as const;
 export type AdminUserSortKey = typeof adminUserSortKeys[number];
 
 export const adminUserSearchFields = [ 'email', 'name' ] as const;
 export type AdminUserSearchField = typeof adminUserSearchFields[number];
+
+// One page, an optional search over one field (a case-insensitive substring; empty reads as absent), and an optional
+// sort. Without a sortKey the listing keeps its own stable order.
+export interface AdminUserListQuery
+{
+    limit : number;
+    offset : number;
+    search ?: string;
+    searchField : AdminUserSearchField;
+    sortKey ?: AdminUserSortKey;
+    sortDirection : SortDirection;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 // User rows (GET /api/admin/users and every action's response)
@@ -86,7 +100,7 @@ export interface AdminUserResponse
     banReason : string | null;
     banExpires : string | null;
     usedBytes : number;
-    createdAt : string;
+    created : string;
 }
 
 export interface AdminUserPageResponse
@@ -159,7 +173,7 @@ export interface AccountDeletionRunSummary
 // Candidates are the staging areas of uploads nobody can still deliver to; the rest are live uploads the sweep left
 // alone and never counted. bytesFreed follows the same rule gc's does -- a staging area counted in failed still
 // occupies its space.
-export interface PartialsRunSummary
+export interface StagedUploadsRunSummary
 {
     candidates : number;
     reclaimed : number;
@@ -179,10 +193,10 @@ export interface TrashPurgeRunStatus
     summary : TrashPurgeRunSummary;
 }
 
-export interface PartialsRunStatus
+export interface StagedUploadsRunStatus
 {
     ranAt : string;
-    summary : PartialsRunSummary;
+    summary : StagedUploadsRunSummary;
 }
 
 export interface AccountDeletionRunStatus
@@ -199,7 +213,7 @@ export interface AccountDeletionRunStatus
 // admin asking for space back is answered with what this sweep reclaimed, not with an acknowledgement.
 //----------------------------------------------------------------------------------------------------------------------
 
-export const sweepKinds = [ 'gc', 'trashPurge', 'partials', 'accountDeletion' ] as const;
+export const sweepKinds = [ 'gc', 'trashPurge', 'stagedUploads', 'accountDeletion' ] as const;
 export type SweepKind = typeof sweepKinds[number];
 
 export interface GcSweepRunResponse extends GcRunStatus
@@ -212,9 +226,9 @@ export interface TrashPurgeSweepRunResponse extends TrashPurgeRunStatus
     sweep : 'trashPurge';
 }
 
-export interface PartialsSweepRunResponse extends PartialsRunStatus
+export interface StagedUploadsSweepRunResponse extends StagedUploadsRunStatus
 {
-    sweep : 'partials';
+    sweep : 'stagedUploads';
 }
 
 export interface AccountDeletionSweepRunResponse extends AccountDeletionRunStatus
@@ -225,7 +239,7 @@ export interface AccountDeletionSweepRunResponse extends AccountDeletionRunStatu
 export type SweepRunResponse
     = | GcSweepRunResponse
     | TrashPurgeSweepRunResponse
-    | PartialsSweepRunResponse
+    | StagedUploadsSweepRunResponse
     | AccountDeletionSweepRunResponse;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -300,7 +314,7 @@ export interface AdminStatusResponse
     backends : StorageBackendStatus[];
     gc : GcRunStatus | null;
     trashPurge : TrashPurgeRunStatus | null;
-    partials : PartialsRunStatus | null;
+    stagedUploads : StagedUploadsRunStatus | null;
     accountDeletion : AccountDeletionRunStatus | null;
 }
 

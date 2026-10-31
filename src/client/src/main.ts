@@ -14,8 +14,8 @@ import { useToast } from '@nuxt/ui/composables';
 import App from './app.vue';
 import { router } from './router/index.ts';
 
-// Resource Access
-import { applySafeThemeRescue } from './resource-access/safeThemeRescue.ts';
+// Utils
+import { applySafeThemeRescue } from './utils/safeThemeRescue.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 

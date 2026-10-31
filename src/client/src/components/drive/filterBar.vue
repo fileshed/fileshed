@@ -1,11 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Filter Bar
   --
-  -- The drive's idle bar, shown in the constant-height strip when nothing is selected: the shared Type and Modified
-  -- chips, the drive-only Owner chip (single-select from the folder's own owners, self-hiding when the folder has a
-  -- single owner), a Clear all chip when any filter is active, and -- in grid view -- the sort menu (list view sorts
-  -- from its own column headers instead). Each chip drives the store, which reloads server-side. The strip's height
-  -- lives on the drive page, so nothing here changes the row's height.
+  -- The strip's height is set on the drive page, so nothing here may change the row's height.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -99,14 +95,12 @@
     import TypeFilter from '../filters/typeFilter.vue';
     import ModifiedFilter from '../filters/modifiedFilter.vue';
 
-    // Utils
-    import {
-        type ModifiedFilter as ModifiedFilterValue,
-        ownerChipVisible,
-        ownerFilterSummary,
-    } from '../../utils/filterPresets.ts';
+    // Engines
+    import { type ModifiedFilter as ModifiedFilterValue, listing } from '../../engines/listing/index.ts';
 
     //------------------------------------------------------------------------------------------------------------------
+
+    const { ownerChipVisible, ownerFilterSummary } = listing.presets;
 
     defineProps<{
         viewMode : ViewMode;
@@ -123,8 +117,8 @@
     const SORT_LABELS : Record<NodeSortKey, string> = {
         name: 'Name',
         size: 'Size',
-        createdAt: 'Created',
-        updatedAt: 'Modified',
+        created: 'Created',
+        updated: 'Modified',
         kind: 'Kind',
     };
 

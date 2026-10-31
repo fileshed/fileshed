@@ -23,8 +23,8 @@ export const publicLinkResponseCodec = z.strictObject({
     nodeID: z.string(),
     token: z.string(),
     url: z.string(),
-    createdAt: isoDateTimeCodec,
-    revokedAt: isoDateTimeCodec.nullable(),
+    created: isoDateTimeCodec,
+    revoked: isoDateTimeCodec.nullable(),
 });
 
 typeAssert<Equals<z.output<typeof publicLinkResponseCodec>, PublicLinkResponse>>();
@@ -53,8 +53,8 @@ export function toPublicLinkResponse(link : PublicLink) : PublicLinkResponse
         nodeID: link.nodeID,
         token: link.token,
         url: publicLinkPath(link.token),
-        createdAt: link.createdAt.toISOString(),
-        revokedAt: link.revokedAt === null ? null : link.revokedAt.toISOString(),
+        created: link.created.toISOString(),
+        revoked: link.revoked === null ? null : link.revoked.toISOString(),
     };
 }
 

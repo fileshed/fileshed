@@ -12,7 +12,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { defaultInstanceTheme } from '@fileshed/core';
 
 // Resource Access
-import { fetchBranding, patchBranding } from '@client/resource-access/admin.ts';
+import { getBranding, patchBranding } from '@client/resource-access/admin.ts';
 
 // Under test
 import { useAdminBrandingStore } from '@client/stores/adminBranding.ts';
@@ -20,11 +20,11 @@ import { useAdminBrandingStore } from '@client/stores/adminBranding.ts';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchBranding: vi.fn(),
+    getBranding: vi.fn(),
     patchBranding: vi.fn(),
 }));
 
-const fetchMock = fetchBranding as unknown as Mock;
+const getBrandingMock = getBranding as unknown as Mock;
 const patchMock = patchBranding as unknown as Mock;
 
 function rootVar(name : string) : string
@@ -45,7 +45,7 @@ describe('useAdminBrandingStore', () =>
 
     it('loads the saved document and starts clean', async () =>
     {
-        fetchMock.mockResolvedValue({ ...defaultInstanceTheme, primary: '#3b82f6' });
+        getBrandingMock.mockResolvedValue({ ...defaultInstanceTheme, primary: '#3b82f6' });
         const store = useAdminBrandingStore();
 
         await store.load();
@@ -56,7 +56,7 @@ describe('useAdminBrandingStore', () =>
 
     it('paints a knob change onto the document element immediately, lowercasing picker hexes', async () =>
     {
-        fetchMock.mockResolvedValue({ ...defaultInstanceTheme });
+        getBrandingMock.mockResolvedValue({ ...defaultInstanceTheme });
         const store = useAdminBrandingStore();
         await store.load();
 
@@ -70,7 +70,7 @@ describe('useAdminBrandingStore', () =>
 
     it('clears a knob\'s variables when it returns to stock', async () =>
     {
-        fetchMock.mockResolvedValue({ ...defaultInstanceTheme });
+        getBrandingMock.mockResolvedValue({ ...defaultInstanceTheme });
         const store = useAdminBrandingStore();
         await store.load();
 
@@ -82,7 +82,7 @@ describe('useAdminBrandingStore', () =>
 
     it('saves only the keys that differ and adopts the merged answer', async () =>
     {
-        fetchMock.mockResolvedValue({ ...defaultInstanceTheme, primary: '#111111' });
+        getBrandingMock.mockResolvedValue({ ...defaultInstanceTheme, primary: '#111111' });
         patchMock.mockResolvedValue({ ...defaultInstanceTheme, primary: '#111111', radius: 0.5 });
         const store = useAdminBrandingStore();
         await store.load();
@@ -102,7 +102,7 @@ describe('useAdminBrandingStore', () =>
         link.setAttribute('href', '/api/branding.css');
         document.head.appendChild(link);
 
-        fetchMock.mockResolvedValue({ ...defaultInstanceTheme });
+        getBrandingMock.mockResolvedValue({ ...defaultInstanceTheme });
         patchMock.mockResolvedValue({ ...defaultInstanceTheme, primary: '#3b82f6' });
         const store = useAdminBrandingStore();
         await store.load();
@@ -123,7 +123,7 @@ describe('useAdminBrandingStore', () =>
 
     it('reverts the draft and wipes the preview', async () =>
     {
-        fetchMock.mockResolvedValue({ ...defaultInstanceTheme });
+        getBrandingMock.mockResolvedValue({ ...defaultInstanceTheme });
         const store = useAdminBrandingStore();
         await store.load();
 

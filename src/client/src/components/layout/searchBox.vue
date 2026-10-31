@@ -1,12 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Search Box
   --
-  -- The top bar's search field and the suggestions that drop out of it. Enter runs the full search page as it always
-  -- has; the dropdown is a shortcut over it -- arrow keys walk the rows, Enter takes the highlighted one, Escape puts
-  -- the dropdown away without disturbing what has been typed.
-  --
-  -- The store owns the debounce and the stale-response discard; this owns whether the dropdown is showing and which row
-  -- is highlighted, which are the box's own business and nobody else's.
+  -- The suggestions store owns the debounce and the stale-response discard; whether the dropdown shows and which row is
+  -- highlighted belong to the box alone.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

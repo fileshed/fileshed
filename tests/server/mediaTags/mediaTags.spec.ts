@@ -20,7 +20,7 @@ import { MediaTagManager } from '@server/managers/mediaTags.ts';
 import { MediaTagsRA, extractTags } from '@server/resource-access/mediaTags/index.ts';
 
 // Support
-import { type BootedServeApp, type TestUser, bootServeApp, makeUser, uploadFile } from '../publicLinks/support.ts';
+import { type BootedStoreApp, type TestUser, bootStoreApp, makeUser, uploadFile } from '../publicLinks/support.ts';
 import { taggedMp3 } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,12 +66,12 @@ describe('extractTags', () =>
 
 describe('MediaTagsRA', () =>
 {
-    let booted : BootedServeApp;
+    let booted : BootedStoreApp;
     let owner : TestUser;
 
     beforeEach(async () =>
     {
-        booted = await bootServeApp();
+        booted = await bootStoreApp();
         owner = await makeUser(booted, 'owner@example.com');
     });
 
@@ -143,7 +143,7 @@ describe('MediaTagManager', () =>
                 size: 100,
                 backendID: 'b1',
                 storageKey: sha256,
-                deletedAt: null,
+                deleted: null,
             })),
             getStream: vi.fn(() =>
             {

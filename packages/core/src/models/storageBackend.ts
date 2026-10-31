@@ -1,8 +1,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Storage Backend Domain Model
 //
-// A configured blob-storage backend instance. config is opaque here: its shape is backend-specific and validated by the
-// backend that consumes it, not at this boundary.
+// config is opaque here: its shape is backend-specific, and the backend that consumes it validates it.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const storageBackendKinds = [ 'fs', 'db', 's3', 'azure' ] as const;

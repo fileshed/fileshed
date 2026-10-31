@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Deletion Offer Request/Response Contracts
-//
-// The offeree-facing surface of the recipients-may-copy flow. Offers carry a snapshot of the deleted file (the node
-// is gone by the time the offeree sees one), so the response is self-contained; accepting places a fresh owned copy,
-// with the same placement shape a save-a-copy takes. Dates serialize as ISO strings.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface DeletionOfferResponse
@@ -14,8 +10,8 @@ export interface DeletionOfferResponse
     mimeType : string;
     size : number;
     createdBy : string;
-    createdAt : string;
-    expiresAt : string;
+    created : string;
+    expires : string;
 }
 
 export interface DeletionOfferListResponse

@@ -15,11 +15,11 @@ import type { PublicLinkResponse } from '@fileshed/core';
 
 // Support
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     type TestUser,
     type UploadedFile,
     bodyBytes,
-    bootServeApp,
+    bootStoreApp,
     createLink,
     getDirect,
     makeUser,
@@ -40,14 +40,14 @@ function sha256Hex(data : Buffer) : string
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let fixture : Buffer;
 let uploaded : UploadedFile;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     fixture = randomBytes(300);
     uploaded = await uploadFile(booted, owner, fixture, { name: 'report.pdf', mimeType: 'application/pdf' });

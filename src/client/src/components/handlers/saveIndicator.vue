@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Save Indicator
-  --
-  -- The one-line save-state readout the editing families show beside their Save button. Priority order: a save error
-  -- outranks everything, then an in-flight save, then unsaved changes, then a settled "Saved" once at least one save has
-  -- landed. A clean session that has never saved shows nothing.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -20,7 +16,7 @@
     const props = defineProps<{
         saving : boolean;
         dirty : boolean;
-        lastSavedAt : number | null;
+        lastSaved : number | null;
         saveError : string | null;
     }>();
 
@@ -29,7 +25,7 @@
         if(props.saveError !== null) { return 'Couldn\'t save'; }
         if(props.saving) { return 'Saving…'; }
         if(props.dirty) { return 'Unsaved changes'; }
-        if(props.lastSavedAt !== null) { return 'Saved'; }
+        if(props.lastSaved !== null) { return 'Saved'; }
         return '';
     });
 

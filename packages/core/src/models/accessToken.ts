@@ -25,9 +25,24 @@ export interface AccessToken
     name : string;
     start : string | null;
     scopes : AccessTokenScope[];
-    createdAt : Date;
-    lastUsedAt : Date | null;
-    expiresAt : Date | null;
+    created : Date;
+    lastUsed : Date | null;
+    expires : Date | null;
+}
+
+// A freshly minted PAT: the secret, shown this once, and the record it lists as from then on.
+export interface MintedAccessToken
+{
+    token : string;
+    accessToken : AccessToken;
+}
+
+// The media player's short-lived download key.
+export interface MintedPlaybackToken
+{
+    id : string;
+    token : string;
+    expires : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

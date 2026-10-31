@@ -22,12 +22,12 @@ import { useSessionStore } from '@client/stores/session.ts';
 import TrashTile from '@client/components/trash/trashTile.vue';
 
 // Resource Access
-import { emptyTrash, getTrash, hardDeleteNode, restoreNode } from '@client/resource-access/nodes.ts';
+import { emptyTrash, hardDeleteNode, listTrash, restoreNode } from '@client/resource-access/nodes.ts';
 import { updatePreferences } from '@client/resource-access/preferences.ts';
 import { listDeletionOffers } from '@client/resource-access/deletionOffers.ts';
 
 // Support
-import { ME_ID, SCROLL_AREA_STUB, meFixture } from '../support.ts';
+import { fileNode, folderNode, meFixture, scrollAreaStub } from '../support.ts';
 
 // Under test
 import TrashPage from '@client/pages/trashPage.vue';
@@ -35,7 +35,7 @@ import TrashPage from '@client/pages/trashPage.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getTrash: vi.fn(),
+    listTrash: vi.fn(),
     restoreNode: vi.fn(),
     hardDeleteNode: vi.fn(),
     emptyTrash: vi.fn(),
@@ -48,7 +48,7 @@ vi.mock('@client/resource-access/deletionOffers.ts', () => ({
 vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
-const getTrashMock = getTrash as unknown as Mock;
+const listTrashMock = listTrash as unknown as Mock;
 const restoreMock = restoreNode as unknown as Mock;
 const purgeMock = hardDeleteNode as unknown as Mock;
 const emptyTrashMock = emptyTrash as unknown as Mock;
@@ -58,27 +58,7 @@ const updatePreferencesMock = updatePreferences as unknown as Mock;
 //----------------------------------------------------------------------------------------------------------------------
 
 const ISO = '2026-07-01T00:00:00.000Z';
-const BASE = { ownerID: ME_ID, parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
-
-function fileNode(id : string) : NodeResponse
-{
-    return {
-        ...BASE,
-        id,
-        name: id,
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: ISO,
-        sharing: null,
-    };
-}
-
-function folderNode(id : string) : NodeResponse
-{
-    return { sharing: null, ...BASE, id, name: id, type: 'folder', trashedAt: ISO };
-}
+const TRASHED = { trashed: ISO };
 
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
@@ -94,13 +74,13 @@ function offer(id : string, name : string) : DeletionOfferResponse
         mimeType: 'text/plain',
         size: 64,
         createdBy: 'owner1',
-        createdAt: ISO,
-        expiresAt: '2026-07-28T00:00:00.000Z',
+        created: ISO,
+        expires: '2026-07-28T00:00:00.000Z',
     };
 }
 
-const STUBS = {
-    UScrollArea: SCROLL_AREA_STUB,
+const stubs = {
+    UScrollArea: scrollAreaStub,
     UButton: {
         props: [ 'label' ],
         template: '<button class="ubtn" :aria-label="$attrs[\'aria-label\']" @click="$emit(\'click\')">'
@@ -133,14 +113,14 @@ async function mountTrash(
     me : MeResponse | null = null
 ) : Promise<VueWrapper>
 {
-    getTrashMock.mockResolvedValue(page(nodes));
+    listTrashMock.mockResolvedValue(page(nodes));
     listOffersMock.mockResolvedValue({ offers });
 
     const pinia = createPinia();
     setActivePinia(pinia);
     useSessionStore().me = me;
 
-    const wrapper = mount(TrashPage, { global: { plugins: [ pinia ], stubs: STUBS } });
+    const wrapper = mount(TrashPage, { global: { plugins: [ pinia ], stubs } });
     await flushPromises();
 
     return wrapper;
@@ -165,9 +145,12 @@ describe('TrashPage', () =>
 
     it('lists the caller\'s trashed roots', async () =>
     {
-        const wrapper = await mountTrash([ folderNode('project'), fileNode('notes.txt') ]);
+        const wrapper = await mountTrash([
+            folderNode({ ...TRASHED, id: 'project' }),
+            fileNode({ ...TRASHED, id: 'notes.txt' }),
+        ]);
 
-        expect(getTrashMock).toHaveBeenCalled();
+        expect(listTrashMock).toHaveBeenCalled();
         expect(wrapper.text()).toContain('project');
         expect(wrapper.text()).toContain('notes.txt');
     });
@@ -181,7 +164,7 @@ describe('TrashPage', () =>
 
     it('restores a node through the restore endpoint', async () =>
     {
-        const wrapper = await mountTrash([ fileNode('notes.txt') ]);
+        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
 
         await rowAction(wrapper, 'notes.txt', 'Restore').trigger('click');
         await flushPromises();
@@ -192,7 +175,7 @@ describe('TrashPage', () =>
 
     it('does not purge on Delete forever until the destructive confirm is accepted', async () =>
     {
-        const wrapper = await mountTrash([ fileNode('notes.txt') ]);
+        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
 
         await rowAction(wrapper, 'notes.txt', 'Delete forever').trigger('click');
         await flushPromises();
@@ -233,14 +216,14 @@ describe('TrashPage', () =>
 
     it('enables the Empty trash action once the trash holds something', async () =>
     {
-        const wrapper = await mountTrash([ fileNode('notes.txt') ]);
+        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
 
         expect(wrapper.get('[aria-label="Empty trash"]').attributes('disabled')).toBeUndefined();
     });
 
     it('does not empty the trash until the Empty trash confirm is accepted', async () =>
     {
-        const wrapper = await mountTrash([ fileNode('notes.txt') ]);
+        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
 
         await wrapper.get('[aria-label="Empty trash"]').trigger('click');
         await flushPromises();
@@ -257,14 +240,14 @@ describe('TrashPage', () =>
 
     it('hides the offers section when no deletion offers are pending', async () =>
     {
-        const wrapper = await mountTrash([ fileNode('notes.txt') ]);
+        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ]);
 
         expect(wrapper.text()).not.toContain('Offered to you');
     });
 
     it('surfaces the offers section above the trash when an offer is pending', async () =>
     {
-        const wrapper = await mountTrash([ fileNode('notes.txt') ], [ offer('o1', 'shared.txt') ]);
+        const wrapper = await mountTrash([ fileNode({ ...TRASHED, id: 'notes.txt' }) ], [ offer('o1', 'shared.txt') ]);
 
         expect(wrapper.text()).toContain('Offered to you');
         expect(wrapper.text()).toContain('shared.txt');
@@ -297,7 +280,7 @@ describe('TrashPage — view toggle', () =>
     {
         updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
         const wrapper = await mountTrash(
-            [ fileNode('notes.txt') ],
+            [ fileNode({ ...TRASHED, id: 'notes.txt' }) ],
             [],
             meFixture({ preferences: { viewMode: 'grid' } })
         );
@@ -313,6 +296,33 @@ describe('TrashPage — view toggle', () =>
         expect(updatePreferencesMock).toHaveBeenCalledWith({ viewMode: 'list' });
         expect(wrapper.findComponent(TrashTile).exists()).toBe(false);
         expect(wrapper.find('[aria-label="notes.txt"]').exists()).toBe(true);
+    });
+
+    // A view mode chosen on this browser outranks the account's, so a toggle that wrote only the account preference
+    // would leave the surface where it was.
+    it('switches the surface when this browser already holds its own view mode', async () =>
+    {
+        window.localStorage.setItem('fileshed.drive.deviceViewMode', 'grid');
+        updatePreferencesMock.mockResolvedValue(meFixture({ preferences: { viewMode: 'list' } }));
+
+        try
+        {
+            const wrapper = await mountTrash(
+                [ fileNode({ ...TRASHED, id: 'notes.txt' }) ],
+                [],
+                meFixture({ preferences: { viewMode: 'grid' } })
+            );
+
+            await wrapper.find('[aria-label="List view"]').trigger('click');
+            await flushPromises();
+
+            expect(wrapper.findComponent(TrashTile).exists()).toBe(false);
+            expect(wrapper.find('[aria-label="notes.txt"]').exists()).toBe(true);
+        }
+        finally
+        {
+            window.localStorage.clear();
+        }
     });
 
     it('leaves the preference untouched when the already-active mode is clicked', async () =>

@@ -9,7 +9,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { getChildren, patchNode } from '@client/resource-access/nodes.ts';
+import { listChildren, patchNode } from '@client/resource-access/nodes.ts';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 // Under test
 import RenameNode from '@client/components/drive/modals/renameNode.vue';
@@ -19,43 +22,22 @@ import RenameNode from '@client/components/drive/modals/renameNode.vue';
 const toastAdd = vi.hoisted(() => vi.fn());
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getChildren: vi.fn(),
+    listChildren: vi.fn(),
     patchNode: vi.fn(),
 }));
 
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
-const getChildrenMock = getChildren as unknown as Mock;
+const listChildrenMock = listChildren as unknown as Mock;
 const patchNodeMock = patchNode as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-const ISO = '2026-07-01T00:00:00.000Z';
 
 interface Openable { open : (node : NodeResponse) => void }
 
 function emptyPage() : NodeListResponse
 {
     return { nodes: [], total: 0, limit: 50, offset: 0, owners: [] };
-}
-
-function fileNode(id : string, name : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name,
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
 }
 
 const NameDialogStub = {
@@ -97,14 +79,14 @@ describe('RenameNode modal', () =>
     {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        getChildrenMock.mockResolvedValue(emptyPage());
+        listChildrenMock.mockResolvedValue(emptyPage());
     });
 
     it('opens prefilled with the node\'s current name', async () =>
     {
         const wrapper = mountModal();
 
-        await open(wrapper, fileNode('f1', 'current.txt'));
+        await open(wrapper, fileNode({ id: 'f1', name: 'current.txt' }));
 
         expect(field(wrapper, 'data-open')).toBe('true');
         expect(field(wrapper, 'data-initial')).toBe('current.txt');
@@ -113,7 +95,7 @@ describe('RenameNode modal', () =>
     it('patches the target to the entered name, then closes', async () =>
     {
         const wrapper = mountModal();
-        await open(wrapper, fileNode('f1', 'current.txt'));
+        await open(wrapper, fileNode({ id: 'f1', name: 'current.txt' }));
 
         await submit(wrapper, 'renamed.txt');
 
@@ -125,7 +107,7 @@ describe('RenameNode modal', () =>
     {
         patchNodeMock.mockRejectedValue(new Error('boom'));
         const wrapper = mountModal();
-        await open(wrapper, fileNode('f1', 'current.txt'));
+        await open(wrapper, fileNode({ id: 'f1', name: 'current.txt' }));
 
         await submit(wrapper, 'renamed.txt');
 

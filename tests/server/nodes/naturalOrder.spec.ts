@@ -23,7 +23,7 @@ import {
 import { sortNodes } from '@client/engines/listing/order.ts';
 
 // Support
-import { type BootedServeApp, ORIGIN, type TestUser, bootServeApp, makeUser } from '../publicLinks/support.ts';
+import { type BootedStoreApp, ORIGIN, type TestUser, bootStoreApp, makeUser } from '../publicLinks/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -89,8 +89,8 @@ const VARIED : readonly {
     name : string;
     size : number | null;
     mimeType : string | null;
-    createdAt : string;
-    updatedAt : string;
+    created : string;
+    updated : string;
     type : 'file' | 'link';
 }[] = [
     {
@@ -98,8 +98,8 @@ const VARIED : readonly {
         name: 'v-huge.bin',
         size: 900_000,
         mimeType: 'application/octet-stream',
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
+        created: '2026-01-01T00:00:00.000Z',
+        updated: '2026-09-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -107,8 +107,8 @@ const VARIED : readonly {
         name: 'v-tiny.txt',
         size: 1,
         mimeType: 'text/plain',
-        createdAt: '2026-06-01T00:00:00.000Z',
-        updatedAt: '2026-02-01T00:00:00.000Z',
+        created: '2026-06-01T00:00:00.000Z',
+        updated: '2026-02-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -116,8 +116,8 @@ const VARIED : readonly {
         name: 'v-empty.txt',
         size: 0,
         mimeType: 'text/plain',
-        createdAt: '2026-03-01T00:00:00.000Z',
-        updatedAt: '2026-05-01T00:00:00.000Z',
+        created: '2026-03-01T00:00:00.000Z',
+        updated: '2026-05-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -125,8 +125,8 @@ const VARIED : readonly {
         name: 'v-clip.mp4',
         size: 5000,
         mimeType: 'video/mp4',
-        createdAt: '2026-04-01T00:00:00.000Z',
-        updatedAt: '2026-04-01T00:00:00.000Z',
+        created: '2026-04-01T00:00:00.000Z',
+        updated: '2026-04-01T00:00:00.000Z',
         type: 'file',
     },
     {
@@ -134,8 +134,8 @@ const VARIED : readonly {
         name: 'v-pointer',
         size: null,
         mimeType: null,
-        createdAt: '2026-05-01T00:00:00.000Z',
-        updatedAt: '2026-03-01T00:00:00.000Z',
+        created: '2026-05-01T00:00:00.000Z',
+        updated: '2026-03-01T00:00:00.000Z',
         type: 'link',
     },
 ];
@@ -144,7 +144,7 @@ const SHA256 = 'c'.repeat(64);
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 
 async function seed() : Promise<void>
@@ -162,8 +162,8 @@ async function seed() : Promise<void>
             size: 10,
             backend_id: backend.id,
             storage_key: 'seed/natural',
-            created_at: now,
-            deleted_at: null,
+            created: now,
+            deleted: null,
         } as never)
         .execute();
 
@@ -177,9 +177,9 @@ async function seed() : Promise<void>
             blob_id: SHA256,
             size: 10,
             mime_type: 'application/octet-stream',
-            created_at: now,
-            updated_at: now,
-            trashed_at: null,
+            created: now,
+            updated: now,
+            trashed: null,
             target_node_id: null,
         })),
         ...VARIED.map((row) => ({
@@ -191,9 +191,9 @@ async function seed() : Promise<void>
             blob_id: row.type === 'file' ? SHA256 : null,
             size: row.size,
             mime_type: row.mimeType,
-            created_at: row.createdAt,
-            updated_at: row.updatedAt,
-            trashed_at: null,
+            created: row.created,
+            updated: row.updated,
+            trashed: null,
             target_node_id: row.type === 'link' ? 'k-01' : null,
         })),
         ...FOLDERS.map((folder) => ({
@@ -205,9 +205,9 @@ async function seed() : Promise<void>
             blob_id: null,
             size: null,
             mime_type: null,
-            created_at: now,
-            updated_at: now,
-            trashed_at: null,
+            created: now,
+            updated: now,
+            trashed: null,
             target_node_id: null,
         })),
     ];
@@ -248,7 +248,7 @@ function positionOf(nodes : readonly NodeResponse[], name : string) : number
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     await seed();
 });

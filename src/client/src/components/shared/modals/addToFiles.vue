@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Add To Files Modal
   --
-  -- The destination picker for placing a link to a shared item into the caller's own tree, opened imperatively from the
-  -- Shared with me kebab. Passes the folder picker an empty moving set -- creating a link carries none of the move
-  -- engine's cycle restrictions, so every folder the caller owns, root included, is a legal destination.
+  -- The folder picker gets an empty moving set: creating a link carries none of the move cycle restrictions, so every
+  -- folder the caller owns, root included, is a legal destination.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

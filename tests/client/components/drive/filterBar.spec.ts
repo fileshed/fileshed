@@ -16,7 +16,7 @@ import FilterBar from '@client/components/drive/filterBar.vue';
 
 // The chips are popovers whose triggers render in the default slot; their content slots (calendar, owner list) stay
 // closed, so only the trigger stubs matter. The sort menu carries a class hook so its presence and label are queryable.
-const STUBS = {
+const stubs = {
     USelectMenu: { template: '<div><slot /></div>' },
     UPopover: { template: '<div><slot /></div>' },
     UButton: { props: [ 'label' ], template: '<button>{{ label }}</button>' },
@@ -29,7 +29,7 @@ const STUBS = {
 
 function mountBar(viewMode : 'grid' | 'list') : VueWrapper
 {
-    return mount(FilterBar, { props: { viewMode }, global: { stubs: STUBS } });
+    return mount(FilterBar, { props: { viewMode }, global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

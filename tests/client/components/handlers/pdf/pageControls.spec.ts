@@ -11,20 +11,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
 // Under test
-import PdfPageControls from '@client/components/handlers/pdf/pageControls.vue';
+import PDFPageControls from '@client/components/handlers/pdf/pageControls.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -47,12 +42,12 @@ const stubs = {
 
 function mountControls() : VueWrapper
 {
-    return mount(PdfPageControls, { global: { stubs } });
+    return mount(PDFPageControls, { global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfPageControls', () =>
+describe('PDFPageControls', () =>
 {
     beforeEach(() =>
     {
@@ -69,7 +64,7 @@ describe('PdfPageControls', () =>
 
     it('steps one page forward', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(3, 10);
         const wrapper = mountControls();
 
@@ -80,7 +75,7 @@ describe('PdfPageControls', () =>
 
     it('disables the back stepper on the first page', () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(1, 10);
         const wrapper = mountControls();
 
@@ -89,7 +84,7 @@ describe('PdfPageControls', () =>
 
     it('disables the forward stepper on the last page', () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(10, 10);
         const wrapper = mountControls();
 
@@ -98,7 +93,7 @@ describe('PdfPageControls', () =>
 
     it('clamps a typed page past the end down to the last one', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(1, 10);
         const wrapper = mountControls();
 
@@ -112,7 +107,7 @@ describe('PdfPageControls', () =>
 
     it('leaves the page alone when the box is committed with nothing parseable in it', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(4, 10);
         const wrapper = mountControls();
 

@@ -20,8 +20,8 @@ export const deletionOfferCodec = z.strictObject({
     mimeType: z.string(),
     size: z.number(),
     createdBy: z.string(),
-    createdAt: z.date(),
-    expiresAt: z.date(),
+    created: z.date(),
+    expires: z.date(),
 });
 
 typeAssert<Equals<z.output<typeof deletionOfferCodec>, DeletionOffer>>();

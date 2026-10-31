@@ -10,18 +10,25 @@
 
 /* eslint-disable camelcase -- avatar-row assertions name snake_case DB columns (house convention for Kysely) */
 
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
+// Models
+import { meResponseCodec } from '@fileshed/core';
 
 // Managers
 import { runGcOnce } from '@server/managers/gc.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedAvatarApp,
+    type BootedStoreApp,
     avatarRow,
-    blobDeletedAt,
+    blobDeleted,
     blobRowExists,
-    bootAvatarApp,
+    bootStoreApp,
     bytesExist,
     deleteAvatar,
     getAvatar,
@@ -29,17 +36,17 @@ import {
     makeUser,
     postAvatar,
     seedUnreferencedBlob,
-    sha256Of,
 } from './support.ts';
-import { REAL_PNG, gifBytes, jpegBytes, pngBytes, svgBytes, webpBytes } from '../support/imageBytes.ts';
+import { gifBytes, jpegBytes, pngBytes, realPNG, svgBytes, webpBytes } from '../support/imageBytes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const cleanups : (() => Promise<void>)[] = [];
 
-async function boot(avatarMaxBytes ?: number) : Promise<BootedAvatarApp>
+async function boot(avatarMaxBytes ?: number) : Promise<BootedStoreApp>
 {
-    const booted = await bootAvatarApp(avatarMaxBytes);
+    const config = avatarMaxBytes === undefined ? {} : { AVATAR_MAX_BYTES: avatarMaxBytes };
+    const booted = await bootStoreApp({ config });
     cleanups.push(booted.cleanup);
     return booted;
 }
@@ -126,10 +133,10 @@ describe('POST /api/me/avatar', () =>
         const booted = await boot();
         const user = await makeUser(booted, 'a@example.com');
 
-        const res = await postAvatar(booted.app, user.cookie, REAL_PNG, 'image/png');
+        const res = await postAvatar(booted.app, user.cookie, realPNG, 'image/png');
 
         expect(res.status).toBe(200);
-        expect((await avatarRow(booted, user.id)).avatar_sha256).toBe(sha256Of(REAL_PNG));
+        expect((await avatarRow(booted, user.id)).avatar_sha256).toBe(sha256Of(realPNG));
     });
 
     it('graveyards the previous avatar blob when a replacement leaves it unreferenced', async () =>
@@ -145,8 +152,8 @@ describe('POST /api/me/avatar', () =>
         await postAvatar(booted.app, user.cookie, second, 'image/jpeg');
 
         expect((await avatarRow(booted, user.id)).avatar_sha256).toBe(secondSha);
-        expect(await blobDeletedAt(booted, firstSha)).not.toBeNull();
-        expect(await blobDeletedAt(booted, secondSha)).toBeNull();
+        expect(await blobDeleted(booted, firstSha)).not.toBeNull();
+        expect(await blobDeleted(booted, secondSha)).toBeNull();
     });
 
     it('does not graveyard a replaced blob still held as another user\'s avatar', async () =>
@@ -162,7 +169,7 @@ describe('POST /api/me/avatar', () =>
         await postAvatar(booted.app, two.cookie, shared, 'image/png');
         await postAvatar(booted.app, one.cookie, pngBytes('a different image'), 'image/png');
 
-        expect(await blobDeletedAt(booted, sharedSha)).toBeNull();
+        expect(await blobDeleted(booted, sharedSha)).toBeNull();
         expect(await bytesExist(booted, sharedSha)).toBe(true);
     });
 });
@@ -181,9 +188,9 @@ describe('DELETE /api/me/avatar', () =>
 
         const res = await deleteAvatar(booted.app, user.cookie);
 
-        expect(res.status).toBe(204);
+        expect(res.status).toBe(200);
         expect(await avatarRow(booted, user.id)).toEqual({ avatar_sha256: null, avatar_mime: null });
-        expect(await blobDeletedAt(booted, sha256)).not.toBeNull();
+        expect(await blobDeleted(booted, sha256)).not.toBeNull();
     });
 
     it('clears the derived image on the me profile', async () =>
@@ -195,6 +202,19 @@ describe('DELETE /api/me/avatar', () =>
         await deleteAvatar(booted.app, user.cookie);
         const me = await (await getMe(booted.app, user.cookie)).json();
 
+        expect(me.image).toBeNull();
+    });
+
+    it('answers the refreshed profile, as the upload does', async () =>
+    {
+        const booted = await boot();
+        const user = await makeUser(booted, 'a@example.com');
+        await postAvatar(booted.app, user.cookie, pngBytes('an avatar'), 'image/png');
+
+        const res = await deleteAvatar(booted.app, user.cookie);
+        const me = meResponseCodec.parse(await res.json());
+
+        expect(me.id).toBe(user.id);
         expect(me.image).toBeNull();
     });
 });
@@ -230,6 +250,20 @@ describe('GET /api/avatars/:sha256', () =>
 
         // The bytes genuinely exist -- the 404 is the reference gate refusing to serve non-avatar content by hash.
         expect(await bytesExist(booted, sha256)).toBe(true);
+        expect(res.status).toBe(404);
+    });
+
+    it('404s an avatar whose bytes have gone from the store, rather than failing', async () =>
+    {
+        const booted = await boot();
+        const user = await makeUser(booted, 'a@example.com');
+        const bytes = pngBytes('soon gone');
+        const sha256 = sha256Of(bytes);
+        await postAvatar(booted.app, user.cookie, bytes, 'image/png');
+        await rm(join(booted.storageRoot, sha256.slice(0, 2), sha256.slice(2, 4), sha256));
+
+        const res = await getAvatar(booted.app, user.cookie, sha256);
+
         expect(res.status).toBe(404);
     });
 
@@ -276,7 +310,7 @@ describe('avatar GC interaction', () =>
         await deleteAvatar(booted.app, user.cookie);
 
         // A cutoff 1s in the future puts the just-graveyarded blob unambiguously past the grace window (a 0 grace can
-        // tie the same millisecond the delete stamped deleted_at). The point is that the removed avatar no longer
+        // tie the same millisecond the delete stamped deleted). The point is that the removed avatar no longer
         // protects the blob, so the sweep is now free to reap it.
         await runGcOnce({ blob: booted.blob, graceMs: async () => -1000 });
 

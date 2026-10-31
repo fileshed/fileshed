@@ -16,7 +16,7 @@ import { type NodeResponse, SEARCH_CANDIDATE_LIMIT, type SearchResponse } from '
 
 // Resource Access
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
 import { NodeManager } from '@server/managers/node.ts';
@@ -67,14 +67,14 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
             grantee_user_id: granteeID,
             role,
             created_by: 'alice',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }
 
 function manager() : NodeManager
 {
-    return new NodeManager(handle, ra, noopOrphanedBlobs(), testNodePolicy());
+    return new NodeManager({ handle, orphanedBlobs: noopOrphanedBlobs(), policy: testNodePolicy() });
 }
 
 function search(actorID : string, term : string, limit = 50, offset = 0) : Promise<SearchResponse>
@@ -169,7 +169,7 @@ describe('NodeManager.search', () =>
     {
         await ra.insert(fileNode({ id: 'live', ownerID: 'alice', blobID: 'sha-a', name: 'live-report' }));
         await ra.insert(fileNode({
-            id: 'gone', ownerID: 'alice', blobID: 'sha-a', name: 'trashed-report', trashedAt: new Date(),
+            id: 'gone', ownerID: 'alice', blobID: 'sha-a', name: 'trashed-report', trashed: new Date(),
         }));
 
         const result = await search('alice', 'report');
@@ -399,8 +399,8 @@ describe('NodeManager.search isolation', () =>
             name: `${ prefix }${ index }`,
             owner_id: ownerID,
             parent_id: null,
-            created_at: now,
-            updated_at: now,
+            created: now,
+            updated: now,
         }));
 
         await handle.db

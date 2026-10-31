@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Files Root Name
-  --
-  -- The account-page control that names the files root. The field prefills with the current name (blank when none is
-  -- set, the default showing as placeholder); Save is live only when the draft differs from what is stored. An empty
-  -- draft clears the preference, resetting the root to its default. Saving updates the session profile, so the sidebar
-  -- and breadcrumb re-label at once.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

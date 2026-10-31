@@ -1,17 +1,15 @@
 //----------------------------------------------------------------------------------------------------------------------
 // API Request Helper
 //
-// The one credentialed-fetch primitive every resource-access module is built on: a same-origin fetch that always sends
-// the session cookie, throws a typed ApiError on any non-2xx, and validates the 2xx JSON body against the endpoint's
-// core codec at the boundary. The codec check is the client's half of the wire contract -- the server hand-builds its
-// responses and never re-parses them on the way out, so this is the only place drift between the two is caught, and it
-// runs in every build, not just dev; a JSON parse costs nothing against a network round trip.
+// The 2xx body is validated against the endpoint's core codec in every build, not just dev: the server never re-parses
+// its responses on the way out, so this is the only place drift between the two is caught, and a parse costs nothing
+// next to a network round trip.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { ZodType } from 'zod';
 
 // Resource Access
-import { ApiError, apiErrorFromResponse } from './apiError.ts';
+import { APIError, apiErrorFromResponse } from './apiError.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -26,14 +24,14 @@ export type QueryParams = Record<string, QueryValue>;
 // intersection keeps `duplex: 'half'` (required to stream a ReadableStream request body) type-safe either way.
 type FetchInit = RequestInit & { duplex ?: 'half' };
 
-interface JsonRequestOptions<T>
+interface JSONRequestOptions<T>
 {
     method ?: HttpMethod;
     query ?: QueryParams;
     body ?: unknown;
     codec : ZodType<T>;
 
-    // Aborting rejects the returned promise with the signal's own DOMException rather than an ApiError -- a caller
+    // Aborting rejects the returned promise with the signal's own DOMException rather than an APIError -- a caller
     // that cancels its own request is expected to recognise and swallow it.
     signal ?: AbortSignal;
 }
@@ -62,7 +60,7 @@ export const SESSION_LOST_EVENT = 'fileshed:session-lost';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export function buildUrl(path : string, query ?: QueryParams) : string
+export function buildURL(path : string, query ?: QueryParams) : string
 {
     if(query === undefined) { return path; }
 
@@ -76,14 +74,20 @@ export function buildUrl(path : string, query ?: QueryParams) : string
     return encoded === '' ? path : `${ path }?${ encoded }`;
 }
 
-async function apiFetch(url : string, init : FetchInit) : Promise<Response>
+// Every credentialed transport calls this with a failed request's status. A 401 means the session the request rode is
+// dead -- revoked, banned, or expired. The shell listens for the event and bounces to sign-in; announcing it on the
+// window keeps resource access router-ignorant.
+export function announceIfSessionLost(status : number) : void
+{
+    if(status === 401) { window.dispatchEvent(new CustomEvent(SESSION_LOST_EVENT)); }
+}
+
+export async function apiFetch(url : string, init : FetchInit = {}) : Promise<Response>
 {
     const response = await fetch(url, { ...init, credentials: 'include' });
     if(!response.ok)
     {
-        // A 401 means the session this fetch rode is dead -- revoked, banned, or expired. The shell listens for
-        // this and bounces to sign-in; announcing it as a window event keeps resource access router-ignorant.
-        if(response.status === 401) { window.dispatchEvent(new CustomEvent(SESSION_LOST_EVENT)); }
+        announceIfSessionLost(response.status);
 
         throw await apiErrorFromResponse(response);
     }
@@ -91,10 +95,10 @@ async function apiFetch(url : string, init : FetchInit) : Promise<Response>
     return response;
 }
 
-// A 2xx body validated against its codec. A body that isn't JSON is a broken response (an ApiError carrying the
+// A 2xx body validated against its codec. A body that isn't JSON is a broken response (an APIError carrying the
 // status); a body that parses but fails the codec throws the codec's own error -- either way the caller never
 // receives an unvalidated shape.
-async function parseJson<T>(response : Response, codec : ZodType<T>) : Promise<T>
+async function parseJSON<T>(response : Response, codec : ZodType<T>) : Promise<T>
 {
     let payload : unknown;
     try
@@ -103,7 +107,7 @@ async function parseJson<T>(response : Response, codec : ZodType<T>) : Promise<T
     }
     catch
     {
-        throw new ApiError(response.status, 'The server returned a response that was not valid JSON.');
+        throw new APIError(response.status, 'The server returned a response that was not valid JSON.');
     }
 
     return codec.parse(payload);
@@ -129,16 +133,16 @@ async function issue(
 
     if(signal !== undefined) { init.signal = signal; }
 
-    return apiFetch(buildUrl(path, query), init);
+    return apiFetch(buildURL(path, query), init);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function requestJson<T>(path : string, options : JsonRequestOptions<T>) : Promise<T>
+export async function requestJSON<T>(path : string, options : JSONRequestOptions<T>) : Promise<T>
 {
     const response = await issue(path, options.method ?? 'GET', options.query, options.body, options.signal);
 
-    return parseJson(response, options.codec);
+    return parseJSON(response, options.codec);
 }
 
 // A request whose success carries no body (a 204). The response is drained by fetch but never parsed.
@@ -158,9 +162,9 @@ export async function requestUpload<T>(path : string, options : UploadRequestOpt
     const init : FetchInit = { method: options.method ?? 'PUT', headers, body: options.body };
     if(options.body instanceof ReadableStream) { init.duplex = 'half'; }
 
-    const response = await apiFetch(buildUrl(path, options.query), init);
+    const response = await apiFetch(buildURL(path, options.query), init);
 
-    return parseJson(response, options.codec);
+    return parseJSON(response, options.codec);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

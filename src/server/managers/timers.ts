@@ -43,6 +43,7 @@ interface Registration
 export class TimerManager
 {
     readonly #jobs = new Map<string, Registration>();
+    readonly #running = new Set<Promise<void>>();
 
     register(job : TimerJob) : void
     {
@@ -91,6 +92,13 @@ export class TimerManager
         entry.timer = null;
     }
 
+    // Stopping a timer does not cancel a run already under way. This settles once every run in flight at the call has
+    // finished, however it ended, so a caller can close what those runs use without pulling it out from under them.
+    async whenIdle() : Promise<void>
+    {
+        await Promise.all(this.#running);
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Internals
     //------------------------------------------------------------------------------------------------------------------
@@ -99,14 +107,17 @@ export class TimerManager
     // rejection would reach the process unhandled, and the interval behind it would be dead from the first bad run.
     #tick(job : TimerJob) : void
     {
-        try
-        {
-            void Promise.resolve(job.run()).catch((error) => this.#failed(job.name, error));
-        }
+        let answer : unknown;
+        try { answer = job.run(); }
         catch(error)
         {
             this.#failed(job.name, error);
+            return;
         }
+
+        const run = Promise.resolve(answer).then(() => undefined, (error : unknown) => this.#failed(job.name, error));
+        this.#running.add(run);
+        void run.finally(() => this.#running.delete(run));
     }
 
     #failed(name : string, error : unknown) : void

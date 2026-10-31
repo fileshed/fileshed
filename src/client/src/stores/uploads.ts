@@ -1,21 +1,14 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Uploads Store
 //
-// The upload queue and the pipeline behind it. Each dropped or picked file becomes an item that walks a fixed path:
-// hash the bytes, check the target folder for a name collision, pause for the user's choice if one is found, claim the
-// blob, then either send the bytes against the ticket in sequential chunks or answer a proof-of-possession
-// challenge -- both of which commit the file node. At most three items run at once; the rest wait their turn. A
-// collision pauses just its own item and raises one prompt at a time, so the queue never asks two questions at once.
-// An item landing in the folder the drive view currently shows refreshes that listing. Cancellation aborts an
-// in-flight transfer, settles a waiting prompt, or drops a still-queued item; every failure leaves a readable message
-// on the item's own row.
+// A collision pauses only its own item, and prompts are raised one at a time, so the queue never asks two questions at
+// once.
 //
-// Folder uploads walk a dropped tree: each folder is created first (merging into an existing folder of the same
-// name, the way an OS copy merges directories) and its files enqueue into the created node; a folder that can't be
-// created surfaces as an error row wearing the folder's name rather than vanishing.
+// A dropped folder merges into an existing folder of the same name, the way an OS copy merges directories; a folder
+// that can't be created shows as an error row with the folder's name rather than vanishing.
 //
-// A file over the instance's upload cap never enters the pipeline: the cap is knowable before any bytes move, so the
-// row is born failed rather than hashing itself only to be turned away at the claim.
+// A file over the instance's upload cap never enters the pipeline: the cap is known before any bytes move, so the row
+// starts out failed instead of hashing only to be refused at the claim.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -25,29 +18,24 @@ import { type NodeResponse, type UploadCommitMetadata, isSkippedName } from '@fi
 
 // Stores
 import { useAppStore } from './app.ts';
+import { commitFile } from './commitFile.ts';
 import { useDriveStore } from './drive.ts';
-import { useSessionStore } from './session.ts';
 
 // Resource Access
-import { answerChallenge, claimBlob } from '../resource-access/blobs.ts';
-import { uploadChunked } from '../resource-access/chunkedUpload.ts';
-import { readDroppedPayload } from '../resource-access/droppedEntries.ts';
-import { createNode, getChildren } from '../resource-access/nodes.ts';
+import { readDroppedPayload } from '../resource-access/browser/droppedEntries.ts';
+import { createNode, listChildren } from '../resource-access/nodes.ts';
 
 // Engines
-import { computeProofAnswer } from '../engines/claim.ts';
 import type { DroppedFolder, DroppedPayload } from '../engines/uploads/droppedTree.ts';
+import { type UploadStatus, isActiveStatus } from '../engines/uploads/status.ts';
 
 // Utils
-import { formatBytes, nextCopyName } from '../utils/formatters/index.ts';
-import { hashFile, readSampleWindows } from '../utils/hashFile.ts';
-import { describeApiError } from '../utils/runWithToast.ts';
+import { formatBytes } from '../utils/formatters/index.ts';
+import { nextCopyName } from '../utils/nextCopyName.ts';
+import { hashFile } from '../utils/hashFile.ts';
+import { describeAPIError } from '../utils/runWithToast.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
-
-export type UploadStatus
-    = 'queued' | 'hashing' | 'checking' | 'prompt' | 'claiming'
-    | 'uploading' | 'proving' | 'done' | 'error' | 'cancelled';
 
 export interface UploadProgress
 {
@@ -56,8 +44,9 @@ export interface UploadProgress
     totalBytes : number;
 }
 
-export interface UploadItem
+export interface FileUploadItem
 {
+    kind : 'file';
     id : string;
     file : File;
     folderID : string | null;
@@ -67,6 +56,19 @@ export interface UploadItem
     result : NodeResponse | null;
     error : string | null;
 }
+
+// A folder of a dropped tree that couldn't be created. It stands in the panel so the missing subtree is visible, and
+// it has nothing to retry: the folder is what failed, and none of its files were ever queued.
+export interface FolderFailureItem
+{
+    kind : 'folder';
+    id : string;
+    name : string;
+    status : 'error';
+    error : string;
+}
+
+export type UploadItem = FileUploadItem | FolderFailureItem;
 
 export type CollisionChoice = 'keep-both' | 'replace' | 'cancel';
 
@@ -81,15 +83,6 @@ export interface CollisionPrompt
 const MAX_RENAME_PROBES = 50;
 
 const CONCURRENCY = 3;
-
-const TERMINAL : ReadonlySet<UploadStatus> = new Set([ 'done', 'error', 'cancelled' ]);
-
-// An item still moving through the pipeline: not yet in a terminal state. Such an item is cancellable and shows a
-// progress bar; the row reads this rather than re-listing the status set.
-export function isActiveStatus(status : UploadStatus) : boolean
-{
-    return !TERMINAL.has(status);
-}
 
 // The content digest and the placement decided during preparation, carried into the claim/commit stage.
 interface Prepared
@@ -127,7 +120,7 @@ export const useUploadsStore = defineStore('uploads', () =>
     let active = 0;
 
     const currentPrompt = computed<CollisionPrompt | null>(() => prompts.value[0] ?? null);
-    const activeCount = computed(() => items.value.filter((item) => !TERMINAL.has(item.status)).length);
+    const activeCount = computed(() => items.value.filter((item) => isActiveStatus(item.status)).length);
     const doneCount = computed(() => items.value.filter((item) => item.status === 'done').length);
     const hasItems = computed(() => items.value.length > 0);
 
@@ -177,14 +170,21 @@ export const useUploadsStore = defineStore('uploads', () =>
 
     // A cancel that reached the item between stages: the request in flight (if any) can't be interrupted, so the
     // pipeline bails at the next checkpoint and finalizes as cancelled.
-    function ensureLive(item : UploadItem) : void
+    function assertNotCancelled(item : FileUploadItem) : void
     {
         if(cancelling.has(item.id)) { throw new DOMException('Upload cancelled', 'AbortError'); }
     }
 
-    function finalizeCancelled(item : UploadItem) : void
+    function finalizeCancelled(item : FileUploadItem) : void
     {
         item.status = 'cancelled';
+        cleanup(item.id);
+    }
+
+    function finalizeFailed(item : FileUploadItem, message : string) : void
+    {
+        item.status = 'error';
+        item.error = message;
         cleanup(item.id);
     }
 
@@ -193,51 +193,64 @@ export const useUploadsStore = defineStore('uploads', () =>
     //------------------------------------------------------------------------------------------------------------------
 
     // The commit target for a fresh node -- the item's (possibly "keep both"-renamed) name in its folder.
-    function createCommit(item : UploadItem) : UploadCommitMetadata
+    function newNodeCommit(item : FileUploadItem) : UploadCommitMetadata
     {
         return { name: item.name, parentID: item.folderID, mimeType: mimeOf(item.file) };
     }
 
     // "Keep both": bump the name past the collision, probing each candidate against the folder until one is free.
-    async function resolveFreeName(item : UploadItem) : Promise<string>
+    // Null once every probe found its name taken.
+    async function resolveFreeName(item : FileUploadItem) : Promise<string | null>
     {
         let candidate = nextCopyName(item.name);
 
         for(let probe = 0; probe < MAX_RENAME_PROBES; probe += 1)
         {
-            ensureLive(item);
+            assertNotCancelled(item);
 
             // eslint-disable-next-line no-await-in-loop -- each probe depends on the previous candidate being taken
-            const listing = await getChildren(item.folderID, { name: candidate, limit: 1 });
+            const listing = await listChildren(item.folderID, { name: candidate, limit: 1 });
             if(listing.total === 0) { return candidate; }
 
             candidate = nextCopyName(candidate);
         }
 
-        throw new Error('Couldn\'t find an available name for this file.');
+        return null;
     }
 
-    // The commit target after a collision: the user's choice decides. Returns null when they cancelled.
+    // The commit target after a collision: the user's choice decides. Returns null when the item settled without one:
+    // the user cancelled, or keeping both found no free name.
     async function resolveCollisionCommit(
-        item : UploadItem,
+        item : FileUploadItem,
         target : NodeResponse
     ) : Promise<UploadCommitMetadata | null>
     {
         item.status = 'prompt';
         const choice = await askCollision(item.id, item.name);
 
-        if(choice === 'cancel') { return null; }
+        if(choice === 'cancel')
+        {
+            finalizeCancelled(item);
+            return null;
+        }
 
         // Replace overwrites the existing node's bytes; the new file's type rides along so a changed type sticks.
         if(choice === 'replace') { return { replaceNodeID: target.id, mimeType: mimeOf(item.file) }; }
 
-        item.name = await resolveFreeName(item);
+        const freeName = await resolveFreeName(item);
+        if(freeName === null)
+        {
+            finalizeFailed(item, 'Couldn\'t find an available name for this file.');
+            return null;
+        }
 
-        return createCommit(item);
+        item.name = freeName;
+
+        return newNodeCommit(item);
     }
 
-    // Hash, collision-check, and settle on a commit target. Returns null when the item was cancelled along the way.
-    async function prepareCommit(item : UploadItem) : Promise<Prepared | null>
+    // Hash, collision-check, and settle on a commit target. Returns null when the item settled along the way.
+    async function prepareCommit(item : FileUploadItem) : Promise<Prepared | null>
     {
         item.status = 'hashing';
         const controller = new AbortController();
@@ -248,59 +261,45 @@ export const useUploadsStore = defineStore('uploads', () =>
             controller.signal
         );
 
-        ensureLive(item);
+        assertNotCancelled(item);
         item.status = 'checking';
-        const listing = await getChildren(item.folderID, { name: item.name, limit: 1 });
+        const listing = await listChildren(item.folderID, { name: item.name, limit: 1 });
         const collision = listing.total > 0 ? listing.nodes[0] ?? null : null;
 
-        const commit = collision !== null ? await resolveCollisionCommit(item, collision) : createCommit(item);
+        const commit = collision !== null ? await resolveCollisionCommit(item, collision) : newNodeCommit(item);
         if(commit === null) { return null; }
 
         return { sha256, commit };
     }
 
     async function commitClaim(
-        item : UploadItem,
+        item : FileUploadItem,
         sha256 : string,
         commit : UploadCommitMetadata
     ) : Promise<NodeResponse>
     {
         item.status = 'claiming';
-        const claim = await claimBlob({ sha256, size: item.file.size });
 
-        if(claim.upload)
-        {
-            item.status = 'uploading';
-
-            return uploadChunked({
-                ticket: claim.ticket,
-                file: item.file,
-                commit,
-                chunkBytes: claim.chunkBytes,
-                onProgress: (progress) =>
-                {
-                    item.progress.sentBytes = progress.sentBytes;
-                    item.progress.totalBytes = progress.totalBytes;
-                },
-                signal: controllers.get(item.id)?.signal,
-            });
-        }
-
-        item.status = 'proving';
-        const windows = await readSampleWindows(item.file, claim.ranges);
-        const answer = await computeProofAnswer(claim.nonce, windows);
-
-        return answerChallenge(claim.challengeID, { answer, ...commit });
+        return commitFile(item.file, commit, {
+            sha256,
+            onPhase: (phase) => { item.status = phase; },
+            onProgress: (progress) =>
+            {
+                item.progress.sentBytes = progress.sentBytes;
+                item.progress.totalBytes = progress.totalBytes;
+            },
+            signal: controllers.get(item.id)?.signal,
+        });
     }
 
-    async function runPipeline(item : UploadItem) : Promise<void>
+    async function runPipeline(item : FileUploadItem) : Promise<void>
     {
         try
         {
             const prepared = await prepareCommit(item);
-            if(prepared === null) { finalizeCancelled(item); return; }
+            if(prepared === null) { return; }
 
-            ensureLive(item);
+            assertNotCancelled(item);
             const result = await commitClaim(item, prepared.sha256, prepared.commit);
 
             item.status = 'done';
@@ -309,18 +308,12 @@ export const useUploadsStore = defineStore('uploads', () =>
 
             const drive = useDriveStore();
             if(item.folderID === drive.folderID) { await drive.refresh().catch(() => undefined); }
-
-            // The landed bytes moved the quota gauge; a failed refresh just leaves it stale until the next one.
-            await useSessionStore().refreshProfile()
-                .catch(() => undefined);
         }
         catch(caught)
         {
             if(isAbort(caught)) { finalizeCancelled(item); return; }
 
-            item.status = 'error';
-            item.error = describeApiError(caught);
-            cleanup(item.id);
+            finalizeFailed(item, describeAPIError(caught));
         }
     }
 
@@ -333,7 +326,10 @@ export const useUploadsStore = defineStore('uploads', () =>
     {
         while(active < CONCURRENCY)
         {
-            const next = items.value.find((item) => item.status === 'queued');
+            const next = items.value.find((item) : item is FileUploadItem =>
+            {
+                return item.kind === 'file' && item.status === 'queued';
+            });
             if(next === undefined) { break; }
 
             active += 1;
@@ -358,7 +354,7 @@ export const useUploadsStore = defineStore('uploads', () =>
     // otherwise a second batch of pure junk reports the sum of both.
     function startFreshBatchIfIdle() : void
     {
-        if(items.value.every((item) => TERMINAL.has(item.status)))
+        if(items.value.every((item) => !isActiveStatus(item.status)))
         {
             items.value = [];
             skipped.value = 0;
@@ -395,6 +391,7 @@ export const useUploadsStore = defineStore('uploads', () =>
             const error = overCapError(file);
 
             items.value.push({
+                kind: 'file',
                 id: `upload-${ counter }`,
                 file,
                 folderID,
@@ -421,14 +418,11 @@ export const useUploadsStore = defineStore('uploads', () =>
     {
         counter += 1;
         items.value.push({
+            kind: 'folder',
             id: `upload-${ counter }`,
-            file: new File([], name),
-            folderID: null,
             name,
             status: 'error',
-            progress: { hashedBytes: 0, sentBytes: 0, totalBytes: 0 },
-            result: null,
-            error: `Couldn't create this folder — nothing inside it was uploaded. ${ describeApiError(error) }`,
+            error: `Couldn't create this folder — nothing inside it was uploaded. ${ describeAPIError(error) }`,
         });
     }
 
@@ -437,7 +431,7 @@ export const useUploadsStore = defineStore('uploads', () =>
     // fresh otherwise. The lookup comes first precisely because creation would succeed and silently fork the tree.
     async function ensureFolder(name : string, parentID : string | null) : Promise<string>
     {
-        const listing = await getChildren(parentID, { name, types: [ 'folders' ], limit: 1 });
+        const listing = await listChildren(parentID, { name, types: [ 'folders' ], limit: 1 });
         const existing = listing.nodes[0];
 
         if(existing !== undefined && existing.type === 'folder') { return existing.id; }
@@ -508,7 +502,7 @@ export const useUploadsStore = defineStore('uploads', () =>
     function cancel(itemID : string) : void
     {
         const item = itemByID(itemID);
-        if(item === undefined || TERMINAL.has(item.status)) { return; }
+        if(item === undefined || !isActiveStatus(item.status)) { return; }
 
         cancelling.add(itemID);
         settlePrompt(itemID, 'cancel');
@@ -521,7 +515,7 @@ export const useUploadsStore = defineStore('uploads', () =>
     function retry(itemID : string) : void
     {
         const item = itemByID(itemID);
-        if(item === undefined || item.status !== 'error') { return; }
+        if(item?.kind !== 'file' || item.status !== 'error') { return; }
 
         cleanup(itemID);
         item.error = overCapError(item.file);
@@ -534,7 +528,7 @@ export const useUploadsStore = defineStore('uploads', () =>
     // Drop every finished item -- the panel's clear/dismiss. In-flight items stay.
     function clearFinished() : void
     {
-        items.value = items.value.filter((item) => !TERMINAL.has(item.status));
+        items.value = items.value.filter((item) => isActiveStatus(item.status));
         skipped.value = 0;
     }
 

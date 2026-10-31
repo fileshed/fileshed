@@ -39,8 +39,8 @@ export const deletionOfferResponseCodec = z.strictObject({
     mimeType: z.string(),
     size: z.number(),
     createdBy: z.string(),
-    createdAt: isoDateTimeCodec,
-    expiresAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
+    expires: isoDateTimeCodec,
 });
 
 typeAssert<Equals<z.output<typeof deletionOfferResponseCodec>, DeletionOfferResponse>>();
@@ -62,8 +62,8 @@ export function toDeletionOfferResponse(offer : DeletionOffer) : DeletionOfferRe
         mimeType: offer.mimeType,
         size: offer.size,
         createdBy: offer.createdBy,
-        createdAt: offer.createdAt.toISOString(),
-        expiresAt: offer.expiresAt.toISOString(),
+        created: offer.created.toISOString(),
+        expires: offer.expires.toISOString(),
     };
 }
 

@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Listing Chunks
-//
-// What a partly-loaded listing may do next: whether more of it is worth pulling on its own, whether enough is in hand
-// to order it without asking the server, and whether the rendered range has come close enough to the loaded edge to
-// want the next chunk. Counts only -- no rows reach here.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { LISTING_FETCH_MARGIN, MAX_COMPLETE_LISTING } from '@fileshed/core';

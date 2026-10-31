@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ describe('provider advertisement', () =>
 {
     it('advertises a boot-configured provider on /api/instance', async () =>
     {
-        const res = await new ApiClient(withGithub.baseURL).get('/api/instance');
+        const res = await new APIClient(withGithub.baseURL).get('/api/instance');
         const body = await res.json() as { providers : string[] };
 
         expect(res.status).toBe(200);
@@ -44,7 +44,7 @@ describe('provider advertisement', () =>
 
     it('registers the provider sign-in doorway on the booted server', async () =>
     {
-        const res = await new ApiClient(withGithub.baseURL).post('/api/auth/sign-in/social', {
+        const res = await new APIClient(withGithub.baseURL).post('/api/auth/sign-in/social', {
             provider: 'github',
             callbackURL: `${ withGithub.baseURL }/`,
         });
@@ -56,10 +56,10 @@ describe('provider advertisement', () =>
 
     it('advertises nothing on a server booted without providers, and refuses their doorway', async () =>
     {
-        const instance = await new ApiClient(without.baseURL).get('/api/instance');
+        const instance = await new APIClient(without.baseURL).get('/api/instance');
         expect(((await instance.json()) as { providers : string[] }).providers).toEqual([]);
 
-        const res = await new ApiClient(without.baseURL).post('/api/auth/sign-in/social', {
+        const res = await new APIClient(without.baseURL).post('/api/auth/sign-in/social', {
             provider: 'github',
             callbackURL: `${ without.baseURL }/`,
         });

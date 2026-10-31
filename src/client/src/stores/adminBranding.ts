@@ -1,11 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin Branding Store
 //
-// The Branding tab's draft brain: `saved` is the server's document, `draft` is what the knobs edit, and every
-// knob change repaints the app immediately through the preview variables. Save sends ONLY the keys that differ
-// and adopts the merged document the server answers; Revert restores the draft and wipes the preview. Custom CSS
-// deliberately never previews -- a half-typed selector must not wreck the admin mid-keystroke; it applies
-// through the stylesheet after Save, which is also why Save cache-busts the branding.css link.
+// Custom CSS never previews, since a half-typed selector must not break the page mid-keystroke; it applies through the
+// stylesheet after Save, which is why Save cache-busts the branding.css link.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -22,7 +19,7 @@ import {
 import { useAppStore } from './app.ts';
 
 // Resource Access
-import { fetchBranding, patchBranding } from '../resource-access/admin.ts';
+import { getBranding, patchBranding } from '../resource-access/admin.ts';
 
 // Utils
 import { applyThemePreview, clearThemePreview } from '../utils/themePreview.ts';
@@ -72,7 +69,7 @@ export const useAdminBrandingStore = defineStore('adminBranding', () =>
 
         try
         {
-            saved.value = await fetchBranding();
+            saved.value = await getBranding();
             draft.value = { ...saved.value };
         }
         catch(caught)
@@ -107,7 +104,7 @@ export const useAdminBrandingStore = defineStore('adminBranding', () =>
 
         // The instance facts changed too (mode policy at minimum) -- refresh them so the admin's own session
         // re-resolves immediately instead of waiting for the next page load.
-        void useAppStore().initialize();
+        void useAppStore().init();
     }
 
     function revert() : void

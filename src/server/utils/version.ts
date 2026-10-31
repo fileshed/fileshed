@@ -6,8 +6,8 @@
 //
 // The commit and branch are read from the environment first and the repository second: an image carries no history to
 // ask, so whatever builds it bakes the facts in, while a checkout has the repository itself and needs nothing baked.
-// All of it resolves once at module load -- nothing serving a request may touch the filesystem or spawn a process for
-// it, and none of it can change while the process lives.
+// Resolve it once at boot: asking the repository spawns git, which nothing serving a request may do, and none of it
+// can change while the process lives.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { execFileSync } from 'node:child_process';
@@ -33,9 +33,9 @@ export interface BuildInfo
 const require = createRequire(import.meta.url);
 const manifest = require('../../../package.json') as { version : string };
 
-function fromEnvironment(name : string) : string | null
+function fromEnvironment(env : Record<string, string | undefined>, name : string) : string | null
 {
-    const value = process.env[name]?.trim() ?? '';
+    const value = env[name]?.trim() ?? '';
 
     return value === '' ? null : value;
 }
@@ -58,17 +58,20 @@ function fromGit(...args : string[]) : string | null
     catch { return null; }
 }
 
-const commit = fromEnvironment('COMMIT_SHA') ?? fromGit('rev-parse', 'HEAD');
-const branch = fromEnvironment('COMMIT_REF') ?? fromGit('rev-parse', '--abbrev-ref', 'HEAD');
+export function resolveBuildInfo(env : Record<string, string | undefined> = process.env) : BuildInfo
+{
+    const commit = fromEnvironment(env, 'COMMIT_SHA') ?? fromGit('rev-parse', 'HEAD');
+    const branch = fromEnvironment(env, 'COMMIT_REF') ?? fromGit('rev-parse', '--abbrev-ref', 'HEAD');
 
-export const BUILD_INFO : BuildInfo = {
-    version: manifest.version,
+    return {
+        version: manifest.version,
 
-    // The environment carries a full hash; the label wants a readable one.
-    commit: commit === null ? null : commit.slice(0, SHORT_COMMIT_LENGTH),
+        // The environment carries a full hash; the label wants a readable one.
+        commit: commit === null ? null : commit.slice(0, SHORT_COMMIT_LENGTH),
 
-    // A detached checkout -- which is every tag build -- calls itself HEAD, and that names no branch.
-    branch: branch === null || branch === 'HEAD' ? null : branch,
-};
+        // A detached checkout -- which is every tag build -- calls itself HEAD, and that names no branch.
+        branch: branch === null || branch === 'HEAD' ? null : branch,
+    };
+}
 
 //----------------------------------------------------------------------------------------------------------------------

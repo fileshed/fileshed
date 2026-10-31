@@ -1,9 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- CSS Editor
   --
-  -- A small CodeMirror surface for the custom-CSS escape hatch: CSS highlighting, line numbers, and the admin's
-  -- own editor colorscheme -- the same registry the file editor uses. Fixed height with its own scroll; edits
-  -- emit upward, external writes land without echoing, same non-looping contract as the file editor.
+  -- An external write to the model lands without emitting an update, so binding it both ways never loops.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -19,8 +17,8 @@
     import { minimalSetup } from 'codemirror';
     import { css } from '@codemirror/lang-css';
 
-    // Components
-    import { resolveEditorTheme } from '../../handlers/text/themeRegistry.ts';
+    // Engines
+    import { resolveEditorTheme } from '../../../engines/editorTheme.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

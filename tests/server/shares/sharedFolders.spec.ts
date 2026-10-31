@@ -11,9 +11,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
 import {
-    type BootedShareApp,
+    type BootedStoreApp,
     type TestUser,
-    bootShareApp,
+    bootStoreApp,
     createFolder,
     grantShare,
     makeUser,
@@ -23,9 +23,9 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+type JSON = Record<string, unknown>;
 
-let booted : BootedShareApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let editor : TestUser;
 let viewer : TestUser;
@@ -33,7 +33,7 @@ let folder : string;
 
 beforeEach(async () =>
 {
-    booted = await bootShareApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     editor = await makeUser(booted, 'editor@example.com');
     viewer = await makeUser(booted, 'viewer@example.com');
@@ -63,7 +63,7 @@ describe('creating a subfolder inside a shared folder', () =>
             editor.cookie,
             { type: 'folder', name: 'Drafts', parentID: folder }
         );
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(201);
         // Owner is the creator (quota charges them); parent points into the folder owner's subtree.
@@ -78,12 +78,12 @@ describe('creating a subfolder inside a shared folder', () =>
             '/api/nodes', 
             editor.cookie,
             { type: 'folder', name: 'Drafts', parentID: folder }
-        )).json() as Json;
+        )).json() as JSON;
 
         const ownerRead = await request(booted.app, 'GET', `/api/nodes/${ created.id }`, owner.cookie);
 
         expect(ownerRead.status).toBe(200);
-        expect((await ownerRead.json() as Json).role).toBe('owner');
+        expect((await ownerRead.json() as JSON).role).toBe('owner');
     });
 
     it('refuses a viewer creating a subfolder inside the shared folder', async () =>
@@ -111,7 +111,7 @@ describe('uploading a file into a shared folder', () =>
     it('lets an editor upload a file owned by the editor into the shared folder', async () =>
     {
         const res = await uploadSmallFile(booted.app, editor.cookie, Buffer.from('editor bytes'), folder);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         // The uploaded file is owned by the uploader and charged to their quota, inside the folder owner's subtree.
@@ -138,7 +138,7 @@ describe('uploading a file into a shared folder', () =>
 async function contribute(name = 'contribution.bin') : Promise<string>
 {
     const res = await uploadSmallFile(booted.app, editor.cookie, Buffer.from('editor bytes'), folder, name);
-    const body = await res.json() as Json;
+    const body = await res.json() as JSON;
 
     return body.id as string;
 }
@@ -165,7 +165,7 @@ describe('the folder owner and a foreign-owned contribution', () =>
         const res = await request(booted.app, 'GET', `/api/nodes/${ contributionID }`, owner.cookie);
 
         expect(res.status).toBe(200);
-        expect((await res.json() as Json).role).toBe('owner');
+        expect((await res.json() as JSON).role).toBe('owner');
     });
 
     it('keeps the contribution hidden from a stranger with no access to the folder', async () =>
@@ -191,7 +191,7 @@ describe('the folder owner and a foreign-owned contribution', () =>
         const body = await res.json() as { violations ?: { code : string }[] };
 
         // Reads as owner ...
-        expect((await read.json() as Json).role).toBe('owner');
+        expect((await read.json() as JSON).role).toBe('owner');
         // ... but cannot re-share what it does not own.
         expect(res.status).toBe(403);
         expect(body.violations?.some((violation) => violation.code === 'share.notOwner')).toBe(true);
@@ -235,7 +235,7 @@ describe('the folder owner and a foreign-owned contribution', () =>
 
         expect(folderRead.status).toBe(404);
         expect(fileRead.status).toBe(200);
-        expect((await fileRead.json() as Json).role).toBe('owner');
+        expect((await fileRead.json() as JSON).role).toBe('owner');
     });
 });
 

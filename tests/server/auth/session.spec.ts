@@ -5,8 +5,14 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 
+// Models
+import { UnauthorizedError } from '@fileshed/core';
+
 // Managers
 import { SessionManager } from '@server/managers/session.ts';
+
+// Resource Access
+import { AuthRA } from '@server/resource-access/auth/index.ts';
 
 // Support
 import { type BootedApp, ORIGIN, bootTestApp, cookieFrom, signIn, signUp } from './support.ts';
@@ -17,9 +23,10 @@ import { type BootedApp, ORIGIN, bootTestApp, cookieFrom, signIn, signUp } from 
 // headers rather than asserted in isolation.
 function whoami(booted : BootedApp) : Hono
 {
-    const sessions = new SessionManager(booted.auth);
+    const sessions = new SessionManager(new AuthRA(booted.auth, booted.handle));
     const app = new Hono();
-    app.get('/whoami', async (ctx) => ctx.json({ user: await sessions.getUser(ctx.req.raw.headers) }));
+    app.get('/whoami', async (ctx) => ctx.json({ user: await sessions.requireUser(ctx.req.raw.headers) }));
+    app.onError((error, ctx) => ctx.json({ error: error.message }, error instanceof UnauthorizedError ? 401 : 500));
     return app;
 }
 
@@ -48,7 +55,7 @@ describe('email/password auth', () =>
         expect(cookieFrom(res)).not.toBe('');
     });
 
-    it('exposes the signed-in user through getSessionUser', async () =>
+    it('resolves the signed-in user from the session cookie', async () =>
     {
         const booted = await bootTestApp();
         const cookie = cookieFrom(await signUp(booted.app, 'ada@example.com', 'correct-horse-battery'));
@@ -60,14 +67,13 @@ describe('email/password auth', () =>
         expect(body.user.email).toBe('ada@example.com');
     });
 
-    it('resolves no user from getSessionUser without a session cookie', async () =>
+    it('refuses a request without a session cookie as unauthenticated', async () =>
     {
         const booted = await bootTestApp();
 
         const res = await whoami(booted).request(`${ ORIGIN }/whoami`);
-        const body = await res.json();
 
-        expect(body.user).toBeNull();
+        expect(res.status).toBe(401);
     });
 
     it('creates the user row with the default role and no quota', async () =>

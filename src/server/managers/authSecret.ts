@@ -20,6 +20,8 @@ import {
     AUTH_SECRET_FILE_NAME,
     type AdminSettingKey,
     GENERATED_AUTH_SECRET_BYTES,
+    adminSettingKeys,
+    isOneOf,
     settingDefinitions,
 } from '@fileshed/core';
 
@@ -93,12 +95,13 @@ async function sealedSettings(settings : SettingsRA) : Promise<SealedSetting[]>
 {
     if(!await settings.tableExists()) { return []; }
 
+    // A stored row can carry a key this version no longer defines.
     return (await settings.all()).flatMap((row) =>
     {
-        const definition = settingDefinitions[row.key as AdminSettingKey];
+        if(!isOneOf(adminSettingKeys, row.key)) { return []; }
 
-        return definition?.secret === true && typeof row.value === 'string'
-            ? [ { key: definition.key, value: row.value } ]
+        return settingDefinitions[row.key].secret === true && typeof row.value === 'string'
+            ? [ { key: row.key, value: row.value } ]
             : [];
     });
 }

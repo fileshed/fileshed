@@ -1,14 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Not Found Page
   --
-  -- Where every unmatched URL lands. It stands alone rather than inside the drive shell: the catch-all is reachable
-  -- signed in or not, and the shell's chrome assumes a session.
+  -- It stands alone rather than inside the drive shell: the catch-all is reachable signed in or not, and the shell's
+  -- chrome assumes a session.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <main class="flex min-h-screen flex-col items-center justify-center gap-8 bg-default p-6 text-default">
         <RouterLink to="/" class="flex items-center gap-2 text-xl font-bold">
-            <img :src="app.logoUrl" alt="" class="size-8">
+            <img :src="app.logoURL" alt="" class="size-8">
             {{ app.name }}
         </RouterLink>
 

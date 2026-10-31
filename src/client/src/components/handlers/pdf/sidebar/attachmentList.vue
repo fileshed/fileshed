@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Attachment List
   --
-  -- Files embedded in the PDF. Saving one never reaches the server: the renderer reads the bytes out of the document
-  -- it already holds. The format records no length for an embedded file, so none is shown.
+  -- Saving an attachment never reaches the server: the renderer reads the bytes out of the document it already holds.
+  -- The format records no length for an embedded file, so none is shown.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -43,13 +43,13 @@
 
 <script setup lang="ts">
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfAttachmentList' });
+    defineOptions({ name: 'PDFAttachmentList' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

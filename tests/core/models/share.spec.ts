@@ -18,7 +18,7 @@ describe('shareCodec', () =>
             granteeUserID: 'user_2',
             role: 'editor',
             createdBy: 'user_1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(shareCodec.safeParse(share).success).toBe(true);
@@ -33,7 +33,7 @@ describe('shareCodec', () =>
             granteeUserID: 'user_2',
             role: 'owner',
             createdBy: 'user_1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
         };
 
         expect(shareCodec.safeParse(ownerGrant).success).toBe(false);
@@ -48,8 +48,8 @@ describe('shareCodec', () =>
             granteeUserID: 'user_2',
             role: 'viewer',
             createdBy: 'user_1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            expiresAt: new Date('2026-02-01T00:00:00.000Z'),
+            created: new Date('2026-01-01T00:00:00.000Z'),
+            expires: new Date('2026-02-01T00:00:00.000Z'),
         };
 
         expect(shareCodec.safeParse(foreign).success).toBe(false);

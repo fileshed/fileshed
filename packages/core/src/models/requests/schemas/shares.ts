@@ -44,7 +44,7 @@ export const shareResponseCodec = z.strictObject({
     granteeUserID: z.string(),
     role: shareRoleCodec,
     createdBy: z.string(),
-    createdAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
 });
 
 typeAssert<Equals<z.output<typeof shareResponseCodec>, ShareResponse>>();
@@ -99,7 +99,7 @@ export const sharedWithMeQueryCodec = z.strictObject({
 typeAssert<Equals<z.output<typeof sharedWithMeQueryCodec>, SharedWithMeQuery>>();
 
 //----------------------------------------------------------------------------------------------------------------------
-// Serialization -- the single domain Share -> wire ShareResponse crossing, so createdAt becomes an ISO string in
+// Serialization -- the single domain Share -> wire ShareResponse crossing, so created becomes an ISO string in
 // exactly one place (isoDateTimeCodec's format).
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -111,7 +111,7 @@ export function toShareResponse(share : Share) : ShareResponse
         granteeUserID: share.granteeUserID,
         role: share.role,
         createdBy: share.createdBy,
-        createdAt: share.createdAt.toISOString(),
+        created: share.created.toISOString(),
     };
 }
 

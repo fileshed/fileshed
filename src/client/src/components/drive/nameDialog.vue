@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Name Dialog
   --
-  -- The shared name prompt behind New Folder and Rename: a single validated text field. The parent owns the action --
-  -- this emits the entered name and stays open until the parent closes it, so a rejected mutation can surface its error
-  -- without the dialog vanishing first. The field resets to `initial` each time the dialog opens.
+  -- It stays open until the parent closes it, so a rejected mutation can show its error without the dialog vanishing
+  -- first.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

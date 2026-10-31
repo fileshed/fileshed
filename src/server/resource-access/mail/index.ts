@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Mail Resource Access
 //
-// The nodemailer facade: one send, one transport, built fresh from the delivery's own connection values. No pooling
-// and no cached transport on purpose -- SMTP settings are admin-tunable at runtime, and building per send is what
-// makes a changed server apply to the very next email at a cost that is nothing next to the SMTP round trip itself.
+// A transport is built fresh for every send, with no pooling and no cached transport: SMTP settings are admin-tunable
+// at runtime, and building per send makes a changed server apply to the very next email at a cost that is nothing next
+// to the SMTP round trip itself.
 //----------------------------------------------------------------------------------------------------------------------
 
 import nodemailer from 'nodemailer';

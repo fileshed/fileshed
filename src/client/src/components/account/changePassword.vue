@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Change Password
   --
-  -- The account-page control for changing the sign-in password. The confirm field must match the new password before
-  -- Update is live -- the only client-side gate; the server still enforces the current password and any strength rules.
-  -- The optional "sign out everywhere else" opt-in defaults off. A success clears the fields and toasts; a failure keeps
-  -- them, so the user can correct a mistyped current password without retyping the rest.
+  -- The matching confirm field is the only client-side check; the server enforces the current password and any strength
+  -- rules. A failure keeps the fields, so the user can fix a mistyped current password without retyping the rest.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

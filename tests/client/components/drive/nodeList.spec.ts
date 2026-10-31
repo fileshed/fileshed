@@ -8,36 +8,20 @@ import { type VueWrapper, mount } from '@vue/test-utils';
 import type { NodeResponse, UserSummary } from '@fileshed/core';
 
 // Support
-import { SCROLL_AREA_STUB } from '../../support.ts';
+import { folderNode, scrollAreaStub } from '../../support.ts';
 
 // Under test
 import NodeList from '@client/components/drive/nodeList.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function folderNode(id : string, ownerID : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name: id,
-        ownerID,
-        parentID: null,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        updatedAt: '2026-07-01T00:00:00.000Z',
-        role: 'owner' as const,
-        type: 'folder',
-        trashedAt: null,
-    };
-}
-
-const STUBS = {
-    UScrollArea: SCROLL_AREA_STUB,
+const stubs = {
+    UScrollArea: scrollAreaStub,
     UIcon: true,
     NodeRow: {
         props: [ 'node', 'selected', 'menuItems', 'owners' ],
         template: '<div class="node-row" :data-id="node.id" :data-owners="owners.map((o) => o.id).join(\',\')" '
-            + ':data-link="node.sharing?.linkUrl ?? \'none\'" />',
+            + ':data-link="node.sharing?.linkURL ?? \'none\'" />',
     },
 };
 
@@ -52,7 +36,7 @@ function mountList(nodes : NodeResponse[], owners : UserSummary[]) : VueWrapper
             buildMenu: () => [ [ { label: 'x' } ] ],
             owners,
         },
-        global: { stubs: STUBS },
+        global: { stubs },
     });
 }
 
@@ -101,10 +85,10 @@ describe('NodeList — sharing wiring', () =>
 {
     it('gives each row the sharing its own node carries', () =>
     {
-        const linked = folderNode('first', 'u1');
-        linked.sharing = { granteeCount: 0, linkUrl: '/d/tok' };
+        const linked = folderNode({ id: 'first' });
+        linked.sharing = { granteeCount: 0, linkURL: '/d/tok' };
 
-        const rows = mountList([ linked, folderNode('second', 'u1') ], []).findAll('.node-row');
+        const rows = mountList([ linked, folderNode({ id: 'second' }) ], []).findAll('.node-row');
 
         expect(rows[0]?.attributes('data-link')).toBe('/d/tok');
         expect(rows[1]?.attributes('data-link')).toBe('none');
@@ -121,7 +105,7 @@ describe('NodeList — owner facet wiring', () =>
             { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null },
             { id: 'u2', name: 'Grace Hopper', email: 'grace@example.com', image: null },
         ];
-        const nodes = [ folderNode('a', 'u1'), folderNode('b', 'u2') ];
+        const nodes = [ folderNode({ id: 'a', ownerID: 'u1' }), folderNode({ id: 'b', ownerID: 'u2' }) ];
 
         const wrapper = mountList(nodes, owners);
         const rows = wrapper.findAll('.node-row');

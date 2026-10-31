@@ -3,7 +3,7 @@
 //
 // Drives the share and share_request row methods against a real in-memory SQLite database (production factory +
 // migrator, zero mocks). Expectations: a grant is (node, grantee, role, created_by), one per pair; requests route
-// to the target's owner and resolution stamps status + resolved_at together; and Shared with me lists active shares
+// to the target's owner and resolution stamps status + resolved together; and Shared with me lists active shares
 // with a placement flag, hiding a trashed target.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -16,7 +16,7 @@ import type { PendingShareRequest, Share, ShareRole } from '@fileshed/core';
 
 // Resource Access
 import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
 
 // Support
@@ -57,11 +57,11 @@ afterEach(async () =>
     await db.destroy();
 });
 
-const createdAt = new Date('2026-02-01T00:00:00.000Z');
+const created = new Date('2026-02-01T00:00:00.000Z');
 
 function shareOf(id : string, nodeID : string, granteeUserID : string, role : ShareRole) : Share
 {
-    return { id, nodeID, granteeUserID, role, createdBy: 'owner', createdAt };
+    return { id, nodeID, granteeUserID, role, createdBy: 'owner', created };
 }
 
 function pendingRequest(
@@ -72,7 +72,7 @@ function pendingRequest(
     message : string | null = null
 ) : PendingShareRequest
 {
-    return { id, nodeID, requesterID, requestedRole: role, message, status: 'pending', resolvedAt: null, createdAt };
+    return { id, nodeID, requesterID, requestedRole: role, message, status: 'pending', resolved: null, created };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -87,7 +87,7 @@ describe('ShareRA share rows', () =>
         const share = shareOf('s1', 'f', 'grantee', 'viewer');
 
         expect(await shares.upsertShare(share)).toEqual(share);
-        expect(await shares.getShareById('s1')).toEqual(share);
+        expect(await shares.getShareByID('s1')).toEqual(share);
     });
 
     it('finds a grant by (node, grantee) and returns undefined when there is none', async () =>
@@ -112,7 +112,7 @@ describe('ShareRA share rows', () =>
         expect(regranted.id).toBe('s1');
         expect(regranted.role).toBe('editor');
         expect(await shares.listByNode('f')).toHaveLength(1);
-        expect(await shares.getShareById('s2-ignored')).toBeUndefined();
+        expect(await shares.getShareByID('s2-ignored')).toBeUndefined();
     });
 
     it('reports whether a delete removed a row (the revoke 404 signal)', async () =>
@@ -127,8 +127,8 @@ describe('ShareRA share rows', () =>
     it('lists every grant on a node for the owner view', async () =>
     {
         await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
-        await shares.upsertShare({ ...shareOf('s1', 'f', 'grantee', 'viewer'), createdAt: new Date('2026-02-01') });
-        await shares.upsertShare({ ...shareOf('s2', 'f', 'other', 'editor'), createdAt: new Date('2026-02-02') });
+        await shares.upsertShare({ ...shareOf('s1', 'f', 'grantee', 'viewer'), created: new Date('2026-02-01') });
+        await shares.upsertShare({ ...shareOf('s2', 'f', 'other', 'editor'), created: new Date('2026-02-02') });
 
         const listed = await shares.listByNode('f');
 
@@ -268,14 +268,14 @@ describe('ShareRA.sharedWithMe', () =>
     // value to test; it is not part of the wire target, only the row.
     it('carries the target\'s last-modified time on the row', async () =>
     {
-        const updatedAt = new Date('2026-05-15T12:00:00.000Z');
-        await nodes.insert(fileNode({ id: 'doc', ownerID: 'owner', blobID: 'sha-a', updatedAt }));
+        const updated = new Date('2026-05-15T12:00:00.000Z');
+        await nodes.insert(fileNode({ id: 'doc', ownerID: 'owner', blobID: 'sha-a', updated }));
         await shares.upsertShare(shareOf('s1', 'doc', 'grantee', 'viewer'));
 
         const [ entry ] = await shares.sharedWithMe('grantee');
         if(entry === undefined) { throw new Error('the share was never listed'); }
 
-        expect(entry.updatedAt).toEqual(updatedAt);
+        expect(entry.updated).toEqual(updated);
     });
 
     it('reports placed=true when the grantee holds a link to the shared target', async () =>
@@ -316,7 +316,7 @@ describe('ShareRA share request rows', () =>
         const request = pendingRequest('r1', 'f', 'requester', 'viewer');
         await shares.insertRequest(request);
 
-        expect(await shares.getRequestById('r1')).toEqual(request);
+        expect(await shares.getRequestByID('r1')).toEqual(request);
     });
 
     it('round-trips a requester\'s message through the row<->domain boundary', async () =>
@@ -325,20 +325,20 @@ describe('ShareRA share request rows', () =>
         const request = pendingRequest('r1', 'f', 'requester', 'viewer', 'Could I get viewer access please?');
         await shares.insertRequest(request);
 
-        expect((await shares.getRequestById('r1'))?.message).toBe('Could I get viewer access please?');
+        expect((await shares.getRequestByID('r1'))?.message).toBe('Could I get viewer access please?');
     });
 
-    it('resolves a request by stamping status and resolved_at together', async () =>
+    it('resolves a request by stamping status and resolved together', async () =>
     {
         await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
         await shares.insertRequest(pendingRequest('r1', 'f', 'requester', 'editor'));
-        const resolvedAt = new Date('2026-04-01T00:00:00.000Z');
+        const resolved = new Date('2026-04-01T00:00:00.000Z');
 
-        await shares.resolveRequest('r1', 'granted', resolvedAt);
+        await shares.resolveRequest('r1', 'granted', resolved);
 
-        const resolved = await shares.getRequestById('r1');
-        expect(resolved?.status).toBe('granted');
-        expect(resolved?.resolvedAt).toEqual(resolvedAt);
+        const stored = await shares.getRequestByID('r1');
+        expect(stored?.status).toBe('granted');
+        expect(stored?.resolved).toEqual(resolved);
     });
 
     it('routes pending requests to the target owner, excluding requests on other owners\' nodes', async () =>
@@ -367,19 +367,19 @@ describe('ShareRA share request rows', () =>
         await nodes.insert(folderNode({ id: 'f', ownerID: 'owner' }));
         await shares.insertRequest(pendingRequest('r1', 'f', 'requester', 'viewer'));
 
-        expect((await shares.findPendingByNodeRequester('f', 'requester'))?.id).toBe('r1');
+        expect((await shares.getPendingByNodeRequester('f', 'requester'))?.id).toBe('r1');
 
         await shares.resolveRequest('r1', 'granted', new Date('2026-04-01T00:00:00.000Z'));
 
-        expect(await shares.findPendingByNodeRequester('f', 'requester')).toBeUndefined();
+        expect(await shares.getPendingByNodeRequester('f', 'requester')).toBeUndefined();
     });
 
     it('lists a requester\'s own requests across statuses', async () =>
     {
         await nodes.insert(folderNode({ id: 'a', ownerID: 'owner' }));
         await nodes.insert(folderNode({ id: 'b', ownerID: 'owner' }));
-        const earlier = { ...pendingRequest('r1', 'a', 'requester', 'viewer'), createdAt: new Date('2026-02-01') };
-        const later = { ...pendingRequest('r2', 'b', 'requester', 'editor'), createdAt: new Date('2026-02-02') };
+        const earlier = { ...pendingRequest('r1', 'a', 'requester', 'viewer'), created: new Date('2026-02-01') };
+        const later = { ...pendingRequest('r2', 'b', 'requester', 'editor'), created: new Date('2026-02-02') };
         await shares.insertRequest(earlier);
         await shares.insertRequest(later);
         await shares.resolveRequest('r2', 'declined', new Date('2026-04-01T00:00:00.000Z'));

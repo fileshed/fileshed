@@ -5,19 +5,19 @@
 // fixtures of the same format hash differently -- which is what the avatar and logo lifecycle specs need to tell one
 // upload from the next.
 //
-// REAL_PNG is a complete 1x1 file rather than a shaped prefix: a sniffer that only ever sees fixtures built to its own
+// realPNG is a complete 1x1 file rather than a shaped prefix: a sniffer that only ever sees fixtures built to its own
 // rules has been tested against itself.
 //----------------------------------------------------------------------------------------------------------------------
 
-const PNG_MAGIC = Buffer.from([ 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a ]);
-const JPEG_MAGIC = Buffer.from([ 0xff, 0xd8, 0xff, 0xe0 ]);
-const GIF_MAGIC = Buffer.from('GIF89a', 'ascii');
-const BMP_MAGIC = Buffer.from('BM', 'ascii');
-const ICO_MAGIC = Buffer.from([ 0x00, 0x00, 0x01, 0x00 ]);
+const pngMagic = Buffer.from([ 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a ]);
+const jpegMagic = Buffer.from([ 0xff, 0xd8, 0xff, 0xe0 ]);
+const gifMagic = Buffer.from('GIF89a', 'ascii');
+const bmpMagic = Buffer.from('BM', 'ascii');
+const icoMagic = Buffer.from([ 0x00, 0x00, 0x01, 0x00 ]);
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export const REAL_PNG = Buffer.from(
+export const realPNG = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
     'base64'
 );
@@ -31,27 +31,27 @@ function shaped(magic : Buffer, marker : string) : Buffer
 
 export function pngBytes(marker = '') : Buffer
 {
-    return shaped(PNG_MAGIC, marker);
+    return shaped(pngMagic, marker);
 }
 
 export function jpegBytes(marker = '') : Buffer
 {
-    return shaped(JPEG_MAGIC, marker);
+    return shaped(jpegMagic, marker);
 }
 
 export function gifBytes(marker = '') : Buffer
 {
-    return shaped(GIF_MAGIC, marker);
+    return shaped(gifMagic, marker);
 }
 
 export function bmpBytes(marker = '') : Buffer
 {
-    return shaped(BMP_MAGIC, marker);
+    return shaped(bmpMagic, marker);
 }
 
 export function icoBytes(marker = '') : Buffer
 {
-    return shaped(ICO_MAGIC, marker);
+    return shaped(icoMagic, marker);
 }
 
 // RIFF names its payload four bytes in, so a WebP fixture needs a plausible chunk size between the two tags.

@@ -132,7 +132,7 @@ export const BlankLines = Extension.create({
 
 // Block types whose tokenizers lazily swallow a directly-following line; ending them takes a blank line, and the
 // serializer writes that grammar line itself when the next block isn't already one.
-const NEEDS_TERMINATOR = new Set([ 'bulletList', 'orderedList', 'taskList', 'blockquote', 'table' ]);
+const needsTerminator = new Set([ 'bulletList', 'orderedList', 'taskList', 'blockquote', 'table' ]);
 
 function isEmptyParagraph(node : JSONContent) : boolean
 {
@@ -156,7 +156,7 @@ function joinBlocks(children : JSONContent[], helpers : JoinHelpers) : string
         const prev = index > 0 ? children[index - 1] : undefined;
         if(prev)
         {
-            const grammarBreak = NEEDS_TERMINATOR.has(prev.type ?? '') && !isEmptyParagraph(child);
+            const grammarBreak = needsTerminator.has(prev.type ?? '') && !isEmptyParagraph(child);
             out += grammarBreak ? '\n\n' : '\n';
         }
 
@@ -181,7 +181,7 @@ function renderListItem(marker : string, node : JSONContent, helpers : JoinHelpe
     return [ `${ marker }${ first }`, ...tail ].join('\n');
 }
 
-const ITEM_INLINE = new Set([ 'text', 'hardBreak' ]);
+const itemInlineTypes = new Set([ 'text', 'hardBreak' ]);
 
 // marked emits tight-item content as bare `text` tokens and the stock item parse paragraph-wraps only the first,
 // so a text line after a blank line inside an item lands as a naked inline child. Every line is a paragraph in the
@@ -199,7 +199,7 @@ function wrapStrayInline<T extends JSONContent | JSONContent[] | null | undefine
 
     for(const child of item.content ?? [])
     {
-        if(ITEM_INLINE.has(child.type ?? '')) { run.push(child); }
+        if(itemInlineTypes.has(child.type ?? '')) { run.push(child); }
         else { flush(); out.push(child); }
     }
     flush();

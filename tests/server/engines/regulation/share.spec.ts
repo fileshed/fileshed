@@ -13,7 +13,7 @@ import { judgeGrant, judgeShareRequestResolution } from '@server/engines/regulat
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const AT = new Date('2026-01-01T00:00:00.000Z');
+const at = new Date('2026-01-01T00:00:00.000Z');
 
 function file(overrides : Partial<FileNode> = {}) : FileNode
 {
@@ -26,9 +26,9 @@ function file(overrides : Partial<FileNode> = {}) : FileNode
         blobID: 'blob_1',
         size: 2048,
         mimeType: 'application/pdf',
-        createdAt: AT,
-        updatedAt: AT,
-        trashedAt: null,
+        created: at,
+        updated: at,
+        trashed: null,
         ...overrides,
     };
 }
@@ -42,8 +42,8 @@ function link(overrides : Partial<LinkNode> = {}) : LinkNode
         ownerID: 'user_recipient',
         parentID: 'folder_1',
         targetNodeID: 'file_1',
-        createdAt: AT,
-        updatedAt: AT,
+        created: at,
+        updated: at,
         ...overrides,
     };
 }
@@ -57,8 +57,8 @@ function pendingRequest(overrides : Partial<PendingShareRequest> = {}) : Pending
         requesterID: 'user_requester',
         requestedRole: 'viewer',
         message: null,
-        resolvedAt: null,
-        createdAt: AT,
+        resolved: null,
+        created: at,
         ...overrides,
     };
 }
@@ -72,8 +72,8 @@ function resolvedRequest(overrides : Partial<ResolvedShareRequest> = {}) : Resol
         requesterID: 'user_requester',
         requestedRole: 'viewer',
         message: null,
-        resolvedAt: AT,
-        createdAt: AT,
+        resolved: at,
+        created: at,
         ...overrides,
     };
 }
@@ -176,7 +176,7 @@ describe('judgeShareRequestResolution', () =>
     it('rejects resolving an already-resolved request', () =>
     {
         const result = judgeShareRequestResolution({
-            request: resolvedRequest({ status: 'granted', resolvedAt: AT }),
+            request: resolvedRequest({ status: 'granted', resolved: at }),
             targetOwnerID: 'user_owner',
             actorID: 'user_owner',
         });

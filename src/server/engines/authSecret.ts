@@ -1,11 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Auth Secret Engine
 //
-// Which key signs this boot's sessions, which older keys may still be needed to open what an earlier boot sealed,
-// and what to do about a sealed setting none of them opens. Pure: reading, writing and deleting are the manager's.
-//
-// The ladder, highest first: a file the operator named, then AUTH_SECRET, then the file FileShed manages itself.
-// Generation happens only at the bottom of it.
+// The ladder of signing-key sources, highest first: a file the operator named, then AUTH_SECRET, then the file FileShed
+// manages itself. Generation happens only at the bottom of it.
 //
 // The standing invariant, which judgeSealedSettings encodes: sealed settings are cleared only when
 // FILESHED_DISCARD_SEALED_SECRETS says so. Everywhere else, a value no key opens ends the boot.

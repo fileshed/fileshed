@@ -1,171 +1,27 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Public Link / Download Spec Support
 //
-// Boots the real serving slice end to end: a fresh in-memory database (real factory + migrations + admin bootstrap), a
-// real BlobRA over an fs facade under a per-run temp directory, the real BlobManager (to land actual file bytes via the
-// claim/upload flow), the real NodeManager (to create folders and trash), and the real PublicLinkManager behind its
-// direct/download/link-management routes. onError routes through mapManagerError, exactly as the integrated app will.
-// Specs drive the flow with app.request over REAL streamed bytes -- zero mocks.
-//
-// Download authorization runs through the REAL ShareRA-backed resolver, wired the same way app.ts wires it, and grants
-// are real share rows minted over the real share route. A hand-rolled resolver here would make every authorization
-// assertion vacuous: it could not fail for a share-resolution regression, which is precisely what it must catch.
+// Download authorization runs through the composed ShareRA-backed resolver, and grants are real share rows minted over
+// the real share route. A hand-rolled resolver here would make every authorization assertion vacuous: it could not fail
+// for a share-resolution regression, which is precisely what it must catch.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
-import { Hono } from 'hono';
 import { createId } from '@paralleldrive/cuid2';
 
-import {
-    type ClaimResponse,
-    DEFAULT_UPLOAD_CHUNK_BYTES,
-    type NodeResponse,
-    type ShareRole,
-    UNLIMITED_QUOTA,
-} from '@fileshed/core';
+import type { ClaimResponse, NodeResponse, ShareRole } from '@fileshed/core';
 
 // Resource Access
-import { type Auth, authOptions, createAuth } from '@server/resource-access/auth.ts';
-import { BlobRA } from '@server/resource-access/blob/index.ts';
-import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
-import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
-import { PublicLinkRA } from '@server/resource-access/publicLinks/index.ts';
-import { ShareRA } from '@server/resource-access/shares/index.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
-import { initialize } from '@server/resource-access/boot.ts';
-import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
-// Managers
-import { AccessTokenManager } from '@server/managers/accessToken.ts';
-import { BlobManager } from '@server/managers/blob.ts';
-import { ArchiveManager } from '@server/managers/archive.ts';
-import { MediaTagManager } from '@server/managers/mediaTags.ts';
-import { NodeManager } from '@server/managers/node.ts';
-import { PublicLinkManager } from '@server/managers/publicLink.ts';
-import { SessionManager } from '@server/managers/session.ts';
-import { ShareManager } from '@server/managers/share.ts';
-import { mapManagerError } from '@server/managers/errors.ts';
-
-// Routes
-import { createBlobRoutes } from '@server/routes/blobs.ts';
-import { createDirectRoutes } from '@server/routes/direct.ts';
-import { createAccessTokenRoutes } from '@server/routes/accessTokens.ts';
-import { createArchiveRoutes } from '@server/routes/archives.ts';
-import { createDownloadRoutes } from '@server/routes/downloads.ts';
-import { createMeRoutes } from '@server/routes/me.ts';
-import { createNodeRoutes } from '@server/routes/nodes.ts';
-import { createPublicLinkRoutes } from '@server/routes/links.ts';
-import { createShareRoutes } from '@server/routes/shares.ts';
-import { createUploadRoutes } from '@server/routes/uploads.ts';
-
-// Auth support (real sign-up/sign-in over the same app)
-import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
-import { accountDeletionsFor } from '../support/accountDeletions.ts';
-import { openTestDatabase } from '../support/database.ts';
+// Support
+import { ORIGIN, cookieFrom, signIn, signUp } from '../auth/support.ts';
+import type { BootedStoreApp } from '../support/storeApp.ts';
 
 export { ORIGIN } from '../auth/support.ts';
-
-//----------------------------------------------------------------------------------------------------------------------
-
-export interface BootedServeApp
-{
-    app : Hono;
-    handle : DatabaseHandle;
-    auth : Auth;
-    blob : BlobRA;
-    cleanup : () => Promise<void>;
-}
-
-// The graveyard collaborator is irrelevant to serving; a no-op stands in (its real home is the upload/GC side).
-const noopOrphanedBlobs = { async graveyardUnreferenced() { /* serving specs do not exercise the graveyard */ } };
-
-function composeApp(auth : Auth, handle : DatabaseHandle, blob : BlobRA) : Hono
-{
-    const sessions = new SessionManager(auth);
-    const nodeRA = new NodeRA(handle);
-    const shareRA = new ShareRA(handle);
-    const userRA = new UserRA(handle);
-    const linkRA = new PublicLinkRA(handle);
-
-    const blobs = new BlobManager({
-        handle,
-        blob,
-        uploadMaxBytes: async () => 5 * 1024 * 1024 * 1024,
-        skippedUploadNames: async () => [],
-        uploadChunkBytes: DEFAULT_UPLOAD_CHUNK_BYTES,
-        defaultQuota: async () => UNLIMITED_QUOTA,
-    });
-    const mediaTags = new MediaTagManager({ blob, tags: new MediaTagsRA(handle) });
-    const nodes = new NodeManager(handle, nodeRA, noopOrphanedBlobs, { defaultQuota: async () => UNLIMITED_QUOTA });
-    const shares = new ShareManager(handle, nodeRA, shareRA, userRA);
-
-    // The REAL share-aware resolver, wired exactly as app.ts wires it -- so these specs exercise the authorization
-    // that actually ships. A hand-rolled double here could not fail for any share-resolution regression.
-    const links = new PublicLinkManager(
-        nodeRA,
-        blob,
-        linkRA,
-        (userID, nodeID) => shareRA.effectiveRole(userID, nodeID)
-    );
-
-    const app = new Hono();
-
-    app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-    app.route('/api', createAccessTokenRoutes(sessions, new AccessTokenManager(auth)));
-    app.route('/api', createMeRoutes(sessions, nodes, accountDeletionsFor(auth, handle)));
-    app.route('/api', createBlobRoutes(sessions, blobs, mediaTags));
-    app.route('/api', createUploadRoutes(sessions, blobs, mediaTags));
-    app.route('/api', createNodeRoutes(sessions, nodes));
-    app.route('/api', createShareRoutes(sessions, shares));
-    app.route('/api', createDownloadRoutes(sessions, links));
-    app.route('/api', createArchiveRoutes(sessions, new ArchiveManager({
-        nodes: nodeRA,
-        blob,
-        resolveRoles: (userID, nodeIDs) => shareRA.effectiveRoles(userID, nodeIDs),
-    })));
-    app.route('/api', createPublicLinkRoutes(sessions, links));
-    app.route('/d', createDirectRoutes(links));
-
-    app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
-    app.onError((error, ctx) =>
-    {
-        const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
-        return ctx.json({ error: 'Internal Server Error' }, 500);
-    });
-
-    return app;
-}
-
-export async function bootServeApp() : Promise<BootedServeApp>
-{
-    const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-serve-'));
-    const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot }));
-
-    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
-    await seedDefaultBackend(handle, config);
-
-    const blob = new BlobRA(handle);
-
-    return {
-        app: composeApp(auth, handle, blob),
-        handle,
-        auth,
-        blob,
-        cleanup: async () =>
-        {
-            await dispose();
-            await rm(storageRoot, { recursive: true, force: true });
-        },
-    };
-}
+export { type BootedStoreApp, bootStoreApp } from '../support/storeApp.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Users
@@ -178,7 +34,7 @@ export interface TestUser
     email : string;
 }
 
-export async function makeUser(booted : BootedServeApp, email : string) : Promise<TestUser>
+export async function makeUser(booted : BootedStoreApp, email : string) : Promise<TestUser>
 {
     const password = 'correct-horse-battery';
     await signUp(booted.app, email, password);
@@ -211,7 +67,7 @@ export interface UploadedFile
 }
 
 export async function uploadFile(
-    booted : BootedServeApp,
+    booted : BootedStoreApp,
     user : TestUser,
     data : Buffer,
     meta : { name ?: string; mimeType ?: string; parentID ?: string } = {}
@@ -246,7 +102,7 @@ export async function uploadFile(
 
 // Write a mime type straight onto a stored node, bypassing every codec. What a row stored before the mime type was
 // validated looks like -- there is no API left that can produce one, which is exactly why serving must survive it.
-export async function forceMimeType(booted : BootedServeApp, nodeID : string, mimeType : string) : Promise<void>
+export async function forceMimeType(booted : BootedStoreApp, nodeID : string, mimeType : string) : Promise<void>
 {
     await booted.handle.db
         .updateTable('node')
@@ -257,7 +113,7 @@ export async function forceMimeType(booted : BootedServeApp, nodeID : string, mi
 }
 
 export async function createFolder(
-    booted : BootedServeApp,
+    booted : BootedStoreApp,
     user : TestUser,
     name = 'folder',
     parentID : string | null = null
@@ -275,7 +131,7 @@ export async function createFolder(
 // what makes a link worth having and what makes its access a question about the target. Not to be confused with
 // createLink below, which mints a public link.
 export async function createNodeLink(
-    booted : BootedServeApp,
+    booted : BootedStoreApp,
     user : TestUser,
     targetNodeID : string,
     parentID : string | null = null,
@@ -291,7 +147,7 @@ export async function createNodeLink(
     return res.json() as Promise<NodeResponse>;
 }
 
-export async function trashNode(booted : BootedServeApp, user : TestUser, nodeID : string) : Promise<Response>
+export async function trashNode(booted : BootedStoreApp, user : TestUser, nodeID : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/nodes/${ nodeID }/trash`, {
         method: 'POST',
@@ -302,7 +158,7 @@ export async function trashNode(booted : BootedServeApp, user : TestUser, nodeID
 // A REAL share grant, minted by the owner over the real share route -- the grant the real resolver reads back when it
 // authorizes a download. Nothing here fakes a role.
 export async function shareWith(
-    booted : BootedServeApp,
+    booted : BootedStoreApp,
     owner : TestUser,
     nodeID : string,
     granteeUserID : string,
@@ -327,7 +183,7 @@ export async function shareWith(
 
 const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
-export async function seedEmptyFile(booted : BootedServeApp, user : TestUser, name = 'empty.bin') : Promise<string>
+export async function seedEmptyFile(booted : BootedStoreApp, user : TestUser, name = 'empty.bin') : Promise<string>
 {
     const location = await booted.blob.put(EMPTY_SHA256, Readable.from([]), 0);
     await booted.blob.insertOrResurrect({
@@ -348,9 +204,9 @@ export async function seedEmptyFile(booted : BootedServeApp, user : TestUser, na
         blobID: EMPTY_SHA256,
         size: 0,
         mimeType: 'application/octet-stream',
-        createdAt: now,
-        updatedAt: now,
-        trashedAt: null,
+        created: now,
+        updated: now,
+        trashed: null,
     });
 
     return id;
@@ -363,7 +219,7 @@ export async function seedEmptyFile(booted : BootedServeApp, user : TestUser, na
 // Minting takes no body: a link has nothing to configure. `body`, when a spec passes one, is what that spec is about --
 // proving the endpoint gives it no meaning.
 export async function createLink(
-    booted : BootedServeApp,
+    booted : BootedStoreApp,
     user : TestUser,
     nodeID : string,
     body ?: Record<string, unknown>
@@ -379,14 +235,14 @@ export async function createLink(
     });
 }
 
-export async function listLinks(booted : BootedServeApp, user : TestUser, nodeID : string) : Promise<Response>
+export async function listLinks(booted : BootedStoreApp, user : TestUser, nodeID : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/nodes/${ nodeID }/links`, {
         headers: { cookie: user.cookie },
     });
 }
 
-export async function revokeLink(booted : BootedServeApp, user : TestUser, linkID : string) : Promise<Response>
+export async function revokeLink(booted : BootedStoreApp, user : TestUser, linkID : string) : Promise<Response>
 {
     return booted.app.request(`${ ORIGIN }/api/links/${ linkID }`, {
         method: 'DELETE',
@@ -416,7 +272,7 @@ function serveHeaders(extra : ServeHeaders, cookie ?: string) : Record<string, s
 // GET /d/:token -- anonymous, no cookie by design. `query` is the raw query string, spelled out at the call site
 // because the exact spelling is what the disposition specs are asserting.
 export async function getDirect(
-    booted : BootedServeApp,
+    booted : BootedStoreApp,
     token : string,
     extra : ServeHeaders = {},
     query = ''
@@ -426,7 +282,7 @@ export async function getDirect(
 }
 
 export async function getDownload(
-    booted : BootedServeApp,
+    booted : BootedStoreApp,
     cookie : string | undefined,
     nodeID : string,
     query : { disposition ?: string } = {},

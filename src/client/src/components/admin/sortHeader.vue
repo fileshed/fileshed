@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Sort Header
-  --
-  -- A sortable column heading: click cycles ascending, descending, unsorted. The arrow shows only while this column
-  -- carries the sort.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -21,14 +18,14 @@
 <script setup lang="ts">
     import { computed } from 'vue';
 
-    import type { AdminUserSortKey } from '@fileshed/core';
+    import type { AdminUserSortKey, SortDirection } from '@fileshed/core';
 
     //------------------------------------------------------------------------------------------------------------------
 
     const props = defineProps<{
         label : string;
         sortKey : AdminUserSortKey;
-        state : { key : AdminUserSortKey; direction : 'asc' | 'desc' } | null;
+        state : { key : AdminUserSortKey; direction : SortDirection } | null;
     }>();
 
     const emit = defineEmits<{ toggle : [ key : AdminUserSortKey ] }>();

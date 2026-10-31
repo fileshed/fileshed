@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Drive Header
   --
-  -- Row one of the drive: the breadcrumb trail and the grid/list view toggle. Constant across selection -- nothing here
-  -- reacts to what is selected, so the trail never moves out from under a click.
+  -- Nothing here reacts to the selection, so the trail never moves out from under a click.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

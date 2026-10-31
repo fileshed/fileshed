@@ -1,11 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Rename Title
   --
-  -- An inline Docs-style rename: hover shows the click affordance, a click swaps in an edit field with the name's
-  -- stem pre-selected (so retyping keeps an extension without any munging), Enter or blur commits through the
-  -- owner's rename, Escape cancels, and a blank or unchanged entry reverts silently. Read-only sessions get the
-  -- plain text. Prop-driven like the save indicator, because each owner fronts a different store -- the editor
-  -- headers rename the FILE with it, the playlist panel its display title, so the labels are props too.
+  -- A click opens the field with the name's stem selected, so retyping keeps the extension. It is prop-driven because
+  -- each owner fronts a different store: the editor headers rename the file with it, the playlist panel its display
+  -- title.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

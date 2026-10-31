@@ -1,11 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin Settings Store
 //
-// State behind the admin Settings tab and the restart banner: the vocabulary entries with their effective values,
-// and the restartRequired flag both the Settings and Status tabs read. Every mutation adopts the server's refreshed
-// view wholesale -- sources, masked secrets, and the restart flag stay whatever the server says they are, never a
-// client-side guess. Mutation errors propagate to the caller to toast; a failed load lands in `error` for the
-// tab's retry state.
+// Every mutation adopts the server's refreshed view whole, so sources, masked secrets, and the restart flag are always
+// the server's, never a client-side guess.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -23,7 +20,7 @@ import {
 import { useAppStore } from './app.ts';
 
 // Resource Access
-import { fetchAdminSettings, patchAdminSettings } from '../resource-access/admin.ts';
+import { getAdminSettings, patchAdminSettings } from '../resource-access/admin.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -68,7 +65,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
 
         try
         {
-            adopt(await fetchAdminSettings());
+            adopt(await getAdminSettings());
         }
         catch(caught)
         {
@@ -93,7 +90,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () =>
     {
         adopt(await patchAdminSettings(changes));
 
-        if(handshakeKeys.some((key) => key in changes)) { void useAppStore().initialize(); }
+        if(handshakeKeys.some((key) => key in changes)) { void useAppStore().init(); }
     }
 
     async function save(key : AdminSettingKey, value : SettingValue) : Promise<void>

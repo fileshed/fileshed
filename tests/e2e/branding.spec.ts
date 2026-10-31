@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Support
-import { ApiClient, type ServerHandle, sha256Of, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, sha256Of, spawnServer } from './support.ts';
 import { pngBytes } from '../server/support/imageBytes.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -18,13 +18,13 @@ const ADMIN_EMAIL = 'admin@fileshed.test';
 const ADMIN_PASSWORD = 'admin-password-e2e';
 
 let server : ServerHandle;
-let admin : ApiClient;
+let admin : APIClient;
 
 beforeAll(async () =>
 {
     server = await spawnServer({ env: { FILESHED_SETUP_TOKEN: 'e2e-setup-token-1234' } });
 
-    const setup = await new ApiClient(server.baseURL).post('/api/setup', {
+    const setup = await new APIClient(server.baseURL).post('/api/setup', {
         token: 'e2e-setup-token-1234',
         name: 'Admin',
         email: ADMIN_EMAIL,
@@ -32,7 +32,7 @@ beforeAll(async () =>
     });
     if(setup.status !== 200) { throw new Error('setup: expected first-run setup to succeed'); }
 
-    admin = new ApiClient(server.baseURL);
+    admin = new APIClient(server.baseURL);
     const signIn = await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
     if(signIn.status !== 200) { throw new Error('setup: expected the admin sign-in to succeed'); }
 });
@@ -48,7 +48,7 @@ describe('branding lifecycle', () =>
 {
     it('serves an empty stylesheet and stock facts on a fresh instance', async () =>
     {
-        const anonymous = new ApiClient(server.baseURL);
+        const anonymous = new APIClient(server.baseURL);
 
         const css = await anonymous.get('/api/branding.css');
         expect(css.status).toBe(200);
@@ -77,7 +77,7 @@ describe('branding lifecycle', () =>
         });
         expect(renamed.status).toBe(200);
 
-        const anonymous = new ApiClient(server.baseURL);
+        const anonymous = new APIClient(server.baseURL);
 
         const css = await (await anonymous.get('/api/branding.css')).text();
         expect(css).toContain('--ui-color-primary-500: #0ea5e9;');
@@ -97,7 +97,7 @@ describe('branding lifecycle', () =>
 
         const expectedSha = sha256Of(bytes);
 
-        const anonymous = new ApiClient(server.baseURL);
+        const anonymous = new APIClient(server.baseURL);
         const instance = await anonymous.get('/api/instance');
         const body = await instance.json() as { branding : { logo : string | null } };
         expect(body.branding.logo).toBe(expectedSha);
@@ -110,7 +110,7 @@ describe('branding lifecycle', () =>
 
     it('refuses the theme surface to non-admins while the stylesheet stays public', async () =>
     {
-        const anonymous = new ApiClient(server.baseURL);
+        const anonymous = new APIClient(server.baseURL);
 
         expect((await anonymous.get('/api/admin/branding')).status).toBe(401);
         expect((await anonymous.patch('/api/admin/branding', { primary: '#112233' })).status).toBe(401);

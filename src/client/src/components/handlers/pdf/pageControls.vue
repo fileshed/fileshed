@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Page Controls
-  --
-  -- Step a page at a time, or type one. The box is an editable draft that tracks the scrolled-to page until the reader
-  -- types into it; committing clamps the parse through the store and snaps the draft back to the accepted page.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -46,13 +43,13 @@
     import { ref, watch } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfPageControls' });
+    defineOptions({ name: 'PDFPageControls' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const draft = ref(String(store.currentPage));
     watch(() => store.currentPage, (page) => { draft.value = String(page); });

@@ -1,10 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Type Filter
   --
-  -- The Type chip shared by every filtered surface: a multi-select over the node-type families, each carrying its
-  -- coloured icon from the shared presentation table. value-key stores just the family on selection, so the model is
-  -- the selected families verbatim. Presentational only -- it holds the current selection as a prop and reports a new
-  -- one; the surface's store owns the reload.
+  -- value-key stores just the family on selection, so the model is the selected families as they are.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

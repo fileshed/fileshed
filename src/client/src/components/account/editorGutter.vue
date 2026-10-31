@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Editor Gutter
-  --
-  -- The account-page toggle for the editor's line-number gutter, the second surface over the same preference the editor
-  -- toolbar drives. Flipping it saves through the session's preferences path so an open editor shows or hides its gutter
-  -- at once. The switch reflects the stored preference, defaulting off until the user turns it on.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

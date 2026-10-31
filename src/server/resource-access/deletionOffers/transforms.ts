@@ -32,8 +32,8 @@ export function offerFromRow(row : Selectable<DeletionOfferTable>) : DeletionOff
         mimeType: row.mime_type,
         size: row.size,
         createdBy: row.created_by,
-        createdAt: toDate(row.created_at),
-        expiresAt: toDate(row.expires_at),
+        created: toDate(row.created),
+        expires: toDate(row.expires),
     };
 }
 
@@ -47,8 +47,8 @@ export function rowFromOffer(offer : DeletionOffer) : Insertable<DeletionOfferTa
         mime_type: offer.mimeType,
         size: offer.size,
         created_by: offer.createdBy,
-        created_at: offer.createdAt.toISOString(),
-        expires_at: offer.expiresAt.toISOString(),
+        created: offer.created.toISOString(),
+        expires: offer.expires.toISOString(),
     };
 }
 

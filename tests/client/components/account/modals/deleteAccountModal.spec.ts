@@ -30,7 +30,7 @@ import DeleteAccountModal from '@client/components/account/modals/deleteAccountM
 const { routerReplace } = vi.hoisted(() => ({ routerReplace: vi.fn() }));
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ replace: routerReplace }) }));
-vi.mock('@client/resource-access/me.ts', () => ({ requestAccountDeletion: vi.fn(), fetchMe: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ requestAccountDeletion: vi.fn(), getMe: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const requestMock = requestAccountDeletion as unknown as Mock;

@@ -1,9 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Account Closing Page
   --
-  -- Where an account that has asked to be deleted lands, and the only page it can reach. The server refuses it
-  -- everywhere else, so this exists to say when the account goes and to offer the one action still open: calling it
-  -- off.
+  -- The only page an account that has asked to be deleted can reach; the server refuses it everywhere else.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

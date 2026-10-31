@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node API DTOs
 //
-// Request/response contracts for the /api/nodes endpoints. Wire shapes only -- cross-record legality (parent-edge
-// ownership, link-to-link, quota) is the regulation engine's job, not this boundary's. Dates serialize as ISO strings;
-// ids stay strings throughout.
+// These are wire shapes only: cross-record legality (parent-edge ownership, link-to-link, quota) is judged by the
+// regulation engine on the server.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -104,7 +103,7 @@ export interface EmptyTrashResponse
 // Children listing (GET /api/nodes/:id/children) -- pagination, the sort-key vocabulary, and the filter facets.
 //----------------------------------------------------------------------------------------------------------------------
 
-export const nodeSortKeys = [ 'name', 'size', 'createdAt', 'updatedAt', 'kind' ] as const;
+export const nodeSortKeys = [ 'name', 'size', 'created', 'updated', 'kind' ] as const;
 export type NodeSortKey = typeof nodeSortKeys[number];
 
 export const sortDirections = [ 'asc', 'desc' ] as const;
@@ -118,22 +117,28 @@ export const nodeTypeFamilies
     = [ 'folders', 'documents', 'pdfs', 'images', 'video', 'playlists', 'audio', 'archives', 'links' ] as const;
 export type NodeTypeFamily = typeof nodeTypeFamilies[number];
 
-// The filters ride the query string alongside pagination and sort, AND-combined. `types` is always present (empty =
-// unfiltered); ownerID, name, and the date window are absent when their filter is off. The date bounds are ISO
-// instants: updatedAfter is an inclusive lower bound, updatedBefore an exclusive upper bound (a half-open window).
-// `name` is an EXACT match, not a substring -- it exists so a client can detect an upload name collision correctly
-// under pagination (asking "is there already a child named X?" without paging the whole folder).
-export interface ChildrenQuery
+// The paging, sort, and Type/Modified filters every node listing takes, and all the trash listing takes. The filters
+// ride the query string alongside pagination and sort, AND-combined. `types` is always present (empty = unfiltered);
+// the date window is absent when its filter is off. The date bounds are ISO instants: updatedAfter is an inclusive
+// lower bound, updatedBefore an exclusive upper bound (a half-open window).
+export interface ListingQuery
 {
     limit : number;
     offset : number;
     sortKey : NodeSortKey;
     sortDirection : SortDirection;
     types : NodeTypeFamily[];
-    ownerID ?: string;
-    name ?: string;
     updatedAfter ?: string;
     updatedBefore ?: string;
+}
+
+// A folder listing adds an owner facet and a name match, each absent when off. `name` is an EXACT match, not a
+// substring -- it exists so a client can detect an upload name collision correctly under pagination (asking "is there
+// already a child named X?" without paging the whole folder).
+export interface ChildrenQuery extends ListingQuery
+{
+    ownerID ?: string;
+    name ?: string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -164,7 +169,7 @@ export interface LinkTarget
 export interface NodeSharing
 {
     granteeCount : number;
-    linkUrl : string | null;
+    linkURL : string | null;
 }
 
 interface NodeResponseBase
@@ -173,8 +178,8 @@ interface NodeResponseBase
     name : string;
     ownerID : string;
     parentID : string | null;
-    createdAt : string;
-    updatedAt : string;
+    created : string;
+    updated : string;
     role : Role;
 
     // What the node reaches beyond its owner, as far as this caller may see it. The two answers are distinct and both
@@ -185,22 +190,22 @@ interface NodeResponseBase
     sharing : NodeSharing | null;
 }
 
-interface FileNodeResponse extends NodeResponseBase
+export interface FileNodeResponse extends NodeResponseBase
 {
     type : 'file';
     blobID : string;
     size : number;
     mimeType : string;
-    trashedAt : string | null;
+    trashed : string | null;
 }
 
-interface FolderNodeResponse extends NodeResponseBase
+export interface FolderNodeResponse extends NodeResponseBase
 {
     type : 'folder';
-    trashedAt : string | null;
+    trashed : string | null;
 }
 
-interface LinkNodeResponse extends NodeResponseBase
+export interface LinkNodeResponse extends NodeResponseBase
 {
     type : 'link';
     targetNodeID : string;

@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Outline Branch
   --
-  -- Recursive: an outline nests arbitrarily, so a branch renders itself for each child. An entry with no destination
-  -- is a heading -- it expands, but there is nowhere to go.
+  -- An outline entry with no destination is a heading: it expands, but there is nowhere to go.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -34,7 +33,7 @@
         </div>
 
         <ul v-if="expanded && entry.items.length > 0" class="ml-3 border-l border-default pl-1">
-            <PdfOutlineBranch v-for="child in entry.items" :key="child.id" :entry="child" />
+            <PDFOutlineBranch v-for="child in entry.items" :key="child.id" :entry="child" />
         </ul>
     </li>
 </template>
@@ -44,21 +43,21 @@
 <script setup lang="ts">
     import { computed, ref } from 'vue';
 
-    // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    // Engines
+    import type { OutlineEntry } from '../../../../engines/pdf/types.ts';
 
-    // Components
-    import type { OutlineEntry } from '../types.ts';
+    // Stores
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfOutlineBranch' });
+    defineOptions({ name: 'PDFOutlineBranch' });
 
     const props = defineProps<{
         entry : OutlineEntry;
     }>();
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     // Outlines in the wild carry blank titles; a row with no label is unclickable and looks broken.
     const title = computed(() =>

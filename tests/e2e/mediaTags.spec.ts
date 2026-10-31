@@ -14,17 +14,17 @@ import type { ClaimResponse, NodeListResponse, NodeResponse } from '@fileshed/co
 
 // Support
 import { taggedMp3 } from '../server/mediaTags/support.ts';
-import { ApiClient, type ServerHandle, sha256Of, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, sha256Of, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 let server : ServerHandle;
-let owner : ApiClient;
+let owner : APIClient;
 
 beforeAll(async () =>
 {
     server = await spawnServer();
-    owner = new ApiClient(server.baseURL);
+    owner = new APIClient(server.baseURL);
     await owner.signUp('tagged@example.com', 'correct-horse-battery');
 });
 

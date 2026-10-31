@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Session-Lost Announcement — the 401 tripwire in the request primitive
 //
-// Every credentialed request flows through requestJson/requestVoid; a 401 anywhere means the session died, and the
-// primitive announces it as a window event (the router-side listener owns the reaction). Any other failure -- 403,
+// A 401 on any credentialed request means the session died, and the request primitive announces it as a window event
+// (the router-side listener owns the reaction). Any other failure -- 403,
 // 404, 500 -- is that call's own problem and must NOT announce, or a permission refusal would sign people out.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 // Under test
-import { SESSION_LOST_EVENT, requestJson } from '@client/resource-access/request.ts';
+import { getNodeBlob, getNodeText } from '@client/resource-access/content.ts';
+import { SESSION_LOST_EVENT, requestJSON } from '@client/resource-access/request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -41,11 +42,11 @@ describe('the session-lost announcement', () =>
         vi.restoreAllMocks();
     });
 
-    it('fires on a 401 and still throws the ApiError to the caller', async () =>
+    it('fires on a 401 and still throws the APIError to the caller', async () =>
     {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(401, { error: 'No session.' }));
 
-        await expect(requestJson('/api/me', { codec: z.unknown() })).rejects.toThrow('No session.');
+        await expect(requestJSON('/api/me', { codec: z.unknown() })).rejects.toThrow('No session.');
         expect(fired).toBe(1);
     });
 
@@ -53,15 +54,26 @@ describe('the session-lost announcement', () =>
     {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(403, { error: 'Not yours.' }));
 
-        await expect(requestJson('/api/admin/users', { codec: z.unknown() })).rejects.toThrow('Not yours.');
+        await expect(requestJSON('/api/admin/users', { codec: z.unknown() })).rejects.toThrow('Not yours.');
         expect(fired).toBe(0);
+    });
+
+    // The editor and the PDF annotator read a file's bytes outside the JSON helpers. A session that died while one was
+    // closed has to send the reader to sign-in when they open it, as any other request would.
+    it('fires when an in-app read of a file\'s bytes meets a dead session', async () =>
+    {
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(401, { error: 'No session.' }));
+
+        await expect(getNodeText('n1')).rejects.toThrow('No session.');
+        await expect(getNodeBlob('n1')).rejects.toThrow('No session.');
+        expect(fired).toBe(2);
     });
 
     it('stays silent on success', async () =>
     {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, { fine: true }));
 
-        await requestJson('/api/health', { codec: z.unknown() });
+        await requestJSON('/api/health', { codec: z.unknown() });
         expect(fired).toBe(0);
     });
 });

@@ -1,12 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Upload With Progress
 //
-// The one byte-moving request fetch can't make: a PUT that reports upload progress. fetch exposes no upload-progress
-// event, so the upload manager's progress bar rides an XMLHttpRequest instead. Everything else mirrors the fetch
-// wrappers -- credentialed, the commit target on the query string (a fresh node's name/parent/mime, or a replaced
-// node's id alone), a codec-validated body on success, and the same typed ApiError (regulation errors upgraded
-// included) on any non-2xx, built from the shared body mapping rather than a second copy of it. An AbortSignal cancels
-// a transfer in flight.
+// fetch exposes no upload-progress event, so this uses XMLHttpRequest. Otherwise it behaves like the fetch wrappers:
+// credentialed, codec-validated on success, and throwing the same typed APIError on any non-2xx.
 //
 // The body is one chunk of a file, or all of it. A chunk that leaves the file incomplete comes back 202 with the
 // upload's position; the chunk that completes it comes back with the committed node.
@@ -20,9 +16,9 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError, apiErrorFromBody } from './apiError.ts';
+import { APIError, apiErrorFromBody } from './apiError.ts';
 import { commitQuery } from './blobs.ts';
-import { buildUrl } from './request.ts';
+import { announceIfSessionLost, buildURL } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -73,7 +69,7 @@ export function uploadWithProgress(options : UploadWithProgressOptions) : Promis
         if(signal?.aborted) { reject(new DOMException('Upload cancelled', 'AbortError')); return; }
 
         const xhr = new XMLHttpRequest();
-        xhr.open('PUT', buildUrl(`/api/uploads/${ ticket }`, { ...commitQuery(commit), offset }));
+        xhr.open('PUT', buildURL(`/api/uploads/${ ticket }`, { ...commitQuery(commit), offset }));
         xhr.withCredentials = true;
         xhr.responseType = 'text';
         xhr.setRequestHeader('accept', 'application/json');
@@ -104,10 +100,11 @@ export function uploadWithProgress(options : UploadWithProgressOptions) : Promis
                 return;
             }
 
+            announceIfSessionLost(xhr.status);
             reject(apiErrorFromBody(xhr.status, xhr.statusText, parsed));
         });
 
-        xhr.addEventListener('error', () => reject(new ApiError(0, 'The upload could not reach the server.')));
+        xhr.addEventListener('error', () => reject(new APIError(0, 'The upload could not reach the server.')));
         xhr.addEventListener('abort', () => reject(new DOMException('Upload cancelled', 'AbortError')));
 
         signal?.addEventListener('abort', () => xhr.abort(), { once: true });

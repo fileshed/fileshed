@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Branding Field
-  --
-  -- The card every Branding knob sits in: a titled header row with room for an inline readout, and the reset that
-  -- returns the knob to the stock build value. Defining the card once is what keeps the fields from drifting apart.
-  -- The action slot's fallback IS the reset button, so a field wanting anything else simply fills the slot.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

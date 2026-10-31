@@ -1,12 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Share Row <-> Domain Transforms
 //
-// The boundary between the `share` / `share_request` table rows (snake_case, stored timestamps) and the canonical
-// domain types of @fileshed/core. shareFromRow / shareRequestFromRow read; the insert builders write ISO-string
-// timestamps, which both dialects accept (see database.ts).
-//
-// A share request is a discriminated union on status where resolvedAt exists exactly when the request is resolved. The
-// paired CHECK of migration 001 makes any other pairing unstorable, so a resolved row with a null resolved_at is store
+// A share request is a discriminated union on status where resolved exists exactly when the request is resolved. The
+// paired CHECK of migration 001 makes any other pairing unstorable, so a resolved row with a null resolved is store
 // corruption, surfaced as a typed error rather than silently coerced to the epoch.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -15,7 +11,7 @@
 import type { Insertable, Selectable } from 'kysely';
 
 // Models
-import type { PendingShareRequest, Share, ShareRequest } from '@fileshed/core';
+import { type PendingShareRequest, RowCorruptionError, type Share, type ShareRequest } from '@fileshed/core';
 
 // Resource Access
 import type { ShareRequestTable, ShareTable } from '../database/database.ts';
@@ -40,7 +36,7 @@ export function shareFromRow(row : Selectable<ShareTable>) : Share
         granteeUserID: row.grantee_user_id,
         role: row.role,
         createdBy: row.created_by,
-        createdAt: toDate(row.created_at),
+        created: toDate(row.created),
     };
 }
 
@@ -52,7 +48,7 @@ export function rowFromShare(share : Share) : Insertable<ShareTable>
         grantee_user_id: share.granteeUserID,
         role: share.role,
         created_by: share.createdBy,
-        created_at: share.createdAt.toISOString(),
+        created: share.created.toISOString(),
     };
 }
 
@@ -68,26 +64,30 @@ export function shareRequestFromRow(row : Selectable<ShareRequestTable>) : Share
         requesterID: row.requester_id,
         requestedRole: row.requested_role,
         message: row.message,
-        createdAt: toDate(row.created_at),
+        created: toDate(row.created),
     };
 
     if(row.status === 'pending')
     {
-        return { ...base, status: 'pending', resolvedAt: null };
+        return { ...base, status: 'pending', resolved: null };
     }
 
     // The paired CHECK makes this unreachable from a well-formed store; a resolved row without a resolution means the
-    // constraint was bypassed out from under us, so we refuse to fabricate an epoch resolvedAt.
-    if(row.resolved_at === null)
+    // constraint was bypassed out from under us, so we refuse to fabricate an epoch resolved timestamp.
+    if(row.resolved === null)
     {
-        throw new Error(`share_request ${ row.id }: a ${ row.status } request must carry a resolved_at`);
+        throw new RowCorruptionError(
+            'share_request',
+            row.id,
+            `a ${ row.status } request must carry a resolved timestamp`
+        );
     }
 
-    return { ...base, status: row.status, resolvedAt: toDate(row.resolved_at) };
+    return { ...base, status: row.status, resolved: toDate(row.resolved) };
 }
 
 // Only a pending request is ever inserted -- resolution is an update, never an insert, so the row always lands with
-// status 'pending' and a null resolved_at.
+// status 'pending' and a null resolved.
 export function rowFromPendingShareRequest(request : PendingShareRequest) : Insertable<ShareRequestTable>
 {
     return {
@@ -97,8 +97,8 @@ export function rowFromPendingShareRequest(request : PendingShareRequest) : Inse
         requested_role: request.requestedRole,
         message: request.message,
         status: 'pending',
-        created_at: request.createdAt.toISOString(),
-        resolved_at: null,
+        created: request.created.toISOString(),
+        resolved: null,
     };
 }
 

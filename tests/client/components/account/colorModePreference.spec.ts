@@ -27,7 +27,7 @@ import ColorModePreference from '@client/components/account/colorModePreference.
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/preferences.ts', () => ({ updatePreferences: vi.fn() }));
-vi.mock('@client/resource-access/instance.ts', () => ({ fetchInstance: vi.fn() }));
+vi.mock('@client/resource-access/instance.ts', () => ({ getInstance: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const updatePreferencesMock = updatePreferences as unknown as Mock;

@@ -1,11 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Link Section
   --
-  -- The share dialog's public-link surface, shown for files only (a folder carries no bytes to serve). It has two
-  -- states: nothing published yet, offering to mint a link; or the live link with its /d/<token> URL, a copy for
-  -- either form -- as it renders, or as a download -- and a revoke. One token backs both forms, so a second link
-  -- would be the same capability twice over and is not offered; revoking the last one returns the section to its
-  -- create state. The listing still handles several, since the API stays free to mint them.
+  -- Shown for files only, since a folder has no bytes to serve. One token backs both the rendered and the download
+  -- form, so a second link would be the same capability twice and is not offered. The listing still handles several,
+  -- since the API can mint them.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -20,7 +18,7 @@
                 :key="link.id"
                 class="flex items-center gap-2 rounded-lg p-2 ring-1 ring-default"
             >
-                <span class="min-w-0 flex-1 truncate font-mono text-sm">{{ absoluteUrl(link) }}</span>
+                <span class="min-w-0 flex-1 truncate font-mono text-sm">{{ absoluteURL(link) }}</span>
                 <UTooltip v-for="form in copyForms" :key="form.label" :text="form.label">
                     <UButton
                         :icon="form.icon"
@@ -74,7 +72,7 @@
 
     // Utils
     import { copyToClipboard } from '../../utils/copyToClipboard.ts';
-    import { publicLinkUrl } from '../../utils/publicLinkUrl.ts';
+    import { publicLinkURL } from '../../utils/publicLinkURL.ts';
     import { useRunWithToast } from '../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -111,14 +109,14 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    function absoluteUrl(link : PublicLinkResponse, download = false) : string
+    function absoluteURL(link : PublicLinkResponse, download = false) : string
     {
-        return publicLinkUrl(link.url, download);
+        return publicLinkURL(link.url, download);
     }
 
     async function refresh() : Promise<void>
     {
-        links.value = (await listLinksForNode(props.node.id)).links.filter((link) => link.revokedAt === null);
+        links.value = (await listLinksForNode(props.node.id)).links.filter((link) => link.revoked === null);
     }
 
     async function load() : Promise<void>
@@ -137,7 +135,7 @@
 
     async function copy(link : PublicLinkResponse, form : CopyForm) : Promise<void>
     {
-        const url = absoluteUrl(link, form.download);
+        const url = absoluteURL(link, form.download);
 
         if(await copyToClipboard(url))
         {

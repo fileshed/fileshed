@@ -17,10 +17,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CompiledQuery, type Expression, type Kysely, type SqlBool, sql } from 'kysely';
 
 // Models
-import { SEARCH_CANDIDATE_LIMIT } from '@fileshed/core';
+import { type DatabaseKind, SEARCH_CANDIDATE_LIMIT } from '@fileshed/core';
 
 // Resource Access
-import type { Database, DatabaseHandle, DatabaseKind } from '@server/resource-access/database/database.ts';
+import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { down } from '@server/resource-access/database/migrations/006_name_ordering_index.ts';
 
 // Support
@@ -64,7 +64,7 @@ function nameOrderedSearchQuery(db : Kysely<Database>, kind : DatabaseKind, term
         .selectFrom('node')
         .leftJoin('media_tags', 'media_tags.blob_id', 'node.blob_id')
         .selectAll('node')
-        .where('node.trashed_at', 'is', null)
+        .where('node.trashed', 'is', null)
         .where((eb) => eb.or([
             matches('node.name'),
             matches('media_tags.title'),
@@ -106,9 +106,9 @@ async function seedNamedRows(db : Kysely<Database>) : Promise<void>
             target_node_id: null,
             size: 10,
             mime_type: 'text/plain',
-            created_at: stamp,
-            updated_at: stamp,
-            trashed_at: null,
+            created: stamp,
+            updated: stamp,
+            trashed: null,
         };
     });
     /* eslint-enable camelcase */

@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF View Menu
-  --
-  -- Everything about how the document is presented rather than what is in it: rotation, what a drag does, page layout,
-  -- the ends of the document, full screen, print, and the properties dialog.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -24,34 +21,34 @@
     import type { DropdownMenuItem } from '@nuxt/ui';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfViewMenu' });
+    defineOptions({ name: 'PDFViewMenu' });
 
     const emit = defineEmits<{
         present : [];
     }>();
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     //------------------------------------------------------------------------------------------------------------------
 
-    const SCROLL_LABELS = [
+    const scrollLabels = [
         { value: 'vertical', label: 'Vertical scrolling', icon: 'i-lucide-move-vertical' },
         { value: 'horizontal', label: 'Horizontal scrolling', icon: 'i-lucide-move-horizontal' },
         { value: 'wrapped', label: 'Wrapped scrolling', icon: 'i-lucide-layout-grid' },
         { value: 'page', label: 'Single page', icon: 'i-lucide-square' },
     ] as const;
 
-    const SPREAD_LABELS = [
+    const spreadLabels = [
         { value: 'none', label: 'No spreads' },
         { value: 'odd', label: 'Odd spreads' },
         { value: 'even', label: 'Even spreads' },
     ] as const;
 
-    const scrollItems = computed<DropdownMenuItem[]>(() => SCROLL_LABELS.map((entry) => ({
+    const scrollItems = computed<DropdownMenuItem[]>(() => scrollLabels.map((entry) => ({
         label: entry.label,
         icon: entry.icon,
         type: 'checkbox' as const,
@@ -59,7 +56,7 @@
         onSelect: () => { store.setScrollMode(entry.value); },
     })));
 
-    const spreadItems = computed<DropdownMenuItem[]>(() => SPREAD_LABELS.map((entry) => ({
+    const spreadItems = computed<DropdownMenuItem[]>(() => spreadLabels.map((entry) => ({
         label: entry.label,
         type: 'checkbox' as const,
         checked: store.spreadMode === entry.value,

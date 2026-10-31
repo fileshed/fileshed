@@ -4,7 +4,7 @@
 
 <template>
     <ul v-if="store.outline.length > 0" class="p-2">
-        <PdfOutlineBranch v-for="entry in store.outline" :key="entry.id" :entry="entry" />
+        <PDFOutlineBranch v-for="entry in store.outline" :key="entry.id" :entry="entry" />
     </ul>
 
     <p v-else class="p-4 text-center text-sm text-dimmed">
@@ -16,16 +16,16 @@
 
 <script setup lang="ts">
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     // Components
-    import PdfOutlineBranch from './outlineBranch.vue';
+    import PDFOutlineBranch from './outlineBranch.vue';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfOutlineTree' });
+    defineOptions({ name: 'PDFOutlineTree' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

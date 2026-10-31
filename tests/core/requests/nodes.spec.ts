@@ -24,7 +24,7 @@ import {
 
 describe('childrenQueryCodec', () =>
 {
-    // The sortKey vocabulary is a closed set -- name, size, createdAt, updatedAt, kind -- not an arbitrary column
+    // The sortKey vocabulary is a closed set -- name, size, created, updated, kind -- not an arbitrary column
     // name a client could use to probe the schema.
     it('rejects a sort key outside the published vocabulary', () =>
     {
@@ -33,7 +33,7 @@ describe('childrenQueryCodec', () =>
         expect(result.success).toBe(false);
     });
 
-    // 'kind' joins the vocabulary alongside name/size/createdAt/updatedAt so a listing can sort by node kind.
+    // 'kind' joins the vocabulary alongside name/size/created/updated so a listing can sort by node kind.
     it('accepts kind as a sort key', () =>
     {
         const result = childrenQueryCodec.safeParse({ sortKey: 'kind' });
@@ -172,22 +172,22 @@ describe('nodeSharingCodec', () =>
     // both at once.
     it('accepts grants without a link, a link without grants, and both together', () =>
     {
-        expect(nodeSharingCodec.safeParse({ granteeCount: 3, linkUrl: null }).success).toBe(true);
-        expect(nodeSharingCodec.safeParse({ granteeCount: 0, linkUrl: '/d/abc' }).success).toBe(true);
-        expect(nodeSharingCodec.safeParse({ granteeCount: 1, linkUrl: '/d/abc' }).success).toBe(true);
+        expect(nodeSharingCodec.safeParse({ granteeCount: 3, linkURL: null }).success).toBe(true);
+        expect(nodeSharingCodec.safeParse({ granteeCount: 0, linkURL: '/d/abc' }).success).toBe(true);
+        expect(nodeSharingCodec.safeParse({ granteeCount: 1, linkURL: '/d/abc' }).success).toBe(true);
     });
 
-    // linkUrl is required-but-nullable: "no link" is an explicit null, so a reader never has to tell an absent key
+    // linkURL is required-but-nullable: "no link" is an explicit null, so a reader never has to tell an absent key
     // from a node that carries no link.
-    it('rejects an entry that omits linkUrl entirely', () =>
+    it('rejects an entry that omits linkURL entirely', () =>
     {
         expect(nodeSharingCodec.safeParse({ granteeCount: 1 }).success).toBe(false);
     });
 
     it('rejects a grantee count that is negative or fractional', () =>
     {
-        expect(nodeSharingCodec.safeParse({ granteeCount: -1, linkUrl: null }).success).toBe(false);
-        expect(nodeSharingCodec.safeParse({ granteeCount: 1.5, linkUrl: null }).success).toBe(false);
+        expect(nodeSharingCodec.safeParse({ granteeCount: -1, linkURL: null }).success).toBe(false);
+        expect(nodeSharingCodec.safeParse({ granteeCount: 1.5, linkURL: null }).success).toBe(false);
     });
 });
 
@@ -199,9 +199,9 @@ describe('nodeResponseCodec', () =>
         ownerID: 'user_1',
         parentID: null,
         type: 'folder' as const,
-        trashedAt: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
+        trashed: null,
+        created: '2026-01-01T00:00:00.000Z',
+        updated: '2026-01-01T00:00:00.000Z',
         sharing: null,
     };
 
@@ -348,8 +348,8 @@ describe('patchNodeRequestCodec', () =>
 
 describe('toNodeResponse', () =>
 {
-    const createdAt = new Date('2026-02-03T04:05:06.000Z');
-    const updatedAt = new Date('2026-02-03T04:05:07.000Z');
+    const created = new Date('2026-02-03T04:05:06.000Z');
+    const updated = new Date('2026-02-03T04:05:07.000Z');
 
     // dates cross the boundary as ISO strings, and the caller's effective role rides every node payload. The serializer
     // is the single place both happen, and its output must satisfy the wire codec.
@@ -361,9 +361,9 @@ describe('toNodeResponse', () =>
             name: 'Docs',
             ownerID: 'u1',
             parentID: null,
-            createdAt,
-            updatedAt,
-            trashedAt: null,
+            created,
+            updated,
+            trashed: null,
         };
 
         const response = toNodeResponse(folder, { role: 'owner' });
@@ -372,8 +372,8 @@ describe('toNodeResponse', () =>
             type: 'folder',
             id: 'n1',
             role: 'owner',
-            createdAt: '2026-02-03T04:05:06.000Z',
-            updatedAt: '2026-02-03T04:05:07.000Z',
+            created: '2026-02-03T04:05:06.000Z',
+            updated: '2026-02-03T04:05:07.000Z',
         });
         expect(nodeResponseCodec.safeParse(response).success).toBe(true);
     });
@@ -388,8 +388,8 @@ describe('toNodeResponse', () =>
             name: 'Shared Photo',
             ownerID: 'u1',
             parentID: null,
-            createdAt,
-            updatedAt,
+            created,
+            updated,
             targetNodeID: 't1',
         };
         const target : Node = {
@@ -398,12 +398,12 @@ describe('toNodeResponse', () =>
             name: 'photo.jpg',
             ownerID: 'u2',
             parentID: null,
-            createdAt,
-            updatedAt,
+            created,
+            updated,
             blobID: 'sha',
             size: 2048,
             mimeType: 'image/jpeg',
-            trashedAt: null,
+            trashed: null,
         };
 
         const response = toNodeResponse(link, { role: 'owner', target });
@@ -432,8 +432,8 @@ describe('toNodeResponse', () =>
             name: 'Shared Folder',
             ownerID: 'recipient',
             parentID: null,
-            createdAt,
-            updatedAt,
+            created,
+            updated,
             targetNodeID: 't1',
         };
         const target : Node = {
@@ -442,9 +442,9 @@ describe('toNodeResponse', () =>
             name: 'Team Docs',
             ownerID: 'original-owner',
             parentID: null,
-            createdAt,
-            updatedAt,
-            trashedAt: null,
+            created,
+            updated,
+            trashed: null,
         };
 
         const response = toNodeResponse(link, { role: 'viewer', target });
@@ -463,8 +463,8 @@ describe('toNodeResponse', () =>
             name: 'Was Shared',
             ownerID: 'u1',
             parentID: null,
-            createdAt,
-            updatedAt,
+            created,
+            updated,
             targetNodeID: 'gone',
         };
 

@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 // Constants
+import { DEFAULT_LIST_USERS_LIMIT, MAX_LIST_USERS_LIMIT } from '../../../constants/pagination.ts';
 import { BAN_MAX_EXPIRES_DAYS, BAN_REASON_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../../../constants/user.ts';
 
 // Models
@@ -16,20 +17,24 @@ import { userRoles } from '../../userProfile.ts';
 import { userProfileCodec } from '../../schemas/userProfile.ts';
 
 // Requests
-import type {
-    AdminOverview,
-    AdminStatusResponse,
-    AdminUserEntry,
-    AdminUserPage,
-    AdminUserPageResponse,
-    AdminUserResponse,
-    BanUserRequest,
-    SetPasswordRequest,
-    SetQuotaRequest,
-    SetRoleRequest,
-    SweepRunResponse,
-    TestEmailResponse,
+import {
+    type AdminOverview,
+    type AdminStatusResponse,
+    type AdminUserEntry,
+    type AdminUserListQuery,
+    type AdminUserPage,
+    type AdminUserPageResponse,
+    type AdminUserResponse,
+    type BanUserRequest,
+    type SetPasswordRequest,
+    type SetQuotaRequest,
+    type SetRoleRequest,
+    type SweepRunResponse,
+    type TestEmailResponse,
+    adminUserSearchFields,
+    adminUserSortKeys,
 } from '../admin.ts';
+import { sortDirections } from '../nodes.ts';
 
 // Request Schemas
 import { isoDateTimeCodec } from './common.ts';
@@ -99,10 +104,30 @@ export const adminUserResponseCodec = userProfileCodec.extend({
     usedBytes: z.number()
         .int()
         .nonnegative(),
-    createdAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
 });
 
 typeAssert<Equals<z.output<typeof adminUserResponseCodec>, AdminUserResponse>>();
+
+export const adminUserListQueryCodec = z.strictObject({
+    limit: z.coerce.number()
+        .int()
+        .min(1)
+        .max(MAX_LIST_USERS_LIMIT)
+        .default(DEFAULT_LIST_USERS_LIMIT),
+    offset: z.coerce.number()
+        .int()
+        .min(0)
+        .default(0),
+    search: z.string()
+        .transform((value) => { return value === '' ? undefined : value; })
+        .optional(),
+    searchField: z.enum(adminUserSearchFields).default('email'),
+    sortKey: z.enum(adminUserSortKeys).optional(),
+    sortDirection: z.enum(sortDirections).default('asc'),
+});
+
+typeAssert<Equals<z.output<typeof adminUserListQueryCodec>, AdminUserListQuery>>();
 
 export const adminUserPageResponseCodec = z.strictObject({
     users: z.array(adminUserResponseCodec),
@@ -136,7 +161,7 @@ export function toAdminUserResponse(entry : AdminUserEntry) : AdminUserResponse
         banReason: profile.banReason,
         banExpires: profile.banExpires === null ? null : profile.banExpires.toISOString(),
         usedBytes,
-        createdAt: profile.createdAt.toISOString(),
+        created: profile.created.toISOString(),
     };
 }
 
@@ -182,7 +207,7 @@ const trashPurgeRunStatusCodec = z.strictObject({
     }),
 });
 
-const partialsRunStatusCodec = z.strictObject({
+const stagedUploadsRunStatusCodec = z.strictObject({
     ranAt: isoDateTimeCodec,
     summary: z.strictObject({
         candidates: wholeCount,
@@ -204,7 +229,7 @@ const accountDeletionRunStatusCodec = z.strictObject({
 export const sweepRunResponseCodec = z.discriminatedUnion('sweep', [
     gcRunStatusCodec.extend({ sweep: z.literal('gc') }),
     trashPurgeRunStatusCodec.extend({ sweep: z.literal('trashPurge') }),
-    partialsRunStatusCodec.extend({ sweep: z.literal('partials') }),
+    stagedUploadsRunStatusCodec.extend({ sweep: z.literal('stagedUploads') }),
     accountDeletionRunStatusCodec.extend({ sweep: z.literal('accountDeletion') }),
 ]);
 
@@ -251,7 +276,7 @@ export const adminStatusResponseCodec = z.strictObject({
     backends: z.array(storageBackendStatusCodec),
     gc: gcRunStatusCodec.nullable(),
     trashPurge: trashPurgeRunStatusCodec.nullable(),
-    partials: partialsRunStatusCodec.nullable(),
+    stagedUploads: stagedUploadsRunStatusCodec.nullable(),
     accountDeletion: accountDeletionRunStatusCodec.nullable(),
 });
 

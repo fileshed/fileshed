@@ -1,12 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Node List
   --
-  -- The dense drive surface: a sortable table of rows. Clicking a column header emits its sort key; the view decides
-  -- the direction and drives the store. Selection and open intents relay up from the rows unchanged. Owner is a
-  -- plain header cell, not a sort button -- the listing API has no owner sort key.
-  --
-  -- The header sits outside the scroller so it stays put while the rows move under it, which leaves the two to be
-  -- lined up by hand: the scroller always reserves its scrollbar gutter and the header pads itself by the same width.
+  -- Owner is a plain header cell because the listing API has no owner sort key. The header sits outside the scroller so
+  -- it stays put, which means the two are lined up by hand: the scroller always reserves its scrollbar gutter and the
+  -- header pads itself by the same width.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -35,10 +32,10 @@
             <button
                 type="button"
                 class="hidden items-center gap-1 text-left hover:text-default sm:flex"
-                @click="emit('sort', 'updatedAt')"
+                @click="emit('sort', 'updated')"
             >
                 Modified
-                <UIcon v-if="sortKey === 'updatedAt'" :name="directionIcon" class="size-3.5" />
+                <UIcon v-if="sortKey === 'updated'" :name="directionIcon" class="size-3.5" />
             </button>
             <button
                 type="button"
@@ -84,9 +81,9 @@
     import NodeRow from './nodeRow.vue';
     import VirtualScroller from '../listing/virtualScroller.vue';
 
-    // Resource Access
-    import { useListingMetrics } from '../../resource-access/listingMetrics.ts';
-    import { scrollbarWidth } from '../../resource-access/scrollbarWidth.ts';
+    // Utils
+    import { useListingMetrics } from '../../utils/listingMetrics.ts';
+    import { scrollbarWidth } from '../../utils/scrollbarWidth.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

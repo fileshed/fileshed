@@ -1,11 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Access Token API DTOs
 //
-// Request/response contracts for PAT management and playback-token minting, both session-only surfaces: no token
-// mints, lists, or revokes tokens. The create response is the only place a PAT's full value ever appears -- the key
-// is hashed at rest, so it is shown once and never again; the list carries only the stored starting characters.
-// Playback tokens are the media player's own short-lived download-scoped keys: never listed, never named, identified
-// only by the id the player holds so it can retire its predecessor on refresh.
+// Both surfaces are session-only: no token mints, lists, or revokes tokens. The key is hashed at rest, so the create
+// response is the only place a PAT's full value ever appears; the list carries only the stored starting characters.
+// Playback tokens are never listed or named, and are identified only by the id the player holds so it can retire its
+// predecessor on refresh.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -28,9 +27,9 @@ export interface AccessTokenResponse
     name : string;
     start : string | null;
     scopes : AccessTokenScope[];
-    createdAt : string;
-    lastUsedAt : string | null;
-    expiresAt : string | null;
+    created : string;
+    lastUsed : string | null;
+    expires : string | null;
 }
 
 export interface CreateAccessTokenResponse
@@ -57,7 +56,7 @@ export interface PlaybackTokenResponse
 {
     id : string;
     token : string;
-    expiresAt : string;
+    expires : string;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

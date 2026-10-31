@@ -1,9 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Logo Field
   --
-  -- The instance mark: shown in every sidebar and as the favicon. Upload applies immediately (identity is
-  -- per-field like the instance name, not part of the theme draft), Remove returns to the stock mark, and the
-  -- preview always shows what visitors currently get.
+  -- Upload applies at once rather than joining the theme draft: the logo is identity, saved per field like the instance
+  -- name.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -23,7 +22,7 @@
         </template>
 
         <div class="mt-3 flex items-end gap-5">
-            <img :src="app.logoUrl" alt="Current logo" class="size-24 shrink-0 rounded-md border border-default p-2">
+            <img :src="app.logoURL" alt="Current logo" class="size-24 shrink-0 rounded-md border border-default p-2">
 
             <div class="flex flex-col items-start gap-3">
                 <p class="text-sm text-muted">
@@ -85,7 +84,7 @@
         void runMutation(async () =>
         {
             await uploadBrandingLogo(file);
-            await app.initialize();
+            await app.init();
         }, pending);
     }
 
@@ -94,7 +93,7 @@
         void runMutation(async () =>
         {
             await deleteBrandingLogo();
-            await app.initialize();
+            await app.init();
         }, pending);
     }
 </script>

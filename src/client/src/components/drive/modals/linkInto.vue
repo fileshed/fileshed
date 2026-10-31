@@ -1,12 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Link Into Modal
   --
-  -- The destination half of placing a link: the caller has picked what to point at, and this asks where the pointer
-  -- goes. Opened imperatively from a node's own menu.
-  --
-  -- The folder picker is handed an empty moving set, as the shared-item version is: a link carries none of the move
-  -- engine's cycle restrictions, because it conducts nothing. Pointing a folder's link at a folder inside itself is
-  -- an odd thing to do and a legal one, so every folder the caller owns is a destination, root included.
+  -- The folder picker gets an empty moving set: a link carries none of the move cycle restrictions, so placing a
+  -- folder's link inside that folder is odd but legal, and every folder the caller owns is a destination, root
+  -- included.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

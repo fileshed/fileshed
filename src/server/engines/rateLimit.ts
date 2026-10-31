@@ -9,6 +9,9 @@
 // the first hop that proxy did not add.
 //----------------------------------------------------------------------------------------------------------------------
 
+// Engines
+import { normalizeRequestPath, pathWithin } from './requestPath.ts';
+
 // Utils
 import { type TrustedProxies, normalizeAddress } from '../utils/ip.ts';
 
@@ -81,26 +84,15 @@ const anonymousPrefixes = [ '/d' ];
 
 const apiPrefixes = [ '/api' ];
 
-// Matched against the same adversarial normalization the auth gate uses: percent-decoded so an encoded slash cannot
-// hide a segment, collapsed on repeated slashes, lowercased. A tier that can be stepped around by spelling is not a
-// tier.
-function normalizePath(pathname : string) : string
-{
-    let path = pathname;
-    try { path = decodeURIComponent(pathname); }
-    catch { /* malformed encoding: the raw path routes to a 404 anyway, so budget it as it stands */ }
-
-    return path.replace(/\/{2,}/g, '/').toLowerCase();
-}
-
 function matches(path : string, prefixes : readonly string[]) : boolean
 {
-    return prefixes.some((prefix) => path === prefix || path.startsWith(`${ prefix }/`));
+    return prefixes.some((prefix) => pathWithin(path, prefix));
 }
 
+// A tier that can be stepped around by spelling is not a tier, so the path is read the way the auth gate reads it.
 export function tierFor(pathname : string) : RateLimitTier | null
 {
-    const path = normalizePath(pathname);
+    const path = normalizeRequestPath(pathname);
 
     if(matches(path, credentialPrefixes)) { return 'credentials'; }
     if(matches(path, anonymousPrefixes)) { return 'anonymous'; }
@@ -122,7 +114,7 @@ export interface RateLimitRule
 export interface Bucket
 {
     count : number;
-    startedAt : number;
+    started : number;
 }
 
 export interface RateLimitDecision
@@ -142,19 +134,19 @@ export function consume(bucket : Bucket | undefined, rule : RateLimitRule, now :
 {
     const windowMs = rule.windowSeconds * 1000;
 
-    if(bucket === undefined || now - bucket.startedAt >= windowMs)
+    if(bucket === undefined || now - bucket.started >= windowMs)
     {
-        return { allowed: true, retryAfterSeconds: 0, bucket: { count: 1, startedAt: now } };
+        return { allowed: true, retryAfterSeconds: 0, bucket: { count: 1, started: now } };
     }
 
     if(bucket.count >= rule.max)
     {
-        const remainingMs = bucket.startedAt + windowMs - now;
+        const remainingMs = bucket.started + windowMs - now;
 
         return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)), bucket };
     }
 
-    return { allowed: true, retryAfterSeconds: 0, bucket: { count: bucket.count + 1, startedAt: bucket.startedAt } };
+    return { allowed: true, retryAfterSeconds: 0, bucket: { count: bucket.count + 1, started: bucket.started } };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

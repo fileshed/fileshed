@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Microsoft Provider Fields
   --
-  -- Microsoft Entra ID adds one knob that matters: the tenant. The default ("common") accepts any Microsoft
-  -- account; a specific tenant id restricts sign-in to one organization.
+  -- The default tenant ("common") accepts any Microsoft account; a specific tenant id restricts sign-in to one
+  -- organization.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

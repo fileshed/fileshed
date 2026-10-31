@@ -13,8 +13,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminSettingEntry, AdminSettingsResponse } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
-import { fetchAdminSettings, sendTestEmail } from '@client/resource-access/admin.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
+import { getAdminSettings, sendTestEmail } from '@client/resource-access/admin.ts';
 
 // Components
 import SettingField from '@client/components/admin/settingField.vue';
@@ -25,7 +25,7 @@ import EmailTab from '@client/pages/admin/emailTab.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
     sendTestEmail: vi.fn(),
 }));
@@ -33,7 +33,7 @@ vi.mock('@client/resource-access/admin.ts', () => ({
 const toastAdd = vi.fn();
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
-const fetchMock = fetchAdminSettings as unknown as Mock;
+const getSettingsMock = getAdminSettings as unknown as Mock;
 const sendTestMock = sendTestEmail as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -93,7 +93,7 @@ describe('Admin EmailTab', () =>
 
     it('renders every mail key under its group heading', async () =>
     {
-        fetchMock.mockResolvedValue(mailView());
+        getSettingsMock.mockResolvedValue(mailView());
         const wrapper = mountTab();
         await flushPromises();
 
@@ -113,7 +113,7 @@ describe('Admin EmailTab', () =>
 
     it('sends the test email and toasts the recipient', async () =>
     {
-        fetchMock.mockResolvedValue(mailView());
+        getSettingsMock.mockResolvedValue(mailView());
         sendTestMock.mockResolvedValue({ to: 'root@example.com' });
         const wrapper = mountTab();
         await flushPromises();
@@ -129,9 +129,9 @@ describe('Admin EmailTab', () =>
 
     it('toasts the server\'s reason when the test-send fails', async () =>
     {
-        fetchMock.mockResolvedValue(mailView());
+        getSettingsMock.mockResolvedValue(mailView());
         sendTestMock.mockRejectedValue(
-            new ApiError(400, 'The SMTP server refused the send: 535 Authentication failed')
+            new APIError(400, 'The SMTP server refused the send: 535 Authentication failed')
         );
         const wrapper = mountTab();
         await flushPromises();
@@ -147,7 +147,7 @@ describe('Admin EmailTab', () =>
 
     it('shows the retry state when the load fails', async () =>
     {
-        fetchMock.mockRejectedValue(new Error('offline'));
+        getSettingsMock.mockRejectedValue(new Error('offline'));
         const wrapper = mountTab();
         await flushPromises();
 

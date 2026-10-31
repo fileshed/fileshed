@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Overview Tab
   --
-  -- The admin landing page: who is on the instance, what it holds, what it is waiting to reclaim, and what this
-  -- deployment is -- then the storage backends and the latest background sweeps. The one thing it does rather than
-  -- reports is run a sweep on demand, which reloads the whole readout: the figures a sweep moves (reclaimable bytes,
-  -- trash pending) are already on this page, so the reclaim shows up where the admin is looking.
+  -- Running a sweep reloads the whole readout, because the figures a sweep moves (reclaimable bytes, trash pending) are
+  -- on this page too.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -105,11 +103,11 @@
 
                 <SweepSummary
                     title="Abandoned uploads"
-                    sweep="partials"
-                    :run="status.partials"
+                    sweep="stagedUploads"
+                    :run="status.stagedUploads"
                     @ran="load"
                 >
-                    {{ status.partials === null ? '' : describePartialsRun(status.partials.summary) }}
+                    {{ status.stagedUploads === null ? '' : describeStagedUploadsRun(status.stagedUploads.summary) }}
                 </SweepSummary>
 
                 <SweepSummary
@@ -137,13 +135,13 @@
     import { useAdminSettingsStore } from '../../stores/adminSettings.ts';
 
     // Resource Access
-    import { adminStatus } from '../../resource-access/admin.ts';
+    import { getAdminStatus } from '../../resource-access/admin.ts';
 
     // Engines
     import {
         describeAccountDeletionRun,
         describeGcRun,
-        describePartialsRun,
+        describeStagedUploadsRun,
         describeTrashPurgeRun,
     } from '../../engines/sweepRun.ts';
 
@@ -172,7 +170,7 @@
 
         try
         {
-            status.value = await adminStatus();
+            status.value = await getAdminStatus();
         }
         catch(caught)
         {

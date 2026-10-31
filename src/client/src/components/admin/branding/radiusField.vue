@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Radius Field
   --
-  -- One slider over --ui-radius, with a sample row that inherits the previewed radius naturally -- the proof is
-  -- the row itself rounding as the thumb moves. Null means the stock radius.
+  -- Null means the stock radius.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -46,11 +45,11 @@
 <script setup lang="ts">
     import { THEME_RADIUS_MAX } from '@fileshed/core';
 
+    // Engines
+    import { stockRadius } from '../../../engines/stockTheme.ts';
+
     // Components
     import BrandingField from './brandingField.vue';
-
-    // Utils
-    import { stockRadius } from '../../../utils/stockTheme.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

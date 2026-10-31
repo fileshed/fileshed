@@ -7,11 +7,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-// Constants
-import { MS_PER_DAY } from '@fileshed/core';
+// Models
+import { type AdminUserListQuery, MS_PER_DAY } from '@fileshed/core';
 
 // Resource Access
-import { type AdminUserListOptions, UserRA } from '@server/resource-access/users/index.ts';
+import { UserRA } from '@server/resource-access/users/index.ts';
 
 // Support
 import { type BootedApp, bootTestApp, makeAdmin, signUp } from '../../auth/support.ts';
@@ -29,15 +29,15 @@ async function banRow(booted : BootedApp, email : string, banExpires : string | 
 }
 
 // The listing's defaults, so a test spells out only the option it is about.
-function listing(overrides : Partial<AdminUserListOptions> = {}) : AdminUserListOptions
+function listing(overrides : Partial<AdminUserListQuery> = {}) : AdminUserListQuery
 {
     return { limit: 50, offset: 0, searchField: 'email', sortDirection: 'asc', ...overrides };
 }
 
-async function backdate(booted : BootedApp, email : string, createdAt : Date) : Promise<void>
+async function backdate(booted : BootedApp, email : string, created : Date) : Promise<void>
 {
     await booted.handle.db.updateTable('user')
-        .set({ createdAt: createdAt.toISOString() })
+        .set({ createdAt: created.toISOString() })
         .where('email', '=', email)
         .execute();
 }
@@ -163,8 +163,8 @@ describe('UserRA.listUsers — ordering and paging', () =>
         await signUp(booted.app, 'ccc@example.com', PASSWORD, 'Cee');
 
         const ra = new UserRA(booted.handle);
-        const asc = await ra.listUsers(listing({ sortBy: 'email' }));
-        const desc = await ra.listUsers(listing({ sortBy: 'email', sortDirection: 'desc' }));
+        const asc = await ra.listUsers(listing({ sortKey: 'email' }));
+        const desc = await ra.listUsers(listing({ sortKey: 'email', sortDirection: 'desc' }));
 
         expect(asc.users.map((user) => user.email))
             .toEqual([ 'aaa@example.com', 'bbb@example.com', 'ccc@example.com' ]);
@@ -179,7 +179,7 @@ describe('UserRA.listUsers — ordering and paging', () =>
         await signUp(booted.app, 'two@example.com', PASSWORD, 'Ada');
         await signUp(booted.app, 'three@example.com', PASSWORD, 'Mia');
 
-        const page = await new UserRA(booted.handle).listUsers(listing({ sortBy: 'name' }));
+        const page = await new UserRA(booted.handle).listUsers(listing({ sortKey: 'name' }));
 
         expect(page.users.map((user) => user.name)).toEqual([ 'Ada', 'Mia', 'Zoe' ]);
     });
@@ -194,7 +194,7 @@ describe('UserRA.listUsers — ordering and paging', () =>
         await backdate(booted, 'middle@example.com', new Date('2026-02-01T00:00:00.000Z'));
         await backdate(booted, 'newest@example.com', new Date('2026-03-01T00:00:00.000Z'));
 
-        const page = await new UserRA(booted.handle).listUsers(listing({ sortBy: 'createdAt' }));
+        const page = await new UserRA(booted.handle).listUsers(listing({ sortKey: 'created' }));
 
         expect(page.users.map((user) => user.email))
             .toEqual([ 'oldest@example.com', 'middle@example.com', 'newest@example.com' ]);
@@ -227,7 +227,7 @@ describe('UserRA.listUsers — ordering and paging', () =>
         await signUp(booted.app, 'two@example.com', PASSWORD, 'Sam');
         await signUp(booted.app, 'three@example.com', PASSWORD, 'Sam');
 
-        const page = await new UserRA(booted.handle).listUsers(listing({ sortBy: 'name' }));
+        const page = await new UserRA(booted.handle).listUsers(listing({ sortKey: 'name' }));
         const ids = page.users.map((user) => user.id);
 
         expect(ids).toEqual([ ...ids ].sort());
@@ -243,7 +243,7 @@ describe('UserRA.listUsers — ordering and paging', () =>
         await signUp(booted.app, 'eee@example.com', PASSWORD, 'Eee');
 
         const ra = new UserRA(booted.handle);
-        const sort = { sortBy: 'email' as const, limit: 2 };
+        const sort = { sortKey: 'email' as const, limit: 2 };
         const first = await ra.listUsers(listing({ ...sort, offset: 0 }));
         const second = await ra.listUsers(listing({ ...sort, offset: 2 }));
         const third = await ra.listUsers(listing({ ...sort, offset: 4 }));
@@ -275,7 +275,7 @@ describe('UserRA.listUsers — rows', () =>
         expect(row?.banned).toBe(true);
         expect(row?.banReason).toBe('spamming');
         expect(row?.banExpires).toEqual(expires);
-        expect(row?.createdAt).toBeInstanceOf(Date);
+        expect(row?.created).toBeInstanceOf(Date);
     });
 
     it('reads a never-banned account as a clean record', async () =>

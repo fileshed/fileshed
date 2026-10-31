@@ -13,7 +13,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { type AdminSettingEntry, defaultInstanceTheme, settingDefinitions } from '@fileshed/core';
 
 // Resource Access
-import { fetchAdminSettings, fetchBranding } from '@client/resource-access/admin.ts';
+import { getAdminSettings, getBranding } from '@client/resource-access/admin.ts';
 
 // Stores
 import { useAdminBrandingStore } from '@client/stores/adminBranding.ts';
@@ -24,15 +24,15 @@ import BrandingTab from '@client/pages/admin/brandingTab.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
-    fetchBranding: vi.fn(),
+    getBranding: vi.fn(),
     patchBranding: vi.fn(),
 }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
-const settingsMock = fetchAdminSettings as unknown as Mock;
-const brandingMock = fetchBranding as unknown as Mock;
+const settingsMock = getAdminSettings as unknown as Mock;
+const brandingMock = getBranding as unknown as Mock;
 
 function settingsView() : { settings : AdminSettingEntry[]; restartRequired : boolean }
 {
@@ -60,7 +60,7 @@ function mountTab() : VueWrapper
                 NeutralField: true,
                 RadiusField: true,
                 ModeField: true,
-                CustomCssField: true,
+                CustomCSSField: true,
                 UAlert: { name: 'UAlert', props: [ 'title' ], template: '<div class="alert">{{ title }}</div>' },
                 UButton: { name: 'UButton', props: [ 'label' ], template: '<button>{{ label }}</button>' },
                 UFieldGroup: { template: '<div><slot /></div>' },
@@ -96,7 +96,7 @@ describe('Admin BrandingTab', () =>
         expect(wrapper.findComponent({ name: 'NeutralField' }).exists()).toBe(true);
         expect(wrapper.findComponent({ name: 'RadiusField' }).exists()).toBe(true);
         expect(wrapper.findComponent({ name: 'ModeField' }).exists()).toBe(true);
-        expect(wrapper.findComponent({ name: 'CustomCssField' }).exists()).toBe(true);
+        expect(wrapper.findComponent({ name: 'CustomCSSField' }).exists()).toBe(true);
         expect(wrapper.find('[data-testid="save-bar"]').exists()).toBe(false);
     });
 

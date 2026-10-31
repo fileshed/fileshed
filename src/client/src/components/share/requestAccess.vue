@@ -1,11 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Request Access
   --
-  -- The requester's side of a share request, shown when a signed-in user opens a node they cannot resolve: the item is
-  -- either shared with someone else or gone, and the server does not leak which. It offers to ask the target's owner for
-  -- access at a chosen role, and on success shows the pending state. The server is the authority on legality -- an
-  -- already-held grant, an existing pending request, or a vanished node all come back as typed errors surfaced inline
-  -- here, rather than the client pre-guessing an outcome it cannot know.
+  -- Shown when a signed-in user opens a node they can't resolve: it is either shared with someone else or gone, and the
+  -- server does not say which. The client doesn't pre-judge the request; an already-held grant, a pending request, or a
+  -- vanished node comes back as a typed error shown inline.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -86,11 +84,11 @@
     } from '@fileshed/core';
 
     // Resource Access
-    import { ApiError } from '../../resource-access/apiError.ts';
+    import { APIError } from '../../resource-access/apiError.ts';
     import { requestAccess } from '../../resource-access/accessRequests.ts';
 
     // Utils
-    import { describeApiError } from '../../utils/runWithToast.ts';
+    import { describeAPIError } from '../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -132,9 +130,9 @@
         {
             // A 404 is the server's non-leaking answer for a node that is gone (or never was); anything else -- an
             // already-held grant, an existing pending request -- carries its own message worth showing verbatim.
-            errorMessage.value = caught instanceof ApiError && caught.status === 404
+            errorMessage.value = caught instanceof APIError && caught.status === 404
                 ? 'This item no longer exists.'
-                : describeApiError(caught);
+                : describeAPIError(caught);
         }
         finally
         {

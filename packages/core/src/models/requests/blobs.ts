@@ -1,8 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob API DTOs
-//
-// Request/response contracts for the claim/proof-of-possession/upload flow. The claim response is a discriminated union
-// on `upload` -- an unknown blob gets an upload ticket, a known one a challenge.
 //----------------------------------------------------------------------------------------------------------------------
 
 export interface ClaimRequest

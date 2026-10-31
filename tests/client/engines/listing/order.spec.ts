@@ -4,50 +4,18 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { NodeResponse } from '@fileshed/core';
+import type { FileNodeResponse, NodeResponse } from '@fileshed/core';
 
 import { sortNodes } from '@client/engines/listing/order.ts';
 
+// Support
+import { fileNode, folderNode, linkNode } from '../../support.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-const BASE = { ownerID: 'u1', parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
-
-interface FileFacts
+function file(id : string, overrides : Partial<FileNodeResponse> = {}) : FileNodeResponse
 {
-    name ?: string;
-    size ?: number;
-    mimeType ?: string;
-    updatedAt ?: string;
-    createdAt ?: string;
-}
-
-function file(id : string, facts : FileFacts = {}) : NodeResponse
-{
-    return {
-        ...BASE,
-        id,
-        name: facts.name ?? id,
-        type: 'file',
-        blobID: 'b1',
-        size: facts.size ?? 100,
-        mimeType: facts.mimeType ?? 'text/plain',
-        trashedAt: null,
-        sharing: null,
-        updatedAt: facts.updatedAt ?? ISO,
-        createdAt: facts.createdAt ?? ISO,
-    };
-}
-
-function folder(id : string, name : string = id) : NodeResponse
-{
-    return { sharing: null, ...BASE, id, name, type: 'folder', trashedAt: null };
-}
-
-function link(id : string, name : string = id) : NodeResponse
-{
-    return { sharing: null, ...BASE, id, name, type: 'link', targetNodeID: 't1', target: null };
+    return fileNode({ id, ...overrides });
 }
 
 function order(nodes : readonly NodeResponse[]) : string[]
@@ -61,7 +29,7 @@ describe('sortNodes', () =>
 {
     it('puts folders ahead of everything else, ascending or descending', () =>
     {
-        const nodes = [ file('f'), folder('d'), link('l') ];
+        const nodes = [ file('f'), folderNode({ id: 'd' }), linkNode({ id: 'l' }) ];
 
         expect(order(sortNodes(nodes, 'name', 'asc'))[0]).toBe('d');
         expect(order(sortNodes(nodes, 'name', 'desc'))[0]).toBe('d');
@@ -93,7 +61,7 @@ describe('sortNodes', () =>
     // something, and the direction flips that along with everything else.
     it('orders by size, putting a link with no size of its own after every measured file', () =>
     {
-        const nodes = [ file('big', { size: 900 }), link('pointer'), file('small', { size: 10 }) ];
+        const nodes = [ file('big', { size: 900 }), linkNode({ id: 'pointer' }), file('small', { size: 10 }) ];
 
         expect(order(sortNodes(nodes, 'size', 'asc'))).toEqual([ 'small', 'big', 'pointer' ]);
         expect(order(sortNodes(nodes, 'size', 'desc'))).toEqual([ 'pointer', 'big', 'small' ]);
@@ -129,27 +97,31 @@ describe('sortNodes', () =>
     it('orders by modified time, newest last ascending', () =>
     {
         const nodes = [
-            file('newer', { updatedAt: '2026-07-05T00:00:00.000Z' }),
-            file('older', { updatedAt: '2026-01-02T00:00:00.000Z' }),
+            file('newer', { updated: '2026-07-05T00:00:00.000Z' }),
+            file('older', { updated: '2026-01-02T00:00:00.000Z' }),
         ];
 
-        expect(order(sortNodes(nodes, 'updatedAt', 'asc'))).toEqual([ 'older', 'newer' ]);
+        expect(order(sortNodes(nodes, 'updated', 'asc'))).toEqual([ 'older', 'newer' ]);
     });
 
     it('orders by created time independently of modified time', () =>
     {
         const nodes = [
-            file('second', { createdAt: '2026-07-05T00:00:00.000Z' }),
-            file('first', { createdAt: '2026-01-02T00:00:00.000Z' }),
+            file('second', { created: '2026-07-05T00:00:00.000Z' }),
+            file('first', { created: '2026-01-02T00:00:00.000Z' }),
         ];
 
-        expect(order(sortNodes(nodes, 'createdAt', 'asc'))).toEqual([ 'first', 'second' ]);
+        expect(order(sortNodes(nodes, 'created', 'asc'))).toEqual([ 'first', 'second' ]);
     });
 
     // Kind groups files by format and keeps links together, so a folder of mixed content reads by type.
     it('groups by kind, files by their format and links behind them', () =>
     {
-        const nodes = [ link('l'), file('pic', { mimeType: 'image/png' }), file('doc', { mimeType: 'text/plain' }) ];
+        const nodes = [
+            linkNode({ id: 'l' }),
+            file('pic', { mimeType: 'image/png' }),
+            file('doc', { mimeType: 'text/plain' }),
+        ];
 
         expect(order(sortNodes(nodes, 'kind', 'asc'))).toEqual([ 'pic', 'doc', 'l' ]);
     });

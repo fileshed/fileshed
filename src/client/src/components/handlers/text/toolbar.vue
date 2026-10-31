@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Editor Toolbar
-  --
-  -- The control row beside the text editing surface: the markdown/plain mode toggle, the colorscheme picker, and the
-  -- gutter toggle. Identity -- the file name, save state, and Save -- lives in the layout header (the text identity
-  -- bar), so this row is pure viewing controls that a viewer keeps too, since switching highlighting harms nothing. It
-  -- reads the editor store for the mode and the session store for the persisted view preferences.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -61,8 +56,8 @@
     import { useEditorStore } from '../../../stores/editor.ts';
     import { useSessionStore } from '../../../stores/session.ts';
 
-    // Components
-    import { editorThemeOptions, resolveEditorTheme } from './themeRegistry.ts';
+    // Engines
+    import { editorThemeOptions, resolveEditorTheme } from '../../../engines/editorTheme.ts';
 
     // Utils
     import { useRunWithToast } from '../../../utils/runWithToast.ts';

@@ -1,12 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Find Bar
-  --
-  -- The in-page search strip: a query box, the four search toggles, the "x of y" match tally, previous/next walkers,
-  -- and a close button. It reads and drives the annotator store, which owns the query, the toggles, the tally, and the
-  -- search commands the render surface carries to pdf.js's find controller. Typing searches as you go; Enter and the
-  -- walkers step through matches; Escape closes. Opened focused, so the caller's Cmd/Ctrl+F lands the cursor in the box.
-  --
-  -- Shift+Enter walks backwards, which is the binding every find box in every browser has taught people to expect.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -76,17 +69,17 @@
 <script setup lang="ts">
     import { onMounted, ref } from 'vue';
 
-    // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    // Engines
+    import type { FindOptions } from '../../../engines/pdf/types.ts';
 
-    // Components
-    import type { FindOptions } from './types.ts';
+    // Stores
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfFindBar' });
+    defineOptions({ name: 'PDFFindBar' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const input = ref<HTMLInputElement | null>(null);
 

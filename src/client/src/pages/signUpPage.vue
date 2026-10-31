@@ -88,7 +88,10 @@
     import { useSessionStore } from '../stores/session.ts';
 
     // Resource Access
-    import { fetchInstance } from '../resource-access/instance.ts';
+    import { getInstance } from '../resource-access/instance.ts';
+
+    // Utils
+    import { describeAPIError } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
     // Setup
@@ -115,7 +118,7 @@
     {
         try
         {
-            const instance = await fetchInstance();
+            const instance = await getInstance();
             if(!instance.signUpEnabled) { await router.replace('/signin'); }
         }
         catch { /* an unreachable API leaves the form up; submitting will surface the real error */ }
@@ -136,7 +139,7 @@
         }
         catch(error)
         {
-            errorMessage.value = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+            errorMessage.value = describeAPIError(error);
         }
     }
 </script>

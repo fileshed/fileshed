@@ -19,7 +19,7 @@ import {
 
 // Support
 import { testDatabaseKind } from '../support/database.ts';
-import { type BootedServeApp, ORIGIN, type TestUser, bootServeApp, makeUser } from '../publicLinks/support.ts';
+import { type BootedStoreApp, ORIGIN, type TestUser, bootStoreApp, makeUser } from '../publicLinks/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ const SHA256 = 'd'.repeat(64);
 // seeds. 5,000 rows was 60,000 parameters and only worked by the grace of whichever SQLite the runtime shipped.
 const INSERT_BATCH = 1000;
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -55,8 +55,8 @@ async function seedFolder(total : number) : Promise<void>
             size: 10,
             backend_id: backend.id,
             storage_key: 'seed/guard',
-            created_at: now,
-            deleted_at: null,
+            created: now,
+            deleted: null,
         } as never)
         .execute();
 
@@ -77,9 +77,9 @@ async function seedFolder(total : number) : Promise<void>
         blob_id: SHA256,
         size: 10,
         mime_type: 'application/octet-stream',
-        created_at: now,
-        updated_at: now,
-        trashed_at: null,
+        created: now,
+        updated: now,
+        trashed: null,
         target_node_id: null,
     }));
 
@@ -109,9 +109,9 @@ async function seedOverlongNames(count : number, length : number) : Promise<void
         blob_id: SHA256,
         size: 10,
         mime_type: 'application/octet-stream',
-        created_at: now,
-        updated_at: now,
-        trashed_at: null,
+        created: now,
+        updated: now,
+        trashed: null,
         target_node_id: null,
     }));
 
@@ -140,7 +140,7 @@ async function probeOrder(limit : number = LISTING_CHUNK_SIZE) : Promise<string[
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
 });
 

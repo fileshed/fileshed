@@ -1,7 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Mode Field
-  --
-  -- The color-mode policy: the default visitors get before they choose, and the switch that makes it mandatory.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -13,7 +11,7 @@
         <div class="mt-3 flex flex-wrap items-center gap-4">
             <USelect
                 :model-value="mode"
-                :items="MODE_ITEMS"
+                :items="modeItems"
                 class="w-40"
                 aria-label="Default color mode"
                 @update:model-value="onMode"
@@ -45,7 +43,7 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    const MODE_ITEMS = [
+    const modeItems = [
         { label: 'System', value: 'system' },
         { label: 'Light', value: 'light' },
         { label: 'Dark', value: 'dark' },

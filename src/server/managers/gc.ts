@@ -2,11 +2,11 @@
 // Blob GC
 //
 // The scheduled sweep that reclaims blob bytes, in two passes over the same rule. For each candidate the record row is
-// hard-deleted FIRST, conditionally (`deleted_at < cutoff` re-checked at delete time), and only when that delete
+// hard-deleted FIRST, conditionally (`deleted < cutoff` re-checked at delete time), and only when that delete
 // actually removes the row are the bytes deleted.
 //
 // The order is deliberate and is the opposite of "bytes then row". The row's conditional delete is the serialization
-// point of the concurrency rule: a claim that resurrects the blob clears deleted_at inside its own transaction,
+// point of the concurrency rule: a claim that resurrects the blob clears deleted inside its own transaction,
 // so it either commits before this delete (which then matches nothing and the live blob survives) or after (the row is
 // already gone, so the claim's resurrect updates nothing and its node insert fails the blob_id FK). Deleting the bytes
 // first would leave a window where a resurrected, still-referenced blob loses its bytes -- data corruption. The price
@@ -66,7 +66,7 @@ async function reclaim(blob : BlobRA, candidate : GcCandidate, cutoff : Date) : 
 
     try
     {
-        await blob.delete({ backendID: candidate.backendID, storageKey: candidate.storageKey });
+        await blob.delete(candidate);
         return { outcome: 'deleted', bytes: candidate.size };
     }
     catch(error)

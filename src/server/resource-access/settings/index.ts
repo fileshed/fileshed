@@ -1,11 +1,12 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Instance Settings Resource Access
 //
-// The override rows, raw. Layering (override-over-config), typing, and secret handling are the manager's business;
-// this surface only stores and fetches JSON values per key.
+// Layering over the config, typing and secret sealing belong to the settings manager; this RA only stores and fetches
+// raw JSON values per key.
 //----------------------------------------------------------------------------------------------------------------------
 
-/* eslint-disable camelcase -- insert values and update sets name snake_case DB columns (house convention) */
+// Models
+import { RowCorruptionError } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle } from '../database/database.ts';
@@ -16,7 +17,13 @@ export interface SettingRow
 {
     key : string;
     value : unknown;
-    updatedAt : Date;
+    updated : Date;
+}
+
+function decodeValue(key : string, stored : string) : unknown
+{
+    try { return JSON.parse(stored) as unknown; }
+    catch { throw new RowCorruptionError('instance_setting', key, 'the value is not JSON'); }
 }
 
 export class SettingsRA
@@ -47,8 +54,8 @@ export class SettingsRA
 
         return rows.map((row) => ({
             key: row.key,
-            value: JSON.parse(row.value) as unknown,
-            updatedAt: new Date(row.updated_at),
+            value: decodeValue(row.key, row.value),
+            updated: new Date(row.updated),
         }));
     }
 
@@ -60,7 +67,7 @@ export class SettingsRA
             .where('key', '=', key)
             .executeTakeFirst();
 
-        return row === undefined ? undefined : JSON.parse(row.value) as unknown;
+        return row === undefined ? undefined : decodeValue(key, row.value);
     }
 
     async upsert(key : string, value : unknown) : Promise<void>
@@ -77,8 +84,8 @@ export class SettingsRA
 
         await this.#db
             .insertInto('instance_setting')
-            .values({ key, value: encoded, updated_at: stamp })
-            .onConflict((oc) => oc.column('key').doUpdateSet({ value: encoded, updated_at: stamp }))
+            .values({ key, value: encoded, updated: stamp })
+            .onConflict((oc) => oc.column('key').doUpdateSet({ value: encoded, updated: stamp }))
             .execute();
     }
 

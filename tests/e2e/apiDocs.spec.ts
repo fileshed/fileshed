@@ -14,7 +14,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -39,7 +39,7 @@ describe('a deployment', () =>
 {
     it('serves the OpenAPI document to anyone who asks', async () =>
     {
-        const res = await new ApiClient(deployed.baseURL).get('/api/openapi.json');
+        const res = await new APIClient(deployed.baseURL).get('/api/openapi.json');
 
         expect(res.status).toBe(200);
         expect((await res.json() as { openapi ?: string }).openapi).toMatch(/^3\./);

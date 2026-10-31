@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Regulation Result
 //
-// The typed result of a legality judgement. Engines RETURN these results and never throw -- turning a violation into an
-// HTTP-facing error is a manager's job. The violation vocabulary itself (codes and shape) is the wire contract and
-// lives in @fileshed/core; this file owns only the pass/fail result the engines build.
+// Engines return these results and never throw; turning a violation into an HTTP-facing error is the manager's job. The
+// violation vocabulary (codes and shape) is the wire contract and lives in @fileshed/core.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

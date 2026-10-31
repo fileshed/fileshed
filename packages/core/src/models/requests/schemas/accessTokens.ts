@@ -12,7 +12,12 @@ import {
 } from '../../../constants/accessToken.ts';
 
 // Models
-import { type AccessToken, accessTokenScopes } from '../../accessToken.ts';
+import {
+    type AccessToken,
+    type MintedAccessToken,
+    type MintedPlaybackToken,
+    accessTokenScopes,
+} from '../../accessToken.ts';
 
 // Requests
 import {
@@ -56,9 +61,9 @@ export const accessTokenResponseCodec = z.strictObject({
     name: z.string(),
     start: z.string().nullable(),
     scopes: z.array(z.enum(accessTokenScopes)),
-    createdAt: isoDateTimeCodec,
-    lastUsedAt: isoDateTimeCodec.nullable(),
-    expiresAt: isoDateTimeCodec.nullable(),
+    created: isoDateTimeCodec,
+    lastUsed: isoDateTimeCodec.nullable(),
+    expires: isoDateTimeCodec.nullable(),
 });
 
 typeAssert<Equals<z.output<typeof accessTokenResponseCodec>, AccessTokenResponse>>();
@@ -88,7 +93,7 @@ typeAssert<Equals<z.output<typeof createPlaybackTokenRequestCodec>, CreatePlayba
 export const playbackTokenResponseCodec = z.strictObject({
     id: z.string(),
     token: z.string(),
-    expiresAt: isoDateTimeCodec,
+    expires: isoDateTimeCodec,
 });
 
 typeAssert<Equals<z.output<typeof playbackTokenResponseCodec>, PlaybackTokenResponse>>();
@@ -104,15 +109,25 @@ export function toAccessTokenResponse(token : AccessToken) : AccessTokenResponse
         name: token.name,
         start: token.start,
         scopes: token.scopes,
-        createdAt: token.createdAt.toISOString(),
-        lastUsedAt: token.lastUsedAt === null ? null : token.lastUsedAt.toISOString(),
-        expiresAt: token.expiresAt === null ? null : token.expiresAt.toISOString(),
+        created: token.created.toISOString(),
+        lastUsed: token.lastUsed === null ? null : token.lastUsed.toISOString(),
+        expires: token.expires === null ? null : token.expires.toISOString(),
     };
 }
 
 export function toAccessTokenListResponse(tokens : readonly AccessToken[]) : AccessTokenListResponse
 {
     return { accessTokens: tokens.map(toAccessTokenResponse) };
+}
+
+export function toCreateAccessTokenResponse(minted : MintedAccessToken) : CreateAccessTokenResponse
+{
+    return { token: minted.token, accessToken: toAccessTokenResponse(minted.accessToken) };
+}
+
+export function toPlaybackTokenResponse(minted : MintedPlaybackToken) : PlaybackTokenResponse
+{
+    return { id: minted.id, token: minted.token, expires: minted.expires.toISOString() };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -12,23 +12,19 @@ import { defineComponent } from 'vue';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeResponse } from '@fileshed/core';
-
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 // Under test
-import PdfToolbar from '@client/components/handlers/pdf/toolbar.vue';
+import PDFToolbar from '@client/components/handlers/pdf/toolbar.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,40 +62,18 @@ const stubs = {
     UPopover: { template: '<div><slot /></div>' },
     UBadge: { template: '<span><slot /></span>', props: [ 'label', 'icon', 'color', 'variant' ] },
     UIcon: { template: '<i />', props: [ 'name' ] },
-    PdfFindBar: { name: 'PdfFindBar', template: '<div class="find-bar" />' },
-    PdfParamsPopover: { name: 'PdfParamsPopover', props: [ 'mode' ], template: '<div />' },
+    PDFFindBar: { name: 'PDFFindBar', template: '<div class="find-bar" />' },
+    PDFParamsPopover: { name: 'PDFParamsPopover', props: [ 'mode' ], template: '<div />' },
 };
-
-type FileNode = Extract<NodeResponse, { type : 'file' }>;
-
-function fileNode(overrides : Partial<FileNode> = {}) : FileNode
-{
-    return {
-        id: 'f1',
-        name: 'contract.pdf',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        updatedAt: '2026-07-01T00:00:00.000Z',
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 2048,
-        mimeType: 'application/pdf',
-        trashedAt: null,
-        ...overrides,
-        sharing: overrides.sharing ?? null,
-    };
-}
 
 function mountToolbar() : VueWrapper
 {
-    return mount(PdfToolbar, { global: { stubs } });
+    return mount(PDFToolbar, { global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfToolbar zoom', () =>
+describe('PDFToolbar zoom', () =>
 {
     beforeEach(() =>
     {
@@ -109,7 +83,7 @@ describe('PdfToolbar zoom', () =>
 
     it('steps zoom out one rung', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setZoom('1');
         const wrapper = mountToolbar();
 
@@ -120,7 +94,7 @@ describe('PdfToolbar zoom', () =>
 
     it('steps zoom in one rung', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setZoom('1');
         const wrapper = mountToolbar();
 
@@ -130,7 +104,7 @@ describe('PdfToolbar zoom', () =>
     });
 });
 
-describe('PdfToolbar page box', () =>
+describe('PDFToolbar page box', () =>
 {
     beforeEach(() =>
     {
@@ -140,7 +114,7 @@ describe('PdfToolbar page box', () =>
 
     it('commits a typed page jump', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(3, 10);
         const wrapper = mountToolbar();
 
@@ -153,7 +127,7 @@ describe('PdfToolbar page box', () =>
 
     it('clamps a typed jump past the last page', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(3, 10);
         const wrapper = mountToolbar();
 
@@ -165,7 +139,7 @@ describe('PdfToolbar page box', () =>
     });
 });
 
-describe('PdfToolbar overflow menu', () =>
+describe('PDFToolbar overflow menu', () =>
 {
     beforeEach(() =>
     {
@@ -175,7 +149,7 @@ describe('PdfToolbar overflow menu', () =>
 
     it('rotates the pages clockwise and counter-clockwise', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountToolbar();
 
         await wrapper.get('[data-menuitem="Rotate right"]').trigger('click');
@@ -187,7 +161,7 @@ describe('PdfToolbar overflow menu', () =>
 
     it('jumps to the first and last pages', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setPage(5, 10);
         const wrapper = mountToolbar();
 
@@ -202,7 +176,7 @@ describe('PdfToolbar overflow menu', () =>
     // file. A document that IS open prints what is on screen; that belongs to the store and is asserted there.
     it('prints the stored file when no document is open', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.node = fileNode({ id: 'f1' });
         const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null) as unknown as Mock;
         const wrapper = mountToolbar();
@@ -213,7 +187,7 @@ describe('PdfToolbar overflow menu', () =>
     });
 });
 
-describe('PdfToolbar find', () =>
+describe('PDFToolbar find', () =>
 {
     beforeEach(() =>
     {
@@ -223,7 +197,7 @@ describe('PdfToolbar find', () =>
 
     it('reveals the find bar when the find button is pressed', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         const wrapper = mountToolbar();
 
         await wrapper.get('[aria-label="Find in document"]').trigger('click');
@@ -235,7 +209,7 @@ describe('PdfToolbar find', () =>
 
 // Identity -- the file name, save state, and Save -- moved to the layout header (the PDF identity bar), so the toolbar
 // row is now pure viewing/annotation controls.
-describe('PdfToolbar slimmed row', () =>
+describe('PDFToolbar slimmed row', () =>
 {
     beforeEach(() =>
     {
@@ -245,7 +219,7 @@ describe('PdfToolbar slimmed row', () =>
 
     it('carries no Save button or file name -- those live in the header', () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.node = fileNode({ name: 'contract.pdf' });
         const wrapper = mountToolbar();
 

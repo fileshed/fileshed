@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Generic Provider Fields
-  --
-  -- The credential pair almost every OAuth provider runs on. Providers whose contract wants more get their own
-  -- component behind the providerFields wrapper; this one stays deliberately two fields.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

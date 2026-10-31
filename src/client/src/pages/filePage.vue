@@ -1,17 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- File Page
   --
-  -- The deep-linkable handler host at /file/:id, opened in its own tab. It resolves the routed node FIRST, asks the
-  -- handler registry what opens it, and mounts that family: text or markdown editors (the markdown family is a page on a
-  -- canvas; the text family is the editor store's card, framed here because a user-chosen theme's background reads as
-  -- deliberate only inside a bordered, clipped card), the PDF annotator and media player (self-contained families that
-  -- own their own chrome and save paths), or -- for natively-rendered types deep-linked here -- a redirect to the
-  -- browser's own inline/download handling. It owns only what a page owns: resolving the routed node, the pre-resolution
-  -- load/denied/error framing, and the Cmd/Ctrl+S shortcut for the editor path (the annotator binds its own). There is
-  -- no Back button -- files open in a fresh tab, so the layout header logo (and "Go to my files" on a dead resolve) is
-  -- the way out. Each mounted family contributes its own identity into the layout header; the text family's identity bar
-  -- and control toolbar are mounted here beside it. Editing, saving, autosave, and conflict resolution live in the
-  -- stores; the markdown family carries its own toolbar and conflict modal, the text family's are mounted here beside it.
+  -- The text family is framed here in a bordered, clipped card, because a user-chosen theme's background reads as
+  -- deliberate only inside one; the other families own their chrome. There is no Back button because files open in a
+  -- fresh tab; the layout header's logo, and "Go to my files" on a dead resolve, are the way out.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -41,7 +33,7 @@
             <UButton icon="i-lucide-hard-drive" label="Go to my files" color="neutral" @click="goHome" />
         </div>
 
-        <PdfAnnotator
+        <PDFAnnotator
             v-else-if="action?.kind === 'annotate' && fileID !== null"
             v-bind="{ nodeID: fileID }"
             class="min-h-0 flex-1"
@@ -129,15 +121,19 @@
     import type { NodeResponse } from '@fileshed/core';
 
     // Engines
-    import { type OpenAction, defaultEditorMode, resolveOpen } from '../engines/intent/index.ts';
+    import { type OpenAction, intent } from '../engines/intent/index.ts';
 
     // Stores
     import { useEditorStore } from '../stores/editor.ts';
     import { useSessionStore } from '../stores/session.ts';
 
     // Resource Access
-    import { downloadUrl } from '../resource-access/downloads.ts';
+    import { APIError } from '../resource-access/apiError.ts';
+    import { downloadURL } from '../resource-access/downloads.ts';
     import { getNode } from '../resource-access/nodes.ts';
+
+    // Utils
+    import { replaceLocation } from '../utils/replaceLocation.ts';
 
     // Components
     import EditorToolbar from '../components/handlers/text/toolbar.vue';
@@ -149,7 +145,7 @@
     // The heavier families load only when a file actually opens with them: pdf.js and TipTap stay out of the main
     // bundle, and nothing outside an opened file ever evaluates their module graphs.
     const MarkdownEditor = defineAsyncComponent(() => import('../components/handlers/markdown/markdownEditor.vue'));
-    const PdfAnnotator = defineAsyncComponent(() => import('../components/handlers/pdf/pdfAnnotator.vue'));
+    const PDFAnnotator = defineAsyncComponent(() => import('../components/handlers/pdf/pdfAnnotator.vue'));
     const MediaPlayer = defineAsyncComponent(() => import('../components/handlers/media/mediaPlayer.vue'));
 
     //------------------------------------------------------------------------------------------------------------------
@@ -179,7 +175,7 @@
 
     const action = computed<OpenAction | null>(() =>
     {
-        return node.value === null ? null : resolveOpen(node.value);
+        return node.value === null ? null : intent.handlers.resolveOpen(node.value);
     });
 
     const mediaKind = computed<'video' | 'audio' | null>(() =>
@@ -191,7 +187,7 @@
     {
         if(node.value === null || node.value.type !== 'file') { return false; }
 
-        return defaultEditorMode(node.value.mimeType, node.value.name) === 'markdown';
+        return intent.handlers.defaultEditorMode(node.value.mimeType, node.value.name) === 'markdown';
     });
 
     async function load() : Promise<void>
@@ -209,10 +205,12 @@
         catch(error)
         {
             // The server answers 404 for both no-access and gone, so the denied framing (with its request-access
-            // affordance) is the honest rendering of any failed resolve; other failures land on the plain error card.
+            // affordance) is the honest rendering of a resolve that found nothing; other failures land on the plain
+            // error card.
             node.value = null;
-            phase.value = 'denied';
-            loadError.value = error instanceof Error ? error.message : null;
+            const notFound = error instanceof APIError && error.status === 404;
+            phase.value = notFound ? 'denied' : 'error';
+            loadError.value = !notFound && error instanceof APIError ? error.message : null;
 
             return;
         }
@@ -228,8 +226,8 @@
 
         const id = routeFileID();
         if(resolved.kind === 'edit' && id !== null) { void editor.open(id); }
-        if(resolved.kind === 'view') { window.location.replace(downloadUrl(resolved.nodeID, 'inline')); }
-        if(resolved.kind === 'download') { window.location.replace(downloadUrl(resolved.nodeID)); }
+        if(resolved.kind === 'view') { replaceLocation(downloadURL(resolved.nodeID, 'inline')); }
+        if(resolved.kind === 'download') { replaceLocation(downloadURL(resolved.nodeID)); }
     }, { immediate: true });
 
     watch(() => route.params.id, () => { void load(); });

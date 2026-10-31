@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Media Queue Engine
 //
-// Pure track shaping and queue surgery behind the media player's playlist. The queue is a zipper -- the tracks
-// before the current one, the current track, and the tracks after it -- so a non-empty queue always has a valid
-// current track by construction; there is no index to fall out of range. An empty playlist is `null`, not a queue
-// with nothing in it.
+// The queue is a zipper (the tracks before the current one, the current track, and the tracks after it), so a non-empty
+// queue always has a valid current track by construction and there is no index to fall out of range. An empty playlist
+// is `null`, not a queue with nothing in it.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { NodeResponse } from '@fileshed/core';
@@ -36,7 +35,7 @@ export interface MediaTrack
     kind : MediaKind;
 
     // A remote stream's URL; the drive serves everything else.
-    remoteUrl : string | null;
+    remoteURL : string | null;
 
     // A playlist entry whose file couldn't be resolved: rendered dimmed, skipped when playback reaches it.
     broken : boolean;
@@ -57,18 +56,8 @@ export interface MediaQueue
 // Track shaping
 //----------------------------------------------------------------------------------------------------------------------
 
-// Seat identities are minted here so every shaper stamps one; a plain sequence keeps the engine deterministic
-// under test. Uniqueness only matters within a session -- queues do not outlive the page.
-let entrySequence = 0;
-
-function mintEntryID() : string
-{
-    entrySequence += 1;
-    return `entry-${ entrySequence }`;
-}
-
 // A playlist addition: only concrete files with a media mime become tracks; anything else has no seat in the queue.
-export function trackFromNode(node : NodeResponse) : MediaTrack | null
+export function trackFromNode(node : NodeResponse, entryID : string) : MediaTrack | null
 {
     if(node.type !== 'file') { return null; }
 
@@ -79,12 +68,12 @@ export function trackFromNode(node : NodeResponse) : MediaTrack | null
     if(kind === null) { return null; }
 
     return {
-        entryID: mintEntryID(),
+        entryID,
         nodeID: node.id,
         name: node.name,
         mimeType: node.mimeType,
         kind,
-        remoteUrl: null,
+        remoteURL: null,
         broken: false,
         failed: false,
     };
@@ -93,17 +82,17 @@ export function trackFromNode(node : NodeResponse) : MediaTrack | null
 // The track a resolved play action opens with. The kind is the intent registry's verdict, not re-derived here. A
 // link plays its TARGET -- the target's id is what the download endpoint streams -- under the link's own display
 // name; a target mime the resolution didn't carry stays unknown.
-export function trackForPlay(node : NodeResponse, kind : MediaKind) : MediaTrack
+export function trackForPlay(node : NodeResponse, kind : MediaKind, entryID : string) : MediaTrack
 {
     if(node.type === 'link' && node.target !== null)
     {
         return {
-            entryID: mintEntryID(),
+            entryID,
             nodeID: node.target.id,
             name: node.name,
             mimeType: node.target.mimeType ?? null,
             kind,
-            remoteUrl: null,
+            remoteURL: null,
             broken: false,
             failed: false,
         };
@@ -112,12 +101,12 @@ export function trackForPlay(node : NodeResponse, kind : MediaKind) : MediaTrack
     const mimeType = node.type === 'file' ? node.mimeType : null;
 
     return {
-        entryID: mintEntryID(),
+        entryID,
         nodeID: node.id,
         name: node.name,
         mimeType,
         kind,
-        remoteUrl: null,
+        remoteURL: null,
         broken: false,
         failed: false,
     };
@@ -128,7 +117,7 @@ const REMOTE_VIDEO_EXTENSIONS = [ '.mp4', '.m4v', '.webm', '.mkv', '.mov', '.avi
 // A remote stream from a playlist: the URL is the identity, the last path segment the display name, and the kind a
 // guess from the extension -- audio unless it looks like video, since audio playlists are what people actually pass
 // around.
-export function trackFromUrl(url : string) : MediaTrack
+export function trackFromURL(url : string, entryID : string) : MediaTrack
 {
     let name = url;
 
@@ -143,12 +132,12 @@ export function trackFromUrl(url : string) : MediaTrack
     const kind = REMOTE_VIDEO_EXTENSIONS.some((extension) => lower.endsWith(extension)) ? 'video' : 'audio';
 
     return {
-        entryID: mintEntryID(),
+        entryID,
         nodeID: url,
         name,
         mimeType: null,
         kind,
-        remoteUrl: url,
+        remoteURL: url,
         broken: false,
         failed: false,
     };
@@ -156,15 +145,15 @@ export function trackFromUrl(url : string) : MediaTrack
 
 // The visible stand-in for a playlist entry that resolved to nothing: it keeps the row (and the user's knowledge
 // that something is missing) without anything to play.
-export function brokenTrack(label : string, key : string) : MediaTrack
+export function brokenTrack(label : string, key : string, entryID : string) : MediaTrack
 {
     return {
-        entryID: mintEntryID(),
+        entryID,
         nodeID: `broken:${ key }`,
         name: label,
         mimeType: null,
         kind: 'audio',
-        remoteUrl: null,
+        remoteURL: null,
         broken: true,
         failed: false,
     };

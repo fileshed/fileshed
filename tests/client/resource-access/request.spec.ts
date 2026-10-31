@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // API Request Helper
 //
-// The contract every resource-access module leans on: a credentialed fetch, a validated 2xx body, a typed ApiError on
-// any non-2xx (with regulation codes surfaced as RegulationApiError), void on a 204, and a loud failure -- never silent
+// The contract every resource-access module leans on: a credentialed fetch, a validated 2xx body, a typed APIError on
+// any non-2xx (with regulation codes surfaced as RegulationAPIError), void on a 204, and a loud failure -- never silent
 // acceptance -- when a body is unparseable or fails its codec.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -10,8 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 // Under test
-import { requestJson, requestUpload, requestVoid } from '@client/resource-access/request.ts';
-import { ApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
+import { requestJSON, requestUpload, requestVoid } from '@client/resource-access/request.ts';
+import { APIError, RegulationAPIError } from '@client/resource-access/apiError.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -37,13 +37,13 @@ afterEach(() =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('requestJson', () =>
+describe('requestJSON', () =>
 {
     it('returns the codec-validated body on a 2xx response', async () =>
     {
         fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }));
 
-        const result = await requestJson('/api/thing', { codec: okCodec });
+        const result = await requestJSON('/api/thing', { codec: okCodec });
 
         expect(result).toEqual({ ok: true });
     });
@@ -52,53 +52,53 @@ describe('requestJson', () =>
     {
         fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }));
 
-        await requestJson('/api/thing', { codec: okCodec });
+        await requestJSON('/api/thing', { codec: okCodec });
 
         expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'include' });
     });
 
-    it('throws an ApiError carrying the status and the server error message on a non-2xx', async () =>
+    it('throws an APIError carrying the status and the server error message on a non-2xx', async () =>
     {
         fetchMock.mockResolvedValue(jsonResponse(403, { error: 'You may not do that.' }));
 
-        const error = await requestJson('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
+        const error = await requestJSON('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
 
-        expect(error).toBeInstanceOf(ApiError);
-        expect((error as ApiError).status).toBe(403);
-        expect((error as ApiError).message).toBe('You may not do that.');
+        expect(error).toBeInstanceOf(APIError);
+        expect((error as APIError).status).toBe(403);
+        expect((error as APIError).message).toBe('You may not do that.');
     });
 
-    it('surfaces regulation violation codes as a RegulationApiError on a 422', async () =>
+    it('surfaces regulation violation codes as a RegulationAPIError on a 422', async () =>
     {
         fetchMock.mockResolvedValue(jsonResponse(422, {
             error: 'Over quota.',
             violations: [ { code: 'quota.exceeded', message: 'Over quota.' } ],
         }));
 
-        const error = await requestJson('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
+        const error = await requestJSON('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
 
-        expect(error).toBeInstanceOf(RegulationApiError);
-        expect((error as RegulationApiError).status).toBe(422);
-        expect((error as RegulationApiError).hasCode('quota.exceeded')).toBe(true);
-        expect((error as RegulationApiError).codes()).toEqual([ 'quota.exceeded' ]);
+        expect(error).toBeInstanceOf(RegulationAPIError);
+        expect((error as RegulationAPIError).status).toBe(422);
+        expect((error as RegulationAPIError).hasCode('quota.exceeded')).toBe(true);
+        expect((error as RegulationAPIError).codes()).toEqual([ 'quota.exceeded' ]);
     });
 
-    it('throws a sensible ApiError when a 2xx body is not valid JSON', async () =>
+    it('throws a sensible APIError when a 2xx body is not valid JSON', async () =>
     {
         fetchMock.mockResolvedValue(new Response('<html>gateway</html>', { status: 200 }));
 
-        const error = await requestJson('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
+        const error = await requestJSON('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
 
-        expect(error).toBeInstanceOf(ApiError);
-        expect((error as ApiError).status).toBe(200);
-        expect((error as ApiError).message).toMatch(/JSON/);
+        expect(error).toBeInstanceOf(APIError);
+        expect((error as APIError).status).toBe(200);
+        expect((error as APIError).message).toMatch(/JSON/);
     });
 
     it('rejects rather than silently accepting a body that fails the codec', async () =>
     {
         fetchMock.mockResolvedValue(jsonResponse(200, { ok: 'yes-please' }));
 
-        const error = await requestJson('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
+        const error = await requestJSON('/api/thing', { codec: okCodec }).catch((err : unknown) => err);
 
         expect(error).toBeInstanceOf(z.ZodError);
     });
@@ -115,14 +115,14 @@ describe('requestVoid', () =>
         await expect(requestVoid('/api/thing', { method: 'DELETE' })).resolves.toBeUndefined();
     });
 
-    it('throws an ApiError on a non-2xx', async () =>
+    it('throws an APIError on a non-2xx', async () =>
     {
         fetchMock.mockResolvedValue(jsonResponse(404, { error: 'Gone.' }));
 
         const error = await requestVoid('/api/thing', { method: 'POST' }).catch((err : unknown) => err);
 
-        expect(error).toBeInstanceOf(ApiError);
-        expect((error as ApiError).status).toBe(404);
+        expect(error).toBeInstanceOf(APIError);
+        expect((error as APIError).status).toBe(404);
     });
 });
 

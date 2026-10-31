@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Color Mode Engine
-//
-// The one resolution rule for which mode wins: a forced instance mode beats everyone (that is what forcing
-// means), the user's own choice beats the instance default, and with neither the instance default stands. No
-// branding facts at all -- the instance hasn't answered yet -- resolves to following the system.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

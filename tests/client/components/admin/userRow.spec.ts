@@ -44,7 +44,7 @@ function user(overrides : Partial<AdminUserResponse> = {}) : AdminUserResponse
         banReason: null,
         banExpires: null,
         usedBytes: 0,
-        createdAt: '2026-07-01T00:00:00.000Z',
+        created: '2026-07-01T00:00:00.000Z',
         ...overrides,
     };
 }

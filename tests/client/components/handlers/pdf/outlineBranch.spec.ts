@@ -11,23 +11,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
-// Components
-import type { OutlineDestination, OutlineEntry } from '@client/components/handlers/pdf/types.ts';
+// Engines
+import type { OutlineDestination, OutlineEntry } from '@client/engines/pdf/types.ts';
 
 // Under test
-import PdfOutlineBranch from '@client/components/handlers/pdf/sidebar/outlineBranch.vue';
+import PDFOutlineBranch from '@client/components/handlers/pdf/sidebar/outlineBranch.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -63,7 +58,7 @@ function entry(init : BranchInit = {}) : OutlineEntry
 
 function mountBranch(init : BranchInit = {}) : VueWrapper
 {
-    return mount(PdfOutlineBranch, { props: { entry: entry(init) }, global: { stubs } });
+    return mount(PDFOutlineBranch, { props: { entry: entry(init) }, global: { stubs } });
 }
 
 // Stands in for the live renderer so a navigation can be observed without one.
@@ -80,14 +75,14 @@ function registerAccess() : { goToDestination : ReturnType<typeof vi.fn> }
         redo: vi.fn(),
     };
 
-    usePdfAnnotatorStore().setDocumentAccess(access);
+    usePDFAnnotatorStore().setDocumentAccess(access);
 
     return access;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfOutlineBranch', () =>
+describe('PDFOutlineBranch', () =>
 {
     beforeEach(() =>
     {

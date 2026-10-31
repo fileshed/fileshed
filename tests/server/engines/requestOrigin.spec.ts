@@ -57,6 +57,12 @@ describe('originAllowed', () =>
         expect(check({ pathname: '/index.html', origin: 'https://evil.example' })).toBe(true);
     });
 
+    it('guards an API path spelled with percent-encoding, which the router decodes before it matches', () =>
+    {
+        expect(check({ pathname: '/%61pi/nodes', origin: 'https://evil.example' })).toBe(false);
+        expect(check({ pathname: '/%61pi/nodes/%E0', origin: 'https://evil.example' })).toBe(false);
+    });
+
     it('allows a request carrying no origin at all, which is what a CLI or gateway sends', () =>
     {
         expect(check({ origin: null })).toBe(true);

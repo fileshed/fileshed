@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
 import { NodeManager } from '@server/managers/node.ts';
@@ -39,7 +39,7 @@ beforeEach(async () =>
 {
     handle = await createTestDatabase();
     ra = new NodeRA(handle);
-    nodes = new NodeManager(handle, ra, new BlobRA(handle), testNodePolicy());
+    nodes = new NodeManager({ handle, orphanedBlobs: (tx) => new BlobRA(tx), policy: testNodePolicy() });
 
     await seedUser(handle.db, 'alice');
     await seedUser(handle.db, 'bob');
@@ -55,12 +55,12 @@ afterEach(async () =>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-async function blobDeletedAt(sha256 : string) : Promise<string | Date | null>
+async function blobDeleted(sha256 : string) : Promise<string | Date | null>
 {
-    const row = await handle.db.selectFrom('blob').select('deleted_at')
+    const row = await handle.db.selectFrom('blob').select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -81,8 +81,8 @@ describe('NodeManager.emptyTrash', () =>
         expect(await ra.get('dir')).toBeUndefined();
         expect(await ra.get('f1')).toBeUndefined();
         expect(await ra.get('solo')).toBeUndefined();
-        expect(await blobDeletedAt('sha-a')).not.toBeNull();
-        expect(await blobDeletedAt('sha-b')).not.toBeNull();
+        expect(await blobDeleted('sha-a')).not.toBeNull();
+        expect(await blobDeleted('sha-b')).not.toBeNull();
     });
 
     it('leaves an untrashed subtree alone -- only trashed roots are counted and purged', async () =>
@@ -95,7 +95,7 @@ describe('NodeManager.emptyTrash', () =>
         expect(result).toEqual({ purged: 0 });
         expect(await ra.get('live')).toBeDefined();
         expect(await ra.get('f1')).toBeDefined();
-        expect(await blobDeletedAt('sha-a')).toBeNull();
+        expect(await blobDeleted('sha-a')).toBeNull();
     });
 
     it('is a harmless no-op when the caller has nothing trashed', async () =>

@@ -1,10 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Theme Preview
 //
-// The live half of the Branding tab: draft token variables written straight onto the document element, where
-// they override the branding stylesheet by specificity and repaint the whole app as a knob moves. The module
-// remembers what it applied so a knob returning to stock actually CLEARS its variables -- leftover inline vars
-// would shadow the stylesheet forever.
+// Draft token variables are written onto the document element, where they override the branding stylesheet by
+// specificity. The module remembers what it applied so a knob returning to stock clears its variables; a leftover
+// inline variable would shadow the stylesheet for the life of the page.
 //----------------------------------------------------------------------------------------------------------------------
 
 let applied = new Set<string>();

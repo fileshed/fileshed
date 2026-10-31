@@ -10,23 +10,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Stores
-import { usePdfAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
+import { usePDFAnnotatorStore } from '@client/stores/pdfAnnotator.ts';
 
-// Components
-import type { DocumentProperties } from '@client/components/handlers/pdf/types.ts';
+// Engines
+import type { DocumentProperties } from '@client/engines/pdf/types.ts';
 
 // Under test
-import PdfSidebar from '@client/components/handlers/pdf/sidebar/sidebar.vue';
+import PDFSidebar from '@client/components/handlers/pdf/sidebar/sidebar.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -39,9 +34,9 @@ const stubs = {
         template: '<button :aria-label="ariaLabel" :data-variant="variant" :disabled="disabled" '
             + '@click="$emit(\'click\')" />',
     },
-    PdfThumbnailRail: { name: 'PdfThumbnailRail', template: '<div class="thumbnails" />' },
-    PdfOutlineTree: { name: 'PdfOutlineTree', template: '<div class="outline" />' },
-    PdfAttachmentList: { name: 'PdfAttachmentList', template: '<div class="attachments" />' },
+    PDFThumbnailRail: { name: 'PDFThumbnailRail', template: '<div class="thumbnails" />' },
+    PDFOutlineTree: { name: 'PDFOutlineTree', template: '<div class="outline" />' },
+    PDFAttachmentList: { name: 'PDFAttachmentList', template: '<div class="attachments" />' },
 };
 
 function documentProperties() : DocumentProperties
@@ -64,12 +59,12 @@ function documentProperties() : DocumentProperties
 
 function mountSidebar() : VueWrapper
 {
-    return mount(PdfSidebar, { global: { stubs } });
+    return mount(PDFSidebar, { global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-describe('PdfSidebar', () =>
+describe('PDFSidebar', () =>
 {
     beforeEach(() =>
     {
@@ -86,7 +81,7 @@ describe('PdfSidebar', () =>
 
     it('offers the outline tab unpressable when the document has no outline', () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setDocumentFacts({ outline: [], attachments: [], properties: documentProperties() });
         const wrapper = mountSidebar();
 
@@ -95,7 +90,7 @@ describe('PdfSidebar', () =>
 
     it('switches to the outline pane when the document has one', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setDocumentFacts({
             outline: [ { id: '0', title: 'Chapter one', bold: false, italic: false, dest: 'ch1', items: [] } ],
             attachments: [],
@@ -111,7 +106,7 @@ describe('PdfSidebar', () =>
 
     it('switches to the attachments pane when the document carries embedded files', async () =>
     {
-        const store = usePdfAnnotatorStore();
+        const store = usePDFAnnotatorStore();
         store.setDocumentFacts({
             outline: [],
             attachments: [ { id: 'a0', filename: 'appendix.csv', description: '' } ],

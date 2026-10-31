@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Forgot Password Page
   --
-  -- The email-side reset entry: one address field, and the same confirmation whether the address exists or not --
-  -- this page must never be an account oracle. The emailed link lands on /reset-password with the token.
+  -- It shows the same confirmation whether or not the address has an account, so the page can't be used to discover
+  -- accounts.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -86,7 +86,11 @@
     import { useAppStore } from '../stores/app.ts';
 
     // Resource Access
+    import { apiErrorFromAuth } from '../resource-access/apiError.ts';
     import { authClient } from '../resource-access/authClient.ts';
+
+    // Utils
+    import { describeAPIError } from '../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -114,13 +118,13 @@
                 email: event.data.email,
                 redirectTo: `${ window.location.origin }/reset-password`,
             });
-            if(error) { throw new Error(error.message ?? 'Something went wrong. Try again.'); }
+            if(error) { throw apiErrorFromAuth(error, 'Something went wrong. Try again.'); }
 
             requested.value = true;
         }
         catch(error)
         {
-            errorMessage.value = error instanceof Error ? error.message : 'Something went wrong. Try again.';
+            errorMessage.value = describeAPIError(error);
         }
         finally
         {

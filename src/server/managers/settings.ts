@@ -1,12 +1,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Settings Manager
 //
-// The instance-settings brain: resolves each admin-tunable key as override-over-config (the loaded, substituted
-// yaml IS the default; a DB row beats it; deleting the row is "reset to default"), enforces the vocabulary's
-// per-key kind and bounds, seals secret values through the SecretBox before they touch a row, and masks them on the way
-// out -- a stored secret never crosses the wire again. Admin-only at this boundary, the same single-condition RBAC
-// the admin manager uses. Consumers read through value() at use time, which is what makes a changed cap apply to
-// the very next request; only requiresRestart keys (frozen into the auth instance at boot) wait.
+// A key resolves as override-over-config: the loaded, substituted yaml is the default, a DB row beats it, and deleting
+// the row resets to the default. Secret values are sealed through the SecretBox before they touch a row and masked on
+// the way out, so a stored secret never crosses the wire again. Consumers read through value() at use time, which is
+// what makes a changed cap apply to the very next request; only requiresRestart keys, frozen into the auth instance at
+// boot, wait.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -14,22 +13,30 @@ import {
     type AdminSettingEntry,
     type AdminSettingKey,
     BadRequestError,
-    ForbiddenError,
+    DEFAULT_INSTANCE_NAME,
     type PatchSettingsRequest,
     type SettingValue,
     adminSettingKeys,
+    isOneOf,
     settingDefinitions,
 } from '@fileshed/core';
 
+// Engines
+import { assertAdmin } from '../engines/adminAccess.ts';
+
 // Resource Access
-import type { SessionUser } from '../resource-access/auth.ts';
-import type { SettingsRA } from '../resource-access/settings/index.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
+import type { DatabaseHandle } from '../resource-access/database/database.ts';
+import { SettingsRA } from '../resource-access/settings/index.ts';
 
 // Utils
 import type { Config } from '../utils/config.ts';
+import { getLogger } from '../utils/logger.ts';
 import type { SecretBox } from '../utils/secretBox.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
+
+const logger = getLogger('settings');
 
 const MASK_TAIL = 4;
 
@@ -38,12 +45,12 @@ function maskSecret(value : string) : string
     return `••••${ value.slice(-MASK_TAIL) }`;
 }
 
-export interface SettingsDeps
+export interface SettingsManagerDeps
 {
-    settings : SettingsRA;
+    handle : DatabaseHandle;
     config : Config;
     box : SecretBox;
-    startedAt : Date;
+    started : Date;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -53,14 +60,14 @@ export class SettingsManager
     readonly #ra : SettingsRA;
     readonly #config : Config;
     readonly #box : SecretBox;
-    readonly #startedAt : Date;
+    readonly #started : Date;
 
-    constructor(deps : SettingsDeps)
+    constructor(deps : SettingsManagerDeps)
     {
-        this.#ra = deps.settings;
+        this.#ra = new SettingsRA(deps.handle);
         this.#config = deps.config;
         this.#box = deps.box;
-        this.#startedAt = deps.startedAt;
+        this.#started = deps.started;
     }
 
     // The config-side default for a key: the loaded yaml value when the key has a config twin, else the
@@ -121,14 +128,16 @@ export class SettingsManager
         return typeof value === 'string' && value !== '' ? value : fallback;
     }
 
+    // A name cleared to blank answers the stock one, so no page title or From line ever names nothing.
+    async instanceName() : Promise<string>
+    {
+        const name = await this.value('INSTANCE_NAME');
+        return typeof name === 'string' && name !== '' ? name : DEFAULT_INSTANCE_NAME;
+    }
+
     //------------------------------------------------------------------------------------------------------------------
     // Admin surface
     //------------------------------------------------------------------------------------------------------------------
-
-    #requireAdmin(actor : SessionUser) : void
-    {
-        if(actor.role !== 'admin') { throw new ForbiddenError('Admin access required.'); }
-    }
 
     // The vocabulary's per-key bounds, enforced before a value can reach a row. A cap outside its bounds is not a
     // value to store and work around later -- an UPLOAD_MAX_BYTES of 0 would refuse every upload, an SMTP_PORT of
@@ -157,9 +166,9 @@ export class SettingsManager
         }
     }
 
-    async adminView(actor : SessionUser) : Promise<{ settings : AdminSettingEntry[]; restartRequired : boolean }>
+    async adminView(user : SessionUser) : Promise<{ settings : AdminSettingEntry[]; restartRequired : boolean }>
     {
-        this.#requireAdmin(actor);
+        assertAdmin(user);
 
         const rows = await this.#ra.all();
         const overrides = new Map(rows.map((row) => [ row.key, row ]));
@@ -182,52 +191,56 @@ export class SettingsManager
             };
         });
 
-        const restartRequired = rows.some((row) =>
-        {
-            const definition = settingDefinitions[row.key as AdminSettingKey];
-            return definition?.requiresRestart === true && row.updatedAt > this.#startedAt;
-        });
+        // A stored row can carry a key this version no longer defines.
+        const restartRequired = rows.some((row) => isOneOf(adminSettingKeys, row.key)
+            && settingDefinitions[row.key].requiresRestart === true
+            && row.updated > this.#started);
 
         return { settings, restartRequired };
     }
 
-    async patch(actor : SessionUser, request : PatchSettingsRequest)
-    : Promise<{ settings : AdminSettingEntry[]; restartRequired : boolean }>
+    // What a change stores for its key, or null when the change is a reset. Throws the 400 for a value the key refuses.
+    #storedFor(key : AdminSettingKey, value : SettingValue | null) : SettingValue | null
     {
-        this.#requireAdmin(actor);
+        const definition = settingDefinitions[key];
 
-        for(const [ key, value ] of Object.entries(request.changes) as [ AdminSettingKey, SettingValue | null ][])
+        // Writing the default value IS a reset: storing an override that equals what lies beneath it would make the
+        // key read as Overridden while being indistinguishable from default.
+        if(value === null || value === this.#defaultFor(key)) { return null; }
+
+        if(typeof value !== definition.kind) { throw new BadRequestError(`${ key } must be a ${ definition.kind }.`); }
+
+        // Every number key is a cap or a day count; a negative or fractional value corrupts the comparisons built on
+        // it (a negative retention would put the purge cutoff in the future and eat all of trash).
+        if(typeof value === 'number' && (!Number.isInteger(value) || value < 0))
         {
-            const definition = settingDefinitions[key];
-
-            // Writing the default value IS a reset: storing an override that equals what lies beneath it would
-            // make the key read as Overridden while being indistinguishable from default.
-            if(value === null || value === this.#defaultFor(key))
-            {
-                // eslint-disable-next-line no-await-in-loop -- a handful of keys, applied in order
-                await this.#ra.remove(key);
-            }
-            else if(typeof value !== definition.kind)
-            {
-                throw new BadRequestError(`${ key } must be a ${ definition.kind }.`);
-            }
-            // Every number key is a cap or a day count; a negative or fractional value corrupts the comparisons
-            // built on it (a negative retention would put the purge cutoff in the future and eat all of trash).
-            else if(typeof value === 'number' && (!Number.isInteger(value) || value < 0))
-            {
-                throw new BadRequestError(`${ key } must be a non-negative integer.`);
-            }
-            else
-            {
-                this.#assertWithinConstraints(key, value);
-
-                const stored = definition.secret && typeof value === 'string' ? this.#box.seal(value) : value;
-                // eslint-disable-next-line no-await-in-loop -- a handful of keys, applied in order
-                await this.#ra.upsert(key, stored);
-            }
+            throw new BadRequestError(`${ key } must be a non-negative integer.`);
         }
 
-        return this.adminView(actor);
+        this.#assertWithinConstraints(key, value);
+
+        return definition.secret && typeof value === 'string' ? this.#box.seal(value) : value;
+    }
+
+    async patch(user : SessionUser, request : PatchSettingsRequest)
+    : Promise<{ settings : AdminSettingEntry[]; restartRequired : boolean }>
+    {
+        assertAdmin(user);
+
+        // Every change is judged before any is written, so a refused patch stores nothing.
+        const writes = (Object.entries(request.changes) as [ AdminSettingKey, SettingValue | null ][])
+            .map(([ key, value ]) => ({ key, stored: this.#storedFor(key, value) }));
+
+        for(const { key, stored } of writes)
+        {
+            // eslint-disable-next-line no-await-in-loop -- a handful of keys, applied in order
+            await (stored === null ? this.#ra.remove(key) : this.#ra.upsert(key, stored));
+        }
+
+        // Key names only: a secret's value is not a thing to put in a log, sealed or not.
+        logger.info({ userID: user.id, keys: Object.keys(request.changes) }, 'Admin changed instance settings');
+
+        return this.adminView(user);
     }
 }
 

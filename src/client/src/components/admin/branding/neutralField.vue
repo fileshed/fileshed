@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Neutral Field
   --
-  -- The chrome-warmth knob: five Tailwind gray families as swatch cards, each showing its own shades so the
-  -- choice is visible before it is made. Null means the stock family the build ships with.
+  -- Null means the stock gray family the build ships with.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -53,11 +52,11 @@
 
     import { type NeutralFamily, type ShadeKey, neutralFamilies, neutralPalettes } from '@fileshed/core';
 
+    // Engines
+    import { stockNeutralFamily } from '../../../engines/stockTheme.ts';
+
     // Components
     import BrandingField from './brandingField.vue';
-
-    // Utils
-    import { stockNeutralFamily } from '../../../utils/stockTheme.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

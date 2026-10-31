@@ -8,20 +8,19 @@
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-    type NodeResponse,
-    UPLOAD_CHUNK_IN_FLIGHT_MAX_ATTEMPTS,
-    UPLOAD_CHUNK_MAX_ATTEMPTS,
-} from '@fileshed/core';
+import { UPLOAD_CHUNK_IN_FLIGHT_MAX_ATTEMPTS, UPLOAD_CHUNK_MAX_ATTEMPTS } from '@fileshed/core';
 
 // Resource Access (under test)
-import { ApiError, ConflictApiError } from '@client/resource-access/apiError.ts';
+import { APIError, ConflictAPIError } from '@client/resource-access/apiError.ts';
 import { uploadChunked } from '@client/resource-access/chunkedUpload.ts';
 import {
     type UploadOutcome,
     type UploadWithProgressOptions,
     uploadWithProgress,
 } from '@client/resource-access/uploadWithProgress.ts';
+
+// Support
+import { fileNode } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -31,28 +30,7 @@ const uploadMock = uploadWithProgress as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
 const COMMIT = { name: 'f.bin', parentID: null, mimeType: 'application/octet-stream' };
-
-function committedNode() : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'n1',
-        name: 'f.bin',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: 'application/octet-stream',
-        trashedAt: null,
-    };
-}
 
 // One request as the transport saw it: where the bytes belonged and what they were.
 interface SentChunk
@@ -76,7 +54,7 @@ function accepted(chunk : SentChunk, totalBytes ?: number) : UploadOutcome
 
 function commits() : UploadOutcome
 {
-    return { committed: true, node: committedNode() };
+    return { committed: true, node: fileNode({ id: 'n1' }) };
 }
 
 // Far above what any spec here legitimately sends, and low enough to trip in milliseconds. An upload that keeps
@@ -198,7 +176,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport((chunk, call) =>
         {
-            if(chunk.offset === 4 && call === 2) { throw new ApiError(0, 'The upload could not reach the server.'); }
+            if(chunk.offset === 4 && call === 2) { throw new APIError(0, 'The upload could not reach the server.'); }
 
             return chunk.offset === 8 ? commits() : accepted(chunk);
         });
@@ -225,7 +203,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport(() =>
         {
-            throw new ApiError(0, 'The upload could not reach the server.');
+            throw new APIError(0, 'The upload could not reach the server.');
         });
 
         await expect(uploadChunked({
@@ -235,7 +213,7 @@ describe('uploadChunked', () =>
             chunkBytes: 4,
             retryDelayMs: 0,
             inFlightRetryDelayMs: 0,
-        })).rejects.toBeInstanceOf(ApiError);
+        })).rejects.toBeInstanceOf(APIError);
 
         expect(sent).toHaveLength(UPLOAD_CHUNK_MAX_ATTEMPTS);
     });
@@ -246,7 +224,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport(() =>
         {
-            throw new ApiError(0, 'The upload could not reach the server.');
+            throw new APIError(0, 'The upload could not reach the server.');
         });
 
         await expect(uploadChunked({
@@ -258,7 +236,7 @@ describe('uploadChunked', () =>
             retryDelayMs: 0,
             inFlightMaxAttempts: 9,
             inFlightRetryDelayMs: 0,
-        })).rejects.toBeInstanceOf(ApiError);
+        })).rejects.toBeInstanceOf(APIError);
 
         expect(sent).toHaveLength(3);
     });
@@ -267,7 +245,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport(() =>
         {
-            throw new ApiError(403, 'This would put you over your storage quota.');
+            throw new APIError(403, 'This would put you over your storage quota.');
         });
 
         await expect(uploadChunked({
@@ -290,7 +268,7 @@ describe('uploadChunked', () =>
         {
             if(chunk.offset === 4 && call === 2)
             {
-                throw new ConflictApiError(
+                throw new ConflictAPIError(
                     'Another chunk of this upload is still being received.',
                     'upload.chunkInFlight'
                 );
@@ -323,7 +301,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport(() =>
         {
-            throw new ConflictApiError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
+            throw new ConflictAPIError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
         });
 
         await expect(uploadChunked({
@@ -346,7 +324,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport(() =>
         {
-            throw new ConflictApiError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
+            throw new ConflictAPIError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
         });
 
         await expect(uploadChunked({
@@ -366,9 +344,9 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport((chunk, call) =>
         {
-            if(call === 1) { throw new ApiError(0, 'The upload could not reach the server.'); }
+            if(call === 1) { throw new APIError(0, 'The upload could not reach the server.'); }
 
-            throw new ConflictApiError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
+            throw new ConflictAPIError('Another chunk of this upload is still being received.', 'upload.chunkInFlight');
         });
 
         await expect(uploadChunked({
@@ -391,7 +369,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport(() =>
         {
-            throw new ConflictApiError(
+            throw new ConflictAPIError(
                 'The chunk starts at 4, but the upload holds 0 bytes.',
                 'upload.offsetConflict'
             );
@@ -416,7 +394,7 @@ describe('uploadChunked', () =>
         {
             if(chunk.offset === 4 && call === 2)
             {
-                throw new ConflictApiError('This chunk was already received.', 'upload.offsetConflict', 8);
+                throw new ConflictAPIError('This chunk was already received.', 'upload.offsetConflict', 8);
             }
 
             return chunk.offset === 8 ? commits() : accepted(chunk);
@@ -444,10 +422,10 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport((chunk, call) =>
         {
-            if(chunk.offset === 4 && call === 2) { throw new ApiError(0, 'The upload could not reach the server.'); }
+            if(chunk.offset === 4 && call === 2) { throw new APIError(0, 'The upload could not reach the server.'); }
             if(chunk.offset === 4 && call === 3)
             {
-                throw new ConflictApiError('This chunk was already received.', 'upload.offsetConflict', 8);
+                throw new ConflictAPIError('This chunk was already received.', 'upload.offsetConflict', 8);
             }
 
             return chunk.offset === 8 ? commits() : accepted(chunk);
@@ -476,7 +454,7 @@ describe('uploadChunked', () =>
     {
         const sent = fakeTransport(() =>
         {
-            throw new ConflictApiError('The upload holds 99 bytes.', 'upload.offsetConflict', 99);
+            throw new ConflictAPIError('The upload holds 99 bytes.', 'upload.offsetConflict', 99);
         });
 
         await expect(uploadChunked({
@@ -504,7 +482,7 @@ describe('uploadChunked', () =>
         {
             if(chunk.offset === 0) { return accepted(chunk); }
 
-            throw new ConflictApiError(`The upload holds ${ position } bytes.`, 'upload.offsetConflict', position);
+            throw new ConflictAPIError(`The upload holds ${ position } bytes.`, 'upload.offsetConflict', position);
         });
 
         await expect(uploadChunked({
@@ -528,7 +506,7 @@ describe('uploadChunked', () =>
         {
             if(chunk.offset === 10) { return commits(); }
 
-            throw new ConflictApiError('The upload holds 10 bytes.', 'upload.offsetConflict', 10);
+            throw new ConflictAPIError('The upload holds 10 bytes.', 'upload.offsetConflict', 10);
         });
 
         await expect(uploadChunked({
@@ -553,7 +531,7 @@ describe('uploadChunked', () =>
         {
             if(chunk.offset === 4)
             {
-                throw new ConflictApiError('The upload holds 0 bytes.', 'upload.offsetConflict', 0);
+                throw new ConflictAPIError('The upload holds 0 bytes.', 'upload.offsetConflict', 0);
             }
 
             return accepted(chunk);

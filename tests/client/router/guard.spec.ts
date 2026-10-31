@@ -14,7 +14,7 @@ function session(state : { isAuthenticated ?: boolean; isAdmin ?: boolean; isClo
         isAuthenticated: state.isAuthenticated ?? false,
         isAdmin: state.isAdmin ?? false,
         isClosing: state.isClosing ?? false,
-        initialize: () => Promise.resolve(),
+        init: () => Promise.resolve(),
     };
 }
 
@@ -132,7 +132,7 @@ describe('createAuthGuard', () =>
             isAuthenticated: false,
             isAdmin: false,
             isClosing: false,
-            initialize: async () => { events.push('init'); },
+            init: async () => { events.push('init'); },
         };
         const guard = createAuthGuard(() => restoring);
 

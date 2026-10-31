@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Upload Panel
   --
-  -- The floating card in the bottom-right that tracks the upload queue: a summary header that collapses the list, one
-  -- row per item, and a dismiss that clears the finished ones. It lives in the layout, not the drive view, so an upload
-  -- keeps running and reporting while the user navigates away. A failed upload also raises a toast, once, on top of its
-  -- row -- the row is the durable record, the toast the nudge.
+  -- It lives in the layout rather than the drive view, so uploads keep running and reporting while the user navigates.
+  -- A failed upload also raises a toast, once; the row stays as the record.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

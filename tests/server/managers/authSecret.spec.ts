@@ -55,7 +55,7 @@ import { SettingsRA } from '@server/resource-access/settings/index.ts';
 import { SecretBox } from '@server/utils/secretBox.ts';
 
 // Support
-import { ORIGIN, bootFullApp, makeAdmin, testConfig } from '../auth/support.ts';
+import { ORIGIN, bootTestApp, makeAdmin, testConfig } from '../auth/support.ts';
 import { openTestDatabase } from '../support/database.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -112,7 +112,7 @@ async function unmigratedSettings() : Promise<SettingsRA>
 // A migrated database, for the cases about stored settings surviving (or not surviving) a change of key.
 async function migratedSettings() : Promise<SettingsRA>
 {
-    const booted = await bootFullApp();
+    const booted = await bootTestApp();
     disposals.push(() => booted.handle.db.destroy());
 
     return new SettingsRA(booted.handle);
@@ -420,7 +420,7 @@ describe('GET /api/admin/settings', () =>
 {
     it('never carries the key the instance signs with', async () =>
     {
-        const booted = await bootFullApp();
+        const booted = await bootTestApp();
         disposals.push(() => booted.handle.db.destroy());
 
         const secret = await resolveAuthSecret(deps(new SettingsRA(booted.handle)));

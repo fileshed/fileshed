@@ -1,21 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Public Link Manager
 //
-// Two jobs, one shared core:
-//
-//   1. Link lifecycle -- mint a public link on a file node (owner only, files only, multiple links per node allowed),
-//      list a node's links, revoke one. Sharing is the owner's authority, so every management path is owner-
-//      gated; a folder has no bytes to serve, so link creation on a non-file is refused.
-//
-//   2. Byte serving -- the two consumers that stream a file node's bytes: the anonymous /d/:token direct link, and the
-//      authed /api/nodes/:id/download endpoint. Both funnel through streamFileNode, which does the whole HTTP/1.1
-//      byte-serving contract: 200 or 206, ETag = the blob sha256 (strong), If-None-Match -> 304, Accept-Ranges
-//      bytes, correct Content-Length, Content-Range on partials, 416 on an unsatisfiable range, Content-Type decided
-//      by servedContentType, and Content-Disposition per the caller's inline/attachment choice.
-//
-// The download endpoint's authorization is an injected role resolver, so this manager never hard-codes an owner check
-// for reads: viewer suffices to download. The resolver is required -- there is deliberately no ownership-only
-// fallback, since a construction that silently degraded to owner-only auth would be a security hole wearing a default.
+// The direct link (/d/:token) and the authenticated download (/api/nodes/:id/download) both get their ServedFile from
+// here. A live link is enough for the first; the second needs a viewer role on the node or better. Link management is
+// owner-only, because sharing is the owner's authority.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { randomBytes } from 'node:crypto';
@@ -27,8 +15,6 @@ import { createId } from '@paralleldrive/cuid2';
 import {
     BadRequestError,
     BlobNotFoundError,
-    type ContentDisposition,
-    FALLBACK_MIME_TYPE,
     type FileNode,
     ForbiddenError,
     MAX_LINKS_PER_NODE,
@@ -36,157 +22,56 @@ import {
     NotFoundError,
     PUBLIC_LINK_TOKEN_BYTES,
     type PublicLink,
-    type Role,
+    type PublicLinkListResponse,
+    type PublicLinkResponse,
     isDirectOwner,
-    isValidMimeType,
+    isHiddenTrash,
+    toPublicLinkListResponse,
+    toPublicLinkResponse,
 } from '@fileshed/core';
 
-// Engines
-import { contentDisposition } from '../engines/contentDisposition.ts';
-import { servedContentType } from '../engines/servedContentType.ts';
-
 // Resource Access
-import type { SessionUser } from '../resource-access/auth.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
+import type { BlobRange } from '../resource-access/blob/backend.ts';
 import { type BlobLocation, BlobRA } from '../resource-access/blob/index.ts';
-import { NodeRA } from '../resource-access/nodes/node.ts';
+import type { DatabaseHandle } from '../resource-access/database/database.ts';
+import { NodeRA } from '../resource-access/nodes/index.ts';
 import { PublicLinkRA } from '../resource-access/publicLinks/index.ts';
+import { ShareRA } from '../resource-access/shares/index.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
-// The download-authorization seam: the caller's effective role on a node, or null for no access. Shaped to
-// match ShareRA.effectiveRole, which is what satisfies it.
-//----------------------------------------------------------------------------------------------------------------------
 
-export type RoleResolver = (userID : string, nodeID : string) => Promise<Role | null>;
-
-//----------------------------------------------------------------------------------------------------------------------
-// The byte-serving result a route turns into an HTTP response. status is the outcome; headers is the exact set to
-// emit; stream is the body for 200/206 and null for the bodiless 304/416.
-//----------------------------------------------------------------------------------------------------------------------
-
-export interface StreamResult
+// A file a caller may have the bytes of, before any are read. open() reads the whole blob or one window of it.
+export interface ServedFile
 {
-    status : 200 | 206 | 304 | 416;
-    headers : Record<string, string>;
-    stream : Readable | null;
-}
-
-interface StreamOptions
-{
-    disposition : ContentDisposition;
-    rangeHeader ?: string;
-    ifNoneMatch ?: string;
+    name : string;
+    mimeType : string;
+    size : number;
+    sha256 : string;
+    open(window ?: BlobRange) : Promise<Readable>;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Range parsing (a single byte range is sufficient). A single satisfiable range yields a window; an out-of-bounds
-// range is unsatisfiable (416); everything else -- no header, a non-bytes unit, a multi-range set, or a malformed
-// spec -- falls back to the full body (200), which RFC 7233 explicitly permits a server to do.
-//----------------------------------------------------------------------------------------------------------------------
 
-interface ByteWindow
+export interface PublicLinkManagerDeps
 {
-    offset : number;
-    length : number;
+    handle : DatabaseHandle;
+    blob : BlobRA;
 }
-
-type RangePlan
-    = | { kind : 'full' }
-    | { kind : 'partial'; window : ByteWindow }
-    | { kind : 'unsatisfiable' };
-
-function parseRange(header : string | undefined, size : number) : RangePlan
-{
-    if(header === undefined) { return { kind: 'full' }; }
-
-    const unit = /^bytes=(.+)$/.exec(header.trim());
-    if(unit === null) { return { kind: 'full' }; }
-
-    // Multiple comma-separated ranges are not served as multipart/byteranges here; a single range is enough,
-    // so the whole body is returned instead -- always a valid response to any range request.
-    const spec = (unit[1] ?? '').trim();
-    if(spec.includes(',')) { return { kind: 'full' }; }
-
-    const bounds = /^(\d*)-(\d*)$/.exec(spec);
-    if(bounds === null) { return { kind: 'full' }; }
-
-    const startText = bounds[1] ?? '';
-    const endText = bounds[2] ?? '';
-
-    // "bytes=-N": the final N bytes. A zero-width window -- N == 0, or any suffix against an empty blob -- names no
-    // bytes at all, so there is nothing satisfiable to return.
-    if(startText === '')
-    {
-        if(endText === '') { return { kind: 'full' }; }
-
-        const length = Math.min(Number(endText), size);
-        if(length === 0) { return { kind: 'unsatisfiable' }; }
-
-        return { kind: 'partial', window: { offset: size - length, length } };
-    }
-
-    const start = Number(startText);
-    if(start >= size) { return { kind: 'unsatisfiable' }; }
-
-    // A last-byte-pos below first-byte-pos makes the byte-range-spec INVALID rather than unsatisfiable, and RFC 7233
-    // §2.1 says an invalid spec is ignored -- so the full body is served. 416 is reserved for a syntactically valid
-    // range that simply falls outside the blob (first-byte-pos >= length, caught above).
-    const end = endText === '' ? size - 1 : Math.min(Number(endText), size - 1);
-    if(end < start) { return { kind: 'full' }; }
-
-    return { kind: 'partial', window: { offset: start, length: (end - start) + 1 } };
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// Header helpers
-//----------------------------------------------------------------------------------------------------------------------
-
-// A strong ETag over the blob's content hash (the sha256 is the natural etag). The blob id IS the sha256.
-function strongEtag(sha256 : string) : string
-{
-    return `"${ sha256 }"`;
-}
-
-// The node's mime type if a header can carry it, the generic binary type if it cannot. The codec refuses an unwritable
-// mime on the way in, so this is for rows stored before it did: without it those bytes are unreachable to the owner and
-// to every public link, and nothing but replacing the content can repair them.
-function servableMimeType(mimeType : string) : string
-{
-    return isValidMimeType(mimeType) ? mimeType : FALLBACK_MIME_TYPE;
-}
-
-// Whether If-None-Match matches the current representation. `*` matches anything; otherwise each listed entry
-// is compared to the sha256 after stripping an optional weak (`W/`) marker and the surrounding quotes.
-function ifNoneMatchHits(header : string | undefined, sha256 : string) : boolean
-{
-    if(header === undefined) { return false; }
-
-    const value = header.trim();
-    if(value === '*') { return true; }
-
-    return value.split(',').some((raw) =>
-    {
-        let tag = raw.trim();
-        if(tag.startsWith('W/')) { tag = tag.slice(2).trim(); }
-        if(tag.startsWith('"') && tag.endsWith('"')) { tag = tag.slice(1, -1); }
-        return tag === sha256;
-    });
-}
-
-//----------------------------------------------------------------------------------------------------------------------
 
 export class PublicLinkManager
 {
     readonly #nodes : NodeRA;
     readonly #blob : BlobRA;
     readonly #links : PublicLinkRA;
-    readonly #resolveRole : RoleResolver;
+    readonly #shares : ShareRA;
 
-    constructor(nodes : NodeRA, blob : BlobRA, links : PublicLinkRA, resolveRole : RoleResolver)
+    constructor(deps : PublicLinkManagerDeps)
     {
-        this.#nodes = nodes;
-        this.#blob = blob;
-        this.#links = links;
-        this.#resolveRole = resolveRole;
+        this.#nodes = new NodeRA(deps.handle);
+        this.#blob = deps.blob;
+        this.#links = new PublicLinkRA(deps.handle);
+        this.#shares = new ShareRA(deps.handle);
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -196,16 +81,16 @@ export class PublicLinkManager
     // Mint a public link on a file node. Sharing is the owner's authority, and a public link references a
     // file node -- folders carry no bytes to serve -- so a non-file is refused. A link has nothing to configure and
     // several per node are ok (an owner may want separately revocable tokens), so nothing here dedups.
-    async createLink(actor : SessionUser, nodeID : string) : Promise<PublicLink>
+    async createLink(user : SessionUser, nodeID : string) : Promise<PublicLinkResponse>
     {
-        const node = await this.#requireOwnedNode(actor, nodeID);
+        const node = await this.#requireOwnedNode(user, nodeID);
 
         if(node.type !== 'file')
         {
             throw new BadRequestError('A public link can only target a file node.');
         }
 
-        const live = (await this.#links.listByNode(nodeID)).filter((existing) => existing.revokedAt === null);
+        const live = (await this.#links.listByNode(nodeID)).filter((existing) => existing.revoked === null);
         if(live.length >= MAX_LINKS_PER_NODE)
         {
             throw new BadRequestError(
@@ -217,29 +102,29 @@ export class PublicLinkManager
             id: createId(),
             nodeID,
             token: randomBytes(PUBLIC_LINK_TOKEN_BYTES).toString('base64url'),
-            createdAt: new Date(),
-            revokedAt: null,
+            created: new Date(),
+            revoked: null,
         };
         await this.#links.insert(link);
 
-        return link;
+        return toPublicLinkResponse(link);
     }
 
-    async listForNode(actor : SessionUser, nodeID : string) : Promise<PublicLink[]>
+    async listForNode(user : SessionUser, nodeID : string) : Promise<PublicLinkListResponse>
     {
-        await this.#requireOwnedNode(actor, nodeID);
+        await this.#requireOwnedNode(user, nodeID);
 
-        return this.#links.listByNode(nodeID);
+        return toPublicLinkListResponse(await this.#links.listByNode(nodeID));
     }
 
-    async revoke(actor : SessionUser, linkID : string) : Promise<void>
+    async revoke(user : SessionUser, linkID : string) : Promise<void>
     {
         const link = await this.#links.getByID(linkID);
         if(link === undefined) { throw new NotFoundError(`No link ${ linkID }.`); }
 
         // The node backs the ownership check; the node_id FK cascade means a live link always has its node.
         const node = await this.#nodes.get(link.nodeID);
-        if(node === undefined || !isDirectOwner(node, actor.id))
+        if(node === undefined || !isDirectOwner(node, user.id))
         {
             throw new ForbiddenError('Only the owner may revoke this link.');
         }
@@ -253,127 +138,78 @@ export class PublicLinkManager
 
     // GET /d/:token -- anonymous, no auth. The token resolves to a link; a dead link (unknown token, revoked,
     // or a target that is gone, not a file, or trashed) serves nothing. A trashed target must never serve publicly:
-    // a trashed node is hidden from everyone, and setTrashed marks the whole subtree, so the node's own trashedAt
+    // a trashed node is hidden from everyone, and setTrashed marks the whole subtree, so the node's own trashed
     // catches an ancestor-trashed file too. Every dead outcome is a 404 that never distinguishes "revoked" from "gone"
     // -- the same reads-as-absent idiom the node manager uses for no-access reads.
     //
-    // Disposition is the requester's, off the URL: the token grants the bytes and says nothing about how a browser
-    // presents them, which could never be a boundary anyway -- whoever can render a file inline can save it.
-    async resolveByToken(token : string, options : StreamOptions) : Promise<StreamResult>
+    async downloadByToken(token : string) : Promise<ServedFile>
     {
         const link = await this.#links.getByToken(token);
         if(link === undefined) { throw new NotFoundError('No such link.'); }
-        if(link.revokedAt !== null) { throw new NotFoundError('This link is no longer available.'); }
+        if(link.revoked !== null) { throw new NotFoundError('This link is no longer available.'); }
 
         const node = await this.#nodes.get(link.nodeID);
-        if(node === undefined || node.type !== 'file' || node.trashedAt !== null)
+        if(node === undefined || node.type !== 'file' || node.trashed !== null)
         {
             throw new NotFoundError('This link is no longer available.');
         }
 
-        return this.#streamFileNode(node, options);
+        return this.#served(node);
     }
 
     // GET /api/nodes/:id/download -- authed, same Range/ETag behavior as the public link. Viewer suffices to
-    // download, so authorization is the injected role resolver, not an owner check; no access reads as absent (404).
-    // Disposition is the caller's choice (?disposition=), defaulting to attachment at the route.
+    // download, so authorization is the resolved role, not an owner check; no access reads as absent (404).
     //
     // Trashing hides a node from every recipient, and setTrashed stamps the whole subtree -- so trashing a
     // shared folder must cut off its files' bytes too, not just their listings, or a recipient could still pull them
     // through this endpoint. The OWNER is exempt: their own trash stays theirs to retrieve until it purges. Ownership
     // is tested directly rather than through the resolved role, so the exemption can never widen to whoever a resolver
     // decides is 'owner'.
-    async download(actor : SessionUser, nodeID : string, options : StreamOptions) : Promise<StreamResult>
+    async download(user : SessionUser, nodeID : string) : Promise<ServedFile>
     {
         const node = await this.#nodes.get(nodeID);
         if(node === undefined) { throw new NotFoundError(`No node ${ nodeID }.`); }
 
-        const role = await this.#resolveRole(actor.id, node.id);
+        const role = await this.#shares.effectiveRole(user.id, node.id);
         if(role === null) { throw new NotFoundError(`No node ${ nodeID }.`); }
 
         // Only files have bytes; a folder or link is not a downloadable resource on this endpoint.
         if(node.type !== 'file') { throw new NotFoundError(`No downloadable file ${ nodeID }.`); }
 
-        if(node.trashedAt !== null && !isDirectOwner(node, actor.id))
+        if(isHiddenTrash(node, user.id))
         {
             throw new NotFoundError(`No node ${ nodeID }.`);
         }
 
-        return this.#streamFileNode(node, options);
+        return this.#served(node);
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    // The shared byte-serving contract
+    // The served file
     //------------------------------------------------------------------------------------------------------------------
 
-    async #streamFileNode(node : FileNode, options : StreamOptions) : Promise<StreamResult>
+    // The blob record pins where the bytes live and carries their authoritative byte count. A missing record for a
+    // live file node is store corruption, surfaced as absent.
+    async #served(node : FileNode) : Promise<ServedFile>
     {
-        // The blob record pins where the bytes live and carries their authoritative byte count -- the basis for the
-        // range math and Content-Length. A missing record for a live file node is store corruption, surfaced as absent.
         const blob = await this.#blob.get(node.blobID);
         if(blob === undefined) { throw new NotFoundError('The content backing this file is unavailable.'); }
 
-        const sha256 = node.blobID;
-        const etag = strongEtag(sha256);
-
-        // If-None-Match is evaluated ahead of Range (RFC 7232): a matching validator returns a bodiless 304 regardless
-        // of any range.
-        if(ifNoneMatchHits(options.ifNoneMatch, sha256))
-        {
-            return { status: 304, headers: { 'accept-ranges': 'bytes', etag }, stream: null };
-        }
-
-        const plan = parseRange(options.rangeHeader, blob.size);
-
-        if(plan.kind === 'unsatisfiable')
-        {
-            return {
-                status: 416,
-                headers: { 'accept-ranges': 'bytes', etag, 'content-range': `bytes */${ blob.size }` },
-                stream: null,
-            };
-        }
-
-        const disposition = contentDisposition(options.disposition, node.name);
-        const contentType = servedContentType(servableMimeType(node.mimeType), options.disposition);
-        const location : BlobLocation = { backendID: blob.backendID, storageKey: blob.storageKey };
-
-        if(plan.kind === 'full')
-        {
-            return {
-                status: 200,
-                headers: {
-                    'accept-ranges': 'bytes',
-                    'content-disposition': disposition,
-                    'content-length': String(blob.size),
-                    'content-type': contentType,
-                    etag,
-                },
-                stream: await this.#open(location),
-            };
-        }
-
-        const { offset, length } = plan.window;
         return {
-            status: 206,
-            headers: {
-                'accept-ranges': 'bytes',
-                'content-disposition': disposition,
-                'content-length': String(length),
-                'content-range': `bytes ${ offset }-${ (offset + length) - 1 }/${ blob.size }`,
-                'content-type': contentType,
-                etag,
-            },
-            stream: await this.#open(location, { offset, length }),
+            name: node.name,
+            mimeType: node.mimeType,
+            size: blob.size,
+            sha256: node.blobID,
+            open: (window) => this.#open(blob, window),
         };
     }
 
     // Open the byte stream, mapping a vanished blob (GC raced the read) to the same absent outcome as a missing record.
-    async #open(location : BlobLocation, range ?: ByteWindow) : Promise<Readable>
+    async #open(location : BlobLocation, window ?: BlobRange) : Promise<Readable>
     {
         try
         {
-            return await this.#blob.getStream(location, range);
+            return await this.#blob.getStream(location, window);
         }
         catch(error)
         {
@@ -392,13 +228,13 @@ export class PublicLinkManager
     // Fetch + authority gate for the owner-only management paths (create/list/revoke). A missing node is 404; a node
     // owned by someone else is 403 -- these operations name the node the caller supplied, so we say plainly it is not
     // theirs. Publishing a link is authority over the node, not access to it, so this asks isDirectOwner rather than
-    // the role resolver: a folder owner resolves 'owner' on a file contributed into their folder and may read
+    // the effective role: a folder owner resolves 'owner' on a file contributed into their folder and may read
     // it, but must not be able to publish content they do not own.
-    async #requireOwnedNode(actor : SessionUser, nodeID : string) : Promise<Node>
+    async #requireOwnedNode(user : SessionUser, nodeID : string) : Promise<Node>
     {
         const node = await this.#nodes.get(nodeID);
         if(node === undefined) { throw new NotFoundError(`No node ${ nodeID }.`); }
-        if(!isDirectOwner(node, actor.id))
+        if(!isDirectOwner(node, user.id))
         {
             throw new ForbiddenError('Only the owner may manage links for this node.');
         }

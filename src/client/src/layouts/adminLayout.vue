@@ -1,16 +1,14 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Layout
   --
-  -- The admin-area chrome, mirroring the account layout: a sidebar whose section nav *is* the tab strip, over the
-  -- shared app shell. Reaching here at all is role-gated by the router; the server enforces the real boundary on
-  -- every call.
+  -- The router gates this area by role, but the server enforces the real boundary on every call.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
     <AppShell>
         <template #sidebar>
             <RouterLink to="/" class="mb-6 flex items-center gap-2 px-2 text-xl font-bold">
-                <img :src="app.logoUrl" alt="" class="size-8">
+                <img :src="app.logoURL" alt="" class="size-8">
                 {{ app.name }}
             </RouterLink>
 

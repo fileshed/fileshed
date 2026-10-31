@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Node Grid
-  --
-  -- The default drive surface: a wall of tiles, as many across as the viewport has room for. Dumb container -- it lays
-  -- the tiles out and relays their selection and open intents up; the store owns the data and the view owns the menu.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -39,8 +36,8 @@
     import NodeTile from './nodeTile.vue';
     import VirtualScroller from '../listing/virtualScroller.vue';
 
-    // Resource Access
-    import { useListingMetrics } from '../../resource-access/listingMetrics.ts';
+    // Utils
+    import { useListingMetrics } from '../../utils/listingMetrics.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

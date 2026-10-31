@@ -42,7 +42,7 @@ import type { Database } from '@server/resource-access/database/database.ts';
 
 // The proof-of-possession answer, computed the way a possessing client would. Single source of truth for the HMAC,
 // shared with the in-process blob-flow specs rather than reimplemented here.
-export { computeAnswer } from '../server/blobs/support.ts';
+export { buildAnswer } from '../server/blobs/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Spawn configuration
@@ -305,12 +305,11 @@ export async function spawnServer(options : SpawnOptions = {}) : Promise<ServerH
 // API client
 //
 // A fetch wrapper with a cookie jar: it captures every Set-Cookie the server sends and replays them, so real session
-// cookies (better-auth's signed token plus its cookie-cache companion) travel like a browser's would. Every request
-// carries an Origin matching the server's BASE_URL -- better-auth's CSRF check trusts that origin, and Node's fetch
-// sends no Origin on its own.
+// cookies travel like a browser's would. Every request carries an Origin matching the server's BASE_URL --
+// better-auth's CSRF check trusts that origin, and Node's fetch sends no Origin on its own.
 //----------------------------------------------------------------------------------------------------------------------
 
-export class ApiClient
+export class APIClient
 {
     readonly #baseURL : string;
     readonly #cookies = new Map<string, string>();

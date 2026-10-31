@@ -1,8 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Public Link Constants
 //
-// The token width for anonymous direct links (entropy >= 128 bits, no auth on /d/:token). 32 random bytes is 256 bits
-// -- comfortably above the floor -- and base64url-encodes to a 43-char URL-safe token.
+// /d/:token has no auth, so a direct-link token needs at least 128 bits of entropy. 32 random bytes is 256 bits and
+// base64url-encodes to a 43-character URL-safe token.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const PUBLIC_LINK_TOKEN_BYTES = 32;

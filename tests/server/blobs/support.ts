@@ -1,85 +1,39 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Blob Flow Spec Support
 //
-// Boots the real claim/PoP/upload slice end to end: a fresh in-memory database (real factory + migrations + admin
-// bootstrap), a real BlobRA over an fs facade under a per-run temp directory, the real BlobManager, and a Hono
-// app that mounts the real auth handler alongside the blob and upload routes. onError routes through mapManagerError,
-// the same translation the integrated app uses -- so specs drive the flow with app.request and read state through the
-// real handle and storage RA, zero mocks.
+// The claim/PoP/upload slice over the composed app (see support/storeApp.ts), with the upload tunables a spec can move
+// between requests the way an admin patching the setting does. Specs drive the flow with app.request and read state
+// through the real handle and storage RA, zero mocks.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- reads/writes name snake_case DB columns (house convention for Kysely) */
 
 import { createHmac } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 
 // Models
-import { DEFAULT_SKIPPED_UPLOAD_NAMES, UNLIMITED_QUOTA, parseSkippedNames } from '@fileshed/core';
+import { BlobNotFoundError, DEFAULT_SKIPPED_UPLOAD_NAMES, UNLIMITED_QUOTA, parseSkippedNames } from '@fileshed/core';
 
 // Resource Access
-import { type Auth, authOptions, createAuth } from '@server/resource-access/auth.ts';
-import { type BlobLocation, BlobNotFoundError, BlobRA } from '@server/resource-access/blob/index.ts';
-import { MediaTagsRA } from '@server/resource-access/mediaTags/index.ts';
-import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
+import type { BlobLocation } from '@server/resource-access/blob/index.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { initialize } from '@server/resource-access/boot.ts';
 
 // Managers
 import { BlobManager } from '@server/managers/blob.ts';
-import { MediaTagManager } from '@server/managers/mediaTags.ts';
-import { mapManagerError } from '@server/managers/errors.ts';
-import { SessionManager } from '@server/managers/session.ts';
 
-// Routes
-import { createBlobRoutes } from '@server/routes/blobs.ts';
-import { createUploadRoutes } from '@server/routes/uploads.ts';
+// App
+import type { AppServices } from '@server/services.ts';
 
-// Utils
-import type { Config } from '@server/utils/config.ts';
-
-// Auth support (real sign-up/sign-in over the same app)
-import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, cookieJarFrom, signIn, signUp, testConfig } from '../auth/support.ts';
-import { openTestDatabase } from '../support/database.ts';
+// Support
+import { ORIGIN, cookieFrom, cookieJarFrom, signIn, signUp } from '../auth/support.ts';
+import { type BootedStoreApp, type StoreParts, bootStoreApp } from '../support/storeApp.ts';
 
 export { ORIGIN, cookieFrom, cookieJarFrom, signIn, signUp } from '../auth/support.ts';
+export type { BootedStoreApp } from '../support/storeApp.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
-
-export interface BootedBlobApp
-{
-    app : Hono;
-    handle : DatabaseHandle;
-    auth : Auth;
-    blob : BlobRA;
-    backendID : string;
-    storageRoot : string;
-    cleanup : () => Promise<void>;
-}
-
-function composeApp(auth : Auth, blobs : BlobManager, mediaTags : MediaTagManager) : Hono
-{
-    const app = new Hono();
-    const sessions = new SessionManager(auth);
-
-    app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-    app.route('/api', createBlobRoutes(sessions, blobs, mediaTags));
-    app.route('/api', createUploadRoutes(sessions, blobs, mediaTags));
-
-    app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
-    app.onError((error, ctx) =>
-    {
-        const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
-        return ctx.json({ error: 'Internal Server Error' }, 500);
-    });
-
-    return app;
-}
 
 export interface BlobAppOptions
 {
@@ -94,43 +48,30 @@ export interface BlobAppOptions
 
     // The instance-wide quota an account with no limit of its own inherits, likewise a supplier.
     defaultQuota ?: () => Promise<number>;
+
+    // Any other manager the spec swaps in, built over the same parts.
+    services ?: (parts : StoreParts) => Partial<AppServices>;
 }
 
-export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<BootedBlobApp>
+export async function bootBlobApp(options : BlobAppOptions = {}) : Promise<BootedStoreApp>
 {
-    const storageRoot = await mkdtemp(join(tmpdir(), 'fileshed-blob-flow-'));
-    const overrides : Partial<Config> = {};
-    if(options.uploadChunkBytes !== undefined) { overrides.UPLOAD_CHUNK_BYTES = options.uploadChunkBytes; }
-
-    const { config, handle, dispose } = await openTestDatabase(testConfig({ STORAGE_ROOT: storageRoot, ...overrides }));
-
-    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
-
-    const backendID = await seedDefaultBackend(handle, config);
-    const blob = new BlobRA(handle);
-    const blobs = new BlobManager({
-        handle,
-        blob,
-        uploadMaxBytes: options.uploadMaxBytes ?? (async () => config.UPLOAD_MAX_BYTES),
-        skippedUploadNames: options.skippedUploadNames ?? (async () => parseSkippedNames(DEFAULT_SKIPPED_UPLOAD_NAMES)),
-        uploadChunkBytes: config.UPLOAD_CHUNK_BYTES,
-        defaultQuota: options.defaultQuota ?? (async () => UNLIMITED_QUOTA),
+    return bootStoreApp({
+        config: options.uploadChunkBytes === undefined ? {} : { UPLOAD_CHUNK_BYTES: options.uploadChunkBytes },
+        services: (parts) => ({
+            blobs: new BlobManager({
+                handle: parts.handle,
+                blob: parts.blob,
+                uploadMaxBytes: options.uploadMaxBytes ?? (async () => parts.config.UPLOAD_MAX_BYTES),
+                skippedUploadNames: options.skippedUploadNames
+                    ?? (async () => parseSkippedNames(DEFAULT_SKIPPED_UPLOAD_NAMES)),
+                uploadChunkBytes: parts.config.UPLOAD_CHUNK_BYTES,
+                defaultQuota: options.defaultQuota ?? (async () => UNLIMITED_QUOTA),
+                responder: parts.composed.nodes,
+                tags: parts.composed.mediaTags,
+            }),
+            ...options.services?.(parts),
+        }),
     });
-
-    return {
-        app: composeApp(auth, blobs, new MediaTagManager({ blob, tags: new MediaTagsRA(handle) })),
-        handle,
-        auth,
-        blob,
-        backendID,
-        storageRoot,
-        cleanup: async () =>
-        {
-            await dispose();
-            await rm(storageRoot, { recursive: true, force: true });
-        },
-    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -151,7 +92,7 @@ export interface TestUser
 
 // Sign up with an optional starting quota_limit on the row, then sign in for a session cookie.
 export async function makeUser(
-    booted : BootedBlobApp,
+    booted : BootedStoreApp,
     email : string,
     quotaLimit : number | null = null
 ) : Promise<TestUser>
@@ -177,7 +118,7 @@ export async function makeUser(
 
 // Move a user's cap after they are signed in, the way an admin patching the row does -- their session still carries
 // whatever it was minted with, so a spec can drive a write judged by a limit the caller has never seen.
-export async function setQuotaLimit(booted : BootedBlobApp, userID : string, quotaLimit : number) : Promise<void>
+export async function setQuotaLimit(booted : BootedStoreApp, userID : string, quotaLimit : number) : Promise<void>
 {
     await booted.handle.db
         .updateTable('user')
@@ -337,7 +278,7 @@ export async function answerReplace(
 // Client-side proof, computed from the fixture bytes the way a possessing client would.
 //----------------------------------------------------------------------------------------------------------------------
 
-export function computeAnswer(nonce : string, ranges : [ number, number ][], data : Buffer) : string
+export function buildAnswer(nonce : string, ranges : [ number, number ][], data : Buffer) : string
 {
     const hmac = createHmac('sha256', nonce);
     for(const [ offset, length ] of ranges)
@@ -351,7 +292,7 @@ export function computeAnswer(nonce : string, ranges : [ number, number ][], dat
 // Byte readers (through the blob RA -- the fs backend keys by sha256, so the location is { backendID, storageKey })
 //----------------------------------------------------------------------------------------------------------------------
 
-function locationOf(booted : BootedBlobApp, sha256 : string) : BlobLocation
+function locationOf(booted : BootedStoreApp, sha256 : string) : BlobLocation
 {
     return { backendID: booted.backendID, storageKey: sha256 };
 }
@@ -363,12 +304,12 @@ async function collect(stream : Readable) : Promise<Buffer>
     return Buffer.concat(chunks);
 }
 
-export async function storedBytes(booted : BootedBlobApp, sha256 : string) : Promise<Buffer>
+export async function storedBytes(booted : BootedStoreApp, sha256 : string) : Promise<Buffer>
 {
     return collect(await booted.blob.getStream(locationOf(booted, sha256)));
 }
 
-export async function bytesExist(booted : BootedBlobApp, sha256 : string) : Promise<boolean>
+export async function bytesExist(booted : BootedStoreApp, sha256 : string) : Promise<boolean>
 {
     try
     {
@@ -413,14 +354,14 @@ export async function blobRowCount(handle : DatabaseHandle, sha256 : string) : P
 }
 
 // The GC graveyard marker for a blob: null when live, a timestamp once its last reference is gone.
-export async function blobDeletedAt(handle : DatabaseHandle, sha256 : string) : Promise<Date | string | null>
+export async function blobDeleted(handle : DatabaseHandle, sha256 : string) : Promise<Date | string | null>
 {
     const row = await handle.db
         .selectFrom('blob')
-        .select('deleted_at')
+        .select('deleted')
         .where('sha256', '=', sha256)
         .executeTakeFirstOrThrow();
-    return row.deleted_at;
+    return row.deleted;
 }
 
 interface NodeContentRow
@@ -428,7 +369,7 @@ interface NodeContentRow
     blob_id : string | null;
     size : number | null;
     mime_type : string | null;
-    trashed_at : Date | string | null;
+    trashed : Date | string | null;
     name : string;
     parent_id : string | null;
 }
@@ -438,7 +379,7 @@ export async function nodeContentRow(handle : DatabaseHandle, id : string) : Pro
 {
     return handle.db
         .selectFrom('node')
-        .select([ 'blob_id', 'size', 'mime_type', 'trashed_at', 'name', 'parent_id' ])
+        .select([ 'blob_id', 'size', 'mime_type', 'trashed', 'name', 'parent_id' ])
         .where('id', '=', id)
         .executeTakeFirstOrThrow();
 }
@@ -461,7 +402,7 @@ export async function grantShare(
             grantee_user_id: granteeID,
             role,
             created_by: createdBy,
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }

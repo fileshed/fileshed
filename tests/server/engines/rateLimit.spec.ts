@@ -171,14 +171,14 @@ describe('tierFor', () =>
 describe('consume', () =>
 {
     const rule = { windowSeconds: 60, max: 3 };
-    const START = 1_000_000;
+    const start = 1_000_000;
 
     it('opens a window on the first request', () =>
     {
-        const decision = consume(undefined, rule, START);
+        const decision = consume(undefined, rule, start);
 
         expect(decision.allowed).toBe(true);
-        expect(decision.bucket).toEqual({ count: 1, startedAt: START });
+        expect(decision.bucket).toEqual({ count: 1, started: start });
     });
 
     it('allows exactly the budgeted number of requests inside one window', () =>
@@ -188,7 +188,7 @@ describe('consume', () =>
 
         for(let attempt = 0; attempt < 5; attempt += 1)
         {
-            const decision = consume(bucket, rule, START + attempt);
+            const decision = consume(bucket, rule, start + attempt);
             allowed.push(decision.allowed);
             bucket = decision.bucket;
         }
@@ -198,37 +198,37 @@ describe('consume', () =>
 
     it('starts a fresh window once the old one has run out', () =>
     {
-        const spent : Bucket = { count: 3, startedAt: START };
+        const spent : Bucket = { count: 3, started: start };
 
-        const decision = consume(spent, rule, START + 60_000);
+        const decision = consume(spent, rule, start + 60_000);
 
         expect(decision.allowed).toBe(true);
-        expect(decision.bucket).toEqual({ count: 1, startedAt: START + 60_000 });
+        expect(decision.bucket).toEqual({ count: 1, started: start + 60_000 });
     });
 
     it('reports how long a refused client has to wait', () =>
     {
-        const spent : Bucket = { count: 3, startedAt: START };
+        const spent : Bucket = { count: 3, started: start };
 
-        const decision = consume(spent, rule, START + 20_000);
+        const decision = consume(spent, rule, start + 20_000);
 
         expect(decision.retryAfterSeconds).toBe(40);
     });
 
     it('never tells a refused client to retry immediately', () =>
     {
-        const spent : Bucket = { count: 3, startedAt: START };
+        const spent : Bucket = { count: 3, started: start };
 
-        const decision = consume(spent, rule, START + 59_999);
+        const decision = consume(spent, rule, start + 59_999);
 
         expect(decision.retryAfterSeconds).toBe(1);
     });
 
     it('leaves the spent bucket untouched on a refusal, so a flood cannot extend its own window', () =>
     {
-        const spent : Bucket = { count: 3, startedAt: START };
+        const spent : Bucket = { count: 3, started: start };
 
-        const decision = consume(spent, rule, START + 20_000);
+        const decision = consume(spent, rule, start + 20_000);
 
         expect(decision.bucket).toEqual(spent);
     });

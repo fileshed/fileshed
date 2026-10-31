@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Folder Picker
   --
-  -- The destination browser inside the Move dialog: start at My Files, drill into folders, and confirm the current
-  -- location as the move target. It only ever lists folders. The moving folder itself is not enterable and no location
-  -- inside its own subtree can be confirmed (regulation.node), so an illegal move can't be expressed here -- the server
-  -- still re-checks, but the picker won't waste a round trip on a move it already knows is impossible.
+  -- No location inside a moving folder's own subtree can be confirmed (regulation.node), so the picker never spends a
+  -- round trip on a move it knows is illegal; the server still re-checks.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -39,7 +37,7 @@
 
             <div v-else-if="error" class="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted">
                 <span>Couldn't load folders.</span>
-                <UButton size="xs" color="neutral" variant="subtle" label="Retry" @click="fetchFolders" />
+                <UButton size="xs" color="neutral" variant="subtle" label="Retry" @click="loadFolders" />
             </div>
 
             <div
@@ -93,7 +91,7 @@
     import { useSessionStore } from '../../stores/session.ts';
 
     // Resource Access
-    import { getChildren } from '../../resource-access/nodes.ts';
+    import { listChildren } from '../../resource-access/nodes.ts';
 
     // Engines
     import { regulation } from '../../engines/regulation/index.ts';
@@ -131,14 +129,14 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    async function fetchFolders() : Promise<void>
+    async function loadFolders() : Promise<void>
     {
         loading.value = true;
         error.value = false;
 
         try
         {
-            const page = await getChildren(currentID.value, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
+            const page = await listChildren(currentID.value, { limit: MAX_CHILDREN_LIMIT, sortKey: 'name' });
             folders.value = page.nodes.filter((node) => node.type === 'folder');
         }
         catch
@@ -157,17 +155,17 @@
         if(!regulation.node.canEnterFolderForMove(props.movingNodeIDs, folder.id)) { return; }
 
         path.value = [ ...path.value, folder ];
-        await fetchFolders();
+        await loadFolders();
     }
 
     // Breadcrumb hop: -1 is My Files (root), any other index truncates the path to that folder.
     async function goTo(index : number) : Promise<void>
     {
         path.value = index < 0 ? [] : path.value.slice(0, index + 1);
-        await fetchFolders();
+        await loadFolders();
     }
 
-    onMounted(fetchFolders);
+    onMounted(loadFolders);
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

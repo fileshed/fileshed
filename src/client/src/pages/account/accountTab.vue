@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Account Tab
-  --
-  -- The account area's account-management tab: the storage summary, the password change control, the connected
-  -- sign-in methods, and the way out. Each owns its own data and mutation; the tab only groups them under section
-  -- headings.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

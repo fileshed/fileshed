@@ -31,7 +31,7 @@ export interface PlaylistRow
     title : string;
 }
 
-function isRemoteUrl(line : string) : boolean
+function isRemoteURL(line : string) : boolean
 {
     return line.startsWith('http://') || line.startsWith('https://');
 }
@@ -65,8 +65,8 @@ export function parsePlaylist(text : string) : ParsedPlaylist
         {
             entries.push({
                 nodeID: pendingNodeID,
-                url: isRemoteUrl(line) ? line : null,
-                path: isRemoteUrl(line) ? null : line,
+                url: isRemoteURL(line) ? line : null,
+                path: isRemoteURL(line) ? null : line,
                 title: pendingTitle,
             });
 

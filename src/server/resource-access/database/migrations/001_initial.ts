@@ -1,23 +1,23 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Initial Schema Migration — app tables
 //
-// The FileShed app tables, created in FK-dependency order and dropped in reverse. The
-// BetterAuth identity tables (user/session/account/verification) are NOT touched here -- BetterAuth's own migrator
-// owns them and runs first at boot, including the role (admin plugin) and quota_limit (additionalField) columns on
-// user. The app tables carry real FKs to user.id.
+// Tables are created in FK-dependency order and dropped in reverse. The BetterAuth identity tables
+// (user/session/account/verification), including the role and quota_limit columns on user, belong to BetterAuth's own
+// migrator, which runs first at boot so the app tables' FKs to user.id have a target.
 //
-// This migration is where the statically-expressible invariants live: the per-type node CHECK constraints, the real
-// target_node_id and deletion_offer.sha256 ON DELETE CASCADE edges, and the paired share_request status/resolved_at
-// constraint. Everything here is plain boolean SQL, valid on both dialects.
+// Every CHECK constraint here is plain boolean SQL, valid on both dialects.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Kysely, type RawBuilder, sql } from 'kysely';
 
 // Models
-import { nodeTypes, shareRequestStatuses, shareRoles, storageBackendKinds } from '@fileshed/core';
-
-// Database
-import type { DatabaseKind } from '../database.ts';
+import {
+    type DatabaseKind,
+    nodeTypes,
+    shareRequestStatuses,
+    shareRoles,
+    storageBackendKinds,
+} from '@fileshed/core';
 
 // Migrations
 import { bigIntType, boolDefault, boolType, timestampType } from './columns.ts';

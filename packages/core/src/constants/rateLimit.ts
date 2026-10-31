@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Rate Limit Defaults
 //
-// Budgets per client per window, generous by design: this is a cost ceiling on an unauthenticated flood, not a quality
-// -of-service policy for the people using the instance. A limit a real session can reach is a limit an operator turns
-// off, and an operator who turned it off has none.
+// Budgets per client per window, generous by design: this is a cost ceiling on an unauthenticated flood, not a
+// quality-of-service policy for the people using the instance. A limit a real session can reach is a limit an operator
+// turns off, and an operator who turned it off has none.
 //----------------------------------------------------------------------------------------------------------------------
 
 export const DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60;

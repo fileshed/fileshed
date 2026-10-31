@@ -1,12 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Markdown Formatting Toolbar
   --
-  -- The word-processor toolbar: a fixed row of grouped formatting controls pinned above the document canvas, shown only
-  -- in WYSIWYG mode. It rides Nuxt UI's UEditorToolbar (layout="fixed"), which resolves each item's kind against the
-  -- editor's handler registry -- so it must mount inside the UEditor slot to inject the custom handlers (table, indent,
-  -- outdent) the mount component layers on. Active states track the block/marks at the cursor; the paragraph-style
-  -- control is a single dropdown whose label reflects the current block, never a row of heading buttons. Every control
-  -- carries an aria-label. Only honestly-serializable structures are offered, matching the GFM round-trip guarantee.
+  -- UEditorToolbar resolves each item's kind against the editor's handler registry, so this must mount inside the
+  -- UEditor slot to inject the custom handlers (table, indent, outdent) the markdown editor adds.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

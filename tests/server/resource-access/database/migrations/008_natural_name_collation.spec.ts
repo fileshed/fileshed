@@ -17,10 +17,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CompiledQuery, type Kysely, sql } from 'kysely';
 
 // Models
-import { NATURAL_ORDER_COLLATION, SEARCH_CANDIDATE_LIMIT } from '@fileshed/core';
+import { type DatabaseKind, NATURAL_ORDER_COLLATION, SEARCH_CANDIDATE_LIMIT } from '@fileshed/core';
 
 // Resource Access
-import type { Database, DatabaseHandle, DatabaseKind } from '@server/resource-access/database/database.ts';
+import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
 import {
     assertICUAvailable,
     down,
@@ -60,7 +60,7 @@ function nameOrderedListingQuery(db : Kysely<Database>) : CompiledQuery
     return db
         .selectFrom('node')
         .selectAll()
-        .where('trashed_at', 'is', null)
+        .where('trashed', 'is', null)
         .where('parent_id', '=', PARENT_ID)
         .orderBy(sql`case when ${ sql.ref('type') } = 'folder' then 0 else 1 end`, 'asc')
         .orderBy(sql`${ sql.ref('name') } collate ${ sql.ref(NATURAL_ORDER_COLLATION) }`, 'asc')
@@ -91,9 +91,9 @@ async function seedFolder(db : Kysely<Database>) : Promise<void>
             target_node_id: null,
             size: null,
             mime_type: null,
-            created_at: stamp,
-            updated_at: stamp,
-            trashed_at: null,
+            created: stamp,
+            updated: stamp,
+            trashed: null,
         } as never)
         .execute();
 
@@ -108,9 +108,9 @@ async function seedFolder(db : Kysely<Database>) : Promise<void>
         target_node_id: null,
         size: 10,
         mime_type: 'audio/mpeg',
-        created_at: stamp,
-        updated_at: stamp,
-        trashed_at: null,
+        created: stamp,
+        updated: stamp,
+        trashed: null,
     }));
 
     for(let start = 0; start < rows.length; start += INSERT_BATCH)

@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Conflict Modal
-  --
-  -- Shown when a save is refused because the file changed under the editor -- someone else saved first. It offers the
-  -- two resolutions and nothing else: Reload discards local edits for the server's current version, Overwrite replaces
-  -- that version with the local buffer. The parent owns both actions (they live on the editor store); this only emits
-  -- the choice and stays open while an overwrite is in flight.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

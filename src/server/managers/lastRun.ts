@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Last-Run Tracker
 //
-// The in-memory record of the most recent background-sweep outcomes, surfaced by the admin status endpoint. Derived,
-// never stored: the sweep manager reports every completed sweep here, scheduled or admin-triggered alike, and the
-// status manager reads the latest. Null until a sweep has run at least once; a process restart resets it, because
-// last-run status is diagnostics, not durable state.
+// In memory only, so a process restart resets it: last-run status is diagnostics, not durable state. The sweep manager
+// reports every completed sweep here, scheduled or admin-triggered, and the status manager reads the latest.
 //
 // Each record hands back the entry it stored, so a caller reporting the run it just finished quotes the same instant
 // the status endpoint will.
@@ -14,11 +12,22 @@
 import type {
     AccountDeletionRunSummary,
     GcRunSummary,
-    PartialsRunSummary,
+    StagedUploadsRunSummary,
+    SweepKind,
     TrashPurgeRunSummary,
 } from '@fileshed/core';
 
 //----------------------------------------------------------------------------------------------------------------------
+
+// What each sweep kind answers with. There is no shape common to all of them, and flattening them into one would throw
+// away the counts an admin is asking for.
+export interface SweepSummaries
+{
+    gc : GcRunSummary;
+    trashPurge : TrashPurgeRunSummary;
+    stagedUploads : StagedUploadsRunSummary;
+    accountDeletion : AccountDeletionRunSummary;
+}
 
 export interface LastRun<TSummary>
 {
@@ -28,57 +37,20 @@ export interface LastRun<TSummary>
 
 export class LastRunTracker
 {
-    #gc : LastRun<GcRunSummary> | null = null;
-    #trashPurge : LastRun<TrashPurgeRunSummary> | null = null;
-    #partials : LastRun<PartialsRunSummary> | null = null;
-    #accountDeletion : LastRun<AccountDeletionRunSummary> | null = null;
+    readonly #runs = new Map<SweepKind, LastRun<SweepSummaries[SweepKind]>>();
 
-    recordGc(summary : GcRunSummary) : LastRun<GcRunSummary>
+    record<K extends SweepKind>(kind : K, summary : SweepSummaries[K]) : LastRun<SweepSummaries[K]>
     {
-        this.#gc = { summary, at: new Date() };
+        const run = { summary, at: new Date() };
+        this.#runs.set(kind, run);
 
-        return this.#gc;
+        return run;
     }
 
-    recordTrashPurge(summary : TrashPurgeRunSummary) : LastRun<TrashPurgeRunSummary>
+    last<K extends SweepKind>(kind : K) : LastRun<SweepSummaries[K]> | null
     {
-        this.#trashPurge = { summary, at: new Date() };
-
-        return this.#trashPurge;
-    }
-
-    recordPartials(summary : PartialsRunSummary) : LastRun<PartialsRunSummary>
-    {
-        this.#partials = { summary, at: new Date() };
-
-        return this.#partials;
-    }
-
-    recordAccountDeletion(summary : AccountDeletionRunSummary) : LastRun<AccountDeletionRunSummary>
-    {
-        this.#accountDeletion = { summary, at: new Date() };
-
-        return this.#accountDeletion;
-    }
-
-    get gc() : LastRun<GcRunSummary> | null
-    {
-        return this.#gc;
-    }
-
-    get trashPurge() : LastRun<TrashPurgeRunSummary> | null
-    {
-        return this.#trashPurge;
-    }
-
-    get partials() : LastRun<PartialsRunSummary> | null
-    {
-        return this.#partials;
-    }
-
-    get accountDeletion() : LastRun<AccountDeletionRunSummary> | null
-    {
-        return this.#accountDeletion;
+        // record() is the only writer, and it files each kind's summary under that kind.
+        return (this.#runs.get(kind) as LastRun<SweepSummaries[K]> | undefined) ?? null;
     }
 }
 

@@ -1,11 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Text Editor
   --
-  -- The CodeMirror 6 surface behind the file editor: a controlled editor bound to a text model, with the source language
-  -- (markdown vs plain), the editable/read-only state, the chosen colorscheme, and the gutter each held in a Compartment
-  -- so a mode toggle, a role change, a theme pick, or a gutter toggle is a reconfigure, not a teardown. User edits emit
-  -- update:modelValue; an external model change (a reload) is written back into the document without echoing, so binding
-  -- the model both ways never loops.
+  -- Each setting that can change at runtime sits in its own Compartment, so changing one is a reconfigure rather than a
+  -- teardown. An external model change (a reload) is written into the document without echoing, so binding the model
+  -- both ways never loops.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -27,10 +25,10 @@
 
     // Engines
     import type { EditorMode } from '../../../engines/intent/index.ts';
+    import { resolveEditorTheme } from '../../../engines/editorTheme.ts';
 
     // Components
     import { editorChrome } from './chrome.ts';
-    import { resolveEditorTheme } from './themeRegistry.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 

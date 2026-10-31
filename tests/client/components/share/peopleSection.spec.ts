@@ -8,14 +8,13 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import type {
     AccessRequestListEntry,
     AccessRequestResponse,
-    NodeResponse,
     ShareListEntry,
     ShareRole,
     UserSummary,
 } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { APIError } from '@client/resource-access/apiError.ts';
 import { grantShare, listSharesForNode, revokeShare } from '@client/resource-access/shares.ts';
 import {
     declineAccessRequest,
@@ -23,6 +22,9 @@ import {
     listAccessRequests,
 } from '@client/resource-access/accessRequests.ts';
 import { lookupUser } from '@client/resource-access/users.ts';
+
+// Support
+import { fileNode } from '../../support.ts';
 
 // Under test
 import PeopleSection from '@client/components/share/peopleSection.vue';
@@ -68,7 +70,7 @@ function accessRequest(
 ) : AccessRequestResponse
 {
     return {
-        id, nodeID, requesterID, requestedRole: role, message, status: 'pending', createdAt: ISO, resolvedAt: null,
+        id, nodeID, requesterID, requestedRole: role, message, status: 'pending', created: ISO, resolved: null,
     };
 }
 
@@ -85,38 +87,19 @@ function incomingRequest(
     return { request: accessRequest(role, nodeID, requester.id, id, message), requester };
 }
 
-function fileNode() : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'f1',
-        name: 'report.txt',
-        ownerID: 'owner1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
-
 // Each row of a shares-list response pairs the grant with its grantee's summary, exactly as the server sends it --
 // the display never falls back to a placeholder because the summary always rides with the grant.
 function shareEntry(role : 'viewer' | 'editor', grantee : UserSummary = GRACE) : ShareListEntry
 {
     return {
-        share: { id: 's1', nodeID: 'f1', granteeUserID: grantee.id, role, createdBy: 'owner1', createdAt: ISO },
+        share: { id: 's1', nodeID: 'f1', granteeUserID: grantee.id, role, createdBy: 'owner1', created: ISO },
         grantee,
     };
 }
 
 // UInput/UButton/USelect/UAvatar reduced to plain elements: v-model round-trips through native events, buttons carry
 // their label as text and pass aria-label/disabled through, and the select emits update:model-value on change.
-const STUBS = {
+const stubs = {
     UInput: {
         props: [ 'modelValue' ],
         emits: [ 'update:modelValue' ],
@@ -142,8 +125,8 @@ const STUBS = {
 function mountSection(owner : UserSummary | null = OWNER) : VueWrapper
 {
     return mount(PeopleSection, {
-        props: { node: fileNode(), owner },
-        global: { stubs: STUBS },
+        props: { node: fileNode({ ownerID: OWNER.id }), owner },
+        global: { stubs },
     });
 }
 
@@ -197,7 +180,7 @@ describe('PeopleSection', () =>
 
     it('shows an inline "no user" message when the email matches no account', async () =>
     {
-        lookupUserMock.mockRejectedValue(new ApiError(404, 'No user with that email.'));
+        lookupUserMock.mockRejectedValue(new APIError(404, 'No user with that email.'));
         const wrapper = mountSection();
         await flushPromises();
 

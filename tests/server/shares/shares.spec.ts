@@ -10,9 +10,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
 import {
-    type BootedShareApp,
+    type BootedStoreApp,
     type TestUser,
-    bootShareApp,
+    bootStoreApp,
     createFolder,
     grantShare,
     makeUser,
@@ -22,16 +22,16 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+type JSON = Record<string, unknown>;
 
-let booted : BootedShareApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let grantee : TestUser;
 let stranger : TestUser;
 
 beforeEach(async () =>
 {
-    booted = await bootShareApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     grantee = await makeUser(booted, 'grantee@example.com');
     stranger = await makeUser(booted, 'stranger@example.com');
@@ -53,7 +53,7 @@ describe('POST /api/nodes/:id/shares', () =>
         const folder = await createFolder(booted.app, owner.cookie, 'Shared');
 
         const res = await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(201);
         expect(body).toMatchObject({ nodeID: folder, granteeUserID: grantee.id, role: 'viewer', createdBy: owner.id });
@@ -141,7 +141,7 @@ describe('effective access of a grantee', () =>
         const strangerRead = await request(booted.app, 'GET', `/api/nodes/${ folder }`, stranger.cookie);
 
         expect(granteeRead.status).toBe(200);
-        expect((await granteeRead.json() as Json).role).toBe('viewer');
+        expect((await granteeRead.json() as JSON).role).toBe('viewer');
         expect(strangerRead.status).toBe(404);
     });
 
@@ -187,7 +187,7 @@ describe('ending access', () =>
     it('lets the owner revoke, after which the grantee can no longer read the node', async () =>
     {
         const folder = await createFolder(booted.app, owner.cookie, 'Shared');
-        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as Json;
+        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as JSON;
 
         const revoke = await request(booted.app, 'DELETE', `/api/shares/${ grant.id }`, owner.cookie);
         const readAfter = await request(booted.app, 'GET', `/api/nodes/${ folder }`, grantee.cookie);
@@ -199,7 +199,7 @@ describe('ending access', () =>
     it('refuses a revoke from someone who is not the node owner', async () =>
     {
         const folder = await createFolder(booted.app, owner.cookie, 'Shared');
-        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as Json;
+        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as JSON;
 
         const res = await request(booted.app, 'DELETE', `/api/shares/${ grant.id }`, grantee.cookie);
 
@@ -209,7 +209,7 @@ describe('ending access', () =>
     it('lets the grantee leave their own share, losing access', async () =>
     {
         const folder = await createFolder(booted.app, owner.cookie, 'Shared');
-        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as Json;
+        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as JSON;
 
         const leave = await request(booted.app, 'POST', `/api/shares/${ grant.id }/leave`, grantee.cookie);
         const readAfter = await request(booted.app, 'GET', `/api/nodes/${ folder }`, grantee.cookie);
@@ -221,7 +221,7 @@ describe('ending access', () =>
     it('refuses a leave from someone who is not the grantee', async () =>
     {
         const folder = await createFolder(booted.app, owner.cookie, 'Shared');
-        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as Json;
+        const grant = await (await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer')).json() as JSON;
 
         const res = await request(booted.app, 'POST', `/api/shares/${ grant.id }/leave`, stranger.cookie);
 
@@ -251,7 +251,7 @@ describe('GET /api/nodes/:id/shares', () =>
         await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
 
         const res = await request(booted.app, 'GET', `/api/nodes/${ folder }/shares`, owner.cookie);
-        const body = await res.json() as { shares : { share : Json; grantee : Json }[] };
+        const body = await res.json() as { shares : { share : JSON; grantee : JSON }[] };
 
         expect(res.status).toBe(200);
         expect(body.shares).toHaveLength(1);
@@ -303,7 +303,7 @@ describe('GET /api/shared-with-me', () =>
         await grantShare(booted.app, owner.cookie, folder, grantee.id, 'editor');
 
         const res = await request(booted.app, 'GET', '/api/shared-with-me', grantee.cookie);
-        const body = await res.json() as { entries : { target : Json; placed : boolean; share : Json }[] };
+        const body = await res.json() as { entries : { target : JSON; placed : boolean; share : JSON }[] };
 
         expect(res.status).toBe(200);
         expect(body.entries).toHaveLength(1);
@@ -335,7 +335,7 @@ describe('GET /api/shared-with-me', () =>
         await grantShare(booted.app, owner.cookie, folder, grantee.id, 'viewer');
 
         const res = await request(booted.app, 'GET', '/api/shared-with-me', grantee.cookie);
-        const body = await res.json() as { entries : { owner : Json }[] };
+        const body = await res.json() as { entries : { owner : JSON }[] };
 
         // The recipient sees the sharer's real name, not just the ownerID already riding on the target -- the owner
         // shared WITH them, so disclosing this summary discloses no one who didn't already disclose themselves.

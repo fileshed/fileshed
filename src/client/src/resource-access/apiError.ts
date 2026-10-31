@@ -1,11 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // API Error
 //
-// The typed failure the resource-access fetch wrappers throw on any non-2xx response: the HTTP status plus the server's
-// error message (every route answers with a `{ error }` body via the server's error mapping), with the parsed body
-// retained for callers that need the structured detail later. A regulation rejection (403/422) additionally carries
-// the stable `violations` codes as a RegulationApiError, and a conflict (409) its `code` as a ConflictApiError, so a
-// store branches on a code, not a human message.
+// Every server route answers a failure with an `{ error }` body. The typed subclasses carry the stable codes, so a
+// store branches on a code rather than a human message.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { ConflictCode, RegulationCode, RegulationViolation } from '@fileshed/core';
@@ -68,9 +65,20 @@ function receivedBytesOf(body : unknown) : number | null
     return receivedBytes;
 }
 
+// The cap a rejected upload broke, off a 413 body, or null when there is none to read -- a proxy in front of the
+// instance answers its own 413, and whatever body it writes is nothing like ours.
+function maxBytesOf(body : unknown) : number | null
+{
+    if(typeof body !== 'object' || body === null || !('maxBytes' in body)) { return null; }
+
+    const { maxBytes } = body as { maxBytes : unknown };
+
+    return typeof maxBytes === 'number' && Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : null;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
-export class ApiError extends Error
+export class APIError extends Error
 {
     readonly status : number;
     readonly body : unknown;
@@ -79,7 +87,7 @@ export class ApiError extends Error
     {
         super(message);
 
-        this.name = 'ApiError';
+        this.name = 'APIError';
         this.status = status;
         this.body = body;
     }
@@ -87,7 +95,7 @@ export class ApiError extends Error
 
 // A regulation rejection: the request was understood but a legality rule blocked it. The violations carry stable
 // codes a caller branches on without parsing the message.
-export class RegulationApiError extends ApiError
+export class RegulationAPIError extends APIError
 {
     readonly violations : RegulationViolation[];
 
@@ -95,7 +103,7 @@ export class RegulationApiError extends ApiError
     {
         super(status, message, body);
 
-        this.name = 'RegulationApiError';
+        this.name = 'RegulationAPIError';
         this.violations = violations;
     }
 
@@ -112,7 +120,7 @@ export class RegulationApiError extends ApiError
 
 // A conflict: two writes to the same thing collided. Always a 409, so the status is not the caller's to supply, and
 // the code is what separates a caller that must change what it sends from one that need only ask again.
-export class ConflictApiError extends ApiError
+export class ConflictAPIError extends APIError
 {
     readonly code : ConflictCode;
 
@@ -124,37 +132,69 @@ export class ConflictApiError extends ApiError
     {
         super(409, message, body);
 
-        this.name = 'ConflictApiError';
+        this.name = 'ConflictAPIError';
         this.code = code;
         this.receivedBytes = receivedBytes;
+    }
+}
+
+// Too large for a size cap. Always a 413; the cap is null when the refusal came from something in front of the instance
+// rather than from the instance itself.
+export class PayloadTooLargeAPIError extends APIError
+{
+    readonly maxBytes : number | null;
+
+    constructor(message : string, maxBytes : number | null = null, body ?: unknown)
+    {
+        super(413, message, body);
+
+        this.name = 'PayloadTooLargeAPIError';
+        this.maxBytes = maxBytes;
     }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
 // The typed error from an already-parsed error body: the server's `{ error }` message with the HTTP status, upgraded to
-// a RegulationApiError when the body carries regulation violation codes and to a ConflictApiError when it carries a
-// conflict code. The transport that read the body is irrelevant -- fetch hands it a parsed Response body, the XHR
-// upload hands it a parsed responseText -- so both funnel here rather than each re-deriving the message and the codes.
-export function apiErrorFromBody(status : number, statusText : string, body : unknown) : ApiError
+// a RegulationAPIError when the body carries regulation violation codes, to a ConflictAPIError when it carries a
+// conflict code, and to a PayloadTooLargeAPIError on a 413. The transport that read the body is irrelevant -- fetch
+// hands it a parsed Response body, the XHR upload hands it a parsed responseText -- so both funnel here rather than
+// each re-deriving the message and the codes.
+export function apiErrorFromBody(status : number, statusText : string, body : unknown) : APIError
 {
     const message = errorMessageOf(body) ?? (statusText || `Request failed with status ${ status }`);
 
     const violations = regulationViolationsOf(body);
-    if(violations !== null) { return new RegulationApiError(status, message, violations, body); }
+    if(violations !== null) { return new RegulationAPIError(status, message, violations, body); }
 
     const conflict = conflictCodeOf(status, body);
-    if(conflict !== null) { return new ConflictApiError(message, conflict, receivedBytesOf(body), body); }
+    if(conflict !== null) { return new ConflictAPIError(message, conflict, receivedBytesOf(body), body); }
 
-    return new ApiError(status, message, body);
+    if(status === 413) { return new PayloadTooLargeAPIError(message, maxBytesOf(body), body); }
+
+    return new APIError(status, message, body);
 }
 
 // The typed error for a fetch Response the request wrappers rejected.
-export async function apiErrorFromResponse(response : Response) : Promise<ApiError>
+export async function apiErrorFromResponse(response : Response) : Promise<APIError>
 {
     const body : unknown = await response.json().catch(() => null);
 
     return apiErrorFromBody(response.status, response.statusText, body);
+}
+
+// What a better-auth client call answers in its `error` slot.
+export interface AuthClientError
+{
+    status : number;
+    message ?: string | undefined;
+}
+
+// better-auth answers a failure instead of throwing it, in its own shape rather than an `{ error }` body. As an
+// APIError it reads like any FileShed route's failure, and describeAPIError shows better-auth's own sentence.
+export function apiErrorFromAuth(error : AuthClientError, fallback : string) : APIError
+{
+    return new APIError(error.status, error.message ?? fallback, error);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

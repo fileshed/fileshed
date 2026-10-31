@@ -1,8 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Delete Account
   --
-  -- The account area's way out. The card names the window rather than promising it can be undone forever: the files
-  -- come back if you cancel in time, the reach does not come back at all.
+  -- The card names the deletion window rather than promising the deletion can be undone: the files come back if the
+  -- user cancels in time, but the shares, links, and tokens never do.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

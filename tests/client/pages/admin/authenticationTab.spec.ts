@@ -20,7 +20,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import { fetchAdminSettings } from '@client/resource-access/admin.ts';
+import { getAdminSettings } from '@client/resource-access/admin.ts';
 
 // Utils
 import { copyToClipboard } from '@client/utils/copyToClipboard.ts';
@@ -34,13 +34,13 @@ import AuthenticationTab from '@client/pages/admin/authenticationTab.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
 }));
 vi.mock('@client/utils/copyToClipboard.ts', () => ({ copyToClipboard: vi.fn().mockResolvedValue(true) }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
-const fetchMock = fetchAdminSettings as unknown as Mock;
+const getSettingsMock = getAdminSettings as unknown as Mock;
 const copyMock = copyToClipboard as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -110,7 +110,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('shows no provider groups on a fresh instance, only the add-provider picker', async () =>
     {
-        fetchMock.mockResolvedValue(view());
+        getSettingsMock.mockResolvedValue(view());
         const wrapper = mountTab();
         await flushPromises();
 
@@ -121,7 +121,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('keeps a group open for every provider with any stored value, callback URL spelled out', async () =>
     {
-        fetchMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id', DISCORD_CLIENT_SECRET: '••••cret' }));
+        getSettingsMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id', DISCORD_CLIENT_SECRET: '••••cret' }));
         const wrapper = mountTab();
         await flushPromises();
 
@@ -134,7 +134,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('opens a group for entry when a provider is picked, and drops it from the picker', async () =>
     {
-        fetchMock.mockResolvedValue(view());
+        getSettingsMock.mockResolvedValue(view());
         const wrapper = mountTab();
         await flushPromises();
 
@@ -151,7 +151,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('links a card to the provider developer console when one is known, and stays quiet when none is', async () =>
     {
-        fetchMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id', POLAR_CLIENT_ID: 'p-id' }));
+        getSettingsMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id', POLAR_CLIENT_ID: 'p-id' }));
         const wrapper = mountTab();
         await flushPromises();
 
@@ -169,7 +169,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('copies the callback URL to the clipboard from the card', async () =>
     {
-        fetchMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id' }));
+        getSettingsMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id' }));
         const wrapper = mountTab();
         await flushPromises();
 
@@ -181,7 +181,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('removes an unsaved provider instantly and returns it to the picker', async () =>
     {
-        fetchMock.mockResolvedValue(view());
+        getSettingsMock.mockResolvedValue(view());
         const wrapper = mountTab();
         await flushPromises();
 
@@ -200,7 +200,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('sends removal of a provider with stored values through the confirming modal', async () =>
     {
-        fetchMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id' }));
+        getSettingsMock.mockResolvedValue(view({ GITLAB_CLIENT_ID: 'gl-id' }));
         const wrapper = mountTab();
         await flushPromises();
 
@@ -213,7 +213,7 @@ describe('Admin AuthenticationTab', () =>
 
     it('shows the retry state when the load fails', async () =>
     {
-        fetchMock.mockRejectedValue(new Error('offline'));
+        getSettingsMock.mockRejectedValue(new Error('offline'));
         const wrapper = mountTab();
         await flushPromises();
 

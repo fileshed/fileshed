@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { LinkTarget, NodeResponse, SharedTarget } from '@fileshed/core';
+import type { FileNodeResponse, LinkNodeResponse, LinkTarget, SharedTarget } from '@fileshed/core';
 
 import {
     familyPresentation,
@@ -14,31 +14,19 @@ import {
     sharedTargetPresentation,
 } from '@client/utils/formatters/nodeTypePresentation.ts';
 
+// Support
+import { fileNode, folderNode, linkNode } from '../../support.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
-const BASE = {
-    id: 'n1',
-    name: 'thing',
-    ownerID: 'u1',
-    parentID: null,
-    createdAt: '2026-07-01T00:00:00.000Z',
-    updatedAt: '2026-07-01T00:00:00.000Z',
-    role: 'owner' as const,
-};
-
-function file(mimeType : string, name = 'thing') : NodeResponse
+function file(mimeType : string, overrides : Partial<FileNodeResponse> = {}) : FileNodeResponse
 {
-    return { sharing: null, ...BASE, name, type: 'file', blobID: 'b1', size: 10, mimeType, trashedAt: null };
+    return fileNode({ mimeType, ...overrides });
 }
 
-function folder() : NodeResponse
+function link(target : LinkTarget | null) : LinkNodeResponse
 {
-    return { sharing: null, ...BASE, type: 'folder', trashedAt: null };
-}
-
-function link(target : LinkTarget | null) : NodeResponse
-{
-    return { sharing: null, ...BASE, type: 'link', targetNodeID: 't1', target };
+    return linkNode({ target });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,7 +54,7 @@ describe('nodePresentation', () =>
 {
     it('presents a folder as the folders family', () =>
     {
-        expect(nodePresentation(folder())).toMatchObject({ icon: 'i-lucide-folder', color: 'text-amber-500' });
+        expect(nodePresentation(folderNode())).toMatchObject({ icon: 'i-lucide-folder', color: 'text-amber-500' });
     });
 
     it('classifies a file by its mime family, PDFs distinct from text documents', () =>
@@ -109,7 +97,7 @@ describe('isDeadLink', () =>
         expect(isDeadLink(link(null))).toBe(true);
         expect(isDeadLink(link({ ownerID: 'u1', id: 't1', type: 'folder', name: 'shared' }))).toBe(false);
         expect(isDeadLink(file('text/plain'))).toBe(false);
-        expect(isDeadLink(folder())).toBe(false);
+        expect(isDeadLink(folderNode())).toBe(false);
     });
 });
 
@@ -119,20 +107,20 @@ describe('nodeKindLabel', () =>
 {
     it('labels a folder, a file by its family, and a resolved link as "Link" rather than its target\'s family', () =>
     {
-        expect(nodeKindLabel(folder())).toBe('Folder');
+        expect(nodeKindLabel(folderNode())).toBe('Folder');
         expect(nodeKindLabel(file('application/pdf'))).toBe('PDF');
         expect(nodeKindLabel(link({ ownerID: 'u1', id: 't1', type: 'folder', name: 'shared' }))).toBe('Link');
     });
 
     it('tells a playlist apart from the audio family it hides in — by mime or by name', () =>
     {
-        expect(nodeKindLabel(file('audio/x-mpegurl', 'mix.weird'))).toBe('Playlist');
-        expect(nodeKindLabel(file('text/plain', 'mix.m3u'))).toBe('Playlist');
-        expect(nodeKindLabel(file('audio/mpeg', 'song.mp3'))).toBe('Audio');
+        expect(nodeKindLabel(file('audio/x-mpegurl', { name: 'mix.weird' }))).toBe('Playlist');
+        expect(nodeKindLabel(file('text/plain', { name: 'mix.m3u' }))).toBe('Playlist');
+        expect(nodeKindLabel(file('audio/mpeg', { name: 'song.mp3' }))).toBe('Audio');
 
-        expect(nodePresentation(file('audio/x-mpegurl', 'mix.m3u8')))
+        expect(nodePresentation(file('audio/x-mpegurl', { name: 'mix.m3u8' })))
             .toMatchObject({ icon: 'i-lucide-list-music', noun: 'Playlist' });
-        expect(nodePresentation(file('audio/mpeg', 'song.mp3')).icon).toBe('i-lucide-music');
+        expect(nodePresentation(file('audio/mpeg', { name: 'song.mp3' })).icon).toBe('i-lucide-music');
     });
 
     it('labels a dead link by its own broken-glyph noun, not "Link"', () =>

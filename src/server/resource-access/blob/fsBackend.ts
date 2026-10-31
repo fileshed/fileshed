@@ -9,7 +9,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 import { createHash, randomUUID } from 'node:crypto';
-import { type Dirent, createReadStream, createWriteStream } from 'node:fs';
+import { type Stats, createReadStream, createWriteStream } from 'node:fs';
 import { type FileHandle, access, mkdir, open, readdir, rename, rm, stat, truncate } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { type Readable, Transform, type TransformCallback } from 'node:stream';
@@ -28,7 +28,7 @@ import {
 } from '@fileshed/core';
 
 // Resource Access
-import type { BlobBackend, BlobRange, StagedSweep, StoredBlobStat } from '../interfaces/blob.ts';
+import type { BlobBackend, BlobRange, StagedSweep, StoredBlobStat } from './backend.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -75,13 +75,25 @@ const SHARD_PATTERN = /^[0-9a-f]{2}$/;
 // The staging directory lives under root (not a sibling) so a committed blob is always a rename within one filesystem.
 const STAGING_DIR = '.staging';
 
-// Chunked uploads stage in their own directory, so the sweep that reclaims abandoned partials never has to tell them
+// Chunked uploads stage in their own directory, so the sweep that reclaims abandoned uploads never has to tell them
 // apart from the short-lived staging file a put holds open.
 const PARTIALS_DIR = '.partials';
 
 function isNotFound(error : unknown) : boolean
 {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+// A directory nobody has created yet holds nothing. One that is there but will not open is a real failure: reading it
+// as empty would hide what it holds.
+async function listOrEmpty<T>(listing : Promise<T[]>) : Promise<T[]>
+{
+    try { return await listing; }
+    catch(error)
+    {
+        if(isNotFound(error)) { return []; }
+        throw error;
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -216,7 +228,7 @@ export class FsBackend implements BlobBackend
             for(const sub of await this.#shardNames(join(this.#root, shard)))
             {
                 // eslint-disable-next-line no-await-in-loop -- likewise
-                const names = await readdir(join(this.#root, shard, sub)).catch(() => [] as string[]);
+                const names = await listOrEmpty(readdir(join(this.#root, shard, sub)));
 
                 yield *names.filter((name) => SHA256_PATTERN.test(name) && name.startsWith(shard + sub));
             }
@@ -233,7 +245,7 @@ export class FsBackend implements BlobBackend
             throw error;
         });
 
-        return stats === null ? null : { size: stats.size, modifiedAt: stats.mtime };
+        return stats === null ? null : { size: stats.size, modified: stats.mtime };
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -264,7 +276,7 @@ export class FsBackend implements BlobBackend
     // Hash the staged bytes in one pass and publish them. The read pass is the price of not carrying hash state across
     // requests: state cannot be rewound, so a chunk that tore halfway through would leave the running hash ahead of
     // the bytes on disk with no way back, while a length is always exact.
-    async commitChunked(uploadID : string, sha256 : string, size : number) : Promise<void>
+    async commitStaged(uploadID : string, sha256 : string, size : number) : Promise<void>
     {
         this.#assertSha256(sha256);
 
@@ -292,7 +304,7 @@ export class FsBackend implements BlobBackend
         }
     }
 
-    async discardChunked(uploadID : string) : Promise<void>
+    async discardStaged(uploadID : string) : Promise<void>
     {
         await rm(this.#partialPath(uploadID), { force: true });
     }
@@ -302,17 +314,26 @@ export class FsBackend implements BlobBackend
     // measured and being deleted is still counted here, since the delete is forced and cannot tell the difference,
     // so two servers sweeping at once can each bill themselves for the same bytes. That costs an overstated readout
     // and nothing else. One that will not delete is counted and logged rather than thrown, so a single unreadable
-    // file cannot strand every other abandoned upload's bytes.
-    async sweepChunked(cutoff : Date) : Promise<StagedSweep>
+    // file cannot strand every other abandoned upload's bytes; one that cannot be measured is counted the same way.
+    async sweepStaged(cutoff : Date) : Promise<StagedSweep>
     {
-        const names = await readdir(this.#partials).catch(() => [] as string[]);
+        const names = await listOrEmpty(readdir(this.#partials));
 
         const outcomes = await Promise.all(names.map(async (name) =>
         {
             const path = join(this.#partials, name);
 
-            const stats = await stat(path).catch(() => null);
-            if(stats === null || stats.mtimeMs >= cutoff.getTime()) { return null; }
+            let stats : Stats;
+            try { stats = await stat(path); }
+            catch(error)
+            {
+                if(isNotFound(error)) { return null; }
+
+                logger.error({ err: error, path }, 'Abandoned upload staging could not be measured; bytes leaked');
+                return { reclaimed: false, bytes: 0 };
+            }
+
+            if(stats.mtimeMs >= cutoff.getTime()) { return null; }
 
             try
             {
@@ -341,7 +362,7 @@ export class FsBackend implements BlobBackend
     // yet has no shards rather than being an error -- a store nobody has written to holds no blobs.
     async #shardNames(dir : string) : Promise<string[]>
     {
-        const entries = await readdir(dir, { withFileTypes: true }).catch(() => [] as Dirent[]);
+        const entries = await listOrEmpty(readdir(dir, { withFileTypes: true }));
 
         return entries
             .filter((entry) => entry.isDirectory() && SHARD_PATTERN.test(entry.name))

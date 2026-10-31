@@ -7,7 +7,7 @@
 // fresh account is born in, and the one that lets an admin move every uncustomized account at once. 0 is an explicit
 // "no cap on this account", which is what pins a user above a tightened default. Anything positive is a byte cap.
 // The instance default speaks the same 0-is-unlimited dialect, so a deployment that never touches quotas resolves
-// every account to unlimited, exactly as it did before quotas were configurable.
+// every account to unlimited.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

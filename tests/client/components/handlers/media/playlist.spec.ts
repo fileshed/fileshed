@@ -12,22 +12,23 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeResponse } from '@fileshed/core';
-
 // Stores
 import { useMediaPlayerStore } from '@client/stores/mediaPlayer.ts';
 
 // Engines
 import { brokenTrack, queueFromTrack } from '@client/engines/media/queue.ts';
 
+// Support
+import { fileNode, folderNode } from '../../../support.ts';
+
 // Under test
 import MediaPlaylist from '@client/components/handlers/media/playlist.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const { readMediaTagsMock, getChildrenMock } = vi.hoisted(() => ({
+const { readMediaTagsMock, listChildrenMock } = vi.hoisted(() => ({
     readMediaTagsMock: vi.fn(),
-    getChildrenMock: vi.fn(),
+    listChildrenMock: vi.fn(),
 }));
 
 vi.mock('@client/resource-access/mediaTags.ts', () => ({
@@ -35,51 +36,13 @@ vi.mock('@client/resource-access/mediaTags.ts', () => ({
     releaseMediaTags: vi.fn(),
 }));
 
-vi.mock('@client/resource-access/nodes.ts', () => ({ getChildren: getChildrenMock, getNode: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(), uploadTicket: vi.fn(), answerChallenge: vi.fn(),
-}));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeBlob: vi.fn() }));
+vi.mock('@client/resource-access/nodes.ts', () => ({ listChildren: listChildrenMock, getNode: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeBlob: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function fileNode(overrides : Partial<{ id : string; name : string; mimeType : string }> = {}) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'f1',
-        name: overrides.name ?? 'song.mp3',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 10,
-        mimeType: overrides.mimeType ?? 'audio/mpeg',
-        trashedAt: null,
-    };
-}
-
-function folderNode(overrides : Partial<{ id : string; name : string }> = {}) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'd1',
-        name: overrides.name ?? 'Music',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'folder',
-        trashedAt: null,
-    };
-}
+const AUDIO = { mimeType: 'audio/mpeg' };
 
 const UButtonStub = {
     name: 'UButton',
@@ -143,8 +106,8 @@ describe('MediaPlaylist rows', () =>
     it('renders one row per track in play order, marking the current one', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
-        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
 
         const wrapper = mountPanel();
         await nextTick();
@@ -169,13 +132,13 @@ describe('MediaPlaylist rows', () =>
         readMediaTagsMock.mockImplementation((nodeID : string) =>
         {
             return Promise.resolve(nodeID === 'a1'
-                ? { title: 'Neon Skyline', artist: 'The Sample Band', album: null, artworkUrl: null }
+                ? { title: 'Neon Skyline', artist: 'The Sample Band', album: null, artworkURL: null }
                 : null);
         });
 
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
-        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
 
         const wrapper = mountPanel();
         await flushPromises();
@@ -190,8 +153,8 @@ describe('MediaPlaylist rows', () =>
     it('jumps playback to a clicked row', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
 
         const wrapper = mountPanel();
         await rows(wrapper)[1]?.get('button.flex-1').trigger('click');
@@ -203,9 +166,9 @@ describe('MediaPlaylist rows', () =>
     it('wears the failed mark with a retry hint, and a click retries the track', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
-        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
-        store.handleTrackError();
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
+        store.onTrackError();
 
         const wrapper = mountPanel();
         await nextTick();
@@ -223,9 +186,9 @@ describe('MediaPlaylist rows', () =>
     it('drags a row to a new position without touching what is playing', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1', name: 'one.mp3' }), 'audio');
-        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
-        store.add(fileNode({ id: 'a3', name: 'three.mp3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1', name: 'one.mp3' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
+        store.add(fileNode({ ...AUDIO, id: 'a3', name: 'three.mp3' }));
         const mountsBefore = store.playToken;
 
         const wrapper = mountPanel();
@@ -242,8 +205,8 @@ describe('MediaPlaylist rows', () =>
     it('removes a row without stopping the current track', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2', name: 'two.mp3' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
 
         const wrapper = mountPanel();
         await rows(wrapper)[1]?.get('button[aria-label="Remove two.mp3 from playlist"]').trigger('click');
@@ -260,7 +223,7 @@ describe('MediaPlaylist playlist file actions', () =>
     it('renders a broken entry dimmed and unclickable, wearing the question icon', async () =>
     {
         const store = useMediaPlayerStore();
-        store.queue = queueFromTrack(brokenTrack('Ghost', '0'));
+        store.queue = queueFromTrack(brokenTrack('Ghost', '0', 'seat-1'));
 
         const wrapper = mountPanel();
         await nextTick();
@@ -273,7 +236,7 @@ describe('MediaPlaylist playlist file actions', () =>
     it('offers Save only once a playlist file is adopted, and titles the panel with its name', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         const wrapper = mountPanel();
         expect(wrapper.get('button[aria-label="Save playlist"]').attributes('disabled')).toBeDefined();
@@ -288,7 +251,7 @@ describe('MediaPlaylist playlist file actions', () =>
     it('Save As sends the typed name and optional title to the store', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         const saveAs = vi.spyOn(store, 'savePlaylistAs').mockResolvedValue(undefined);
 
         const wrapper = mountPanel();
@@ -307,7 +270,7 @@ describe('MediaPlaylist playlist file actions', () =>
     it('titles the panel with the playlist\'s display title over its file name', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         store.playlistNode = fileNode({ id: 'pl', name: 'road-trip.m3u8' });
         store.playlistTitle = 'Road Trip 2026';
 
@@ -321,7 +284,7 @@ describe('MediaPlaylist playlist file actions', () =>
     it('edits the title inline, Docs-style, committing through the store', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         store.playlistNode = fileNode({ id: 'pl', name: 'road-trip.m3u8' });
         store.playlistTitle = 'Road Trip 2026';
         const retitle = vi.spyOn(store, 'retitlePlaylist').mockResolvedValue(undefined);
@@ -359,7 +322,7 @@ describe('MediaPlaylist playlist file actions', () =>
     it('asks open-or-append when a queue is already playing, and appends on request', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
         const openSpy = vi.spyOn(store, 'openPlaylistNode').mockResolvedValue({ resolved: 1, broken: 0 });
 
         const wrapper = mountPanel();
@@ -386,7 +349,7 @@ describe('MediaPlaylist add flow', () =>
     it('opens the picker modal constrained to media, and every pick appends while it stays open', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         const wrapper = mountPanel();
         await addButton(wrapper).trigger('click');
@@ -398,7 +361,7 @@ describe('MediaPlaylist add flow', () =>
         const picker = wrapper.getComponent(FilePickerStub);
         expect(picker.props('accept')).toEqual([ 'audio/*', 'video/*' ]);
 
-        picker.vm.$emit('select', fileNode({ id: 'a2', name: 'two.mp3' }));
+        picker.vm.$emit('select', fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }));
         picker.vm.$emit('select', fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' }));
         await nextTick();
 
@@ -409,8 +372,8 @@ describe('MediaPlaylist add flow', () =>
     it('shows the picker which rows are queued and keeps a running count in the caption', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
-        store.add(fileNode({ id: 'a2' }));
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
+        store.add(fileNode({ ...AUDIO, id: 'a2' }));
 
         const wrapper = mountPanel();
         await addButton(wrapper).trigger('click');
@@ -423,9 +386,9 @@ describe('MediaPlaylist add flow', () =>
 
     it('queues a whole folder from Add-all and reports what it added in the caption', async () =>
     {
-        getChildrenMock.mockResolvedValue({
+        listChildrenMock.mockResolvedValue({
             nodes: [
-                fileNode({ id: 'a2', name: 'two.mp3' }),
+                fileNode({ ...AUDIO, id: 'a2', name: 'two.mp3' }),
                 fileNode({ id: 'v1', name: 'clip.mp4', mimeType: 'video/mp4' }),
             ],
             total: 2,
@@ -435,7 +398,7 @@ describe('MediaPlaylist add flow', () =>
         });
 
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         const wrapper = mountPanel();
         await addButton(wrapper).trigger('click');
@@ -452,7 +415,7 @@ describe('MediaPlaylist add flow', () =>
     it('closes the picker on Done without touching the queue', async () =>
     {
         const store = useMediaPlayerStore();
-        store.open(fileNode({ id: 'a1' }), 'audio');
+        store.open(fileNode({ ...AUDIO, id: 'a1' }), 'audio');
 
         const wrapper = mountPanel();
         await addButton(wrapper).trigger('click');

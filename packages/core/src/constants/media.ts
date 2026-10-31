@@ -10,7 +10,7 @@ export const MEDIA_FOLDER_ADD_MAX_DEPTH = 8;
 
 export const PLAYLIST_EXTENSIONS = [ '.m3u', '.m3u8' ] as const;
 export const PLAYLIST_MIME_LIST = [ 'audio/x-mpegurl', 'audio/mpegurl', 'application/vnd.apple.mpegurl' ] as const;
-export const PLAYLIST_MIME_TYPES = new Set<string>(PLAYLIST_MIME_LIST);
+export const playlistMimeTypes = new Set<string>(PLAYLIST_MIME_LIST);
 
 export const PLAYLIST_SAVE_MIME = 'audio/x-mpegurl';
 
@@ -26,17 +26,5 @@ export const MEDIA_TAG_MAX_LENGTH = 512;
 // into a `blob:` URL -- which has no HTTP response, so no response header can ever cover what it is treated as. Every
 // entry here is a raster format a browser renders in an <img> and nothing else.
 export const ARTWORK_MIME_TYPES = [ 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp' ] as const;
-
-// A playlist by declared type or by extension -- browsers and servers disagree on m3u mimes often enough that the
-// name is the more reliable witness. Beside familyOfMimeType because it plays the same classifying role: the drive's
-// presentation and the client's open-intent registry both key off it.
-export function isPlaylistFile(mimeType : string, name : string) : boolean
-{
-    if(PLAYLIST_MIME_TYPES.has(mimeType)) { return true; }
-
-    const lower = name.toLowerCase();
-
-    return PLAYLIST_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
 
 //----------------------------------------------------------------------------------------------------------------------

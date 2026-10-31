@@ -1,12 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Location Engine
 //
-// Turns a search hit's location into the line a result row draws, and decides whether "go to containing folder" is
-// even offered.
-//
-// The anchor is the same one the drive puts at the head of its breadcrumb: a foreign chain roots under Shared with me,
-// an own-tree chain under the caller's files root. A chain too long for a row keeps its anchor and the folders nearest
-// the file -- those say where the file lives -- and drops the middle to an ellipsis. Pure, no I/O.
+// The anchor matches the head of the drive's breadcrumb. A chain too long for a row keeps its anchor and the folders
+// nearest the file, since those say where it lives, and collapses the middle to an ellipsis.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { MAX_LOCATION_SEGMENTS, type NodeLocation } from '@fileshed/core';

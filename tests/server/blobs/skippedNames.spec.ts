@@ -7,19 +7,20 @@
 // that carries none.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ClaimResponse } from '@fileshed/core';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     answerChallenge,
     bootBlobApp,
+    buildAnswer,
     claim,
-    computeAnswer,
     fileNodesForBlob,
     makeUser,
     putUpload,
@@ -27,14 +28,7 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
+let booted : BootedStoreApp;
 
 // Above SMALL_FILE_THRESHOLD_BYTES, so a second claim on the same hash is worth a proof-of-possession round trip
 // rather than another upload -- which is the only way to reach the deduped commit.
@@ -158,7 +152,7 @@ describe('a deduped commit naming a skipped file', () =>
             .then((res) => res.json()) as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a challenge'); }
 
-        const answer = computeAnswer(challenge.nonce, challenge.ranges, data);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, data);
         const res = await answerChallenge(booted.app, claimant.cookie, challenge.challengeID, answer, {
             name: 'Thumbs.db',
             parentID: null,

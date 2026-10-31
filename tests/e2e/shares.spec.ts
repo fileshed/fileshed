@@ -33,7 +33,7 @@ import type {
 
 // Support
 import {
-    ApiClient,
+    APIClient,
     type ServerHandle,
     blobFileExists,
     sha256Of,
@@ -51,9 +51,9 @@ const contribFile = smallFixture('shares-grantee-contrib');
 
 let server : ServerHandle;
 
-let owner : ApiClient;
-let grantee : ApiClient;
-let stranger : ApiClient;
+let owner : APIClient;
+let grantee : APIClient;
+let stranger : APIClient;
 let ownerID : string;
 let granteeID : string;
 let strangerID : string;
@@ -80,13 +80,13 @@ let accessRequestStatus : number;
 let ownerIncoming : AccessRequestListResponse;
 let ownerIncomingStatus : number;
 
-async function callerID(client : ApiClient) : Promise<string>
+async function callerID(client : APIClient) : Promise<string>
 {
     const me = await (await client.get('/api/me')).json() as MeResponse;
     return me.id;
 }
 
-async function quotaUsed(client : ApiClient) : Promise<number>
+async function quotaUsed(client : APIClient) : Promise<number>
 {
     const me = await (await client.get('/api/me')).json() as MeResponse;
     return me.quota.used;
@@ -95,7 +95,7 @@ async function quotaUsed(client : ApiClient) : Promise<number>
 // Claim -> ticket -> PUT, returning the committed file node. Both fixtures are small (< 1 MiB), so the claim always
 // answers with a ticket rather than a proof challenge.
 async function upload(
-    client : ApiClient,
+    client : APIClient,
     parentID : string | null,
     name : string,
     bytes : Buffer
@@ -123,9 +123,9 @@ beforeAll(async () =>
 {
     server = await spawnServer();
 
-    owner = new ApiClient(server.baseURL);
-    grantee = new ApiClient(server.baseURL);
-    stranger = new ApiClient(server.baseURL);
+    owner = new APIClient(server.baseURL);
+    grantee = new APIClient(server.baseURL);
+    stranger = new APIClient(server.baseURL);
     await owner.signUp('owner@example.com', PASSWORD);
     await grantee.signUp('grantee@example.com', PASSWORD);
     await stranger.signUp('stranger@example.com', PASSWORD);
@@ -364,7 +364,7 @@ describe('access request lifecycle', () =>
 
         expect(grantRes.status).toBe(200);
         expect(resolved.status).toBe('granted');
-        expect(resolved.resolvedAt).not.toBeNull();
+        expect(resolved.resolved).not.toBeNull();
 
         const readRes = await stranger.get(`/api/nodes/${ folderID }`);
         const node = await readRes.json() as NodeResponse;
@@ -429,7 +429,7 @@ describe('declining an access request', () =>
 {
     it('resolves without access, and permits a fresh request afterward', async () =>
     {
-        const seeker = new ApiClient(server.baseURL);
+        const seeker = new APIClient(server.baseURL);
         await seeker.signUp('seeker@example.com', PASSWORD);
 
         const requestRes = await seeker.post(`/api/nodes/${ folderID }/access-requests`, { requestedRole: 'viewer' });
@@ -443,7 +443,7 @@ describe('declining an access request', () =>
         const declined = await declineRes.json() as AccessRequestResponse;
         expect(declineRes.status).toBe(200);
         expect(declined.status).toBe('declined');
-        expect(declined.resolvedAt).not.toBeNull();
+        expect(declined.resolved).not.toBeNull();
 
         // A decline grants nothing: the requester still reads the node as absent.
         expect((await seeker.get(`/api/nodes/${ folderID }`)).status).toBe(404);
@@ -530,8 +530,8 @@ describe('save a copy', () =>
 {
     it('copies a shared file into a node the viewer owns, charged to the viewer, sharing the blob', async () =>
     {
-        const copyOwner = new ApiClient(server.baseURL);
-        const copyViewer = new ApiClient(server.baseURL);
+        const copyOwner = new APIClient(server.baseURL);
+        const copyViewer = new APIClient(server.baseURL);
         await copyOwner.signUp('copy-owner@example.com', PASSWORD);
         await copyViewer.signUp('copy-viewer@example.com', PASSWORD);
         const copyOwnerID = await callerID(copyOwner);

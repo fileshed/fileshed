@@ -22,6 +22,7 @@ import {
     type DeleteNodeQuery,
     type EmptyTrashResponse,
     type LinkTarget,
+    type ListingQuery,
     type MoveRequest,
     type NodeListResponse,
     type NodeResponse,
@@ -149,7 +150,7 @@ export const typeFamiliesParam = z.string()
     })
     .pipe(z.array(z.enum(nodeTypeFamilies)));
 
-export const childrenQueryCodec = z.strictObject({
+const listingQueryShape = {
     limit: z.coerce.number()
         .int()
         .min(1)
@@ -162,10 +163,18 @@ export const childrenQueryCodec = z.strictObject({
     sortKey: z.enum(nodeSortKeys).default('name'),
     sortDirection: z.enum(sortDirections).default('asc'),
     types: typeFamiliesParam,
-    ownerID: z.string().optional(),
-    name: nodeNameCodec.optional(),
     updatedAfter: z.iso.datetime().optional(),
     updatedBefore: z.iso.datetime().optional(),
+};
+
+export const listingQueryCodec = z.strictObject(listingQueryShape);
+
+typeAssert<Equals<z.output<typeof listingQueryCodec>, ListingQuery>>();
+
+export const childrenQueryCodec = z.strictObject({
+    ...listingQueryShape,
+    ownerID: z.string().optional(),
+    name: nodeNameCodec.optional(),
 });
 
 typeAssert<Equals<z.output<typeof childrenQueryCodec>, ChildrenQuery>>();
@@ -190,7 +199,7 @@ export const nodeSharingCodec = z.strictObject({
     granteeCount: z.number()
         .int()
         .nonnegative(),
-    linkUrl: z.string().nullable(),
+    linkURL: z.string().nullable(),
 });
 
 typeAssert<Equals<z.output<typeof nodeSharingCodec>, NodeSharing>>();
@@ -200,8 +209,8 @@ const nodeResponseBaseShape = {
     name: z.string(),
     ownerID: z.string(),
     parentID: z.string().nullable(),
-    createdAt: isoDateTimeCodec,
-    updatedAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
+    updated: isoDateTimeCodec,
     role: roleCodec,
     sharing: nodeSharingCodec.nullable(),
 };
@@ -212,13 +221,13 @@ const fileNodeResponseCodec = z.strictObject({
     blobID: z.string(),
     size: z.number(),
     mimeType: z.string(),
-    trashedAt: isoDateTimeCodec.nullable(),
+    trashed: isoDateTimeCodec.nullable(),
 });
 
 const folderNodeResponseCodec = z.strictObject({
     ...nodeResponseBaseShape,
     type: z.literal('folder'),
-    trashedAt: isoDateTimeCodec.nullable(),
+    trashed: isoDateTimeCodec.nullable(),
 });
 
 const linkNodeResponseCodec = z.strictObject({
@@ -298,8 +307,8 @@ export function toNodeResponse(
         name: node.name,
         ownerID: node.ownerID,
         parentID: node.parentID,
-        createdAt: node.createdAt.toISOString(),
-        updatedAt: node.updatedAt.toISOString(),
+        created: node.created.toISOString(),
+        updated: node.updated.toISOString(),
         role,
         sharing,
     };
@@ -313,14 +322,14 @@ export function toNodeResponse(
                 blobID: node.blobID,
                 size: node.size,
                 mimeType: node.mimeType,
-                trashedAt: node.trashedAt === null ? null : node.trashedAt.toISOString(),
+                trashed: node.trashed === null ? null : node.trashed.toISOString(),
             };
 
         case 'folder':
             return {
                 ...base,
                 type: 'folder',
-                trashedAt: node.trashedAt === null ? null : node.trashedAt.toISOString(),
+                trashed: node.trashed === null ? null : node.trashed.toISOString(),
             };
 
         case 'link':

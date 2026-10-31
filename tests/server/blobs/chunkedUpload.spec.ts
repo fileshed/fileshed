@@ -7,7 +7,7 @@
 // corrupting the file; and the assembled bytes face exactly the integrity check a single-stream upload faces.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { readdir, rm, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -23,11 +23,12 @@ import {
 } from '@fileshed/core';
 
 // Managers
-import { runPartialsOnce } from '@server/managers/partials.ts';
+import { runStagedUploadsOnce } from '@server/managers/stagedUploads.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
     blobRowCount,
@@ -45,14 +46,7 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
+let booted : BootedStoreApp;
 
 // A ticket for content the store has never seen, which is what an unknown blob's claim always answers with.
 async function ticketResponseFor(user : TestUser, data : Buffer) : Promise<{ ticket : string; chunkBytes : number }>
@@ -632,7 +626,7 @@ describe('chunked upload', () =>
 
     // Two passes rather than one, because an upload mid-delivery and an abandoned one cannot be staged side by side
     // here -- the first has to finish before the second can start. A pass over a mixed staging directory is proven
-    // against the reaper directly, in the partials spec.
+    // against the reaper directly, in the staged-upload spec.
     it('spares an upload that just delivered a chunk, and reclaims one nobody came back to', async () =>
     {
         const user = await makeUser(booted, 'reaper@example.com');
@@ -643,7 +637,7 @@ describe('chunked upload', () =>
         await putChunk(booted.app, user.cookie, ticket, data.subarray(0, 1000), 0);
 
         // A sweep over the real window leaves an upload that just delivered a chunk untouched, and the upload finishes.
-        expect(await runPartialsOnce({ blob: booted.blob, ttlMs: TICKET_TTL_MS }))
+        expect(await runStagedUploadsOnce({ blob: booted.blob, ttlMs: TICKET_TTL_MS }))
             .toMatchObject({ candidates: 0, reclaimed: 0 });
         expect(await partials()).toHaveLength(1);
 
@@ -660,7 +654,7 @@ describe('chunked upload', () =>
         const staged = await partials();
         await Promise.all(staged.map((name) => utimes(join(booted.storageRoot, '.partials', name), aged, aged)));
 
-        expect(await runPartialsOnce({ blob: booted.blob, ttlMs: TICKET_TTL_MS }))
+        expect(await runStagedUploadsOnce({ blob: booted.blob, ttlMs: TICKET_TTL_MS }))
             .toMatchObject({ candidates: 1, reclaimed: 1, bytesFreed: 1000 });
         expect(await partials()).toEqual([]);
     });

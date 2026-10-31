@@ -10,7 +10,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Resource Access
-import { ApiError, ConflictApiError, RegulationApiError } from '@client/resource-access/apiError.ts';
+import { APIError, ConflictAPIError, RegulationAPIError } from '@client/resource-access/apiError.ts';
+import { SESSION_LOST_EVENT } from '@client/resource-access/request.ts';
 import { uploadWithProgress } from '@client/resource-access/uploadWithProgress.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -69,22 +70,22 @@ class FakeXHR
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const NODE_JSON = {
+const nodeJSON = {
     id: 'n1',
     name: 'f.txt',
     ownerID: 'u1',
     parentID: 'p1',
-    createdAt: '2026-07-01T00:00:00.000Z',
-    updatedAt: '2026-07-01T00:00:00.000Z',
+    created: '2026-07-01T00:00:00.000Z',
+    updated: '2026-07-01T00:00:00.000Z',
     role: 'owner',
     type: 'file',
     blobID: 'b1',
     size: 10,
     mimeType: 'text/plain',
-    trashedAt: null,
+    trashed: null,
 
     // A node fresh off an upload has nothing granted and nothing published.
-    sharing: { granteeCount: 0, linkUrl: null },
+    sharing: { granteeCount: 0, linkURL: null },
 };
 
 function lastRequest() : FakeXHR
@@ -125,7 +126,7 @@ describe('uploadWithProgress', () =>
         expect(xhr.withCredentials).toBe(true);
         expect(xhr.headers['content-type']).toBe('application/octet-stream');
 
-        xhr.complete(200, JSON.stringify(NODE_JSON));
+        xhr.complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 
@@ -139,7 +140,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest())).toEqual({ name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' });
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 
@@ -153,7 +154,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest())).toEqual({ replaceNodeID: 'n9', mimeType: 'image/png' });
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 
@@ -168,7 +169,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest()).offset).toBe('8192');
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await chunked;
 
         const whole = uploadWithProgress({
@@ -179,7 +180,7 @@ describe('uploadWithProgress', () =>
 
         expect(queryOf(lastRequest())).not.toHaveProperty('offset');
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await whole;
     });
 
@@ -191,7 +192,7 @@ describe('uploadWithProgress', () =>
             commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
         });
 
-        lastRequest().complete(201, JSON.stringify(NODE_JSON));
+        lastRequest().complete(201, JSON.stringify(nodeJSON));
 
         const outcome = await promise;
         expect(outcome.committed).toBe(true);
@@ -228,7 +229,7 @@ describe('uploadWithProgress', () =>
         await expect(promise).rejects.toBeInstanceOf(Error);
     });
 
-    it('maps a non-2xx { error } body to an ApiError with the status and message', async () =>
+    it('maps a non-2xx { error } body to an APIError with the status and message', async () =>
     {
         const promise = uploadWithProgress({
             ticket: 'TKT',
@@ -239,7 +240,26 @@ describe('uploadWithProgress', () =>
         lastRequest().complete(413, JSON.stringify({ error: 'That file is too large.' }));
 
         await expect(promise).rejects.toMatchObject({ status: 413, message: 'That file is too large.' });
-        await expect(promise).rejects.toBeInstanceOf(ApiError);
+        await expect(promise).rejects.toBeInstanceOf(APIError);
+    });
+
+    // An upload rides the same session as every other request, so its 401 has to send the reader to sign-in too.
+    it('announces a dead session on a 401 and still rejects with the APIError', async () =>
+    {
+        const lost = vi.fn();
+        window.addEventListener(SESSION_LOST_EVENT, lost);
+
+        const promise = uploadWithProgress({
+            ticket: 'TKT',
+            body: new Blob([ 'x' ]),
+            commit: { name: 'f.txt', parentID: 'p1', mimeType: 'text/plain' },
+        });
+
+        lastRequest().complete(401, JSON.stringify({ error: 'No session.' }));
+
+        await expect(promise).rejects.toMatchObject({ status: 401, message: 'No session.' });
+        expect(lost).toHaveBeenCalledTimes(1);
+        window.removeEventListener(SESSION_LOST_EVENT, lost);
     });
 
     // A size refusal names the ceiling it measured against. The transport keeps the parsed body on the error so a
@@ -255,10 +275,10 @@ describe('uploadWithProgress', () =>
         lastRequest().complete(413, JSON.stringify({ error: 'That file is too large.', maxBytes: 5_368_709_120 }));
 
         const error = await promise.catch((caught : unknown) => caught);
-        expect((error as ApiError).body).toMatchObject({ maxBytes: 5_368_709_120 });
+        expect((error as APIError).body).toMatchObject({ maxBytes: 5_368_709_120 });
     });
 
-    it('maps a regulation rejection to a RegulationApiError carrying the codes', async () =>
+    it('maps a regulation rejection to a RegulationAPIError carrying the codes', async () =>
     {
         const promise = uploadWithProgress({
             ticket: 'TKT',
@@ -272,12 +292,12 @@ describe('uploadWithProgress', () =>
         );
 
         const error = await promise.catch((caught : unknown) => caught);
-        expect(error).toBeInstanceOf(RegulationApiError);
-        expect((error as RegulationApiError).codes()).toEqual([ 'quota.exceeded' ]);
+        expect(error).toBeInstanceOf(RegulationAPIError);
+        expect((error as RegulationAPIError).codes()).toEqual([ 'quota.exceeded' ]);
     });
 
     // A 409 says two writes collided; only its code says which collision, and the caller's next move differs by it.
-    it('maps a conflict to a ConflictApiError carrying the code', async () =>
+    it('maps a conflict to a ConflictAPIError carrying the code', async () =>
     {
         const promise = uploadWithProgress({
             ticket: 'TKT',
@@ -291,8 +311,8 @@ describe('uploadWithProgress', () =>
         );
 
         const error = await promise.catch((caught : unknown) => caught);
-        expect(error).toBeInstanceOf(ConflictApiError);
-        expect((error as ConflictApiError).code).toBe('upload.chunkInFlight');
+        expect(error).toBeInstanceOf(ConflictAPIError);
+        expect((error as ConflictAPIError).code).toBe('upload.chunkInFlight');
     });
 
     // An offset conflict carries where the upload actually stands, which is the byte a client cuts its next chunk at.
@@ -315,8 +335,8 @@ describe('uploadWithProgress', () =>
         );
 
         const error = await promise.catch((caught : unknown) => caught);
-        expect(error).toBeInstanceOf(ConflictApiError);
-        expect((error as ConflictApiError).receivedBytes).toBe(8192);
+        expect(error).toBeInstanceOf(ConflictAPIError);
+        expect((error as ConflictAPIError).receivedBytes).toBe(8192);
     });
 
     // A conflict that names no position leaves one absent rather than invented -- a client must be able to tell "the
@@ -332,7 +352,7 @@ describe('uploadWithProgress', () =>
         lastRequest().complete(409, JSON.stringify({ error: 'Still receiving.', code: 'upload.chunkInFlight' }));
 
         const error = await promise.catch((caught : unknown) => caught);
-        expect((error as ConflictApiError).receivedBytes).toBeNull();
+        expect((error as ConflictAPIError).receivedBytes).toBeNull();
     });
 
     // The next chunk is cut at exactly this byte, so a fractional or negative count is not a position at all. Taking
@@ -357,12 +377,12 @@ describe('uploadWithProgress', () =>
         );
 
         const error = await promise.catch((caught : unknown) => caught);
-        expect((error as ConflictApiError).receivedBytes).toBeNull();
+        expect((error as ConflictAPIError).receivedBytes).toBeNull();
     });
 
     // Other surfaces put a `code` in their error bodies too (better-auth names its failures that way), so the upgrade
     // is a conflict's alone -- a caller must not be handed a conflict code by a status that never meant one.
-    it('leaves a code on a status that is not a conflict as a plain ApiError', async () =>
+    it('leaves a code on a status that is not a conflict as a plain APIError', async () =>
     {
         const promise = uploadWithProgress({
             ticket: 'TKT',
@@ -373,8 +393,8 @@ describe('uploadWithProgress', () =>
         lastRequest().complete(401, JSON.stringify({ error: 'No session.', code: 'SESSION_EXPIRED' }));
 
         const error = await promise.catch((caught : unknown) => caught);
-        expect(error).toBeInstanceOf(ApiError);
-        expect(error).not.toBeInstanceOf(ConflictApiError);
+        expect(error).toBeInstanceOf(APIError);
+        expect(error).not.toBeInstanceOf(ConflictAPIError);
     });
 
     it('reports upload progress as bytes sent of total', async () =>
@@ -390,7 +410,7 @@ describe('uploadWithProgress', () =>
         lastRequest().emitProgress(40, 100);
         expect(onProgress).toHaveBeenLastCalledWith({ sentBytes: 40, totalBytes: 100 });
 
-        lastRequest().complete(200, JSON.stringify(NODE_JSON));
+        lastRequest().complete(200, JSON.stringify(nodeJSON));
         await promise;
     });
 
@@ -422,7 +442,7 @@ describe('uploadWithProgress', () =>
         expect(FakeXHR.last).toBeNull();
     });
 
-    it('rejects with an ApiError when the transport itself fails', async () =>
+    it('rejects with an APIError when the transport itself fails', async () =>
     {
         const promise = uploadWithProgress({
             ticket: 'TKT',
@@ -432,7 +452,7 @@ describe('uploadWithProgress', () =>
 
         lastRequest().fail();
 
-        await expect(promise).rejects.toBeInstanceOf(ApiError);
+        await expect(promise).rejects.toBeInstanceOf(APIError);
     });
 });
 

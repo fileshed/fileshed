@@ -1,72 +1,15 @@
 //----------------------------------------------------------------------------------------------------------------------
 // User Lookup Spec Support
-//
-// Boots the exact-email lookup surface the way app.ts wires it: real auth, a real in-memory database + migrations, and
-// the user route over a real UserManager/UserRA. No blob backend or node routes -- the lookup touches only the user
-// table. onError uses the production mapManagerError, so specs drive the flow with app.request and real session
-// cookies. Zero mocks.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 
-// Resource Access
-import { type Auth, authOptions, createAuth } from '@server/resource-access/auth.ts';
-import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { initialize } from '@server/resource-access/boot.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
-
-// Managers
-import { SessionManager } from '@server/managers/session.ts';
-import { UserManager } from '@server/managers/user.ts';
-import { mapManagerError } from '@server/managers/errors.ts';
-
-// Routes
-import { createUserRoutes } from '@server/routes/users.ts';
-
-// Auth support (real sign-up / sign-in over the same app)
-import { ORIGIN, TEST_AUTH_SECRET, cookieFrom, signIn, signUp, testConfig } from '../auth/support.ts';
-import { openTestDatabase } from '../support/database.ts';
+// Support
+import { ORIGIN, cookieFrom, signIn, signUp } from '../auth/support.ts';
+import type { BootedStoreApp } from '../support/storeApp.ts';
 
 export { ORIGIN } from '../auth/support.ts';
-
-//----------------------------------------------------------------------------------------------------------------------
-
-export interface BootedUserApp
-{
-    app : Hono;
-    handle : DatabaseHandle;
-    auth : Auth;
-    cleanup : () => Promise<void>;
-}
-
-export async function bootUserApp() : Promise<BootedUserApp>
-{
-    const { config, handle, dispose } = await openTestDatabase(testConfig());
-    await initialize(handle, authOptions(handle, config, TEST_AUTH_SECRET));
-    const auth = createAuth(handle, config, TEST_AUTH_SECRET);
-
-    const sessions = new SessionManager(auth);
-    const users = new UserManager(new UserRA(handle));
-
-    const app = new Hono();
-    app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => auth.handler(ctx.req.raw));
-    app.route('/api', createUserRoutes(sessions, users));
-
-    app.notFound((ctx) => ctx.json({ error: 'Not Found' }, 404));
-    app.onError((error, ctx) =>
-    {
-        const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
-        return ctx.json({ error: 'Internal Server Error' }, 500);
-    });
-
-    return {
-        app,
-        handle,
-        auth,
-        cleanup: dispose,
-    };
-}
+export { type BootedStoreApp, bootStoreApp } from '../support/storeApp.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Users
@@ -81,7 +24,7 @@ export interface TestUser
 }
 
 // Sign up and sign in, returning the user's id (as the FKs see it), their display name, and their session cookie.
-export async function makeUser(booted : BootedUserApp, email : string, name : string) : Promise<TestUser>
+export async function makeUser(booted : BootedStoreApp, email : string, name : string) : Promise<TestUser>
 {
     const password = 'correct-horse-battery';
     await signUp(booted.app, email, password, name);

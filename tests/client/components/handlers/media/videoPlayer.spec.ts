@@ -181,6 +181,34 @@ describe('VideoPlayer controls state machine', () =>
 
         await expect(wrapper.get('[aria-label="Toggle fullscreen"]').trigger('click')).resolves.toBeUndefined();
     });
+
+    it('takes the whole player fullscreen from the bar, and offers the way back once it is', async () =>
+    {
+        const wrapper = mountPlayer();
+        const player = wrapper.element as HTMLElement;
+        const requestFullscreen = vi.fn(() => Promise.resolve());
+        player.requestFullscreen = requestFullscreen;
+
+        await wrapper.get('[aria-label="Toggle fullscreen"]').trigger('click');
+        expect(requestFullscreen).toHaveBeenCalledTimes(1);
+
+        Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: player });
+        document.dispatchEvent(new Event('fullscreenchange'));
+        await wrapper.vm.$nextTick();
+        Reflect.deleteProperty(document, 'fullscreenElement');
+
+        expect(wrapper.get('[aria-label="Toggle fullscreen"]').attributes('data-icon')).toBe('i-lucide-minimize');
+    });
+
+    it('toggles the playlist panel from the bar, its icon following the state', async () =>
+    {
+        const wrapper = mountPlayer();
+        await wrapper.get('[aria-label="Hide playlist"]').trigger('click');
+        expect(wrapper.emitted('toggle-playlist')).toHaveLength(1);
+
+        const hidden = mountPlayer({ playlistHidden: true });
+        expect(hidden.get('[aria-label="Show playlist"]').attributes('data-icon')).toBe('i-lucide-panel-right-open');
+    });
 });
 
 //----------------------------------------------------------------------------------------------------------------------

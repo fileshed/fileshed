@@ -17,8 +17,8 @@ export const blobCodec = z.strictObject({
     size: z.number(),
     backendID: z.string(),
     storageKey: z.string(),
-    createdAt: z.date(),
-    deletedAt: z.date().nullable(),
+    created: z.date(),
+    deleted: z.date().nullable(),
 });
 
 typeAssert<Equals<z.output<typeof blobCodec>, Blob>>();

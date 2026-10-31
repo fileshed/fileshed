@@ -1,12 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // User Resource Access
 //
-// A narrow read/write surface over BetterAuth's `user` table for the columns FileShed's app layer touches outside an
-// auth round trip: the per-user byte quota, the preferences blob, and the avatar reference. The quota read exists
-// because a write charged to an owner who is NOT the acting caller -- an editor replacing content in a file shared to
-// them -- must judge quota against the OWNER's authoritative limit, which the caller's session snapshot cannot supply.
-// The preferences and avatar reads are fresh-from-row on purpose: the session cookie cache would lag a just-saved
-// value, so /api/me reads the row.
+// The quota read exists because a write charged to an owner who is NOT the acting caller -- an editor replacing content
+// in a file shared to them -- must judge quota against the OWNER's limit, which the caller's session does not carry.
 //
 // The admin listing reads here rather than through the auth plugin's own list endpoint, which matches its search
 // case-sensitively on Postgres and offers no way to ask for anything else. Only the read moved: every account
@@ -18,7 +14,7 @@
 import { type Expression, type Selectable, type SqlBool, sql } from 'kysely';
 
 // Models
-import type { AdminUserSearchField, AdminUserSortKey, UserRole, UserSummary } from '@fileshed/core';
+import type { AdminUserListQuery, AdminUserSearchField, AdminUserSortKey, UserRole, UserSummary } from '@fileshed/core';
 
 // Resource Access
 import type { DatabaseHandle, UserTable } from '../database/database.ts';
@@ -71,7 +67,7 @@ export interface AdminUserRow
     banned : boolean;
     banReason : string | null;
     banExpires : Date | null;
-    createdAt : Date;
+    created : Date;
 }
 
 export interface AdminUserListing
@@ -86,18 +82,8 @@ export interface AdminUserListing
 const userSortColumns : Record<AdminUserSortKey, 'name' | 'email' | 'createdAt'> = {
     name: 'name',
     email: 'email',
-    createdAt: 'createdAt',
+    created: 'createdAt',
 };
-
-export interface AdminUserListOptions
-{
-    limit : number;
-    offset : number;
-    search ?: string;
-    searchField : AdminUserSearchField;
-    sortBy ?: AdminUserSortKey;
-    sortDirection : 'asc' | 'desc';
-}
 
 // A substring match with BOTH sides folded: the stored value through lower(), the term in JS. SQLite's LIKE already
 // ignores ASCII case where Postgres's does not, so an unfolded match answers the same search differently depending on
@@ -128,7 +114,7 @@ function adminUserRow(row : AdminUserSelection) : AdminUserRow
         banned: row.banned === true || row.banned === 1,
         banReason: row.banReason,
         banExpires: row.banExpires === null ? null : new Date(row.banExpires),
-        createdAt: new Date(row.createdAt),
+        created: new Date(row.createdAt),
     };
 }
 
@@ -190,7 +176,7 @@ export class UserRA
     // predicate, so the count and the page can never describe different sets. The requested sort key leads, then id
     // breaks ties -- without it a page boundary landing inside a run of equal names could repeat or drop an account.
     // With no key requested the listing falls back to account age, the order the accounts arrived in.
-    async listUsers(options : AdminUserListOptions) : Promise<AdminUserListing>
+    async listUsers(options : AdminUserListQuery) : Promise<AdminUserListing>
     {
         const filter = options.search === undefined
             ? undefined
@@ -211,9 +197,9 @@ export class UserRA
         }
 
         // A direction with no key to apply it to is dropped, exactly as an unsorted listing has no direction.
-        const sort = options.sortBy === undefined
+        const sort = options.sortKey === undefined
             ? { column: 'createdAt' as const, direction: 'asc' as const }
-            : { column: userSortColumns[options.sortBy], direction: options.sortDirection };
+            : { column: userSortColumns[options.sortKey], direction: options.sortDirection };
 
         const [ rows, total ] = await Promise.all([
             page
@@ -245,7 +231,7 @@ export class UserRA
     // account carries it. Whole-email match only -- never a prefix or substring -- so the share dialog's lookup can
     // confirm a grantee without becoming an account-enumeration oracle. Builds the UserSummary the same way the owner
     // facet does (avatarImage), so the avatar URL is derived identically on both paths.
-    async findSummaryByEmail(email : string) : Promise<UserSummary | undefined>
+    async getSummaryByEmail(email : string) : Promise<UserSummary | undefined>
     {
         const normalized = email.trim().toLowerCase();
         const row = await this.#db
@@ -364,9 +350,20 @@ export class UserRA
         return stamp === null ? null : new Date(stamp);
     }
 
+    // A direct write, outside the auth plugin's admin API, for first-run setup: no admin exists yet to make that call
+    // as.
+    async setRole(userID : string, role : UserRole) : Promise<void>
+    {
+        await this.#db
+            .updateTable('user')
+            .set({ role })
+            .where('id', '=', userID)
+            .execute();
+    }
+
     // Stamp or clear the request. Cancelling is this with null, and it restores nothing else -- what the request
     // revoked stays revoked.
-    async setDeletionRequestedAt(userID : string, at : Date | null) : Promise<void>
+    async setDeletionRequested(userID : string, at : Date | null) : Promise<void>
     {
         await this.#db
             .updateTable('user')

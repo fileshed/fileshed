@@ -6,15 +6,18 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeListResponse, NodeResponse } from '@fileshed/core';
+import type { NodeListResponse } from '@fileshed/core';
 
 // Resource Access
-import { getChildren, getNode } from '@client/resource-access/nodes.ts';
-import { claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
+import { getNode, listChildren } from '@client/resource-access/nodes.ts';
 
 // Stores
+import { commitFile } from '@client/stores/commitFile.ts';
 import { useDriveStore } from '@client/stores/drive.ts';
 import { useNewItemStore } from '@client/stores/newItem.ts';
+
+// Support
+import { fileNode, folderNode } from '../../../support.ts';
 
 // Under test
 import NewDocument from '@client/components/drive/modals/newDocument.vue';
@@ -27,65 +30,23 @@ const routerPush = vi.hoisted(() => vi.fn());
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 vi.mock('@client/resource-access/nodes.ts', () => ({
-    getChildren: vi.fn(),
+    listChildren: vi.fn(),
     getNode: vi.fn(),
 }));
 
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(),
-    uploadTicket: vi.fn(),
-    answerChallenge: vi.fn(),
-}));
+vi.mock('@client/stores/commitFile.ts', () => ({ commitFile: vi.fn() }));
 
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
-const getChildrenMock = getChildren as unknown as Mock;
+const listChildrenMock = listChildren as unknown as Mock;
 const getNodeMock = getNode as unknown as Mock;
-const claimBlobMock = claimBlob as unknown as Mock;
-const uploadTicketMock = uploadTicket as unknown as Mock;
+const commitMock = commitFile as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-const ISO = '2026-07-01T00:00:00.000Z';
 
 function emptyPage() : NodeListResponse
 {
     return { nodes: [], total: 0, limit: 50, offset: 0, owners: [] };
-}
-
-function fileNode(id : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name: id,
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 0,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
-
-function folderNode(id : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name: id,
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'folder',
-        trashedAt: null,
-    };
 }
 
 // NameDialog is the presentational primitive the modal wraps; this stub surfaces its title, prefill, and open flag, and
@@ -122,10 +83,9 @@ describe('NewDocument modal', () =>
     {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        getChildrenMock.mockResolvedValue(emptyPage());
-        getNodeMock.mockResolvedValue(folderNode('parent1'));
-        claimBlobMock.mockResolvedValue({ upload: true, ticket: 'TICKET' });
-        uploadTicketMock.mockResolvedValue(fileNode('doc'));
+        listChildrenMock.mockResolvedValue(emptyPage());
+        getNodeMock.mockResolvedValue(folderNode({ id: 'parent1' }));
+        commitMock.mockResolvedValue(fileNode({ id: 'doc' }));
     });
 
     it('opens the Markdown prompt, prefilled Untitled.md, on a markdown request', async () =>
@@ -161,7 +121,7 @@ describe('NewDocument modal', () =>
         await flushPromises();
         await submit(wrapper, 'notes');
 
-        const [ , , placement ] = uploadTicketMock.mock.calls[0] ?? [];
+        const [ , placement ] = commitMock.mock.calls[0] ?? [];
         expect(placement).toEqual({ name: 'notes.md', parentID: 'parent1', mimeType: 'text/markdown' });
         expect(field(wrapper, 'data-open')).toBe('false');
     });
@@ -175,13 +135,13 @@ describe('NewDocument modal', () =>
         await flushPromises();
         await submit(wrapper, 'notes');
 
-        // The upload committed a node with id 'doc', so the modal drops the user into its editor route.
+        // The commit landed a node with id 'doc', so the modal drops the user into its editor route.
         expect(routerPush).toHaveBeenCalledWith('/file/doc');
     });
 
     it('keeps the modal open and toasts when creation fails', async () =>
     {
-        claimBlobMock.mockRejectedValue(new Error('boom'));
+        commitMock.mockRejectedValue(new Error('boom'));
         const wrapper = mountModal();
 
         useNewItemStore().requestNew('markdown');

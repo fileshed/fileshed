@@ -1,10 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Admin Branding Tab
   --
-  -- The instance's look, live: every knob edits a draft that repaints this very page through preview variables,
-  -- and nothing becomes real for anyone else until Save. No restart banner belongs here -- the whole surface
-  -- applies on the next page load by design. Identity (the instance name) is an ordinary per-field setting; the
-  -- visual knobs share the one draft/save bar.
+  -- Every knob edits a draft that repaints this page through preview variables; nothing reaches anyone else until Save.
+  -- There is no restart banner because branding applies on the next page load. The instance name is an ordinary
+  -- per-field setting outside the draft.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -96,7 +95,7 @@
                 <h2 class="text-lg font-semibold text-highlighted">
                     Custom CSS
                 </h2>
-                <CustomCssField
+                <CustomCSSField
                     :model-value="branding.draft.customCSS"
                     @update:model-value="branding.setKnob({ customCSS: $event })"
                 />
@@ -149,7 +148,7 @@
     import NeutralField from '../../components/admin/branding/neutralField.vue';
     import RadiusField from '../../components/admin/branding/radiusField.vue';
     import ModeField from '../../components/admin/branding/modeField.vue';
-    import CustomCssField from '../../components/admin/branding/customCssField.vue';
+    import CustomCSSField from '../../components/admin/branding/customCSSField.vue';
 
     // Utils
     import { useRunWithToast } from '../../utils/runWithToast.ts';

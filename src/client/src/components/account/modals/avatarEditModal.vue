@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Avatar Edit Modal
   --
-  -- Opened imperatively with no argument. A small state machine: pick a source (a FileShed file, a device file, or
-  -- remove the current photo), then crop. Both source paths land on the same crop step, whose export is always a fresh
-  -- PNG regardless of the source format. The object URL backing the crop preview is revoked on every path out (save,
-  -- back, close, or a repeated pick), so browsing never leaks one.
+  -- The object URL behind the crop preview is revoked on every way out (save, back, close, or another pick), so
+  -- browsing never leaks one.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -83,7 +81,7 @@
     import { CircleStencil, Cropper } from 'vue-advanced-cropper';
     import 'vue-advanced-cropper/dist/style.css';
 
-    import { type NodeResponse, avatarMimeTypes } from '@fileshed/core';
+    import { type NodeResponse, avatarMimeTypes, isOneOf } from '@fileshed/core';
 
     // Stores
     import { useAppStore } from '../../../stores/app.ts';
@@ -93,7 +91,7 @@
     import FilePicker from '../../drive/filePicker.vue';
 
     // Resource Access
-    import { fetchNodeBlob } from '../../../resource-access/content.ts';
+    import { getNodeBlob } from '../../../resource-access/content.ts';
 
     // Utils
     import { formatBytes } from '../../../utils/formatters/index.ts';
@@ -189,7 +187,7 @@
 
         if(file === null) { return; }
 
-        if(!(avatarMimeTypes as readonly string[]).includes(file.type))
+        if(!isOneOf(avatarMimeTypes, file.type))
         {
             toast.add({
                 title: 'Unsupported image',
@@ -210,7 +208,7 @@
     {
         void runMutation(async () =>
         {
-            const blob = await fetchNodeBlob(node.id);
+            const blob = await getNodeBlob(node.id);
             const type = node.type === 'file' ? node.mimeType : blob.type;
             setSource(new File([ blob ], node.name, { type }));
         }, pending);

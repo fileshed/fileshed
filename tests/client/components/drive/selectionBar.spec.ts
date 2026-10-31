@@ -20,7 +20,7 @@ interface MenuItem
 
 // The kebab renders its items as buttons so a menu action is inspectable and clickable, exactly as the real dropdown
 // would invoke each item's onSelect.
-const STUBS = {
+const stubs = {
     UTooltip: { template: '<div><slot /></div>' },
     UButton: { props: [ 'label' ], template: '<button class="ubtn">{{ label }}</button>' },
     UIcon: true,
@@ -47,7 +47,7 @@ const FULL_CAPS = {
 
 function mountBar(overrides : Partial<typeof FULL_CAPS> = {}) : VueWrapper
 {
-    return mount(SelectionBar, { props: { ...FULL_CAPS, ...overrides }, global: { stubs: STUBS } });
+    return mount(SelectionBar, { props: { ...FULL_CAPS, ...overrides }, global: { stubs } });
 }
 
 // Both the overflow menu and the Download menu render through the same stub, so each is reached by the identity the

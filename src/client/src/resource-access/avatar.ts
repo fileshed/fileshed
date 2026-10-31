@@ -1,15 +1,13 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Avatar Resource Access
 //
-// The typed client for the avatar routes. Upload POSTs the raw image bytes (the file's own type as Content-Type) and
-// answers the refreshed MeResponse the session store adopts; remove is a bodiless DELETE, after which the store
-// refetches the profile. No progress reporting -- an avatar is at most a couple of MiB, so a plain fetch body is fine.
+// No upload progress: an avatar is at most a couple of MiB, so a plain fetch body is enough.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type MeResponse, meResponseCodec } from '@fileshed/core';
 
 // Resource Access
-import { requestUpload, requestVoid } from './request.ts';
+import { requestJSON, requestUpload } from './request.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -23,9 +21,9 @@ export async function uploadAvatar(file : File) : Promise<MeResponse>
     });
 }
 
-export async function deleteAvatar() : Promise<void>
+export async function deleteAvatar() : Promise<MeResponse>
 {
-    return requestVoid('/api/me/avatar', { method: 'DELETE' });
+    return requestJSON('/api/me/avatar', { method: 'DELETE', codec: meResponseCodec });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

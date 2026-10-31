@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- New Folder Modal
-  --
-  -- The New folder prompt, self-subscribed to the sidebar's create signal: a 'folder' request opens the name prompt and
-  -- creates in the folder that is open when it lands. Stays open until the create resolves, so a rejection can toast
-  -- without the dialog vanishing under it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

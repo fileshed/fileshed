@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Top Bar
-  --
-  -- The header shared by the drive-chrome layouts: the file search box and the user menu. Both are self-contained
-  -- pieces, so the shell mounts this without wiring anything through. The #leading slot is where the shell hangs its
-  -- narrow-viewport navigation trigger.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

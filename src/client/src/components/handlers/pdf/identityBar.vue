@@ -1,10 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Identity Bar
-  --
-  -- The PDF annotator's contribution to the editor layout header: the file name and what it exposes, a save-state
-  -- readout, and Save (a Read only badge in its place for a viewer). It reads and drives the annotator store. The find
-  -- box, annotation tools, page, zoom, and overflow controls -- which aren't identity -- stay on the toolbar row above
-  -- the render surface.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -19,7 +14,7 @@
             <SaveIndicator
                 :saving="store.saving"
                 :dirty="store.dirty"
-                :last-saved-at="store.lastSavedAt"
+                :last-saved="store.lastSaved"
                 :save-error="store.saveError"
             />
 
@@ -44,7 +39,7 @@
     import { computed } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Components
     import DownloadAction from '../downloadAction.vue';
@@ -55,9 +50,9 @@
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfIdentityBar' });
+    defineOptions({ name: 'PDFIdentityBar' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
 </script>
 

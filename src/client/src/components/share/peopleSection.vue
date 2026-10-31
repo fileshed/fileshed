@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- People Section
   --
-  -- The share dialog's user-to-user grant surface: resolve an email to a real account before granting (typo safety),
-  -- then grant at a chosen role. Below, the node's current grants -- the owner (shown, never editable) plus each
-  -- grantee, rendered from the summary the shares-list response carries alongside each grant (avatar, name, email),
-  -- with an in-place role select (a re-grant at a new role, which the server upserts) and a revoke.
+  -- An email is resolved to a real account before granting, which catches typos. Changing a grantee's role is a
+  -- re-grant at the new role, which the server upserts.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -172,7 +170,7 @@
     } from '@fileshed/core';
 
     // Resource Access
-    import { ApiError } from '../../resource-access/apiError.ts';
+    import { APIError } from '../../resource-access/apiError.ts';
     import {
         declineAccessRequest,
         grantAccessRequest,
@@ -182,7 +180,7 @@
     import { lookupUser } from '../../resource-access/users.ts';
 
     // Utils
-    import { describeApiError, useRunWithToast } from '../../utils/runWithToast.ts';
+    import { describeAPIError, useRunWithToast } from '../../utils/runWithToast.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
@@ -258,13 +256,13 @@
         }
         catch(caught)
         {
-            if(caught instanceof ApiError && caught.status === 404)
+            if(caught instanceof APIError && caught.status === 404)
             {
                 lookupError.value = 'No user with that email.';
             }
             else
             {
-                toast.add({ title: 'That didn\'t work', description: describeApiError(caught), color: 'error' });
+                toast.add({ title: 'That didn\'t work', description: describeAPIError(caught), color: 'error' });
             }
         }
         finally

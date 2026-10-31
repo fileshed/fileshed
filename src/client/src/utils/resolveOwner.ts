@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Owner Resolution
 //
-// Looks a node's owner up in a listing's owners facet (the whole folder's distinct owners, not just the visible
-// page). A miss returns null rather than throwing, so a row whose owner fell out of the facet still renders --
-// callers fall back to a bare avatar keyed off the raw id.
+// The owners facet covers the whole folder's distinct owners, not just the loaded rows. A miss returns null rather than
+// throwing, so a row whose owner is missing from the facet still renders.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { NodeResponse, UserSummary } from '@fileshed/core';

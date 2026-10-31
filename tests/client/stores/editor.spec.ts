@@ -1,90 +1,48 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Editor Store
 //
-// Drives the load / edit / save / conflict pipeline with the resource-access, hashing, and proof seams mocked. Each
-// test asserts an observable outcome -- the buffer and dirty state after a load, the single save a quiet period
-// debounces to, the guard carried on the commit, the conflict state a 409 raises, or the guard dropped on an overwrite
-// -- never merely that a mock was called. Expectations come from the store's contract, not its internals.
+// Drives the load / edit / save / conflict pipeline with the node and content calls, hashing, and commitFile mocked.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 
-import type { NodeResponse, Role } from '@fileshed/core';
-
 // Resource Access
-import { ApiError } from '@client/resource-access/apiError.ts';
+import { ConflictAPIError } from '@client/resource-access/apiError.ts';
 import { getNode, patchNode } from '@client/resource-access/nodes.ts';
-import { fetchNodeText } from '@client/resource-access/content.ts';
-import { answerChallenge, claimBlob, uploadTicket } from '@client/resource-access/blobs.ts';
-
-// Engines
-import { computeProofAnswer } from '@client/engines/claim.ts';
+import { getNodeText } from '@client/resource-access/content.ts';
 
 // Utils
-import { hashFile, readSampleWindows } from '@client/utils/hashFile.ts';
+import { hashFile } from '@client/utils/hashFile.ts';
 
 // Stores
+import { commitFile } from '@client/stores/commitFile.ts';
 import { useEditorStore } from '@client/stores/editor.ts';
+
+// Support
+import { fileNode } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ getNode: vi.fn(), patchNode: vi.fn() }));
-vi.mock('@client/resource-access/content.ts', () => ({ fetchNodeText: vi.fn() }));
-vi.mock('@client/resource-access/blobs.ts', () => ({
-    claimBlob: vi.fn(),
-    uploadTicket: vi.fn(),
-    answerChallenge: vi.fn(),
-}));
-vi.mock('@client/engines/claim.ts', () => ({ computeProofAnswer: vi.fn() }));
-vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn(), readSampleWindows: vi.fn() }));
+vi.mock('@client/resource-access/content.ts', () => ({ getNodeText: vi.fn() }));
+vi.mock('@client/stores/commitFile.ts', () => ({ commitFile: vi.fn() }));
+vi.mock('@client/utils/hashFile.ts', () => ({ hashFile: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 const getNodeMock = getNode as unknown as Mock;
-const fetchTextMock = fetchNodeText as unknown as Mock;
-const claimBlobMock = claimBlob as unknown as Mock;
-const uploadTicketMock = uploadTicket as unknown as Mock;
-const answerChallengeMock = answerChallenge as unknown as Mock;
-const proofMock = computeProofAnswer as unknown as Mock;
+const getTextMock = getNodeText as unknown as Mock;
+const commitMock = commitFile as unknown as Mock;
 const hashFileMock = hashFile as unknown as Mock;
-const readWindowsMock = readSampleWindows as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function fileNode(overrides : Partial<{
-    id : string;
-    name : string;
-    role : Role;
-    blobID : string;
-    size : number;
-    mimeType : string;
-}> = {}) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: overrides.id ?? 'f1',
-        name: overrides.name ?? 'notes.txt',
-        ownerID: 'u1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: overrides.role ?? 'owner',
-        type: 'file',
-        blobID: overrides.blobID ?? 'b1',
-        size: overrides.size ?? 10,
-        mimeType: overrides.mimeType ?? 'text/plain',
-        trashedAt: null,
-    };
-}
-
-// A store loaded and ready over a file with blob 'b1' and the text 'hello'. Save defaults to a fresh-content ticket
-// commit landing a node whose blob is 'b2'; individual tests override the pieces they exercise.
+// A store loaded and ready over a file with blob 'b1' and the text 'hello'. Save defaults to a commit landing a node
+// whose blob is 'b2'; individual tests override the pieces they exercise.
 async function openReady(overrides : Parameters<typeof fileNode>[0] = {}) : Promise<ReturnType<typeof useEditorStore>>
 {
     getNodeMock.mockResolvedValue(fileNode(overrides));
-    fetchTextMock.mockResolvedValue('hello');
+    getTextMock.mockResolvedValue('hello');
 
     const store = useEditorStore();
     await store.open('f1');
@@ -96,12 +54,8 @@ beforeEach(() =>
     setActivePinia(createPinia());
     vi.clearAllMocks();
 
-    claimBlobMock.mockResolvedValue({ upload: true, ticket: 'tk' });
-    uploadTicketMock.mockResolvedValue(fileNode({ blobID: 'b2' }));
-    answerChallengeMock.mockResolvedValue(fileNode({ blobID: 'b2' }));
+    commitMock.mockResolvedValue(fileNode({ blobID: 'b2' }));
     hashFileMock.mockResolvedValue('freshsha');
-    proofMock.mockResolvedValue('proof-answer');
-    readWindowsMock.mockResolvedValue([]);
 });
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -110,6 +64,28 @@ beforeEach(() =>
 
 describe('useEditorStore.open', () =>
 {
+    it('lands nothing from an open that a later open overtook', async () =>
+    {
+        let slowText : (text : string) => void = () => undefined;
+        getNodeMock
+            .mockResolvedValueOnce(fileNode({ id: 'f1', blobID: 'b1' }))
+            .mockResolvedValueOnce(fileNode({ id: 'f2', blobID: 'c1' }));
+        getTextMock
+            .mockImplementationOnce(() => new Promise((resolve) => { slowText = resolve; }))
+            .mockResolvedValueOnce('second file');
+        const store = useEditorStore();
+
+        const first = store.open('f1');
+        await vi.waitFor(() => { expect(getTextMock).toHaveBeenCalledTimes(1); });
+        await store.open('f2');
+        slowText('first file');
+        await first;
+
+        expect(store.node?.id).toBe('f2');
+        expect(store.buffer).toBe('second file');
+        expect(store.dirty).toBe(false);
+    });
+
     it('loads a file into a ready, clean buffer an owner can edit', async () =>
     {
         const store = await openReady();
@@ -147,7 +123,7 @@ describe('useEditorStore.open', () =>
         const store = await openReady({ size: 1_474_561 });
 
         expect(store.loadState).toBe('error');
-        expect(fetchTextMock).not.toHaveBeenCalled();
+        expect(getTextMock).not.toHaveBeenCalled();
     });
 });
 
@@ -188,13 +164,12 @@ describe('useEditorStore autosave', () =>
             store.setBuffer('abc');
 
             // Nothing has fired yet: the quiet period has not elapsed.
-            expect(claimBlobMock).not.toHaveBeenCalled();
+            expect(commitMock).not.toHaveBeenCalled();
 
             await vi.advanceTimersByTimeAsync(2000);
 
             // Exactly one save for the whole burst.
-            expect(claimBlobMock).toHaveBeenCalledTimes(1);
-            expect(uploadTicketMock).toHaveBeenCalledTimes(1);
+            expect(commitMock).toHaveBeenCalledTimes(1);
         }
         finally
         {
@@ -212,7 +187,7 @@ describe('useEditorStore autosave', () =>
             store.setBuffer('a viewer somehow typed');
             await vi.advanceTimersByTimeAsync(2000);
 
-            expect(claimBlobMock).not.toHaveBeenCalled();
+            expect(commitMock).not.toHaveBeenCalled();
         }
         finally
         {
@@ -230,11 +205,11 @@ describe('useEditorStore autosave', () =>
             store.setBuffer('edited');
             await store.save();
 
-            expect(claimBlobMock).toHaveBeenCalledTimes(1);
+            expect(commitMock).toHaveBeenCalledTimes(1);
 
             // The debounce that the edit armed must have been cancelled by the explicit save.
             await vi.advanceTimersByTimeAsync(2000);
-            expect(claimBlobMock).toHaveBeenCalledTimes(1);
+            expect(commitMock).toHaveBeenCalledTimes(1);
         }
         finally
         {
@@ -257,8 +232,7 @@ describe('useEditorStore.save', () =>
         store.setBuffer('cosmetically different but same bytes to the store');
         await store.save();
 
-        expect(claimBlobMock).not.toHaveBeenCalled();
-        expect(uploadTicketMock).not.toHaveBeenCalled();
+        expect(commitMock).not.toHaveBeenCalled();
         expect(store.dirty).toBe(false);
     });
 
@@ -269,7 +243,7 @@ describe('useEditorStore.save', () =>
         store.setBuffer('new content');
         await store.save();
 
-        const commit = uploadTicketMock.mock.calls[0]?.[2];
+        const commit = commitMock.mock.calls[0]?.[1];
         expect(commit).toEqual({ replaceNodeID: 'f1', ifBlobID: 'b1' });
         expect(store.dirty).toBe(false);
     });
@@ -279,7 +253,7 @@ describe('useEditorStore.save', () =>
         const store = await openReady();
 
         hashFileMock.mockResolvedValueOnce('shaV2').mockResolvedValueOnce('shaV3');
-        uploadTicketMock
+        commitMock
             .mockResolvedValueOnce(fileNode({ blobID: 'b2' }))
             .mockResolvedValueOnce(fileNode({ blobID: 'b3' }));
 
@@ -290,24 +264,35 @@ describe('useEditorStore.save', () =>
         await store.save();
 
         // The first save pinned the loaded blob; the second pinned what the first save wrote.
-        expect(uploadTicketMock.mock.calls[0]?.[2].ifBlobID).toBe('b1');
-        expect(uploadTicketMock.mock.calls[1]?.[2].ifBlobID).toBe('b2');
+        expect(commitMock.mock.calls[0]?.[1].ifBlobID).toBe('b1');
+        expect(commitMock.mock.calls[1]?.[1].ifBlobID).toBe('b2');
     });
 
-    it('saves a known blob through the proof-of-possession path, carrying the guard', async () =>
+    // A save can still be on the wire when the reader leaves the file and opens another. Once it lands, the
+    // convergence loop must not go on to write the new file's text onto the old node.
+    it('writes nothing more onto a file the reader left while its save was in flight', async () =>
     {
         const store = await openReady();
-        claimBlobMock.mockResolvedValue({ upload: false, challengeID: 'c1', nonce: 'n1', ranges: [ [ 0, 4 ] ] });
+        let land : (node : unknown) => void = () => undefined;
+        commitMock.mockImplementationOnce(() => new Promise((resolve) => { land = resolve; }));
 
-        store.setBuffer('known content');
-        await store.save();
+        store.setBuffer('old file edit');
+        const saving = store.save();
+        await vi.waitFor(() => { expect(commitMock).toHaveBeenCalledTimes(1); });
 
-        expect(uploadTicketMock).not.toHaveBeenCalled();
-        expect(answerChallengeMock).toHaveBeenCalledWith('c1', {
-            answer: 'proof-answer',
-            replaceNodeID: 'f1',
-            ifBlobID: 'b1',
-        });
+        store.reset();
+        getNodeMock.mockResolvedValue(fileNode({ id: 'f2', blobID: 'c1' }));
+        getTextMock.mockResolvedValue('other file');
+        await store.open('f2');
+        store.setBuffer('other file, edited');
+
+        land(fileNode({ blobID: 'b2' }));
+        await saving;
+
+        expect(commitMock).toHaveBeenCalledTimes(1);
+        expect(store.node?.id).toBe('f2');
+        expect(store.dirty).toBe(true);
+        expect(store.saving).toBe(false);
     });
 });
 
@@ -320,7 +305,9 @@ describe('useEditorStore conflict', () =>
     it('raises the conflict state on a 409 and keeps the buffer dirty', async () =>
     {
         const store = await openReady();
-        uploadTicketMock.mockRejectedValueOnce(new ApiError(409, 'The file changed since you opened it.'));
+        commitMock.mockRejectedValueOnce(
+            new ConflictAPIError('The file changed since you opened it.', 'replace.staleBlob')
+        );
 
         store.setBuffer('my edit');
         await store.save();
@@ -333,8 +320,8 @@ describe('useEditorStore conflict', () =>
     it('overwrite retries the save without the guard and clears the conflict', async () =>
     {
         const store = await openReady();
-        uploadTicketMock
-            .mockRejectedValueOnce(new ApiError(409, 'stale'))
+        commitMock
+            .mockRejectedValueOnce(new ConflictAPIError('stale', 'replace.staleBlob'))
             .mockResolvedValueOnce(fileNode({ blobID: 'b2' }));
 
         store.setBuffer('my edit');
@@ -344,7 +331,7 @@ describe('useEditorStore conflict', () =>
         await store.overwrite();
 
         // The retry drops the ifBlobID guard entirely -- last-write-wins.
-        expect(uploadTicketMock.mock.calls[1]?.[2]).toEqual({ replaceNodeID: 'f1' });
+        expect(commitMock.mock.calls[1]?.[1]).toEqual({ replaceNodeID: 'f1' });
         expect(store.conflict).toBe(false);
         expect(store.dirty).toBe(false);
     });
@@ -352,14 +339,14 @@ describe('useEditorStore conflict', () =>
     it('reload discards local edits and restores the server content', async () =>
     {
         const store = await openReady();
-        uploadTicketMock.mockRejectedValueOnce(new ApiError(409, 'stale'));
+        commitMock.mockRejectedValueOnce(new ConflictAPIError('stale', 'replace.staleBlob'));
 
         store.setBuffer('my edit');
         await store.save();
         expect(store.conflict).toBe(true);
 
         // The server now serves different content on reload.
-        fetchTextMock.mockResolvedValue('their newer content');
+        getTextMock.mockResolvedValue('their newer content');
         await store.reload();
 
         expect(store.conflict).toBe(false);
@@ -382,29 +369,6 @@ describe('EditorStore.rename', () =>
 
         expect(store.node?.name).toBe('journal.txt');
         expect(patchNode).toHaveBeenCalledWith('f1', { name: 'journal.txt' });
-    });
-
-    it('refuses to rename a read-only session', async () =>
-    {
-        const store = useEditorStore();
-        store.node = fileNode({ name: 'notes.txt', role: 'viewer' });
-
-        await store.rename('renamed.txt');
-
-        expect(store.node?.name).toBe('notes.txt');
-        expect(patchNode).not.toHaveBeenCalled();
-    });
-
-    it('ignores blank and unchanged names', async () =>
-    {
-        const store = useEditorStore();
-        store.node = fileNode({ name: 'notes.txt' });
-
-        await store.rename('   ');
-        await store.rename('notes.txt');
-
-        expect(store.node?.name).toBe('notes.txt');
-        expect(patchNode).not.toHaveBeenCalled();
     });
 });
 

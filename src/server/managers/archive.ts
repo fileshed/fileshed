@@ -25,19 +25,20 @@ import {
     ARCHIVE_SKIPPED_MANIFEST,
     type ArchiveFormat,
     type ArchiveQuery,
+    BlobNotFoundError,
     type Node,
     NotFoundError,
-    type Role,
 } from '@fileshed/core';
 
 // Engines
 import { type ArchiveFileEntry, type ArchiveOmission, planArchive } from '../engines/archivePlan.ts';
-import { contentDisposition } from '../engines/contentDisposition.ts';
 
 // Resource Access
-import { BlobNotFoundError, type BlobRA } from '../resource-access/blob/index.ts';
-import type { SessionUser } from '../resource-access/auth.ts';
-import type { NodeRA } from '../resource-access/nodes/node.ts';
+import type { BlobRA } from '../resource-access/blob/index.ts';
+import type { SessionUser } from '../resource-access/auth/instance.ts';
+import type { DatabaseHandle } from '../resource-access/database/database.ts';
+import { NodeRA } from '../resource-access/nodes/index.ts';
+import { ShareRA } from '../resource-access/shares/index.ts';
 
 // Utils
 import { getLogger } from '../utils/logger.ts';
@@ -53,22 +54,18 @@ const FORMATS : Record<ArchiveFormat, { contentType : string; extension : string
     tgz: { contentType: 'application/gzip', extension: 'tgz' },
 };
 
-// The same shape the byte-serving routes already answer with, so an archive goes out through the one stream adapter
-// rather than a second one written for it. Always a 200: an archive has no ranges to satisfy and no etag to match.
+// An archive being written as it is read. Its size is not known until it has been built.
 export interface ArchiveResult
 {
-    status : 200;
-    headers : Record<string, string>;
+    filename : string;
+    contentType : string;
     stream : Readable;
 }
 
-export type RoleResolver = (userID : string, nodeIDs : readonly string[]) => Promise<Map<string, Role | null>>;
-
 export interface ArchiveManagerDeps
 {
-    nodes : NodeRA;
+    handle : DatabaseHandle;
     blob : BlobRA;
-    resolveRoles : RoleResolver;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -92,20 +89,20 @@ function manifestText(omissions : readonly ArchiveOmission[]) : string
 export class ArchiveManager
 {
     readonly #nodes : NodeRA;
+    readonly #shares : ShareRA;
     readonly #blob : BlobRA;
-    readonly #resolveRoles : RoleResolver;
 
     constructor(deps : ArchiveManagerDeps)
     {
-        this.#nodes = deps.nodes;
+        this.#nodes = new NodeRA(deps.handle);
+        this.#shares = new ShareRA(deps.handle);
         this.#blob = deps.blob;
-        this.#resolveRoles = deps.resolveRoles;
     }
 
     // GET /api/archives. Resolves the selection to a layout, then answers with a stream already being written into.
     // A selection that resolves to nothing at all is a 404 -- ids naming no node the caller can even see is a request
     // about somebody else's drive, not an archive of nothing.
-    async build(actor : SessionUser, query : ArchiveQuery) : Promise<ArchiveResult>
+    async build(user : SessionUser, query : ArchiveQuery) : Promise<ArchiveResult>
     {
         const nodes = await this.#nodes.subtreeNodes(query.ids);
         if(nodes.length === 0) { throw new NotFoundError('Nothing in that selection could be found.'); }
@@ -114,7 +111,7 @@ export class ArchiveManager
         // walked, and their own access is resolved alongside the walk's. The caller's reach through a link is the
         // reach they have to what it points at, never to the link.
         const targets = await this.#targetsOf(nodes);
-        const roles = await this.#resolveRoles(actor.id, [
+        const roles = await this.#shares.effectiveRoles(user.id, [
             ...nodes.map((node) => node.id),
             ...targets.keys(),
         ]);
@@ -130,14 +127,9 @@ export class ArchiveManager
         const filename = `${ this.#archiveName(query, nodes) }.${ format.extension }`;
 
         return {
-            status: 200,
-            headers: {
-                // No content-length: the size is not known until the archive has been built, which is the point of
-                // building it as it is sent.
-                'content-type': format.contentType,
-                'content-disposition': contentDisposition('attachment', filename),
-            },
-            stream: this.#stream(query.format, plan.directories, plan.files, plan.omissions, actor),
+            filename,
+            contentType: format.contentType,
+            stream: this.#stream(query.format, plan.directories, plan.files, plan.omissions, user),
         };
     }
 
@@ -180,7 +172,7 @@ export class ArchiveManager
         directories : readonly string[],
         files : readonly ArchiveFileEntry[],
         omissions : readonly ArchiveOmission[],
-        actor : SessionUser
+        user : SessionUser
     ) : Readable
     {
         // Stored rather than deflated for zip: this store holds whatever people uploaded, which is mostly already
@@ -201,7 +193,7 @@ export class ArchiveManager
             {
                 building = false;
 
-                logger.error({ err: error, userID: actor.id }, 'Archive failed mid-stream');
+                logger.error({ err: error, userID: user.id }, 'Archive failed mid-stream');
 
                 archive.abort();
                 out.destroy(error instanceof Error ? error : new Error('The archive could not be built.'));
@@ -269,7 +261,7 @@ export class ArchiveManager
 
         try
         {
-            return await this.#blob.getStream({ backendID: blob.backendID, storageKey: blob.storageKey });
+            return await this.#blob.getStream(blob);
         }
         catch(error)
         {

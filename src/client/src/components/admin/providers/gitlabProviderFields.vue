@@ -1,8 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- GitLab Provider Fields
   --
-  -- GitLab's extra knob earns its place in a self-hosting crowd: the issuer points the OAuth flow at a self-hosted
-  -- GitLab instead of gitlab.com.
+  -- The issuer points the OAuth flow at a self-hosted GitLab instead of gitlab.com.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

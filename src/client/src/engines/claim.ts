@@ -1,14 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Claim Engine
 //
-// The client-side pure logic of the blob claim protocol. Today that is a single decision: the proof-of-possession
-// answer a caller returns when the server already holds a blob and challenges the uploader to prove it actually has the
-// bytes rather than just their digest. The answer is HMAC-SHA256, keyed by the challenge nonce, over the sampled window
-// bytes concatenated in the order the challenge listed them, hex -- matching what the server computes for the same
-// challenge. Pure given its inputs: the windows are read from the file elsewhere and handed in as buffers, so this
-// computes and never touches I/O. crypto.subtle runs only over the tiny sampled windows, never the whole file, so the
-// ban on subtle.digest for content hashing does not reach it. Future claim-flow decisions that are pure client logic
-// belong here too.
+// The proof-of-possession answer must match what the server computes: HMAC-SHA256 keyed by the challenge nonce, over
+// the sampled windows concatenated in the order the challenge listed them, as hex. crypto.subtle runs only over those
+// small windows, never the whole file, so the rule against subtle.digest for content hashing doesn't apply.
 //----------------------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -35,7 +30,7 @@ function concat(windows : readonly ArrayBuffer[]) : Uint8Array<ArrayBuffer>
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export async function computeProofAnswer(nonce : string, windows : readonly ArrayBuffer[]) : Promise<string>
+export async function buildProofAnswer(nonce : string, windows : readonly ArrayBuffer[]) : Promise<string>
 {
     const key = await crypto.subtle.importKey(
         'raw',

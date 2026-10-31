@@ -1,11 +1,7 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Share Dialog
   --
-  -- The share surface for one node, opened imperatively by the drive page. Composes two self-contained sections: People
-  -- (user-to-user grants) always, and Get link (public links) for files only -- a folder carries no bytes to serve.
-  -- Each section owns its own load, pending state, and mutations; this dialog only holds visibility and the target,
-  -- hands the owner summary (the caller, since sharing is owner-only) to the People section, and relays either
-  -- section's change up under the node it happened to.
+  -- The owner summary handed to the People section is the caller's own, since only the owner can share.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

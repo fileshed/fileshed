@@ -1,17 +1,12 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Search Store
 //
-// State and orchestration behind the Search view: the caller's most recent query, its results, and the owners facet,
-// locations, and sharing they carry. The facet rides the same NodeListResponse shape a folder listing uses, so results
-// render owner attribution the identical way, scoped to the hits rather than a whole folder's. A search can never
-// surface more hits than the server's candidate cap, and the largest page it will serve is that same cap, so one
-// request answers any search in full -- there is nothing here to page. A blank query never reaches the RA -- the page
-// calls load only once it has a non-empty term -- so there is no listing-vs-no-query ambiguity to track here.
+// One request answers any search in full: a search never surfaces more hits than the server's candidate cap, and the
+// largest page the server serves is that same cap. The page calls load only with a non-empty term.
 //
-// The mutations a selection can run from here are the drive's, minus the drive: each hits the same node routes and
-// then re-runs the search, because the results are the listing that has to settle and the caller's open folder --
-// whichever it was -- is not on screen. A copy from here lands in the caller's own root rather than a current folder,
-// there being no such thing on this surface.
+// Mutations from a selection hit the same node routes as the drive and then re-run the search, because the results are
+// the listing on screen, not any folder. A copy lands in the caller's own root, since this surface has no current
+// folder.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -45,8 +40,13 @@ export const useSearchStore = defineStore('search', () =>
 
     const isEmpty = computed(() => !loading.value && error.value === null && nodes.value.length === 0);
 
+    // Two searches typed in quick succession can answer in either order, and a clear can come while one is on the
+    // wire. Only the latest read lands.
+    let generation = 0;
+
     async function load(term : string) : Promise<void>
     {
+        const token = ++generation;
         q.value = term;
         loading.value = true;
         error.value = null;
@@ -54,6 +54,8 @@ export const useSearchStore = defineStore('search', () =>
         try
         {
             const page = await search(term, { limit: MAX_SEARCH_LIMIT, offset: 0 });
+            if(token !== generation) { return; }
+
             nodes.value = page.nodes;
             owners.value = page.owners;
             locations.value = page.locations;
@@ -61,6 +63,8 @@ export const useSearchStore = defineStore('search', () =>
         }
         catch(caught)
         {
+            if(token !== generation) { return; }
+
             error.value = caught instanceof Error ? caught : new Error('Search failed.');
             nodes.value = [];
             owners.value = [];
@@ -69,7 +73,7 @@ export const useSearchStore = defineStore('search', () =>
         }
         finally
         {
-            loading.value = false;
+            if(token === generation) { loading.value = false; }
         }
     }
 
@@ -89,7 +93,7 @@ export const useSearchStore = defineStore('search', () =>
         await retry();
     }
 
-    // A dead link is removed rather than trashed: links carry no trashed_at, so removal is the only way out of a
+    // A dead link is removed rather than trashed: links carry no trashed timestamp, so removal is the only way out of a
     // listing for one.
     async function removeDeadLink(id : string) : Promise<void>
     {
@@ -103,13 +107,13 @@ export const useSearchStore = defineStore('search', () =>
     {
         await copyNode(id, { parentID: null });
         await retry();
-        await useSessionStore()
-            .refreshProfile()
-            .catch(() => undefined);
+        await useSessionStore().refreshProfile();
     }
 
     function clear() : void
     {
+        generation += 1;
+        loading.value = false;
         q.value = '';
         nodes.value = [];
         owners.value = [];

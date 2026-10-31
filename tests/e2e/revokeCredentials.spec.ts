@@ -20,31 +20,31 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CreateAccessTokenResponse } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, spawnServer, withDb } from './support.ts';
+import { APIClient, type ServerHandle, spawnServer, withDb } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const PASSWORD = 'correct-horse-battery';
 
 let server : ServerHandle;
-let caller : ApiClient;
-let bystander : ApiClient;
+let caller : APIClient;
+let bystander : APIClient;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-async function signUpAccount(email : string) : Promise<ApiClient>
+async function signUpAccount(email : string) : Promise<APIClient>
 {
-    const client = new ApiClient(server.baseURL);
+    const client = new APIClient(server.baseURL);
     const res = await client.signUp(email, PASSWORD);
     expect(res.status).toBe(200);
 
     return client;
 }
 
-async function mintToken(client : ApiClient, name : string) : Promise<string>
+async function mintToken(client : APIClient, name : string) : Promise<string>
 {
     const res = await client.post('/api/me/access-tokens', { name, scopes: [ 'account:read' ] });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
 
     return (await res.json() as CreateAccessTokenResponse).token;
 }
@@ -109,8 +109,8 @@ describe('POST /api/me/revoke-credentials', () =>
         const bystanderToken = await mintToken(bystander, 'their script');
 
         // A second device for each: a panic button that only ended the session it was clicked from would be useless.
-        await new ApiClient(server.baseURL).signIn('panic@example.com', PASSWORD);
-        await new ApiClient(server.baseURL).signIn('bystander@example.com', PASSWORD);
+        await new APIClient(server.baseURL).signIn('panic@example.com', PASSWORD);
+        await new APIClient(server.baseURL).signIn('bystander@example.com', PASSWORD);
 
         expect(await profileStatusWith(callerToken)).toBe(200);
         expect(await profileStatusWith(bystanderToken)).toBe(200);

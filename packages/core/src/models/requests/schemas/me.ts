@@ -56,9 +56,9 @@ export const meResponseCodec = z.strictObject({
     image: z.string()
         .nullable()
         .optional(),
-    createdAt: isoDateTimeCodec,
+    created: isoDateTimeCodec,
     deletion: z.strictObject({
-        requestedAt: isoDateTimeCodec,
+        requested: isoDateTimeCodec,
         scheduledFor: isoDateTimeCodec,
     }).nullable(),
 });

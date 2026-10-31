@@ -1,16 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Playlist Panel
   --
-  -- The queue beside the playing surface: one row per track in play order, the current one highlighted, a click
-  -- anywhere on a row jumps playback there, rows drag to reorder (what's playing never changes, only where it
-  -- sits), and each row can be removed without stopping what's playing. Rows wear the file's embedded title and
-  -- artist once the store has read them, falling back to the filename; a broken playlist entry sits dimmed and
-  -- unclickable, while a track that failed to play wears a warning and a click retries it. The header carries the
-  -- playlist's display title (its file name
-  -- until one is set) once a file is adopted -- click-to-edit, Docs-style, written through to the file's #PLAYLIST
-  -- line -- and the session's file actions: Open (replace or append via prompt), Save (overwrite the adopted
-  -- file), Save As, and Add. The rows read from and act on the media player store directly -- this panel is the
-  -- queue's own UI, not a reusable list.
+  -- The rows read and act on the media player store directly, since this panel is the queue's own UI rather than a
+  -- reusable list.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

@@ -1,8 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Stat Tile
-  --
-  -- One figure on the admin overview: a label, the number, and an optional line of context under it. The value slot
-  -- exists for tiles whose figure needs its own markup; everything else passes a plain string.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

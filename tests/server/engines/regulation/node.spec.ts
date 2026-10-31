@@ -20,7 +20,7 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const AT = new Date('2026-01-01T00:00:00.000Z');
+const at = new Date('2026-01-01T00:00:00.000Z');
 
 function folder(overrides : Partial<FolderNode> = {}) : FolderNode
 {
@@ -30,9 +30,9 @@ function folder(overrides : Partial<FolderNode> = {}) : FolderNode
         name: 'Docs',
         ownerID: 'user_owner',
         parentID: null,
-        createdAt: AT,
-        updatedAt: AT,
-        trashedAt: null,
+        created: at,
+        updated: at,
+        trashed: null,
         ...overrides,
     };
 }
@@ -48,9 +48,9 @@ function file(overrides : Partial<FileNode> = {}) : FileNode
         blobID: 'blob_1',
         size: 2048,
         mimeType: 'application/pdf',
-        createdAt: AT,
-        updatedAt: AT,
-        trashedAt: null,
+        created: at,
+        updated: at,
+        trashed: null,
         ...overrides,
     };
 }
@@ -64,8 +64,8 @@ function link(overrides : Partial<LinkNode> = {}) : LinkNode
         ownerID: 'user_recipient',
         parentID: 'folder_1',
         targetNodeID: 'file_1',
-        createdAt: AT,
-        updatedAt: AT,
+        created: at,
+        updated: at,
         ...overrides,
     };
 }
@@ -83,7 +83,6 @@ describe('judgeLinkCreation', () =>
     it('rejects a link whose target is another link', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'link_other',
             targetType: 'link',
             creatorRoleOnTarget: 'viewer',
@@ -93,25 +92,10 @@ describe('judgeLinkCreation', () =>
         expect(codes(result)).toContain('link.targetIsLink');
     });
 
-    // a link may not point at itself.
-    it('rejects a link that targets itself', () =>
-    {
-        const result = judgeLinkCreation({
-            linkID: 'node_x',
-            targetNodeID: 'node_x',
-            targetType: 'file',
-            creatorRoleOnTarget: 'owner',
-        });
-
-        expect(result.ok).toBe(false);
-        expect(codes(result)).toContain('link.selfTarget');
-    });
-
     // creating a link requires ownership of or an active share on the target; no access resolves to no role.
     it('rejects a link when the creator has no access to the target', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'file_1',
             targetType: 'file',
             creatorRoleOnTarget: null,
@@ -126,7 +110,6 @@ describe('judgeLinkCreation', () =>
     it('admits a link onto a different node the creator owns', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'file_1',
             targetType: 'file',
             creatorRoleOnTarget: 'owner',
@@ -139,7 +122,6 @@ describe('judgeLinkCreation', () =>
     it('admits a link to a folder the creator holds a viewer share on', () =>
     {
         const result = judgeLinkCreation({
-            linkID: 'link_new',
             targetNodeID: 'folder_9',
             targetType: 'folder',
             creatorRoleOnTarget: 'viewer',
@@ -183,7 +165,7 @@ describe('judgeParentEdge', () =>
     {
         const result = judgeParentEdge({
             creatorID: 'user_owner',
-            parent: folder({ trashedAt: AT }),
+            parent: folder({ trashed: at }),
             creatorRoleOnParent: 'owner',
         });
 

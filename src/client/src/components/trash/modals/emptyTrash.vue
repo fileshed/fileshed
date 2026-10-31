@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Empty Trash Modal
-  --
-  -- The destructive confirm behind "Empty trash", opened imperatively by the trash page. Unlike Delete forever it
-  -- names no single node -- the whole trash goes at once. Stays open until the mutation resolves, so a rejection can
-  -- toast without the dialog vanishing under it.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

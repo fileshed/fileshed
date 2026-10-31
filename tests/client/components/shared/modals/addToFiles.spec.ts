@@ -10,7 +10,7 @@ import type { SharedTarget } from '@fileshed/core';
 
 // Resource Access
 import { createNode } from '@client/resource-access/nodes.ts';
-import { sharedWithMe } from '@client/resource-access/shares.ts';
+import { listSharedWithMe } from '@client/resource-access/shares.ts';
 
 // Under test
 import AddToFiles from '@client/components/shared/modals/addToFiles.vue';
@@ -20,11 +20,11 @@ import AddToFiles from '@client/components/shared/modals/addToFiles.vue';
 const toastAdd = vi.hoisted(() => vi.fn());
 
 vi.mock('@client/resource-access/nodes.ts', () => ({ createNode: vi.fn() }));
-vi.mock('@client/resource-access/shares.ts', () => ({ sharedWithMe: vi.fn() }));
+vi.mock('@client/resource-access/shares.ts', () => ({ listSharedWithMe: vi.fn() }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }));
 
 const createNodeMock = createNode as unknown as Mock;
-const sharedWithMeMock = sharedWithMe as unknown as Mock;
+const listSharedWithMeMock = listSharedWithMe as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -82,7 +82,7 @@ describe('AddToFiles modal', () =>
     beforeEach(() =>
     {
         vi.clearAllMocks();
-        sharedWithMeMock.mockResolvedValue({ entries: [] });
+        listSharedWithMeMock.mockResolvedValue({ entries: [] });
     });
 
     it('opens titled for the shared target and drives the picker with no moving set of its own', async () =>
@@ -108,7 +108,7 @@ describe('AddToFiles modal', () =>
         await confirm(wrapper, 'dest1');
 
         expect(createNodeMock).toHaveBeenCalledWith({ type: 'link', parentID: 'dest1', targetNodeID: 'f1' });
-        expect(sharedWithMeMock).toHaveBeenCalledTimes(1);
+        expect(listSharedWithMeMock).toHaveBeenCalledTimes(1);
         expect(attr(wrapper, '.umodal', 'data-open')).toBe('false');
     });
 

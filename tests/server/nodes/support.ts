@@ -1,37 +1,36 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Node Spec Support
 //
-// Composes the node/me routes against the real stack the auth harness already boots (real auth, real in-memory SQLite,
-// real migrations): a Hono app mounting createNodeRoutes/createMeRoutes with a real SessionManager and NodeManager over
-// a real NodeRA, plus the same onError mapping app.ts will wire (mapManagerError). Only the blob-graveyard collaborator
-// is a hand-rolled recording double -- it is the RA-boundary seam the node manager reports orphaned blobs to, whose
-// real implementation belongs to the upload/GC side.
+// The node specs run over the composed app on the auth harness's database. Only the blob-graveyard collaborator is a
+// hand-rolled recording double: it is the boundary the node manager reports orphaned blobs to, and its real
+// implementation belongs to the upload/GC side.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable camelcase -- seedLinkRow builds a snake_case DB row (house convention for Kysely inserts) */
 
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 
 // Models
 import { type AccessTokenScope, UNLIMITED_QUOTA, statementForScopes } from '@fileshed/core';
 
 // Resource Access
-import type { SessionUser } from '@server/resource-access/auth.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import type { SessionUser } from '@server/resource-access/auth/instance.ts';
 
 // Managers
-import { NodeManager, type NodePolicy, type OrphanedBlobs } from '@server/managers/node.ts';
-import { type Actor, SessionManager } from '@server/managers/session.ts';
-import { mapManagerError } from '@server/managers/errors.ts';
+import {
+    NodeManager,
+    type NodePolicy,
+    type OrphanedBlobs,
+    type OrphanedBlobsFor,
+} from '@server/managers/node.ts';
+import type { Actor } from '@server/managers/session.ts';
 
-// Routes
-import { createNodeRoutes } from '@server/routes/nodes.ts';
-import { createSearchRoutes } from '@server/routes/search.ts';
-import { createMeRoutes } from '@server/routes/me.ts';
+// App
+import { createApp } from '@server/clients/http/app.ts';
+import type { AppServices } from '@server/services.ts';
 
 // Support
-import type { BootedApp } from '../auth/support.ts';
-import { accountDeletionsFor } from '../support/accountDeletions.ts';
+import { type BootedApp, composeTestServices } from '../auth/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // Orphaned-blob doubles
@@ -49,9 +48,9 @@ export class RecordingOrphanedBlobs implements OrphanedBlobs
     }
 }
 
-export function noopOrphanedBlobs() : OrphanedBlobs
+export function noopOrphanedBlobs() : OrphanedBlobsFor
 {
-    return { async graveyardUnreferenced() { /* the tree specs do not exercise the graveyard */ } };
+    return () => ({ async graveyardUnreferenced() { /* the tree specs do not exercise the graveyard */ } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -69,32 +68,20 @@ export function testNodePolicy(overrides : Partial<NodePolicy> = {}) : NodePolic
 // App composition
 //----------------------------------------------------------------------------------------------------------------------
 
-// A single app carrying the auth mount (so signUp/signIn work) plus the node and me surfaces, wired exactly as app.ts
-// will wire them at integration -- managers over a real NodeRA, errors mapped through mapManagerError with a 500 floor.
+// The composed app with one swap: a NodeManager reporting orphaned blobs to the given collaborator under the given
+// policy, so a spec can see what a delete handed off without a real graveyard behind it.
 export function composeNodeApp(
     booted : BootedApp,
-    orphanedBlobs : OrphanedBlobs = noopOrphanedBlobs(),
+    orphanedBlobs : OrphanedBlobsFor = noopOrphanedBlobs(),
     policy : NodePolicy = testNodePolicy()
 ) : Hono
 {
-    const sessions = new SessionManager(booted.auth);
-    const nodes = new NodeManager(booted.handle, new NodeRA(booted.handle), orphanedBlobs, policy);
+    const services : AppServices = {
+        ...composeTestServices(booted.auth, booted.handle, booted.config),
+        nodes: new NodeManager({ handle: booted.handle, orphanedBlobs, policy }),
+    };
 
-    const app = new Hono();
-
-    app.on([ 'POST', 'GET' ], '/api/auth/*', (ctx) => booted.auth.handler(ctx.req.raw));
-    app.route('/api', createNodeRoutes(sessions, nodes));
-    app.route('/api', createSearchRoutes(sessions, nodes));
-    app.route('/api', createMeRoutes(sessions, nodes, accountDeletionsFor(booted.auth, booted.handle)));
-
-    app.onError((error, ctx) =>
-    {
-        const mapped = mapManagerError(error);
-        if(mapped) { return ctx.json(mapped.body, mapped.status, mapped.headers); }
-        return ctx.json({ error: 'Internal Server Error' }, 500);
-    });
-
-    return app;
+    return createApp({ auth: booted.auth, services });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -134,9 +121,9 @@ export async function seedLinkRow(
             target_node_id: init.targetNodeID,
             size: null,
             mime_type: null,
-            created_at: now,
-            updated_at: now,
-            trashed_at: null,
+            created: now,
+            updated: now,
+            trashed: null,
         })
         .execute();
 }
@@ -156,7 +143,7 @@ export async function seedShareRow(
             grantee_user_id: init.granteeID,
             role: init.role,
             created_by: init.createdBy,
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }
@@ -171,11 +158,11 @@ interface ActorInit
     email ?: string;
     name ?: string;
     role ?: 'admin' | 'user';
-    createdAt ?: Date;
+    created ?: Date;
 }
 
 // A minimal signed-in principal for manager-level specs that drive the manager directly rather than over HTTP. The
-// manager reads only id (every method) plus email/name/role/createdAt (me); the rest of better-auth's inferred
+// manager reads only id (every method) plus email/name/role/created (me); the rest of better-auth's inferred
 // SessionUser is irrelevant here, so a partial is cast to the boundary type.
 //
 // Deliberately carries no quota: a session cannot state one. Quota is read from the user row at every enforcement
@@ -183,7 +170,7 @@ interface ActorInit
 // knob here would let a spec "set" a quota that nothing enforces.
 export function testActor(init : ActorInit) : SessionUser
 {
-    const createdAt = init.createdAt ?? new Date('2026-01-01T00:00:00.000Z');
+    const created = init.created ?? new Date('2026-01-01T00:00:00.000Z');
 
     return {
         id: init.id,
@@ -191,8 +178,8 @@ export function testActor(init : ActorInit) : SessionUser
         name: init.name ?? init.id,
         role: init.role ?? 'user',
         emailVerified: true,
-        createdAt,
-        updatedAt: createdAt,
+        createdAt: created,
+        updatedAt: created,
     } as unknown as SessionUser;
 }
 

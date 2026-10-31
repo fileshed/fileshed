@@ -19,11 +19,11 @@ import {
 
 // Support
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
     type UploadedFile,
-    bootServeApp,
+    bootStoreApp,
     createFolder,
     createLink,
     listLinks,
@@ -34,14 +34,14 @@ import {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let stranger : TestUser;
 let uploaded : UploadedFile;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     stranger = await makeUser(booted, 'stranger@example.com');
     uploaded = await uploadFile(booted, owner, randomBytes(64), { name: 'report.pdf', mimeType: 'application/pdf' });
@@ -73,7 +73,7 @@ describe('POST /api/nodes/:id/links', () =>
         expect(PUBLIC_LINK_TOKEN_BYTES * 8).toBeGreaterThanOrEqual(128);
         expect(link.token.length).toBeGreaterThanOrEqual(Math.ceil((PUBLIC_LINK_TOKEN_BYTES * 8) / 6));
         expect(link.url).toBe(`/d/${ link.token }`);
-        expect(link.revokedAt).toBeNull();
+        expect(link.revoked).toBeNull();
     });
 
     // A link is a capability and nothing else, so there is no field on it -- and none in the response -- naming how
@@ -83,7 +83,7 @@ describe('POST /api/nodes/:id/links', () =>
         const link = await (await createLink(booted, owner, uploaded.node.id, { mode: 'view', disposition: 'inline' }))
             .json() as Record<string, unknown>;
 
-        expect(Object.keys(link).sort()).toEqual([ 'createdAt', 'id', 'nodeID', 'revokedAt', 'token', 'url' ]);
+        expect(Object.keys(link).sort()).toEqual([ 'created', 'id', 'nodeID', 'revoked', 'token', 'url' ]);
     });
 
     it('allows multiple distinct links on one node', async () =>
@@ -180,16 +180,16 @@ describe('GET /api/nodes/:id/links', () =>
 
 describe('DELETE /api/links/:id', () =>
 {
-    it('revokes the owner\'s link and marks revokedAt on the listing', async () =>
+    it('revokes the owner\'s link and marks it revoked on the listing', async () =>
     {
         const link = await mintLink();
 
         const revoked = await revokeLink(booted, owner, link.id);
         expect(revoked.status).toBe(204);
 
-        // A revoked link still lists (it is revoked, not deleted) with revokedAt set.
+        // A revoked link still lists (it is revoked, not deleted) with revoked set.
         const list = await (await listLinks(booted, owner, uploaded.node.id)).json() as PublicLinkListResponse;
-        expect(list.links[0]?.revokedAt).not.toBeNull();
+        expect(list.links[0]?.revoked).not.toBeNull();
     });
 
     it('refuses a non-owner revoking a link', async () =>

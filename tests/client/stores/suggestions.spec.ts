@@ -15,6 +15,9 @@ import { type NodeResponse, SUGGEST_LIMIT, type SearchResponse } from '@fileshed
 // Resource Access
 import { search } from '@client/resource-access/search.ts';
 
+// Support
+import { folderNode } from '../support.ts';
+
 // Under test
 import { useSuggestionsStore } from '@client/stores/suggestions.ts';
 
@@ -23,24 +26,6 @@ import { useSuggestionsStore } from '@client/stores/suggestions.ts';
 vi.mock('@client/resource-access/search.ts', () => ({ search: vi.fn() }));
 
 const searchMock = search as unknown as Mock;
-
-const ISO = '2026-07-01T00:00:00.000Z';
-
-function node(id : string, name : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name,
-        ownerID: 'owner1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'folder',
-        trashedAt: null,
-    };
-}
 
 function envelope(nodes : NodeResponse[]) : SearchResponse
 {
@@ -81,7 +66,7 @@ describe('useSuggestionsStore.suggest', () =>
     it('waits for the typing to settle before asking the server', async () =>
     {
         const store = useSuggestionsStore();
-        searchMock.mockResolvedValue(envelope([ node('n1', 'notes') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'n1', name: 'notes' }) ]));
 
         store.suggest('notes');
         expect(searchMock).not.toHaveBeenCalled();
@@ -124,7 +109,7 @@ describe('useSuggestionsStore.suggest', () =>
     it('drops standing suggestions when the term falls back below the floor', async () =>
     {
         const store = useSuggestionsStore();
-        searchMock.mockResolvedValue(envelope([ node('n1', 'notes') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'n1', name: 'notes' }) ]));
 
         store.suggest('notes');
         await vi.runAllTimersAsync();
@@ -162,9 +147,9 @@ describe('useSuggestionsStore.suggest', () =>
         await vi.advanceTimersByTimeAsync(500);
 
         // The newer query answers first, then the stale one arrives late.
-        second.resolve(envelope([ node('beta1', 'beta-hit') ]));
+        second.resolve(envelope([ folderNode({ id: 'beta1', name: 'beta-hit' }) ]));
         await vi.runAllTimersAsync();
-        first.resolve(envelope([ node('alpha1', 'alpha-hit') ]));
+        first.resolve(envelope([ folderNode({ id: 'alpha1', name: 'alpha-hit' }) ]));
         await vi.runAllTimersAsync();
 
         expect(store.nodes.map((entry) => entry.id)).toEqual([ 'beta1' ]);
@@ -174,7 +159,7 @@ describe('useSuggestionsStore.suggest', () =>
     it('shows nothing when a query fails', async () =>
     {
         const store = useSuggestionsStore();
-        searchMock.mockResolvedValueOnce(envelope([ node('n1', 'notes') ]));
+        searchMock.mockResolvedValueOnce(envelope([ folderNode({ id: 'n1', name: 'notes' }) ]));
 
         store.suggest('notes');
         await vi.runAllTimersAsync();
@@ -192,7 +177,7 @@ describe('useSuggestionsStore.suggest', () =>
     it('drops a pending query when cleared before it fires', async () =>
     {
         const store = useSuggestionsStore();
-        searchMock.mockResolvedValue(envelope([ node('n1', 'notes') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'n1', name: 'notes' }) ]));
 
         store.suggest('notes');
         store.clear();

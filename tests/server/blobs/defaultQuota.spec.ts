@@ -7,18 +7,19 @@
 // pins an account unlimited under a tightened instance, and a per-user cap holds under a roomier one.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Support
-import { type BootedBlobApp, bootBlobApp, claim, makeUser, putUpload } from './support.ts';
+import { sha256Of } from '../support/sha256.ts';
+import { type BootedStoreApp, bootBlobApp, claim, makeUser, putUpload } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 const KILOBYTE = 1024;
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 // The live instance default the manager reads on every enforcement; each test moves it and re-claims.
 let defaultQuota : number;
@@ -35,13 +36,6 @@ afterEach(async () =>
 });
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
 
 async function claimBytes(cookie : string, data : Buffer) : Promise<Response>
 {

@@ -20,7 +20,7 @@ const savedEnv = vi.hoisted(() =>
 });
 
 // Resource Access
-import { resolveBaseURL, resolveTrustedOrigins } from '@server/resource-access/auth.ts';
+import { resolveBaseURL, resolveTrustedOrigins } from '@server/resource-access/auth/instance.ts';
 
 // Support
 import { ORIGIN, bootTestApp, cookieFrom, testConfig } from './support.ts';

@@ -232,7 +232,7 @@ export default [
     //------------------------------------------------------------------------------------------------------------------
 
     {
-        files: [ 'src/server/routes/**' ],
+        files: [ 'src/server/clients/http/routes/**' ],
         rules: {
             'no-restricted-imports': [ 'error', {
                 patterns: [
@@ -254,7 +254,7 @@ export default [
             'no-restricted-imports': [ 'error', {
                 patterns: [
                     {
-                        group: [ '**/managers/**', '**/routes/**', '**/resource-access/**' ],
+                        group: [ '**/managers/**', '**/clients/**', '**/resource-access/**' ],
                         message: 'Engines are pure -- they import models and utils only, see the iDesign section '
                             + 'in CLAUDE.md.',
                     },
@@ -268,8 +268,8 @@ export default [
             'no-restricted-imports': [ 'error', {
                 patterns: [
                     {
-                        group: [ '**/routes/**' ],
-                        message: 'Managers may not import routes -- see the iDesign section in CLAUDE.md.',
+                        group: [ '**/clients/**' ],
+                        message: 'Managers may not import clients -- see the iDesign section in CLAUDE.md.',
                     },
                     {
                         group: [ '**/blob/fsBackend*' ],
@@ -285,7 +285,7 @@ export default [
             'no-restricted-imports': [ 'error', {
                 patterns: [
                     {
-                        group: [ '**/managers/**', '**/routes/**', '**/engines/**' ],
+                        group: [ '**/managers/**', '**/clients/**', '**/engines/**' ],
                         message: 'Resource access is the bottom layer -- it imports models and utils only, see the '
                             + 'iDesign section in CLAUDE.md.',
                     },
@@ -299,7 +299,7 @@ export default [
             'no-restricted-imports': [ 'error', {
                 patterns: [
                     {
-                        group: [ '**/managers/**', '**/routes/**', '**/engines/**', '**/resource-access/**' ],
+                        group: [ '**/managers/**', '**/clients/**', '**/engines/**', '**/resource-access/**' ],
                         message: 'Utils are cross-cutting -- they import nothing from the layer stack, see the '
                             + 'iDesign section in CLAUDE.md.',
                     },

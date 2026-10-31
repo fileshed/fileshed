@@ -1,10 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Move Modal
   --
-  -- The Move picker for one or more nodes, opened imperatively by the drive page. Wraps the folder picker in a modal and
-  -- moves each target into the chosen destination in turn -- sequentially, so each move's refetch settles before the
-  -- next rather than racing overlapping refreshes. Stays open until the move resolves, so a rejection can toast without
-  -- the dialog vanishing under it.
+  -- Targets move one at a time, so each move's refetch settles before the next starts instead of racing overlapping
+  -- refreshes.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

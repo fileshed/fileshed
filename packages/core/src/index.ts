@@ -6,7 +6,7 @@
 
 // Models
 export type { Node, FileNode, FolderNode, LinkNode } from './models/node.ts';
-export { type NodeType, nodeTypes, isDirectOwner } from './models/node.ts';
+export { type NodeType, nodeTypes, isDirectOwner, isHiddenTrash } from './models/node.ts';
 export {
     type Role,
     type ShareRole,
@@ -29,6 +29,8 @@ export { type ContentDisposition, contentDispositions } from './models/download.
 export {
     type AccessToken,
     type AccessTokenScope,
+    type MintedAccessToken,
+    type MintedPlaybackToken,
     type PermissionStatement,
     accessTokenScopes,
     scopeStatements,
@@ -107,9 +109,13 @@ export {
     type NodeTypeFamily,
     nodeTypeFamilies,
     type ChildrenQuery,
+    type ListingQuery,
     type DeleteNodeQuery,
     type LinkTarget,
     type NodeResponse,
+    type FileNodeResponse,
+    type FolderNodeResponse,
+    type LinkNodeResponse,
     type NodeSharing,
     type NodeListResponse,
     type UserSummary,
@@ -164,20 +170,21 @@ export {
     type SetPasswordRequest,
     type TestEmailResponse,
     type AdminUserSortKey,
+    type AdminUserListQuery,
     type AdminUserSearchField,
     type StorageBackendStatus,
     type GcRunSummary,
     type TrashPurgeRunSummary,
-    type PartialsRunSummary,
+    type StagedUploadsRunSummary,
     type AccountDeletionRunSummary,
     type GcRunStatus,
     type TrashPurgeRunStatus,
-    type PartialsRunStatus,
+    type StagedUploadsRunStatus,
     type AccountDeletionRunStatus,
     type SweepKind,
     type GcSweepRunResponse,
     type TrashPurgeSweepRunResponse,
-    type PartialsSweepRunResponse,
+    type StagedUploadsSweepRunResponse,
     type AccountDeletionSweepRunResponse,
     type SweepRunResponse,
     type OverviewUsers,
@@ -234,6 +241,7 @@ export {
     moveRequestCodec,
     patchNodeRequestCodec,
     childrenQueryCodec,
+    listingQueryCodec,
     deleteNodeQueryCodec,
     purgeBrokenLinksResponseCodec,
     emptyTrashResponseCodec,
@@ -302,6 +310,7 @@ export {
     sweepRunResponseCodec,
     adminUserResponseCodec,
     adminUserPageResponseCodec,
+    adminUserListQueryCodec,
     toAdminUserResponse,
     toAdminUserPageResponse,
 } from './models/requests/schemas/admin.ts';
@@ -329,11 +338,16 @@ export {
     playbackTokenResponseCodec,
     toAccessTokenResponse,
     toAccessTokenListResponse,
+    toCreateAccessTokenResponse,
+    toPlaybackTokenResponse,
 } from './models/requests/schemas/accessTokens.ts';
 
 // Utils
 export { compareNames } from './utils/naturalOrder.ts';
+export { familyOfMimeType, isPlaylistFile, isValidMimeType } from './utils/mimeType.ts';
+export { listingGridColumns, listingRowHeight } from './utils/listingGeometry.ts';
 export { isSkippedName, parseSkippedNames } from './utils/skippedNames.ts';
+export { isOneOf } from './utils/isOneOf.ts';
 export {
     LISTING_SORT_FIELDS,
     LISTING_TIEBREAK_FIELDS,
@@ -359,6 +373,10 @@ export * from './constants/index.ts';
 
 // Errors
 export {
+    type ErrorKind,
+    errorKinds,
+    type ErrorDetails,
+    AppError,
     UnauthorizedError,
     ForbiddenError,
     BadRequestError,
@@ -382,7 +400,7 @@ export {
     BackendNotFoundError,
     NoDefaultBackendError,
     UnsupportedBackendError,
-    NodeRowCorruptionError,
+    RowCorruptionError,
 } from './errors.ts';
 
 //----------------------------------------------------------------------------------------------------------------------

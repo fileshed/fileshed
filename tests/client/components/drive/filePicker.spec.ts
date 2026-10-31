@@ -14,7 +14,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { NodeListResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { getChildren } from '@client/resource-access/nodes.ts';
+import { listChildren } from '@client/resource-access/nodes.ts';
+
+// Support
+import { fileNode, folderNode } from '../../support.ts';
 
 // Under test
 import FilePicker from '@client/components/drive/filePicker.vue';
@@ -23,47 +26,12 @@ import FilePicker from '@client/components/drive/filePicker.vue';
 
 vi.mock('@client/resource-access/authClient.ts', () => ({ authClient: { updateUser: vi.fn() } }));
 vi.mock('@client/resource-access/avatar.ts', () => ({ uploadAvatar: vi.fn(), deleteAvatar: vi.fn() }));
-vi.mock('@client/resource-access/me.ts', () => ({ fetchMe: vi.fn() }));
-vi.mock('@client/resource-access/nodes.ts', () => ({ getChildren: vi.fn() }));
+vi.mock('@client/resource-access/me.ts', () => ({ getMe: vi.fn() }));
+vi.mock('@client/resource-access/nodes.ts', () => ({ listChildren: vi.fn() }));
 
-const getChildrenMock = getChildren as unknown as Mock;
+const listChildrenMock = listChildren as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function folderNode(id : string, name : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name,
-        ownerID: 'user_1',
-        parentID: null,
-        createdAt: '2026-07-20T00:00:00.000Z',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-        role: 'owner',
-        type: 'folder',
-        trashedAt: null,
-    };
-}
-
-function fileNode(id : string, name : string, mimeType : string) : NodeResponse
-{
-    return {
-        sharing: null,
-        id,
-        name,
-        ownerID: 'user_1',
-        parentID: null,
-        createdAt: '2026-07-20T00:00:00.000Z',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-        role: 'owner',
-        type: 'file',
-        blobID: `blob_${ id }`,
-        size: 10,
-        mimeType,
-        trashedAt: null,
-    };
-}
 
 function page(nodes : NodeResponse[]) : NodeListResponse
 {
@@ -107,9 +75,9 @@ describe('FilePicker', () =>
 
     it('disables a file whose mime type is not in the accept list', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([
-            fileNode('f1', 'ok.png', 'image/png'),
-            fileNode('f2', 'notes.txt', 'text/plain'),
+        listChildrenMock.mockResolvedValue(page([
+            fileNode({ id: 'f1', name: 'ok.png', mimeType: 'image/png' }),
+            fileNode({ id: 'f2', name: 'notes.txt', mimeType: 'text/plain' }),
         ]));
         const wrapper = mountPicker();
         await flushPromises();
@@ -120,10 +88,10 @@ describe('FilePicker', () =>
 
     it('accepts a whole mime family via a type/* entry, still refusing everything else', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([
-            fileNode('f1', 'song.mp3', 'audio/mpeg'),
-            fileNode('f2', 'clip.mp4', 'video/mp4'),
-            fileNode('f3', 'notes.txt', 'text/plain'),
+        listChildrenMock.mockResolvedValue(page([
+            fileNode({ id: 'f1', name: 'song.mp3', mimeType: 'audio/mpeg' }),
+            fileNode({ id: 'f2', name: 'clip.mp4', mimeType: 'video/mp4' }),
+            fileNode({ id: 'f3', name: 'notes.txt', mimeType: 'text/plain' }),
         ]));
         const wrapper = mountPicker([ 'audio/*', 'video/*' ]);
         await flushPromises();
@@ -135,9 +103,9 @@ describe('FilePicker', () =>
 
     it('marks already-picked rows with a check while leaving them pickable again', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([
-            fileNode('f1', 'one.png', 'image/png'),
-            fileNode('f2', 'two.png', 'image/png'),
+        listChildrenMock.mockResolvedValue(page([
+            fileNode({ id: 'f1', name: 'one.png', mimeType: 'image/png' }),
+            fileNode({ id: 'f2', name: 'two.png', mimeType: 'image/png' }),
         ]));
         const wrapper = mountPicker(acceptImages, { pickedIDs: new Set([ 'f1' ]) });
         await flushPromises();
@@ -154,7 +122,7 @@ describe('FilePicker', () =>
 
     it('offers Add-all on folder rows only when the host asked for it, emitting the folder', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ folderNode('d1', 'Music') ]));
+        listChildrenMock.mockResolvedValue(page([ folderNode({ id: 'd1', name: 'Music' }) ]));
 
         const plain = mountPicker();
         await flushPromises();
@@ -172,9 +140,9 @@ describe('FilePicker', () =>
 
     it('accepts by name suffix via a .ext entry, for types whose mimes are unreliable', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([
-            fileNode('f1', 'mix.m3u8', 'application/octet-stream'),
-            fileNode('f2', 'song.mp3', 'audio/mpeg'),
+        listChildrenMock.mockResolvedValue(page([
+            fileNode({ id: 'f1', name: 'mix.m3u8', mimeType: 'application/octet-stream' }),
+            fileNode({ id: 'f2', name: 'song.mp3', mimeType: 'audio/mpeg' }),
         ]));
         const wrapper = mountPicker([ '.m3u', '.m3u8' ]);
         await flushPromises();
@@ -185,7 +153,7 @@ describe('FilePicker', () =>
 
     it('emits the selected node when an accepted file is clicked', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f1', 'ok.png', 'image/png') ]));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f1', name: 'ok.png', mimeType: 'image/png' }) ]));
         const wrapper = mountPicker();
         await flushPromises();
 
@@ -197,7 +165,7 @@ describe('FilePicker', () =>
 
     it('does not emit when a disabled, non-matching file is clicked', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ fileNode('f2', 'notes.txt', 'text/plain') ]));
+        listChildrenMock.mockResolvedValue(page([ fileNode({ id: 'f2', name: 'notes.txt', mimeType: 'text/plain' }) ]));
         const wrapper = mountPicker();
         await flushPromises();
 
@@ -208,10 +176,13 @@ describe('FilePicker', () =>
 
     it('drills into a folder and lists its children', async () =>
     {
-        getChildrenMock.mockImplementation((parentID : string | null) =>
+        listChildrenMock.mockImplementation((parentID : string | null) =>
         {
-            if(parentID === null) { return Promise.resolve(page([ folderNode('d1', 'Photos') ])); }
-            if(parentID === 'd1') { return Promise.resolve(page([ fileNode('f3', 'inner.png', 'image/png') ])); }
+            if(parentID === null) { return Promise.resolve(page([ folderNode({ id: 'd1', name: 'Photos' }) ])); }
+            if(parentID === 'd1')
+            {
+                return Promise.resolve(page([ fileNode({ id: 'f3', name: 'inner.png', mimeType: 'image/png' }) ]));
+            }
 
             return Promise.resolve(page([]));
         });
@@ -221,7 +192,7 @@ describe('FilePicker', () =>
         await entry(wrapper, 'Photos')?.trigger('click');
         await flushPromises();
 
-        expect(getChildrenMock).toHaveBeenCalledWith('d1', expect.anything());
+        expect(listChildrenMock).toHaveBeenCalledWith('d1', expect.anything());
         expect(entry(wrapper, 'inner.png')).toBeDefined();
         expect(wrapper.emitted('select')).toBeUndefined();
     });
@@ -241,9 +212,9 @@ describe('FilePicker — a host that constrains nothing', () =>
     // the bare '*' is its own entry, for a host whose only rule is that the caller can read the thing.
     it('accepts every file for a bare wildcard', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([
-            fileNode('f1', 'notes.txt', 'text/plain'),
-            fileNode('f2', 'clip.mp4', 'video/mp4'),
+        listChildrenMock.mockResolvedValue(page([
+            fileNode({ id: 'f1', name: 'notes.txt', mimeType: 'text/plain' }),
+            fileNode({ id: 'f2', name: 'clip.mp4', mimeType: 'video/mp4' }),
         ]));
 
         const wrapper = mountPicker([ '*' ]);
@@ -257,7 +228,7 @@ describe('FilePicker — a host that constrains nothing', () =>
     // than as a bag of media, names its own verb.
     it('lets the host name the folder action', async () =>
     {
-        getChildrenMock.mockResolvedValue(page([ folderNode('d1', 'Reports') ]));
+        listChildrenMock.mockResolvedValue(page([ folderNode({ id: 'd1', name: 'Reports' }) ]));
 
         const wrapper = mountPicker([ '*' ], {
             folderAddable: true,

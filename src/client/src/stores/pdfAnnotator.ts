@@ -1,43 +1,28 @@
 //----------------------------------------------------------------------------------------------------------------------
 // PDF Annotator Store
 //
-// The open-PDF annotation session: load a PDF's bytes, track whether the annotation layer has unsaved marks, and save
-// the annotated document back through the same claim / proof-of-possession / replace flow an upload uses -- so a save
-// dedups against known content and preserves the node's id, links, and shares. This is a sibling of the text editor
-// store, not a reuse of it: the editing surface here deals in BYTES (a Uint8Array pdf.js produces from saveDocument),
-// not a text buffer, so there is no string diff, no source mode, and no per-keystroke dirty signal to diff against.
+// Saves are explicit only, never autosaved. A text buffer is coherent at every keystroke, so debounced autosave is safe
+// there; an annotation session is not, and autosaving mid-gesture would serialize a half-drawn ink stroke or a partly
+// placed text box as if it were finished.
 //
-// Saves are EXPLICIT only -- never autosaved. A text buffer is coherent at every keystroke, so debounced autosave is
-// safe there; an annotation session is not. Autosaving mid-gesture would serialize a half-drawn ink stroke or a
-// partially placed text box as if it were finished. The user decides when the page is in a saveable state and presses
-// Save. Each save re-arms the optimistic-concurrency guard with the blob it just wrote, so a stale save (someone else
-// saved first) is refused with a conflict the user resolves by reloading or overwriting.
-//
-// The store does not import pdf.js. Everything it needs of a live document -- the bytes to save, a thumbnail, an
-// attachment's content, a jump to an outline destination, undo and redo -- comes from an access object the surface
-// registers once a document is open, which keeps this whole pipeline testable without a renderer.
+// The store does not import pdf.js. Everything it needs of a live document comes from an access object the surface
+// registers once a document is open, which keeps the store testable without a renderer.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
-import { type NodeResponse, PDF_ANNOTATOR_MAX_BYTES, type UploadCommitMetadata, isRoleAtLeast } from '@fileshed/core';
+import { PDF_ANNOTATOR_MAX_BYTES } from '@fileshed/core';
 
 // Resource Access
-import { ApiError } from '../resource-access/apiError.ts';
-import { answerChallenge, claimBlob, uploadTicket } from '../resource-access/blobs.ts';
-import { fetchNodeBlob } from '../resource-access/content.ts';
-import { downloadUrl, saveBytes, showBytesIn } from '../resource-access/downloads.ts';
-import { getNode, patchNode } from '../resource-access/nodes.ts';
+import { getNodeBlob } from '../resource-access/content.ts';
+import { downloadURL, saveBytes, showBytesIn } from '../resource-access/downloads.ts';
+import { getNode } from '../resource-access/nodes.ts';
+
+// Stores
+import { createFileSaveSession } from './fileSaveSession.ts';
 
 // Engines
-import { computeProofAnswer } from '../engines/claim.ts';
-
-// Utils
-import { hashFile, readSampleWindows } from '../utils/hashFile.ts';
-import { describeApiError } from '../utils/runWithToast.ts';
-
-// Components
 import {
     type AltTextRequest,
     type AnnotationMode,
@@ -51,7 +36,7 @@ import {
     type InkParams,
     type OutlineDestination,
     type OutlineEntry,
-    type PdfAttachment,
+    type PDFAttachment,
     ROTATION_STEP,
     type ScrollModeName,
     type SidebarTab,
@@ -60,7 +45,10 @@ import {
     defaultEditorParams,
     defaultFindOptions,
     zoomLadder,
-} from '../components/handlers/pdf/types.ts';
+} from '../engines/pdf/types.ts';
+
+// Utils
+import { describeAPIError } from '../utils/runWithToast.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -71,7 +59,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 //
 // View state the renderer should follow (mode, zoom, rotation, layout) stays as plain reactive state that the surface
 // watches. These are the calls that go the other way -- a question or a one-shot command, with no state to mirror.
-interface PdfDocumentAccess
+interface PDFDocumentAccess
 {
     save : () => Promise<Uint8Array>;
 
@@ -88,13 +76,10 @@ interface PdfDocumentAccess
 
 //----------------------------------------------------------------------------------------------------------------------
 
-export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
+export const usePDFAnnotatorStore = defineStore('pdfAnnotator', () =>
 {
-    const node = ref<NodeResponse | null>(null);
+    const file = createFileSaveSession();
     const bytes = ref<Uint8Array | null>(null);
-
-    // The blob the bytes were loaded from and re-armed to on each save: the ifBlobID guard a save pins itself to.
-    const loadedBlobID = ref<string | null>(null);
 
     const mode = ref<AnnotationMode>('none');
 
@@ -120,7 +105,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     const sidebarOpen = ref(false);
     const sidebarTab = ref<SidebarTab>('thumbnails');
     const outline = ref<OutlineEntry[]>([]);
-    const attachments = ref<PdfAttachment[]>([]);
+    const attachments = ref<PDFAttachment[]>([]);
 
     // Whether the document is filling the screen. Set by the surface once the browser confirms the change rather than
     // when it is asked for, since the reader can leave fullscreen by a route this app never hears about (Escape).
@@ -159,108 +144,46 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     const loadState = ref<LoadState>('idle');
     const loadError = ref<string | null>(null);
 
-    const saving = ref(false);
-    const saveError = ref<string | null>(null);
     const printing = ref(false);
     const printError = ref<string | null>(null);
-    const conflict = ref(false);
-    const lastSavedAt = ref<number | null>(null);
 
-    // Raised by the surface when the annotation layer gains unsaved marks, cleared on save and load. The Save control
-    // gates on it; the store trusts it rather than diffing bytes, since only the renderer knows the editor's state.
-    const dirty = ref(false);
+    // The renderer's own unsaved-marks flag, as the surface reports it: raised on the first unsaved mark and cleared
+    // when a save serializes the document, so a mark made while that save is on the wire raises it again. The store
+    // trusts it rather than diffing bytes, since only the renderer knows the editor's state.
+    const rendererDirty = ref(false);
 
-    let access : PdfDocumentAccess | null = null;
+    // Serialized marks whose write has not landed. The renderer counted them saved the moment it serialized them.
+    const unlandedSave = ref(false);
+
+    const dirty = computed(() => rendererDirty.value || unlandedSave.value);
+
+    let access : PDFDocumentAccess | null = null;
     let altTextApply : AltTextRequest['apply'] | null = null;
-
-    //------------------------------------------------------------------------------------------------------------------
-
-    // A viewer (or no loaded node) annotates nothing: the surface renders view-only and never saves. Editor-or-owner
-    // annotates.
-    const readOnly = computed(() => node.value === null || !isRoleAtLeast(node.value.role, 'editor'));
 
     //------------------------------------------------------------------------------------------------------------------
     // Save
     //------------------------------------------------------------------------------------------------------------------
 
-    // Wrap the saved bytes in a File so the same streaming hash the upload flow keys claims on, and the same sampled
-    // window reads a proof-of-possession answer is computed over, run against the exact bytes being written.
-    async function hashBytes(out : Uint8Array, name : string) : Promise<{ sha : string; file : File }>
-    {
-        const file = new File([ new Uint8Array(out) ], name, { type: 'application/pdf' });
-        return { sha: await hashFile(file), file };
-    }
-
-    // Save the bytes onto the existing node via claim -> ticket-PUT or challenge-answer, with the concurrency guard
-    // (omitted on an overwrite). Content-addressing means an identical or already-known body dedups server-side.
-    async function commitReplace(nodeID : string, file : File, sha : string, ifBlobID : string | undefined)
-    : Promise<NodeResponse>
-    {
-        const commit : UploadCommitMetadata = ifBlobID === undefined
-            ? { replaceNodeID: nodeID }
-            : { replaceNodeID: nodeID, ifBlobID };
-
-        const claim = await claimBlob({ sha256: sha, size: file.size });
-        if(claim.upload)
-        {
-            return uploadTicket(claim.ticket, file, commit);
-        }
-
-        const windows = await readSampleWindows(file, claim.ranges);
-        const answer = await computeProofAnswer(claim.nonce, windows);
-        return answerChallenge(claim.challengeID, { answer, ...commit });
-    }
-
-    // One save pass over the current annotated document. A body that already hashes to the node's blob is the cheapest
-    // no-op -- nothing is written. Otherwise the write re-arms the guard to the blob it just landed and clears the
-    // conflict.
-    async function performSave(out : Uint8Array, force : boolean) : Promise<void>
-    {
-        const current = node.value;
-        if(current === null) { return; }
-
-        const { sha, file } = await hashBytes(out, current.name);
-
-        if(sha === loadedBlobID.value)
-        {
-            dirty.value = false;
-            return;
-        }
-
-        const guard = force ? undefined : (loadedBlobID.value ?? undefined);
-        const saved = await commitReplace(current.id, file, sha, guard);
-
-        node.value = saved;
-        if(saved.type === 'file') { loadedBlobID.value = saved.blobID; }
-        dirty.value = false;
-        lastSavedAt.value = Date.now();
-        conflict.value = false;
-    }
-
-    // The one save path both triggers funnel through. saving is raised synchronously so a second press while a save
-    // runs returns rather than starting a second in-flight save. force drops the guard, the "Overwrite" resolution to
-    // a conflict. With no registered save source (no live document) there is nothing to write.
+    // With no registered save source (no live document) there is nothing to write.
     async function runSave(force : boolean) : Promise<void>
     {
-        if(saving.value || node.value === null || readOnly.value || access === null) { return; }
+        const source = access;
+        if(source === null) { return; }
 
-        saving.value = true;
-        saveError.value = null;
+        await file.save(async (write) =>
+        {
+            const current = file.node.value;
+            if(current === null) { return; }
 
-        try
-        {
-            const out = await access.save();
-            await performSave(out, force);
-        }
-        catch(caught)
-        {
-            if(caught instanceof ApiError && caught.status === 409) { conflict.value = true; }
-            else { saveError.value = describeApiError(caught); }
-        }
-        finally
-        {
-            saving.value = false;
-        }
+            const out = await source.save();
+
+            // A reset or a newly opened document replaces the access, and these bytes are no longer the open file's.
+            if(access !== source) { return; }
+            unlandedSave.value = true;
+
+            const pdf = new File([ new Uint8Array(out) ], current.name, { type: 'application/pdf' });
+            if(await write(pdf, force)) { unlandedSave.value = false; }
+        });
     }
 
     async function save() : Promise<void>
@@ -272,20 +195,20 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // Surface seam
     //------------------------------------------------------------------------------------------------------------------
 
-    function setDocumentAccess(source : PdfDocumentAccess | null) : void
+    function setDocumentAccess(source : PDFDocumentAccess | null) : void
     {
         access = source;
     }
 
     function setDirty(value : boolean) : void
     {
-        dirty.value = value;
+        rendererDirty.value = value;
     }
 
     function setMode(next : AnnotationMode) : void
     {
         // A read-only session has no annotation mode to be in; a stray toggle stays at none.
-        mode.value = readOnly.value ? 'none' : next;
+        mode.value = file.readOnly.value ? 'none' : next;
     }
 
     function setPage(current : number, total : number) : void
@@ -465,7 +388,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // when the tab it was left on has nothing behind it, so a reader moving between documents is never handed a pane
     // that is blank for a reason they cannot see.
     function setDocumentFacts(
-        facts : { outline : OutlineEntry[]; attachments : PdfAttachment[]; properties : DocumentProperties }
+        facts : { outline : OutlineEntry[]; attachments : PDFAttachment[]; properties : DocumentProperties }
     ) : void
     {
         outline.value = facts.outline;
@@ -517,14 +440,14 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // while it is already armed has to place another image rather than do nothing.
     function addImage() : void
     {
-        if(readOnly.value) { return; }
+        if(file.readOnly.value) { return; }
 
         mode.value = 'stamp';
         access?.addImage();
     }
 
-    function undo() : void { if(!readOnly.value) { access?.undo(); } }
-    function redo() : void { if(!readOnly.value) { access?.redo(); } }
+    function undo() : void { if(!file.readOnly.value) { access?.undo(); } }
+    function redo() : void { if(!file.readOnly.value) { access?.redo(); } }
 
     function openProperties() : void { propertiesOpen.value = true; }
     function closeProperties() : void { propertiesOpen.value = false; }
@@ -569,12 +492,12 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // a user gesture, and a popup blocker refuses it.
     async function print() : Promise<void>
     {
-        const current = node.value;
+        const current = file.node.value;
         if(current === null) { return; }
 
         if(access === null)
         {
-            window.open(downloadUrl(current.id, 'inline'), '_blank', 'noopener');
+            window.open(downloadURL(current.id, 'inline'), '_blank', 'noopener');
             return;
         }
 
@@ -595,7 +518,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         catch(caught)
         {
             target.close();
-            printError.value = describeApiError(caught);
+            printError.value = describeAPIError(caught);
         }
         finally
         {
@@ -632,12 +555,11 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
 
     async function open(nodeID : string) : Promise<void>
     {
+        const token = file.begin();
         loadState.value = 'loading';
         loadError.value = null;
-        saveError.value = null;
-        conflict.value = false;
-        lastSavedAt.value = null;
-        dirty.value = false;
+        rendererDirty.value = false;
+        unlandedSave.value = false;
         mode.value = 'none';
         pageCount.value = 0;
         currentPage.value = 1;
@@ -650,7 +572,8 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         try
         {
             const loaded = await getNode(nodeID);
-            node.value = loaded;
+            if(!file.isCurrent(token)) { return; }
+            file.node.value = loaded;
 
             if(loaded.type !== 'file')
             {
@@ -665,17 +588,22 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
                 return;
             }
 
-            const blob = await fetchNodeBlob(nodeID);
-            bytes.value = new Uint8Array(await blob.arrayBuffer());
-            loadedBlobID.value = loaded.blobID;
+            const blob = await getNodeBlob(nodeID);
+            const loadedBytes = new Uint8Array(await blob.arrayBuffer());
+            if(!file.isCurrent(token)) { return; }
+
+            bytes.value = loadedBytes;
+            file.loadedBlobID.value = loaded.blobID;
             loadState.value = 'ready';
         }
         catch(caught)
         {
-            node.value = null;
+            if(!file.isCurrent(token)) { return; }
+
+            file.node.value = null;
             bytes.value = null;
             loadState.value = 'error';
-            loadError.value = describeApiError(caught);
+            loadError.value = describeAPIError(caught);
         }
     }
 
@@ -686,34 +614,17 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     // Discard local annotations and reload the server's current bytes -- the "Reload" resolution to a conflict.
     async function reload() : Promise<void>
     {
-        const current = node.value;
+        const current = file.node.value;
         if(current === null) { return; }
 
-        conflict.value = false;
         await open(current.id);
     }
 
     // Retry the save without the guard, clobbering whatever landed first -- the "Overwrite" resolution.
     async function overwrite() : Promise<void>
     {
-        conflict.value = false;
+        file.dismissConflict();
         await runSave(true);
-    }
-
-    function dismissConflict() : void
-    {
-        conflict.value = false;
-    }
-
-    // Rename the open file in place. The node is replaced with the server's response, so later saves carry the new
-    // name and the freshened timestamps without a reload.
-    async function rename(name : string) : Promise<void>
-    {
-        const current = node.value;
-        const trimmed = name.trim();
-        if(current === null || readOnly.value || trimmed.length === 0 || trimmed === current.name) { return; }
-
-        node.value = await patchNode(current.id, { name: trimmed });
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -721,21 +632,17 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     function reset() : void
     {
         access = null;
-        node.value = null;
+        file.close();
         bytes.value = null;
-        loadedBlobID.value = null;
         mode.value = 'none';
         pageCount.value = 0;
         currentPage.value = 1;
         zoom.value = DEFAULT_ZOOM;
         loadState.value = 'idle';
         loadError.value = null;
-        saving.value = false;
-        saveError.value = null;
         printing.value = false;
-        conflict.value = false;
-        lastSavedAt.value = null;
-        dirty.value = false;
+        rendererDirty.value = false;
+        unlandedSave.value = false;
         outline.value = [];
         attachments.value = [];
         properties.value = null;
@@ -748,7 +655,7 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
     //------------------------------------------------------------------------------------------------------------------
 
     return {
-        node,
+        node: file.node,
         bytes,
         mode,
         pageCount,
@@ -765,14 +672,14 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         pageRequest,
         loadState,
         loadError,
-        saving,
-        saveError,
+        saving: file.saving,
+        saveError: file.saveError,
         printing,
         printError,
-        conflict,
-        lastSavedAt,
+        conflict: file.conflict,
+        lastSaved: file.lastSaved,
         dirty,
-        readOnly,
+        readOnly: file.readOnly,
         scrollMode,
         spreadMode,
         cursorTool,
@@ -836,8 +743,8 @@ export const usePdfAnnotatorStore = defineStore('pdfAnnotator', () =>
         saveAltText,
         reload,
         overwrite,
-        dismissConflict,
-        rename,
+        dismissConflict: file.dismissConflict,
+        rename: file.rename,
         reset,
     };
 });

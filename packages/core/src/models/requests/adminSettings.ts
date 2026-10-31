@@ -1,10 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Admin Settings API DTOs
 //
-// The admin's view of the instance settings and the patch that changes them. Secret values never cross the wire
-// outward -- a set secret reads as its masked tail -- and a patch value of null means "reset to the config default"
-// (delete the override). The response carries per-key source and requiresRestart so the UI can say where a value
-// came from and whether a change waits on a restart.
+// Secret values never cross the wire outward: a set secret reads as its masked tail. A patch value of null resets the
+// key to the config default by deleting the override.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models

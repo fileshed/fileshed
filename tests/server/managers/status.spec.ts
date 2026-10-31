@@ -15,17 +15,16 @@ import { type AdminOverview, ForbiddenError, MS_PER_DAY, MS_PER_SECOND } from '@
 
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 import { ShareRA } from '@server/resource-access/shares/index.ts';
-import { UserRA } from '@server/resource-access/users/index.ts';
-import { seedDefaultBackend } from '@server/resource-access/database/seeds.ts';
+import { seedDefaultBackend } from '@server/resource-access/blob/seeds.ts';
 
 // Managers
 import { LastRunTracker } from '@server/managers/lastRun.ts';
 import { StatusManager } from '@server/managers/status.ts';
 
 // Support
-import { type BootedApp, bootFullApp, makeAdmin, signUp } from '../auth/support.ts';
+import { type BootedApp, bootTestApp, makeAdmin, signUp } from '../auth/support.ts';
 import { fileNode, folderNode, linkNode } from '../resource-access/nodes/support.ts';
 import { testActor } from '../nodes/support.ts';
 
@@ -34,7 +33,7 @@ import { testActor } from '../nodes/support.ts';
 const PASSWORD = 'correct-horse-battery';
 const UPTIME_SECONDS = 90;
 
-const ADMIN = testActor({ id: 'admin-actor', role: 'admin' });
+const admin = testActor({ id: 'admin-actor', role: 'admin' });
 
 let booted : BootedApp;
 let backendID : string;
@@ -49,7 +48,7 @@ let signUpsOpen : boolean;
 
 beforeEach(async () =>
 {
-    booted = await bootFullApp();
+    booted = await bootTestApp();
     backendID = await seedDefaultBackend(booted.handle, booted.config);
 
     nodes = new NodeRA(booted.handle);
@@ -60,14 +59,11 @@ beforeEach(async () =>
     signUpsOpen = true;
 
     manager = new StatusManager({
+        handle: booted.handle,
         blob,
-        nodes,
-        users: new UserRA(booted.handle),
-        shares,
         tracker: new LastRunTracker(),
         build: { version: '9.9.9', commit: 'a0931ee', branch: 'topic-branch' },
-        databaseKind: booted.handle.kind,
-        startedAt: new Date(Date.now() - (UPTIME_SECONDS * MS_PER_SECOND)),
+        started: new Date(Date.now() - (UPTIME_SECONDS * MS_PER_SECOND)),
         activeProviders: 2,
         emailEnabled: async () => emailConfigured,
         signUpEnabled: async () => signUpsOpen,
@@ -83,7 +79,7 @@ afterEach(async () =>
 
 async function overview() : Promise<AdminOverview>
 {
-    return (await manager.status(ADMIN)).overview;
+    return (await manager.status(admin)).overview;
 }
 
 async function createUser(email : string) : Promise<string>
@@ -168,7 +164,7 @@ describe('StatusManager.status', () =>
         await nodes.insert(folderNode({ id: 'folder-1', ownerID }));
         await nodes.insert(fileNode({ id: 'file-1', ownerID, blobID: 'sha-live' }));
         await nodes.insert(fileNode({ id: 'file-2', ownerID, blobID: 'sha-live' }));
-        await nodes.insert(fileNode({ id: 'file-trashed', ownerID, blobID: 'sha-live', trashedAt: new Date() }));
+        await nodes.insert(fileNode({ id: 'file-trashed', ownerID, blobID: 'sha-live', trashed: new Date() }));
         await nodes.insert(linkNode({ id: 'link-1', ownerID, targetNodeID: 'file-1' }));
 
         const view = await overview();
@@ -188,7 +184,7 @@ describe('StatusManager.status', () =>
             ownerID,
             blobID: 'sha-tossed',
             size: 500,
-            trashedAt: new Date(),
+            trashed: new Date(),
         }));
 
         const view = await overview();
@@ -227,7 +223,7 @@ describe('StatusManager.status', () =>
             ownerID: bob,
             blobID: 'sha-bob',
             size: 700,
-            trashedAt: new Date(),
+            trashed: new Date(),
         }));
 
         const view = await overview();
@@ -271,8 +267,8 @@ describe('StatusManager.status', () =>
             requestedRole: 'viewer',
             message: null,
             status: 'pending',
-            resolvedAt: null,
-            createdAt: new Date(),
+            resolved: null,
+            created: new Date(),
         });
         await shares.insertRequest({
             id: 'request-bob',
@@ -281,8 +277,8 @@ describe('StatusManager.status', () =>
             requestedRole: 'viewer',
             message: null,
             status: 'pending',
-            resolvedAt: null,
-            createdAt: new Date(),
+            resolved: null,
+            created: new Date(),
         });
         await shares.insertRequest({
             id: 'request-settled',
@@ -291,8 +287,8 @@ describe('StatusManager.status', () =>
             requestedRole: 'editor',
             message: null,
             status: 'pending',
-            resolvedAt: null,
-            createdAt: new Date(),
+            resolved: null,
+            created: new Date(),
         });
         await shares.resolveRequest('request-settled', 'granted', new Date());
 

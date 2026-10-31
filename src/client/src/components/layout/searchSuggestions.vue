@@ -1,10 +1,6 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Search Suggestions
   --
-  -- The dropdown under the top bar's search box: a handful of matching files and folders, each with where it lives, and
-  -- a last row that runs the full search. Purely presentational -- the box owns which row is active and what picking
-  -- one does.
-  --
   -- Rows commit on mousedown rather than click: a click would blur the input first, closing the dropdown out from under
   -- the pointer before the row ever fired.
   --------------------------------------------------------------------------------------------------------------------->

@@ -1,12 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Shared Store
-//
-// State and orchestration behind the Shared with me view: the caller's active incoming grants, each carrying its target
-// for display, its role, and whether the caller has already placed a link to it. The listing is a single unpaginated
-// read (every active grant), so there is no load-more. Three recipient mutations act on an entry -- save a copy of a
-// shared file into My Files, place a link to it in a folder of the caller's choosing, and leave a share -- each calling
-// the RA then refetching so the surface reflects the change. Mutation errors propagate to the caller to toast; a failed
-// listing lands in `error` for the surface's retry.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { computed, ref } from 'vue';
@@ -16,10 +9,13 @@ import type { NodeTypeFamily, SharedWithMeEntry } from '@fileshed/core';
 
 // Resource Access
 import { copyNode, createNode } from '../resource-access/nodes.ts';
-import { leaveShare, sharedWithMe } from '../resource-access/shares.ts';
+import { leaveShare, listSharedWithMe } from '../resource-access/shares.ts';
 
-// Utils
-import { type ModifiedFilter, modifiedRange } from '../utils/filterPresets.ts';
+// Engines
+import type { ModifiedFilter } from '../engines/listing/index.ts';
+
+// Stores
+import { createListingFilters } from './listingFilters.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -31,68 +27,56 @@ export const useSharedStore = defineStore('shared', () =>
 
     // The active Type/Modified filters, applied server-side against each share's target. Per-page-visit, not
     // persisted: a fresh visit (load) drops them, while a mutation's refetch holds them.
-    const typeFamilies = ref<NodeTypeFamily[]>([]);
-    const modified = ref<ModifiedFilter | null>(null);
+    const filters = createListingFilters();
 
     const isEmpty = computed(() => !loading.value && error.value === null && entries.value.length === 0);
-    const hasActiveFilters = computed(() => typeFamilies.value.length > 0 || modified.value !== null);
 
     // An empty listing WITH an active filter is a distinct surface state from nothing being shared at all.
-    const filteredEmpty = computed(() => isEmpty.value && hasActiveFilters.value);
+    const filteredEmpty = computed(() => isEmpty.value && filters.active.value);
 
-    // The current filters as a shared-with-me query fragment: an empty type selection and an absent date window are
-    // dropped so the server reads them as unfiltered.
-    function filterParams() : { types ?: NodeTypeFamily[]; updatedAfter ?: string; updatedBefore ?: string }
+    // Each filter change re-reads, so an older and less narrowed read can answer after a newer one. Only the latest
+    // read lands.
+    let generation = 0;
+
+    async function readEntries(token : number) : Promise<void>
     {
-        const params : { types ?: NodeTypeFamily[]; updatedAfter ?: string; updatedBefore ?: string } = {};
-
-        if(typeFamilies.value.length > 0) { params.types = [ ...typeFamilies.value ]; }
-        if(modified.value !== null)
-        {
-            const window = modifiedRange(modified.value);
-            if(window.after !== undefined) { params.updatedAfter = window.after; }
-            if(window.before !== undefined) { params.updatedBefore = window.before; }
-        }
-
-        return params;
-    }
-
-    function resetFilters() : void
-    {
-        typeFamilies.value = [];
-        modified.value = null;
+        const read = await listSharedWithMe(filters.query());
+        if(token === generation) { entries.value = read.entries; }
     }
 
     async function refresh() : Promise<void>
     {
-        entries.value = (await sharedWithMe(filterParams())).entries;
+        await readEntries(++generation);
     }
 
-    async function fetchListing() : Promise<void>
+    async function loadListing() : Promise<void>
     {
+        const token = ++generation;
         loading.value = true;
         error.value = null;
 
         try
         {
-            await refresh();
+            await readEntries(token);
         }
         catch(caught)
         {
+            if(token !== generation) { return; }
+
             error.value = caught instanceof Error ? caught : new Error('Failed to load your shared items.');
             entries.value = [];
         }
         finally
         {
-            loading.value = false;
+            if(token === generation) { loading.value = false; }
         }
     }
 
     // A fresh visit: filters reset, then the listing loads unfiltered.
     async function load() : Promise<void>
     {
-        resetFilters();
-        await fetchListing();
+        filters.reset();
+        await loadListing();
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -101,20 +85,20 @@ export const useSharedStore = defineStore('shared', () =>
 
     async function setTypeFamilies(families : NodeTypeFamily[]) : Promise<void>
     {
-        typeFamilies.value = [ ...families ];
-        await fetchListing();
+        filters.typeFamilies.value = [ ...families ];
+        await loadListing();
     }
 
     async function setModified(next : ModifiedFilter | null) : Promise<void>
     {
-        modified.value = next;
-        await fetchListing();
+        filters.modified.value = next;
+        await loadListing();
     }
 
     async function clearFilters() : Promise<void>
     {
-        resetFilters();
-        await fetchListing();
+        filters.reset();
+        await loadListing();
     }
 
     // Save a copy of a shared file into My Files (root), a fresh node the caller owns referencing the same content.
@@ -144,10 +128,10 @@ export const useSharedStore = defineStore('shared', () =>
         entries,
         loading,
         error,
-        typeFamilies,
-        modified,
+        typeFamilies: filters.typeFamilies,
+        modified: filters.modified,
         isEmpty,
-        hasActiveFilters,
+        hasActiveFilters: filters.active,
         filteredEmpty,
         load,
         refresh,

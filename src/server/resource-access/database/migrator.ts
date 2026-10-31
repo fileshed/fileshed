@@ -13,8 +13,11 @@ import { type Migration, type MigrationProvider, Migrator, NO_MIGRATIONS } from 
 
 import type { Kysely } from 'kysely';
 
+// Models
+import type { DatabaseKind } from '@fileshed/core';
+
 // Database
-import type { Database, DatabaseKind } from './database.ts';
+import type { Database } from './database.ts';
 
 // Migrations
 import * as initial001 from './migrations/001_initial.ts';
@@ -25,6 +28,8 @@ import * as quotaAggregateIndex005 from './migrations/005_quota_aggregate_index.
 import * as nameOrderingIndex006 from './migrations/006_name_ordering_index.ts';
 import * as publicLinkKindRemoval007 from './migrations/007_public_link_kind_removal.ts';
 import * as naturalNameCollation008 from './migrations/008_natural_name_collation.ts';
+import * as auditTimestampNames009 from './migrations/009_audit_timestamp_names.ts';
+import * as eventTimestampNames010 from './migrations/010_event_timestamp_names.ts';
 
 // Utils
 import { getLogger } from '../../utils/logger.ts';
@@ -67,6 +72,14 @@ function migrationList(kind : DatabaseKind) : Record<string, Migration>
         '008_natural_name_collation': {
             up: (db) => naturalNameCollation008.up(db, kind),
             down: (db) => naturalNameCollation008.down(db, kind),
+        },
+        '009_audit_timestamp_names': {
+            up: (db) => auditTimestampNames009.up(db),
+            down: (db) => auditTimestampNames009.down(db),
+        },
+        '010_event_timestamp_names': {
+            up: (db) => eventTimestampNames010.up(db),
+            down: (db) => eventTimestampNames010.down(db),
         },
     };
 }

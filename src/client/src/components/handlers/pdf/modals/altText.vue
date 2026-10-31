@@ -1,11 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Alt Text
   --
-  -- The description behind an image annotation's alt-text button. pdf.js draws the button on the annotation itself and
-  -- then asks a manager to run the dialog; this is that dialog, and the store is what carries the answer back.
-  --
-  -- Marking an image decorative is the statement that it carries no information a reader would miss, so the text box
-  -- goes away with it rather than being kept and ignored.
+  -- pdf.js draws the alt-text button on the annotation itself and then asks a manager to run the dialog; this is that
+  -- dialog, and the store carries the answer back. Marking an image decorative states that it carries no information a
+  -- reader would miss, so the text box goes away with it rather than being kept and ignored.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -54,13 +52,13 @@
     import { computed, ref, watch } from 'vue';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfAltText' });
+    defineOptions({ name: 'PDFAltText' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const draft = ref('');
     const decorative = ref(false);

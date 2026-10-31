@@ -10,45 +10,12 @@ import type { LinkTarget, NodeResponse, UserSummary } from '@fileshed/core';
 
 import NodeRow from '@client/components/drive/nodeRow.vue';
 
+// Support
+import { fileNode, linkNode } from '../../support.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
-function fileNode(ownerID = 'u1') : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'n1',
-        name: 'notes.txt',
-        ownerID,
-        parentID: null,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        updatedAt: '2026-07-01T00:00:00.000Z',
-        role: 'owner' as const,
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
-
-function linkNode(ownerID : string, target : LinkTarget | null) : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'l1',
-        name: 'a link',
-        ownerID,
-        parentID: null,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        updatedAt: '2026-07-01T00:00:00.000Z',
-        role: 'owner' as const,
-        type: 'link',
-        targetNodeID: 't1',
-        target,
-    };
-}
-
-const STUBS = {
+const stubs = {
     UContextMenu: { template: '<div><slot /></div>' },
     UDropdownMenu: { template: '<div><slot /></div>' },
     UButton: { template: '<button class="ubtn" />' },
@@ -66,7 +33,7 @@ async function mountRow(node : NodeResponse, owners : UserSummary[]) : Promise<V
 {
     const wrapper = mount(NodeRow, {
         props: { node, selected: false, menuItems: [ [ { label: 'x' } ] ], owners },
-        global: { stubs: STUBS },
+        global: { stubs },
     });
 
     await wrapper.find('.group').trigger('mouseenter');
@@ -87,7 +54,7 @@ describe('NodeRow — owner column', () =>
     {
         const owners : UserSummary[]
             = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: 'https://cdn.example/ada.png' } ];
-        const wrapper = await mountRow(fileNode('u1'), owners);
+        const wrapper = await mountRow(fileNode({ ownerID: 'u1' }), owners);
 
         const hover = wrapper.find('.user-summary-hover');
         expect(hover.attributes('data-owner-id')).toBe('u1');
@@ -100,14 +67,14 @@ describe('NodeRow — owner column', () =>
     it('passes an imageless owner through with no src, so the avatar falls back to initials', async () =>
     {
         const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
-        const wrapper = await mountRow(fileNode('u1'), owners);
+        const wrapper = await mountRow(fileNode({ ownerID: 'u1' }), owners);
 
         expect(wrapper.find('.user-summary-hover .avatar').attributes('data-src')).toBeUndefined();
     });
 
     it('falls back to a bare avatar keyed by the raw owner id when the facet has no match', async () =>
     {
-        const wrapper = await mountRow(fileNode('u1'), []);
+        const wrapper = await mountRow(fileNode({ ownerID: 'u1' }), []);
 
         expect(wrapper.find('.user-summary-hover').exists()).toBe(false);
         expect(wrapper.find('.avatar').attributes('data-alt')).toBe('u1');
@@ -119,7 +86,7 @@ describe('NodeRow — owner column', () =>
             { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null },
             { id: 'u2', name: 'Grace Hopper', email: 'grace@example.com', image: null },
         ];
-        const wrapper = await mountRow(fileNode('u2'), owners);
+        const wrapper = await mountRow(fileNode({ ownerID: 'u2' }), owners);
 
         expect(wrapper.find('.user-summary-hover').attributes('data-owner-id')).toBe('u2');
         expect(wrapper.find('.avatar').attributes('data-alt')).toBe('Grace Hopper');
@@ -137,8 +104,8 @@ describe('NodeRow — controls the pointer has not reached', () =>
     {
         const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
         const wrapper = mount(NodeRow, {
-            props: { node: fileNode('u1'), selected: false, menuItems: [ [ { label: 'x' } ] ], owners },
-            global: { stubs: STUBS },
+            props: { node: fileNode({ ownerID: 'u1' }), selected: false, menuItems: [ [ { label: 'x' } ] ], owners },
+            global: { stubs },
         });
 
         expect(wrapper.find('.user-summary-hover').exists()).toBe(false);
@@ -149,7 +116,7 @@ describe('NodeRow — controls the pointer has not reached', () =>
     it('builds the hover card and the kebab once the pointer arrives', async () =>
     {
         const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
-        const wrapper = await mountRow(fileNode('u1'), owners);
+        const wrapper = await mountRow(fileNode({ ownerID: 'u1' }), owners);
 
         expect(wrapper.find('.user-summary-hover').exists()).toBe(true);
         expect(wrapper.find('.ubtn').exists()).toBe(true);
@@ -159,8 +126,8 @@ describe('NodeRow — controls the pointer has not reached', () =>
     it('builds them for a keyboard that focuses the row', async () =>
     {
         const wrapper = mount(NodeRow, {
-            props: { node: fileNode('u1'), selected: false, menuItems: [ [ { label: 'x' } ] ], owners: [] },
-            global: { stubs: STUBS },
+            props: { node: fileNode(), selected: false, menuItems: [ [ { label: 'x' } ] ], owners: [] },
+            global: { stubs },
         });
 
         await wrapper.find('.group').trigger('focusin');
@@ -178,7 +145,7 @@ describe('NodeRow — column order', () =>
     it('places the owner cell immediately after the name, ahead of size, modified, and type', async () =>
     {
         const owners : UserSummary[] = [ { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image: null } ];
-        const wrapper = await mountRow(fileNode('u1'), owners);
+        const wrapper = await mountRow(fileNode({ name: 'notes.txt', ownerID: 'u1' }), owners);
 
         const cells = [ ...wrapper.find('.group').element.children ];
 
@@ -202,7 +169,7 @@ describe('NodeRow — owner column for a link', () =>
             { id: 'original-owner', name: 'Ada Lovelace', email: 'ada@example.com', image: null },
         ];
         const target : LinkTarget = { id: 't1', type: 'file', name: 'shared.txt', ownerID: 'original-owner' };
-        const wrapper = await mountRow(linkNode('recipient', target), owners);
+        const wrapper = await mountRow(linkNode({ ownerID: 'recipient', target }), owners);
 
         expect(wrapper.find('.user-summary-hover').attributes('data-owner-id')).toBe('original-owner');
         expect(wrapper.find('.avatar').attributes('data-alt')).toBe('Ada Lovelace');
@@ -213,7 +180,7 @@ describe('NodeRow — owner column for a link', () =>
     {
         const owners : UserSummary[]
             = [ { id: 'recipient', name: 'Recipient', email: 'recipient@example.com', image: null } ];
-        const wrapper = await mountRow(linkNode('recipient', null), owners);
+        const wrapper = await mountRow(linkNode({ ownerID: 'recipient' }), owners);
 
         expect(wrapper.find('.user-summary-hover').attributes('data-owner-id')).toBe('recipient');
     });

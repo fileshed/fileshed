@@ -1,19 +1,12 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- PDF Surface
   --
-  -- The scrolling render surface: a positioned container pdf.js's PDFViewer paints into, page by page, lazily. It owns
-  -- one live pdf.js session (see pdfjs.ts) over the store's loaded bytes and is otherwise driven entirely by the store
-  -- -- it reads the bytes, the read-only flag, the annotation mode, the zoom, and the layout, and it reports the
-  -- scrolled-to page, the unsaved-marks flag, and the document's own facts back. A reload swaps the store's bytes,
-  -- which tears the old session down and mounts a fresh one, so in-progress annotations are dropped exactly as a
-  -- conflict reload intends.
+  -- A reload swaps the store's bytes, which tears the old pdf.js session down and mounts a fresh one, so unsaved
+  -- annotations are dropped as a conflict reload intends. The session is registered as the store's document access, the
+  -- only way anything outside this component reaches the renderer.
   --
-  -- The session is registered as the store's document access, the one place anything outside this component reaches
-  -- the renderer.
-  --
-  -- Two behaviors are the surface's own and never reach pdf.js: dragging the page to scroll it (the pan cursor tool),
-  -- and filling the screen. Full screen is reported back to the store only once the browser confirms it, because a
-  -- reader can leave it by pressing Escape, which this app is never asked about.
+  -- Panning and full screen belong to this surface and never reach pdf.js. Full screen is reported to the store only
+  -- once the browser confirms it, because the browser lets the reader leave it with Escape without asking the app.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -86,23 +79,25 @@
     import 'pdfjs-dist/web/pdf_viewer.css';
 
     // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+
+    // Engines
+    import type { ScrollModeName, SpreadModeName } from '../../../engines/pdf/types.ts';
 
     // Components
-    import type { ScrollModeName, SpreadModeName } from './types.ts';
-    import { type PdfSession, openPdfSession } from './pdfjs.ts';
+    import { type PDFSession, openPDFSession } from './pdfjs.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfSurface' });
+    defineOptions({ name: 'PDFSurface' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 
     const container = ref<HTMLDivElement | null>(null);
     const viewer = ref<HTMLDivElement | null>(null);
     const renderError = ref<string | null>(null);
 
-    let session : PdfSession | null = null;
+    let session : PDFSession | null = null;
 
     // Bumped on every (re)mount so a session that finishes loading after its bytes were already superseded tears itself
     // down instead of attaching a stale document.
@@ -130,7 +125,7 @@
 
         try
         {
-            const active = await openPdfSession({
+            const active = await openPDFSession({
                 container: container.value,
                 viewer: viewer.value,
                 data,

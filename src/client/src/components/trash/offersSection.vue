@@ -1,11 +1,8 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Offered To You
   --
-  -- The offeree's surface of the recipients-may-copy flow: when the owner of a file shared with you hard-deletes it and
-  -- opts to let recipients keep a copy, a time-boxed offer lands here. Saving a copy places a fresh file you own in My
-  -- Files, referencing the same content, charged to your quota; declining lets the offer lapse. The offer carries a
-  -- snapshot of the deleted file (the node is already gone), so nothing here needs to resolve it. Self-loads its own
-  -- offers and renders nothing when there are none.
+  -- When the owner of a file shared with the caller deletes it for good and lets recipients keep a copy, a time-limited
+  -- offer lands here. The offer carries a snapshot of the deleted file, since the node is already gone.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -33,7 +30,7 @@
                         {{ offer.name }}
                     </p>
                     <p class="truncate text-xs text-muted">
-                        {{ formatBytes(offer.size) }} · save before {{ deadline(offer.expiresAt) }}
+                        {{ formatBytes(offer.size) }} · save before {{ deadline(offer.expires) }}
                     </p>
                 </div>
 
@@ -109,9 +106,9 @@
         offers.value = offers.value.filter((offer) => offer.id !== id);
     }
 
-    function deadline(expiresAt : string) : string
+    function deadline(expires : string) : string
     {
-        return formatNodeDate(expiresAt, session.timeFormat);
+        return formatNodeDate(expires, session.timeFormat);
     }
 
     // Accept places the copy in My Files (root); the copy is fully independent of the deleted original thereafter --
@@ -125,7 +122,7 @@
             () =>
             {
                 remove(offer.id);
-                void session.refreshProfile().catch(() => undefined);
+                void session.refreshProfile();
                 toast.add({
                     title: 'Saved to your files',
                     description: `"${ offer.name }" is now in My Files.`,

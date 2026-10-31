@@ -1,15 +1,10 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Node Tile
   --
-  -- One card in the grid: a type icon (a link overlays a small badge; a dead link dims to a broken glyph), the name
-  -- truncated with the full name on hover, size plus modified time for files, and the node's sharing in the
-  -- top-left corner, opposite the kebab. Presentational only -- a click emits selection intent with its modifiers, a
-  -- double-click emits open, and the menu items (right-click, or the corner kebab) arrive as a prop.
-  --
-  -- The tile is a fixed height, which is what lets the grid place it without measuring, and it carries its node's id
-  -- so a right-click anywhere in the grid can tell which tile it landed on. The kebab's menu waits for the pointer:
-  -- in a folder of ten thousand, a tile is mounted every time it scrolls back into view, and a menu nobody has
-  -- reached for yet is the most expensive thing on the card.
+  -- The tile is a fixed height, which is what lets the grid place it without measuring, and it carries its node's id so
+  -- a right-click anywhere in the grid can tell which tile it landed on. The kebab's menu waits for the pointer: in a
+  -- folder of ten thousand a tile is mounted every time it scrolls back into view, and a menu nobody has reached for
+  -- yet is the most expensive thing on the card.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -67,7 +62,7 @@
                 {{ node.name }}
             </p>
             <p v-if="node.type === 'file'" class="mt-0.5 truncate text-xs text-muted">
-                {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updatedAt, session.timeFormat) }}
+                {{ formatBytes(node.size) }} · {{ formatNodeDate(node.updated, session.timeFormat) }}
             </p>
             <p v-else-if="dead" class="mt-0.5 text-xs text-dimmed">
                 Broken link

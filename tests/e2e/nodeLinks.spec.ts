@@ -23,7 +23,7 @@ import type {
 } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, sha256Of, smallFixture, spawnServer, withDb } from './support.ts';
+import { APIClient, type ServerHandle, sha256Of, smallFixture, spawnServer, withDb } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -31,26 +31,26 @@ const PASSWORD = 'correct-horse-battery';
 
 let server : ServerHandle;
 
-let owner : ApiClient;
-let recipient : ApiClient;
-let stranger : ApiClient;
+let owner : APIClient;
+let recipient : APIClient;
+let stranger : APIClient;
 let recipientID : string;
 let ownerID : string;
 
-async function callerID(client : ApiClient) : Promise<string>
+async function callerID(client : APIClient) : Promise<string>
 {
     const me = await (await client.get('/api/me')).json() as MeResponse;
     return me.id;
 }
 
-async function makeFolder(client : ApiClient, name : string) : Promise<NodeResponse>
+async function makeFolder(client : APIClient, name : string) : Promise<NodeResponse>
 {
     return await (await client.post('/api/nodes', { type: 'folder', name, parentID: null })).json() as NodeResponse;
 }
 
 // Claim -> ticket -> PUT for a small (< 1 MiB) fixture, which always answers with a ticket rather than a challenge.
 async function upload(
-    client : ApiClient,
+    client : APIClient,
     parentID : string | null,
     name : string,
     bytes : Buffer
@@ -105,7 +105,7 @@ async function placeLinkIntoSharedFolder(seed : string, role : 'viewer' | 'edito
 }
 
 // A link placed by `client` inside `parentID`, pointing at `targetNodeID`.
-async function placeLink(client : ApiClient, parentID : string | null, targetNodeID : string) : Promise<NodeResponse>
+async function placeLink(client : APIClient, parentID : string | null, targetNodeID : string) : Promise<NodeResponse>
 {
     return await (await client.post('/api/nodes', { type: 'link', parentID, targetNodeID })).json() as NodeResponse;
 }
@@ -126,9 +126,9 @@ beforeAll(async () =>
 {
     server = await spawnServer();
 
-    owner = new ApiClient(server.baseURL);
-    recipient = new ApiClient(server.baseURL);
-    stranger = new ApiClient(server.baseURL);
+    owner = new APIClient(server.baseURL);
+    recipient = new APIClient(server.baseURL);
+    stranger = new APIClient(server.baseURL);
     await owner.signUp('link-owner@example.com', PASSWORD);
     await recipient.signUp('link-recipient@example.com', PASSWORD);
     await stranger.signUp('link-stranger@example.com', PASSWORD);

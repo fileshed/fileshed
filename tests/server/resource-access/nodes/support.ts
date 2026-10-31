@@ -11,10 +11,10 @@
 import type { Kysely } from 'kysely';
 
 // Models
-import type { FileNode, FolderNode, LinkNode } from '@fileshed/core';
+import type { DatabaseKind, FileNode, FolderNode, LinkNode } from '@fileshed/core';
 
 // Resource Access
-import type { Database, DatabaseHandle, DatabaseKind } from '@server/resource-access/database/database.ts';
+import type { Database, DatabaseHandle } from '@server/resource-access/database/database.ts';
 import { migrateToLatest } from '@server/resource-access/database/migrator.ts';
 import {
     bigIntType,
@@ -131,7 +131,7 @@ export async function seedBlob(db : Kysely<Database>, sha256 : string, backendID
             size: 10,
             backend_id: backendID,
             storage_key: `key/${ sha256 }`,
-            created_at: isoNow(),
+            created: isoNow(),
         })
         .execute();
 }
@@ -148,9 +148,9 @@ interface FolderInit
     ownerID : string;
     parentID ?: string | null;
     name ?: string;
-    createdAt ?: Date;
-    updatedAt ?: Date;
-    trashedAt ?: Date | null;
+    created ?: Date;
+    updated ?: Date;
+    trashed ?: Date | null;
 }
 
 export function folderNode(init : FolderInit) : FolderNode
@@ -161,9 +161,9 @@ export function folderNode(init : FolderInit) : FolderNode
         name: init.name ?? init.id,
         ownerID: init.ownerID,
         parentID: init.parentID ?? null,
-        createdAt: init.createdAt ?? epoch,
-        updatedAt: init.updatedAt ?? epoch,
-        trashedAt: init.trashedAt ?? null,
+        created: init.created ?? epoch,
+        updated: init.updated ?? epoch,
+        trashed: init.trashed ?? null,
     };
 }
 
@@ -176,9 +176,9 @@ interface FileInit
     mimeType ?: string;
     parentID ?: string | null;
     name ?: string;
-    createdAt ?: Date;
-    updatedAt ?: Date;
-    trashedAt ?: Date | null;
+    created ?: Date;
+    updated ?: Date;
+    trashed ?: Date | null;
 }
 
 export function fileNode(init : FileInit) : FileNode
@@ -192,9 +192,9 @@ export function fileNode(init : FileInit) : FileNode
         blobID: init.blobID,
         size: init.size ?? 10,
         mimeType: init.mimeType ?? 'text/plain',
-        createdAt: init.createdAt ?? epoch,
-        updatedAt: init.updatedAt ?? epoch,
-        trashedAt: init.trashedAt ?? null,
+        created: init.created ?? epoch,
+        updated: init.updated ?? epoch,
+        trashed: init.trashed ?? null,
     };
 }
 
@@ -205,8 +205,8 @@ interface LinkInit
     targetNodeID : string;
     parentID ?: string | null;
     name ?: string;
-    createdAt ?: Date;
-    updatedAt ?: Date;
+    created ?: Date;
+    updated ?: Date;
 }
 
 export function linkNode(init : LinkInit) : LinkNode
@@ -218,8 +218,8 @@ export function linkNode(init : LinkInit) : LinkNode
         ownerID: init.ownerID,
         parentID: init.parentID ?? null,
         targetNodeID: init.targetNodeID,
-        createdAt: init.createdAt ?? epoch,
-        updatedAt: init.updatedAt ?? epoch,
+        created: init.created ?? epoch,
+        updated: init.updated ?? epoch,
     };
 }
 

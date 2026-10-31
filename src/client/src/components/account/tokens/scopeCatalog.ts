@@ -1,9 +1,8 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Scope Catalog
 //
-// The presentation vocabulary for the six scopes: labels, plain-language descriptions, and the danger flag the UI
-// badges. The presets are buttons, not stored scopes -- they tick real checkboxes, so a key's row always shows its
-// true capabilities and a "full access" key minted today never silently grows scopes added later.
+// Presets are buttons rather than stored scopes: they tick real checkboxes, so a token's row always shows its true
+// capabilities and a "full access" token minted today never gains scopes added later.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { AccessTokenScope } from '@fileshed/core';

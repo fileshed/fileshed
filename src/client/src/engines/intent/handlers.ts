@@ -1,14 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Handler Resolution
 //
-// The handler-resolution engine: given a node, which handler opens it -- edit (text/markdown editors), annotate (the
-// PDF annotator), play (the media players), native view (the browser's own inline renderer), or download. It is the
-// registry the components/handlers/ families plug into: each family's handler gets first refusal at a file, and
-// whatever no handler claims falls through to the browser's native open -- the permanent fallback, where an
-// inline-renderable type previews in a new tab and the rest download. Folders navigate; a link to a folder navigates
-// to the LINK's own id (so its logical placement shows, not the target's ancestry), a link to a file follows the
-// target under the file rules, and a dead link opens to nothing. resolveOpen returns the intent rather than performing
-// it, so the effectful half (router push, window.open) stays in the caller.
+// Whatever no handler claims falls through to the browser's native open: an inline-renderable type previews in a new
+// tab and the rest download. A link to a folder navigates to the link's own id, so the link's placement shows rather
+// than the target's ancestry.
 //----------------------------------------------------------------------------------------------------------------------
 
 import {
@@ -22,9 +17,9 @@ import {
 //----------------------------------------------------------------------------------------------------------------------
 
 const INLINE_PREFIXES = [ 'text/', 'image/', 'audio/', 'video/' ] as const;
-const INLINE_EXACT = new Set([ 'application/pdf', 'application/json' ]);
+const inlineExactTypes = new Set([ 'application/pdf', 'application/json' ]);
 
-const MARKDOWN_MIME = new Set([ 'text/markdown', 'text/x-markdown' ]);
+const markdownMimeTypes = new Set([ 'text/markdown', 'text/x-markdown' ]);
 const MARKDOWN_EXTENSIONS = [ '.md', '.markdown' ] as const;
 
 export type EditorMode = 'markdown' | 'plain';
@@ -56,7 +51,7 @@ interface OpenTarget
 
 export function canViewInline(mimeType : string) : boolean
 {
-    if(INLINE_EXACT.has(mimeType)) { return true; }
+    if(inlineExactTypes.has(mimeType)) { return true; }
 
     return INLINE_PREFIXES.some((prefix) => mimeType.startsWith(prefix));
 }
@@ -64,7 +59,7 @@ export function canViewInline(mimeType : string) : boolean
 // Markdown by declared type or by extension -- a .md the server typed as text/plain (or worse) is still markdown to us.
 function isMarkdown(mimeType : string, name : string) : boolean
 {
-    if(MARKDOWN_MIME.has(mimeType)) { return true; }
+    if(markdownMimeTypes.has(mimeType)) { return true; }
 
     const lower = name.toLowerCase();
     return MARKDOWN_EXTENSIONS.some((extension) => lower.endsWith(extension));
@@ -94,7 +89,7 @@ export function defaultEditorMode(mimeType : string, name : string) : EditorMode
 
 type OpenHandler = (target : OpenTarget) => OpenAction | null;
 
-const HANDLERS : readonly OpenHandler[] = [
+const handlers : readonly OpenHandler[] = [
     // First on purpose: an .m3u often arrives typed text/plain (which the editor would claim) or audio/x-mpegurl
     // (which the player would claim as an undecodable "track"); the playlist opens as a playlist regardless.
     (target) =>
@@ -144,7 +139,7 @@ function nativeOpen(target : OpenTarget) : OpenAction
 
 function openFile(target : OpenTarget) : OpenAction
 {
-    for(const handle of HANDLERS)
+    for(const handle of handlers)
     {
         const action = handle(target);
         if(action !== null) { return action; }

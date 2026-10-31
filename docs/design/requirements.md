@@ -42,23 +42,23 @@ Domain modeling convention: canonical TypeScript domain types with Zod codecs at
 
 ## 3. Data Model
 
-All primary keys are **cuid2** strings, generated app-side. cuid2 is deliberately non-monotonic — order by `created_at`, never by id.
+All primary keys are **cuid2** strings, generated app-side. cuid2 is deliberately non-monotonic — order by `created`, never by id.
 
 Names order by **ICU collation at primary strength with numeric runs**: case and accents never separate two names, `track-9` precedes `track-10`, and ties break on id. Both dialects and the client produce that same order — Postgres through a collation, SQLite by ordering in the server, which caps at 100,000 children in one folder and falls back to alphabetical beyond it.
 
 ### 3.1 Core entities
 
 - **user** — BetterAuth-managed identity plus app profile (quota limit, role: admin/user).
-- **node** — a file, folder, or link. Fields: `id`, `type` (file|folder|link), `name`, `owner_id`, `mount_id`, `parent_id` (nullable = root level), `blob_id` (files only), `target_node_id` (links only), `size` (logical, files only), `mime_type` (files only), `created_at`, `updated_at`, `trashed_at` (nullable; never set on links — links are deleted, not trashed).
+- **node** — a file, folder, or link. Fields: `id`, `type` (file|folder|link), `name`, `owner_id`, `mount_id`, `parent_id` (nullable = root level), `blob_id` (files only), `target_node_id` (links only), `size` (logical, files only), `mime_type` (files only), `created`, `updated`, `trashed` (nullable; never set on links — links are deleted, not trashed).
   - A **link** is the recipient-side placement of a shared item: an ordinary node, owned by the recipient, living in their tree, pointing at someone else's node. Links may not target links. Links carry no size, no quota charge, and no ACL of their own.
   - A **mounted node** is an entry of a mount (§5.3). A node has exactly one of `owner_id` or `mount_id`; a mounted node has `mount_id`, no `blob_id`, and the entry's filesystem identity.
-- **share** — a permission grant. Fields: `id`, `node_id`, `grantee_user_id`, `role` (viewer|editor), `created_by`, `created_at`.
-- **public_link** — tokened anonymous access to a node. Fields: `id`, `node_id`, `token`, `created_at`, `revoked_at`.
-- **share_request** — a recipient-initiated ask for access (§3.5). Fields: `id`, `node_id`, `requester_id`, `requested_role`, `status` (pending|granted|declined), `created_at`, `resolved_at`.
-- **blob** — content-addressed storage record. Fields: `sha256` (PK), `size`, `backend_id`, `storage_key`, `created_at`, `deleted_at` (nullable, GC grace marker).
-- **deletion_offer** — a time-boxed "save a copy" offer created when an owner hard-deletes a shared file with recipients-may-copy enabled (§4.4). Fields: `id`, `sha256` (FK → blob, `ON DELETE CASCADE`), `offeree_id`, `name`/`mime_type`/`size` snapshot, `created_by`, `created_at`, `expires_at` (= the blob GC grace deadline).
+- **share** — a permission grant. Fields: `id`, `node_id`, `grantee_user_id`, `role` (viewer|editor), `created_by`, `created`.
+- **public_link** — tokened anonymous access to a node. Fields: `id`, `node_id`, `token`, `created`, `revoked`.
+- **share_request** — a recipient-initiated ask for access (§3.5). Fields: `id`, `node_id`, `requester_id`, `requested_role`, `status` (pending|granted|declined), `created`, `resolved`.
+- **blob** — content-addressed storage record. Fields: `sha256` (PK), `size`, `backend_id`, `storage_key`, `created`, `deleted` (nullable, GC grace marker).
+- **deletion_offer** — a time-boxed "save a copy" offer created when an owner hard-deletes a shared file with recipients-may-copy enabled (§4.4). Fields: `id`, `sha256` (FK → blob, `ON DELETE CASCADE`), `offeree_id`, `name`/`mime_type`/`size` snapshot, `created_by`, `created`, `expires` (= the blob GC grace deadline).
 - **storage_backend** — configured backend instances: `id`, `kind` (fs|db|s3|azure), config JSON, `is_default`.
-- **mount** — an existing server directory, configured by an admin and indexed into node rows (§5). Fields: `id`, `name`, `path`, `default_role` (none|viewer|editor), `allow_public_links`, scan state, `created_at`.
+- **mount** — an existing server directory, configured by an admin and indexed into node rows (§5). Fields: `id`, `name`, `path`, `default_role` (none|viewer|editor), `allow_public_links`, scan state, `created`.
 - **mount_grant** — a per-user role on a mount. Fields: `mount_id`, `user_id`, `role` (viewer|editor).
 
 ### 3.2 Trees: per-user, with links
@@ -155,8 +155,8 @@ Notes:
 
 - `blob.sha256` is the identity. A blob is stored once regardless of how many nodes reference it.
 - Ref count is derived (count of non-purged file nodes referencing the blob), not a stored counter — avoids drift. Index `node.blob_id`.
-- When the last reference is removed, set `blob.deleted_at` (graveyard). A scheduled GC job hard-deletes blobs whose `deleted_at` exceeds the grace window (default 7 days, configurable).
-- A successful claim of a graveyard blob clears `deleted_at` (resurrection). Claim/GC must be concurrency-safe: GC takes a per-blob lock or uses `DELETE … WHERE deleted_at < cutoff` with the claim path clearing `deleted_at` first, in a transaction.
+- When the last reference is removed, set `blob.deleted` (graveyard). A scheduled GC job hard-deletes blobs whose `deleted` exceeds the grace window (default 7 days, configurable).
+- A successful claim of a graveyard blob clears `deleted` (resurrection). Claim/GC must be concurrency-safe: GC takes a per-blob lock or uses `DELETE … WHERE deleted < cutoff` with the claim path clearing `deleted` first, in a transaction.
 
 ### 4.3 Upload flow
 
@@ -192,8 +192,8 @@ The bytes travel as a sequence of PUTs against one ticket, so the largest reques
 
 ### 4.4 Trash & delete semantics
 
-- Trashing a node sets `trashed_at`; subtree is hidden from normal listings, visible in Trash. **Trashed files still count against the owner's quota** (matches Drive; prevents trash-as-free-storage).
-- Restore clears `trashed_at`; if the original parent is gone, restore to owner's root.
+- Trashing a node sets `trashed`; subtree is hidden from normal listings, visible in Trash. **Trashed files still count against the owner's quota** (matches Drive; prevents trash-as-free-storage).
+- Restore clears `trashed`; if the original parent is gone, restore to owner's root.
 - Permanent delete (manual or auto-purge after 30 days, configurable) removes the node; blob ref-counting handles the rest. Links targeting the node die with it by FK cascade (§3.2b).
 - Trashing a shared folder (by owner) hides it from all recipients. Recipients cannot trash nodes they don't own — they delete their link instead. Links are deleted directly, never trashed (they're re-creatable from Shared with me).
 
@@ -231,7 +231,7 @@ A feature that needs FileShed to be the only writer, or to know a file by its ha
 
 ### 5.3 Data model
 
-- **mount** — `id`, `name`, `path`, `default_role` (none|viewer|editor), `allow_public_links`, `created_at`, and scan state: `device` (the device the root was on at the last successful scan), `status` (online|offline), `last_scanned_at`.
+- **mount** — `id`, `name`, `path`, `default_role` (none|viewer|editor), `allow_public_links`, `created`, and scan state: `device` (the device the root was on at the last successful scan), `status` (online|offline), `last_scanned_at`.
 - **mount_grant** — `mount_id`, `user_id`, `role` (viewer|editor); one per user per mount. Both FKs are `ON DELETE CASCADE`.
 - Mounted entries are rows in `node`, so every node feature works on them: children listing, download, links' `target_node_id`, search, viewer URLs.
   - A node has exactly one of `owner_id` or `mount_id` (CHECK constraint). `mount_id` is an FK → mount `ON DELETE CASCADE`.
@@ -271,7 +271,7 @@ Mounts are read-write. Access levels (§5.2) are the only control; a mount has n
 - **Rename/move** within a mount is a filesystem rename.
 - **Edit & save** (markdown editor, PDF annotations): the new content is written to a temp file and renamed over the original in one step. The node keeps its id and takes the new file's identity. The save is refused `409` if the file changed on disk since it was opened (`device`/`inode`/`size`/`mtime` no longer match), and the client offers to reload or save as a copy.
 - **Between drives and mounts**: a move between a drive and a mount, or between mounts, is a copy-then-delete background job with confirmation and progress. Copying into a drive hashes the bytes into content-addressed storage (dedup applies) and charges the user who copies. This is also how a folder of backups or a cloud export gets imported. "Copy to my drive" and "Copy to mount" are the non-destructive forms.
-- **Trash**: trashing an entry moves it into `.fileshed/trash/` on the same filesystem (an instant rename); the node stays, with `trashed_at` set. Each mount has its own Trash view, visible to its editors. Restore moves the entry back and needs its original path to be free. Permanent deletion happens only through the trash retention purge (`TRASH_PURGE_DAYS`) or by an admin with editor access to the mount. Other editors trash and restore any entry but do not permanently delete, so a mount everyone can write keeps a safety net.
+- **Trash**: trashing an entry moves it into `.fileshed/trash/` on the same filesystem (an instant rename); the node stays, with `trashed` set. Each mount has its own Trash view, visible to its editors. Restore moves the entry back and needs its original path to be free. Permanent deletion happens only through the trash retention purge (`TRASH_PURGE_DAYS`) or by an admin with editor access to the mount. Other editors trash and restore any entry but do not permanently delete, so a mount everyone can write keeps a safety net.
 
 ### 5.6 Feature availability
 
@@ -293,7 +293,7 @@ Mounts are read-write. Access levels (§5.2) are the only control; a mount has n
 | Integrity | Assembled bytes verified against the claimed hash | No hash check |
 | Rename & move | Database update | Filesystem rename |
 | Edit & save | Replace upload onto the node; `409` if someone saved first | Temp file renamed over the original; `409` if the file changed on disk |
-| Trash | `trashed_at` set; counts against quota | Moved into `.fileshed/trash/`; permanent deletion only by the purge or an admin with editor access |
+| Trash | `trashed` set; counts against quota | Moved into `.fileshed/trash/`; permanent deletion only by the purge or an admin with editor access |
 | Deletion offers | Yes (§4.4) | No |
 | Access | Ownership and shares (§3.4) | Default access and per-user grants |
 | Links & public links | Links; public links by the owner | Links; public links by editors, where the mount allows them |

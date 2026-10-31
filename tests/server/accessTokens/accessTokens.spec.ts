@@ -28,26 +28,26 @@ import {
 // Support
 import { makeAdmin } from '../auth/support.ts';
 import {
-    type BootedServeApp,
+    type BootedStoreApp,
     ORIGIN,
     type TestUser,
     type UploadedFile,
     bodyBytes,
-    bootServeApp,
+    bootStoreApp,
     makeUser,
     uploadFile,
 } from '../publicLinks/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedServeApp;
+let booted : BootedStoreApp;
 let owner : TestUser;
 let fixture : Buffer;
 let uploaded : UploadedFile;
 
 beforeEach(async () =>
 {
-    booted = await bootServeApp();
+    booted = await bootStoreApp();
     owner = await makeUser(booted, 'owner@example.com');
     fixture = randomBytes(300);
     uploaded = await uploadFile(booted, owner, fixture, { name: 'track.mp3', mimeType: 'audio/mpeg' });
@@ -74,7 +74,7 @@ async function mintPat(
         body: JSON.stringify({ name, scopes }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     return await res.json() as CreateAccessTokenResponse;
 }
 
@@ -119,7 +119,7 @@ describe('PAT minting and management', () =>
         expect(minted.token.startsWith(ACCESS_TOKEN_PREFIX)).toBe(true);
         expect(minted.accessToken.name).toBe('backup script');
         expect(minted.accessToken.scopes).toEqual(expect.arrayContaining([ 'files:download', 'files:read' ]));
-        expect(minted.accessToken.expiresAt).toBeNull();
+        expect(minted.accessToken.expires).toBeNull();
         expect(JSON.stringify(minted.accessToken)).not.toContain(minted.token);
 
         const listRes = await booted.app.request(`${ ORIGIN }/api/me/access-tokens`, {
@@ -141,10 +141,10 @@ describe('PAT minting and management', () =>
         });
         const minted = await res.json() as CreateAccessTokenResponse;
 
-        const expiresAt = Date.parse(minted.accessToken.expiresAt ?? '');
+        const expires = Date.parse(minted.accessToken.expires ?? '');
         const expectedMs = 30 * 24 * MS_PER_HOUR;
 
-        expect(Math.abs(expiresAt - Date.now() - expectedMs)).toBeLessThan(MS_PER_HOUR);
+        expect(Math.abs(expires - Date.now() - expectedMs)).toBeLessThan(MS_PER_HOUR);
     });
 
     it('rejects a mint with no scopes or an unknown scope as malformed', async () =>
@@ -344,7 +344,7 @@ describe('playback tokens', () =>
 
         expect(playback.token.startsWith(PLAYBACK_TOKEN_PREFIX)).toBe(true);
 
-        const expiresIn = Date.parse(playback.expiresAt) - Date.now();
+        const expiresIn = Date.parse(playback.expires) - Date.now();
         expect(expiresIn).toBeGreaterThan(4.5 * MS_PER_HOUR);
         expect(expiresIn).toBeLessThan(5.5 * MS_PER_HOUR);
 

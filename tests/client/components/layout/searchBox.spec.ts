@@ -17,6 +17,9 @@ import type { NodeLocation, NodeResponse, SearchResponse } from '@fileshed/core'
 // Resource Access
 import { search } from '@client/resource-access/search.ts';
 
+// Support
+import { fileNode, folderNode } from '../../support.ts';
+
 // Under test
 import SearchBox from '@client/components/layout/searchBox.vue';
 
@@ -25,29 +28,6 @@ import SearchBox from '@client/components/layout/searchBox.vue';
 vi.mock('@client/resource-access/search.ts', () => ({ search: vi.fn() }));
 
 const searchMock = search as unknown as Mock;
-
-const ISO = '2026-07-01T00:00:00.000Z';
-const BASE = { ownerID: 'owner1', parentID: null, createdAt: ISO, updatedAt: ISO, role: 'owner' as const };
-
-function folderNode(id : string, name : string) : NodeResponse
-{
-    return { sharing: null, ...BASE, id, name, type: 'folder', trashedAt: null };
-}
-
-function textFileNode(id : string, name : string) : NodeResponse
-{
-    return {
-        ...BASE,
-        id,
-        name,
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: null,
-        sharing: null,
-    };
-}
 
 function envelope(nodes : NodeResponse[], locations : Record<string, NodeLocation> = {}) : SearchResponse
 {
@@ -65,7 +45,7 @@ function envelope(nodes : NodeResponse[], locations : Record<string, NodeLocatio
 }
 
 // The real UInput is a wrapper; this stub is the input element the component binds and listens to.
-const STUBS = {
+const stubs = {
     UInput: {
         props: [ 'modelValue' ],
         emits: [ 'update:modelValue' ],
@@ -90,7 +70,7 @@ async function mountBox() : Promise<{ wrapper : VueWrapper; router : Router }>
     await router.push('/');
     await router.isReady();
 
-    const wrapper = mount(SearchBox, { global: { plugins: [ router ], stubs: STUBS }, attachTo: document.body });
+    const wrapper = mount(SearchBox, { global: { plugins: [ router ], stubs }, attachTo: document.body });
 
     return { wrapper, router };
 }
@@ -125,7 +105,7 @@ describe('SearchBox', () =>
     it('shows nothing until the term clears the suggestion floor', async () =>
     {
         const { wrapper } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'Notes') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'd1', name: 'Notes' }) ]));
 
         await type(wrapper, 'n');
 
@@ -137,7 +117,7 @@ describe('SearchBox', () =>
     {
         const { wrapper } = await mountBox();
         searchMock.mockResolvedValue(envelope(
-            [ textFileNode('f1', 'notes.txt') ],
+            [ fileNode({ id: 'f1', name: 'notes.txt' }) ],
             { f1: { crumbs: [ { id: 'p1', name: 'Projects' } ], foreign: false } }
         ));
 
@@ -152,7 +132,7 @@ describe('SearchBox', () =>
     it('runs the full search on Enter when no row is highlighted', async () =>
     {
         const { wrapper, router } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ textFileNode('f1', 'notes.txt') ]));
+        searchMock.mockResolvedValue(envelope([ fileNode({ id: 'f1', name: 'notes.txt' }) ]));
         await type(wrapper, 'notes');
         const push = vi.spyOn(router, 'push');
 
@@ -164,7 +144,7 @@ describe('SearchBox', () =>
     it('opens the highlighted file in a new tab when Enter takes it', async () =>
     {
         const { wrapper } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ textFileNode('f1', 'notes.txt') ]));
+        searchMock.mockResolvedValue(envelope([ fileNode({ id: 'f1', name: 'notes.txt' }) ]));
         await type(wrapper, 'notes');
         const open = vi.spyOn(window, 'open').mockReturnValue(null);
 
@@ -177,7 +157,7 @@ describe('SearchBox', () =>
     it('navigates into a highlighted folder rather than opening a tab', async () =>
     {
         const { wrapper, router } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'Team') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'd1', name: 'Team' }) ]));
         await type(wrapper, 'team');
         const push = vi.spyOn(router, 'push');
 
@@ -190,7 +170,10 @@ describe('SearchBox', () =>
     it('walks the rows with the arrow keys, marking one selected at a time', async () =>
     {
         const { wrapper } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'One'), folderNode('d2', 'Two') ]));
+        searchMock.mockResolvedValue(envelope([
+            folderNode({ id: 'd1', name: 'One' }),
+            folderNode({ id: 'd2', name: 'Two' }),
+        ]));
         await type(wrapper, 'wal');
 
         const selected = () : (string | undefined)[] =>
@@ -212,7 +195,7 @@ describe('SearchBox', () =>
     it('reaches the see-all row past the last suggestion, then wraps to the top', async () =>
     {
         const { wrapper, router } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'One') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'd1', name: 'One' }) ]));
         await type(wrapper, 'wrap');
         const push = vi.spyOn(router, 'push');
 
@@ -226,7 +209,7 @@ describe('SearchBox', () =>
     it('puts the dropdown away on Escape without clearing what was typed', async () =>
     {
         const { wrapper } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'Notes') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'd1', name: 'Notes' }) ]));
         await type(wrapper, 'notes');
 
         expect(wrapper.find('[role="listbox"]').exists()).toBe(true);
@@ -241,7 +224,7 @@ describe('SearchBox', () =>
     it('still runs the search on Enter after the dropdown was dismissed', async () =>
     {
         const { wrapper, router } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'Notes') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'd1', name: 'Notes' }) ]));
         await type(wrapper, 'notes');
         await wrapper.get('.uinput').trigger('keydown', { key: 'Escape' });
         const push = vi.spyOn(router, 'push');
@@ -254,7 +237,7 @@ describe('SearchBox', () =>
     it('dismisses the dropdown when a click lands outside the box', async () =>
     {
         const { wrapper } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'Notes') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'd1', name: 'Notes' }) ]));
         await type(wrapper, 'notes');
 
         expect(wrapper.find('[role="listbox"]').exists()).toBe(true);
@@ -268,7 +251,7 @@ describe('SearchBox', () =>
     it('opens a suggestion clicked with the pointer', async () =>
     {
         const { wrapper, router } = await mountBox();
-        searchMock.mockResolvedValue(envelope([ folderNode('d1', 'Team') ]));
+        searchMock.mockResolvedValue(envelope([ folderNode({ id: 'd1', name: 'Team' }) ]));
         await type(wrapper, 'team');
         const push = vi.spyOn(router, 'push');
 

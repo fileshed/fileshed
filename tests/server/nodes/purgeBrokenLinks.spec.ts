@@ -14,7 +14,7 @@ import { composeNodeApp, seedLinkRow, userIDByEmail } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+type JSON = Record<string, unknown>;
 
 async function request(
     app : Hono,
@@ -40,15 +40,15 @@ async function signedUp(app : Hono, email : string) : Promise<string>
     return cookieFrom(await signUp(app, email, 'correct-horse-battery'));
 }
 
-async function createFolder(app : Hono, cookie : string, name : string, parentID : string | null = null) : Promise<Json>
+async function createFolder(app : Hono, cookie : string, name : string, parentID : string | null = null) : Promise<JSON>
 {
-    return await (await request(app, 'POST', '/api/nodes', cookie, { type: 'folder', name, parentID })).json() as Json;
+    return await (await request(app, 'POST', '/api/nodes', cookie, { type: 'folder', name, parentID })).json() as JSON;
 }
 
-async function createLink(app : Hono, cookie : string, targetNodeID : string, parentID : string) : Promise<Json>
+async function createLink(app : Hono, cookie : string, targetNodeID : string, parentID : string) : Promise<JSON>
 {
     const res = await request(app, 'POST', '/api/nodes', cookie, { type: 'link', targetNodeID, parentID });
-    return await res.json() as Json;
+    return await res.json() as JSON;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -77,13 +77,13 @@ describe('POST /api/nodes/:id/purge-broken-links', () =>
         });
 
         const res = await request(app, 'POST', `/api/nodes/${ dir.id }/purge-broken-links`, cookieA);
-        const body = await res.json() as Json;
+        const body = await res.json() as JSON;
 
         expect(res.status).toBe(200);
         expect(body).toEqual({ purged: 1 });
 
         const childrenRes = await request(app, 'GET', `/api/nodes/${ dir.id }/children`, cookieA);
-        const children = await childrenRes.json() as { nodes : Json[] };
+        const children = await childrenRes.json() as { nodes : JSON[] };
         const ids = children.nodes.map((node) => node.id);
         expect(ids).toContain(liveLink.id);
         expect(ids).not.toContain('deadlink');

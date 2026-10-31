@@ -90,14 +90,14 @@ describe('stockBrandRamps', () =>
 {
     it('mirrors the shed palette in the client stylesheet verbatim', () =>
     {
-        const mainCss = readFileSync(
+        const mainCSS = readFileSync(
             fileURLToPath(new URL('../../../src/client/src/styles/main.css', import.meta.url)),
             'utf8'
         );
 
         for(const shade of shadeKeys)
         {
-            const match = new RegExp(`--color-shed-${ shade }: ([^;]+);`).exec(mainCss);
+            const match = new RegExp(`--color-shed-${ shade }: ([^;]+);`).exec(mainCSS);
             expect(match?.[1], `shed-${ shade }`).toBe(stockBrandRamps.primary[shade]);
         }
     });

@@ -8,24 +8,25 @@
 // returns; the node's untouched state on a 409 is asserted against the store, not just the status line.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaimResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     type TestUser,
     answerReplace,
     blobRowCount,
     bootBlobApp,
+    buildAnswer,
     claim,
-    computeAnswer,
     makeUser,
     nodeContentRow,
     putReplace,
@@ -33,13 +34,6 @@ import {
 } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
-
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
 
 // Just over 1 MiB: past the threshold where a known blob is proof-challenged rather than re-uploaded, so the replace
 // travels the proof-of-possession transport with zero bytes moved.
@@ -50,7 +44,7 @@ function largeFixture() : Buffer
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 beforeEach(async () =>
 {
@@ -193,7 +187,7 @@ describe('replace ifBlobID guard — proof of possession', () =>
         const challenge = await challengeRes.json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const answer = computeAnswer(challenge.nonce, challenge.ranges, known);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, known);
         const res = await answerReplace(
             booted.app,
             owner.cookie,
@@ -232,7 +226,7 @@ describe('replace ifBlobID guard — proof of possession', () =>
         const challenge = await challengeRes.json() as ClaimResponse;
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const answer = computeAnswer(challenge.nonce, challenge.ranges, known);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, known);
         const res = await answerReplace(
             booted.app,
             owner.cookie,

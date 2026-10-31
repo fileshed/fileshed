@@ -1,9 +1,5 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Selection Engine
-//
-// Pure selection logic for the drive surface: the click-to-selection state machine, and the action decisions the
-// selection bar reads off the current multi-selection. No I/O -- every function returns a fresh value and the route
-// component owns the effects.
 //----------------------------------------------------------------------------------------------------------------------
 
 import type { NodeResponse } from '@fileshed/core';

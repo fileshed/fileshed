@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ClaimResponse, MeResponse, NodeResponse, SearchResponse } from '@fileshed/core';
 
 // Support
-import { ApiClient, type ServerHandle, sha256Of, smallFixture, spawnServer } from './support.ts';
+import { APIClient, type ServerHandle, sha256Of, smallFixture, spawnServer } from './support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -22,18 +22,18 @@ const PASSWORD = 'correct-horse-battery';
 
 let server : ServerHandle;
 
-let owner : ApiClient;
-let recipient : ApiClient;
-let stranger : ApiClient;
+let owner : APIClient;
+let recipient : APIClient;
+let stranger : APIClient;
 let recipientID : string;
 
-async function callerID(client : ApiClient) : Promise<string>
+async function callerID(client : APIClient) : Promise<string>
 {
     const me = await (await client.get('/api/me')).json() as MeResponse;
     return me.id;
 }
 
-async function makeFolder(client : ApiClient, name : string, parentID : string | null = null) : Promise<NodeResponse>
+async function makeFolder(client : APIClient, name : string, parentID : string | null = null) : Promise<NodeResponse>
 {
     return await (await client.post('/api/nodes', { type: 'folder', name, parentID })).json() as NodeResponse;
 }
@@ -45,7 +45,7 @@ function crumbNamesOf(result : SearchResponse, nodeID : string) : string[]
 
 // Claim -> ticket -> PUT for a small (< 1 MiB) fixture, which always answers with a ticket rather than a challenge.
 async function upload(
-    client : ApiClient,
+    client : APIClient,
     parentID : string | null,
     name : string,
     bytes : Buffer
@@ -67,7 +67,7 @@ function grantShare(nodeID : string, granteeUserID : string, role : 'viewer' | '
     return owner.post(`/api/nodes/${ nodeID }/shares`, { granteeUserID, role });
 }
 
-function search(client : ApiClient, term : string) : Promise<Response>
+function search(client : APIClient, term : string) : Promise<Response>
 {
     const params = new URLSearchParams({ q: term });
     return client.get(`/api/search?${ params.toString() }`);
@@ -79,9 +79,9 @@ beforeAll(async () =>
 {
     server = await spawnServer();
 
-    owner = new ApiClient(server.baseURL);
-    recipient = new ApiClient(server.baseURL);
-    stranger = new ApiClient(server.baseURL);
+    owner = new APIClient(server.baseURL);
+    recipient = new APIClient(server.baseURL);
+    stranger = new APIClient(server.baseURL);
     await owner.signUp('search-owner@example.com', PASSWORD);
     await recipient.signUp('search-recipient@example.com', PASSWORD);
     await stranger.signUp('search-stranger@example.com', PASSWORD);
@@ -165,8 +165,8 @@ describe('GET /api/search', () =>
             ownerID: file.ownerID,
             role: 'owner',
         });
-        expect(typeof hit?.createdAt).toBe('string');
-        expect(typeof hit?.updatedAt).toBe('string');
+        expect(typeof hit?.created).toBe('string');
+        expect(typeof hit?.updated).toBe('string');
 
         // The envelope is the ordinary paginated node list: the full accessible total plus the default page window.
         expect(result).toMatchObject({ total: 1, limit: 50, offset: 0 });

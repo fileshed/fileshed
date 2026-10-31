@@ -13,7 +13,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AdminSettingEntry, AdminSettingsResponse } from '@fileshed/core';
 
 // Resource Access
-import { fetchAdminSettings } from '@client/resource-access/admin.ts';
+import { getAdminSettings } from '@client/resource-access/admin.ts';
 
 // Components
 import SettingField from '@client/components/admin/settingField.vue';
@@ -24,12 +24,12 @@ import SettingsTab from '@client/pages/admin/settingsTab.vue';
 //----------------------------------------------------------------------------------------------------------------------
 
 vi.mock('@client/resource-access/admin.ts', () => ({
-    fetchAdminSettings: vi.fn(),
+    getAdminSettings: vi.fn(),
     patchAdminSettings: vi.fn(),
 }));
 vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
-const fetchMock = fetchAdminSettings as unknown as Mock;
+const getSettingsMock = getAdminSettings as unknown as Mock;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -74,7 +74,7 @@ describe('Admin SettingsTab', () =>
 
     it('loads on mount and renders every vocabulary key under its group heading', async () =>
     {
-        fetchMock.mockResolvedValue(fullView());
+        getSettingsMock.mockResolvedValue(fullView());
         const wrapper = mountTab();
         await flushPromises();
 
@@ -96,7 +96,7 @@ describe('Admin SettingsTab', () =>
     // cap of nothing, so they get no word for it.
     it('names the quota key\'s meaning for zero, and only that key\'s', async () =>
     {
-        fetchMock.mockResolvedValue(fullView());
+        getSettingsMock.mockResolvedValue(fullView());
         const wrapper = mountTab();
         await flushPromises();
 
@@ -112,7 +112,7 @@ describe('Admin SettingsTab', () =>
     // card that changed. Only the two retention keys govern a sweep; nothing else claims to.
     it('attaches each retention setting to the sweep that enforces it, and no other setting', async () =>
     {
-        fetchMock.mockResolvedValue(fullView());
+        getSettingsMock.mockResolvedValue(fullView());
         const wrapper = mountTab();
         await flushPromises();
 
@@ -129,7 +129,7 @@ describe('Admin SettingsTab', () =>
 
     it('shows the retry state when the load fails', async () =>
     {
-        fetchMock.mockRejectedValue(new Error('offline'));
+        getSettingsMock.mockRejectedValue(new Error('offline'));
         const wrapper = mountTab();
         await flushPromises();
 

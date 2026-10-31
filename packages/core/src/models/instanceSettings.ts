@@ -1,16 +1,15 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Instance Settings Vocabulary
 //
-// The admin-tunable knobs and the facts the UI needs to render them honestly. Most settings are read at use time,
-// so a saved change simply applies -- but better-auth freezes some options (OAuth providers, required email
-// verification) at construction, and those carry requiresRestart so the UI can say "saved, takes effect after a
-// restart" instead of lying. A key marked secret is stored encrypted and never leaves the server unmasked. Keys
-// shared with the yaml config use the SAME name, so an override reads as "this value, instead of the config's";
-// settings-only keys carry their default here.
+// Most settings are read at use time, so a saved change simply applies -- but better-auth freezes some options (OAuth
+// providers, required email verification) at construction, and those carry requiresRestart so the UI can say "saved,
+// takes effect after a restart" instead of lying. A key marked secret is stored encrypted and never leaves the server
+// unmasked. Keys shared with the yaml config use the SAME name, so an override reads as "this value, instead of the
+// config's"; settings-only keys carry their default here.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Constants
-import { INSTANCE_NAME_MAX_LENGTH } from '../constants/branding.ts';
+import { DEFAULT_INSTANCE_NAME, INSTANCE_NAME_MAX_LENGTH } from '../constants/branding.ts';
 import { DEFAULT_SMTP_PORT, MIN_ACCOUNT_DELETION_DAYS } from '../constants/config.ts';
 import { DEFAULT_SKIPPED_UPLOAD_NAMES, SKIPPED_UPLOAD_NAMES_MAX_LENGTH } from '../constants/node.ts';
 import { UNLIMITED_QUOTA } from '../constants/quota.ts';
@@ -211,7 +210,7 @@ export const settingDefinitions : Readonly<Record<AdminSettingKey, SettingDefini
         kind: 'string',
         secret: false,
         requiresRestart: false,
-        fallback: 'FileShed',
+        fallback: DEFAULT_INSTANCE_NAME,
         constraints: { maxLength: INSTANCE_NAME_MAX_LENGTH },
     },
 

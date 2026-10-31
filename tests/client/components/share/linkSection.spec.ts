@@ -5,10 +5,13 @@
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type VueWrapper, flushPromises, mount } from '@vue/test-utils';
 
-import type { NodeResponse, PublicLinkResponse } from '@fileshed/core';
+import type { PublicLinkResponse } from '@fileshed/core';
 
 // Resource Access
 import { createPublicLink, listLinksForNode, revokePublicLink } from '@client/resource-access/publicLinks.ts';
+
+// Support
+import { fileNode } from '../../support.ts';
 
 // Under test
 import LinkSection from '@client/components/share/linkSection.vue';
@@ -34,25 +37,6 @@ const writeText = vi.fn().mockResolvedValue(undefined);
 
 const ISO = '2026-07-01T00:00:00.000Z';
 
-function fileNode() : NodeResponse
-{
-    return {
-        sharing: null,
-        id: 'f1',
-        name: 'report.txt',
-        ownerID: 'owner1',
-        parentID: null,
-        createdAt: ISO,
-        updatedAt: ISO,
-        role: 'owner',
-        type: 'file',
-        blobID: 'b1',
-        size: 100,
-        mimeType: 'text/plain',
-        trashedAt: null,
-    };
-}
-
 function link(overrides : Partial<PublicLinkResponse> = {}) : PublicLinkResponse
 {
     return {
@@ -60,13 +44,13 @@ function link(overrides : Partial<PublicLinkResponse> = {}) : PublicLinkResponse
         nodeID: 'f1',
         token: 'tok123',
         url: '/d/tok123',
-        createdAt: ISO,
-        revokedAt: null,
+        created: ISO,
+        revoked: null,
         ...overrides,
     };
 }
 
-const STUBS = {
+const stubs = {
     UButton: {
         props: [ 'label', 'loading' ],
         template: '<button class="ubtn" @click="$emit(\'click\')">{{ label }}</button>',
@@ -76,7 +60,7 @@ const STUBS = {
 
 function mountSection() : VueWrapper
 {
-    return mount(LinkSection, { props: { node: fileNode() }, global: { stubs: STUBS } });
+    return mount(LinkSection, { props: { node: fileNode() }, global: { stubs } });
 }
 
 function clickButton(wrapper : VueWrapper, label : string) : Promise<void>
@@ -109,7 +93,7 @@ describe('LinkSection', () =>
         listLinksMock.mockResolvedValue({
             links: [
                 link({ id: 'live', token: 'aaa', url: '/d/aaa' }),
-                link({ id: 'dead', token: 'bbb', url: '/d/bbb', revokedAt: ISO }),
+                link({ id: 'dead', token: 'bbb', url: '/d/bbb', revoked: ISO }),
             ],
         });
         const wrapper = mountSection();

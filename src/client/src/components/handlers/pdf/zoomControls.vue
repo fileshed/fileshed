@@ -37,17 +37,17 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    // Stores
-    import { usePdfAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
+    // Engines
+    import { zoomPresets } from '../../../engines/pdf/types.ts';
 
-    // Components
-    import { zoomPresets } from './types.ts';
+    // Stores
+    import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     //------------------------------------------------------------------------------------------------------------------
 
-    defineOptions({ name: 'PdfZoomControls' });
+    defineOptions({ name: 'PDFZoomControls' });
 
-    const store = usePdfAnnotatorStore();
+    const store = usePDFAnnotatorStore();
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

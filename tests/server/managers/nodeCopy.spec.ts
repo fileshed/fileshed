@@ -17,10 +17,10 @@ import { ForbiddenError, NotFoundError, RegulationError } from '@fileshed/core';
 // Resource Access
 import { BlobRA } from '@server/resource-access/blob/index.ts';
 import type { DatabaseHandle } from '@server/resource-access/database/database.ts';
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Managers
-import { NodeManager, type OrphanedBlobs } from '@server/managers/node.ts';
+import { NodeManager, type OrphanedBlobsFor } from '@server/managers/node.ts';
 
 // Support
 import {
@@ -71,14 +71,14 @@ async function seedShare(nodeID : string, granteeID : string, role : 'viewer' | 
             grantee_user_id: granteeID,
             role,
             created_by: 'alice',
-            created_at: new Date().toISOString(),
+            created: new Date().toISOString(),
         })
         .execute();
 }
 
-function manager(orphanedBlobs : OrphanedBlobs = noopOrphanedBlobs()) : NodeManager
+function manager(orphanedBlobs : OrphanedBlobsFor = noopOrphanedBlobs()) : NodeManager
 {
-    return new NodeManager(handle, ra, orphanedBlobs, testNodePolicy());
+    return new NodeManager({ handle, orphanedBlobs, policy: testNodePolicy() });
 }
 
 async function caught(promise : Promise<unknown>) : Promise<unknown>
@@ -219,7 +219,11 @@ describe('NodeManager.copy', () =>
     {
         await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
 
-        const bound = new NodeManager(handle, ra, noopOrphanedBlobs(), { defaultQuota: async () => 1500 });
+        const bound = new NodeManager({
+            handle,
+            orphanedBlobs: noopOrphanedBlobs(),
+            policy: { defaultQuota: async () => 1500 },
+        });
         const error = await caught(bound.copy(testActor({ id: 'alice' }), 'src', { parentID: null }));
 
         expect(error).toBeInstanceOf(ForbiddenError);
@@ -232,7 +236,11 @@ describe('NodeManager.copy', () =>
 
         await setUserQuota(handle.db, 'alice', 0);
 
-        const bound = new NodeManager(handle, ra, noopOrphanedBlobs(), { defaultQuota: async () => 1500 });
+        const bound = new NodeManager({
+            handle,
+            orphanedBlobs: noopOrphanedBlobs(),
+            policy: { defaultQuota: async () => 1500 },
+        });
         await bound.copy(testActor({ id: 'alice' }), 'src', { parentID: null });
 
         expect(await ra.ownedBytes('alice')).toBe(2000);
@@ -273,24 +281,24 @@ describe('NodeManager.copy', () =>
     // too: the copy lands live, the source stays exactly where it was -- in the trash.
     it('lets the owner copy their own trashed file, leaving the source trashed', async () =>
     {
-        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashedAt: new Date() }));
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashed: new Date() }));
 
         const copy = await manager().copy(testActor({ id: 'alice' }), 'src', { parentID: null });
 
         expect(copy).toMatchObject({ type: 'file', ownerID: 'alice', role: 'owner' });
-        expect(copy.type === 'file' ? copy.trashedAt : undefined).toBeNull();
+        expect(copy.type === 'file' ? copy.trashed : undefined).toBeNull();
 
-        const source = await handle.db.selectFrom('node').select('trashed_at')
+        const source = await handle.db.selectFrom('node').select('trashed')
             .where('id', '=', 'src')
             .executeTakeFirstOrThrow();
-        expect(source.trashed_at).not.toBeNull();
+        expect(source.trashed).not.toBeNull();
     });
 
     // Trash hides a node from recipients; a grant resolves a role regardless of trash state, so the guard -- not the
     // resolver -- is what keeps a trashed source absent for everyone but its owner.
     it('treats a trashed source as absent for a viewer holding a grant on it', async () =>
     {
-        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashedAt: new Date() }));
+        await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', trashed: new Date() }));
         await seedShare('src', 'bob', 'viewer');
 
         const error = await caught(manager().copy(testActor({ id: 'bob' }), 'src', { parentID: null }));
@@ -305,7 +313,7 @@ describe('NodeManager.copy', () =>
         await ra.insert(fileNode({ id: 'src', ownerID: 'alice', blobID: 'sha-a', size: 1000 }));
         await seedShare('src', 'bob', 'viewer');
 
-        const mgr = manager(new BlobRA(handle));
+        const mgr = manager((tx) => new BlobRA(tx));
         const copy = await mgr.copy(testActor({ id: 'bob' }), 'src', { parentID: null });
 
         await mgr.hardDelete(testActor({ id: 'alice' }), 'src');
@@ -316,10 +324,10 @@ describe('NodeManager.copy', () =>
 
         const blob = await handle.db
             .selectFrom('blob')
-            .select('deleted_at')
+            .select('deleted')
             .where('sha256', '=', 'sha-a')
             .executeTakeFirstOrThrow();
-        expect(blob.deleted_at).toBeNull();
+        expect(blob.deleted).toBeNull();
     });
 });
 

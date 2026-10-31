@@ -1,9 +1,5 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Shared Tile
-  --
-  -- One card in the Shared with me grid: the target's type icon, its name, the owner's attribution, the caller's role,
-  -- a placement note, and size for a file -- the same facts the shared row carries, laid out as a card that matches the
-  -- drive's grid tiles. Presentational only: a double-click emits open, the kebab items arrive as a prop.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

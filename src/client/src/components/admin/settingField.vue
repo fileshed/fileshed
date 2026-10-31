@@ -1,14 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Setting Field
   --
-  -- One instance setting as an editable card, driven entirely by its vocabulary entry: a switch for boolean keys
-  -- (saving on toggle), a number input with an explicit Save for numeric ones. The Overridden badge and the Reset
-  -- control appear only when an override hides an actual default underneath -- a stored value with nothing
-  -- beneath it is not overriding anything, and there is nothing to reset to. The card also flags the rare key
-  -- whose change waits on a restart, and refuses to spend a round trip on a value its own bounds already reject.
-  --
-  -- A byte key reads and writes human sizes, and the echo underneath carries the exact count the pretty rendering
-  -- rounds away.
+  -- The Overridden badge and Reset appear only when an override hides an actual default: a stored value with nothing
+  -- beneath it overrides nothing, and there is nothing to reset to. A byte key reads and writes human sizes, and the
+  -- echo underneath carries the exact count the human rendering rounds away.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>

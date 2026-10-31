@@ -16,14 +16,14 @@ import SharingBadges from '@client/components/share/sharingBadges.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-const STUBS = {
+const stubs = {
     UTooltip: { props: [ 'text' ], template: '<span class="badge" :data-text="text"><slot /></span>' },
     UIcon: { props: [ 'name' ], template: '<i :data-icon="name" />' },
 };
 
 function mountBadges(sharing : NodeSharing | null) : VueWrapper
 {
-    return mount(SharingBadges, { props: { sharing }, global: { stubs: STUBS } });
+    return mount(SharingBadges, { props: { sharing }, global: { stubs } });
 }
 
 function labels(wrapper : VueWrapper) : string[]
@@ -40,29 +40,29 @@ describe('SharingBadges', () =>
     it('renders nothing for a node with no sharing at all', () =>
     {
         expect(labels(mountBadges(null))).toEqual([]);
-        expect(labels(mountBadges({ granteeCount: 0, linkUrl: null }))).toEqual([]);
+        expect(labels(mountBadges({ granteeCount: 0, linkURL: null }))).toEqual([]);
     });
 
     it('names how many people a node is shared with', () =>
     {
-        expect(labels(mountBadges({ granteeCount: 2, linkUrl: null }))).toEqual([ 'Shared with 2 people' ]);
+        expect(labels(mountBadges({ granteeCount: 2, linkURL: null }))).toEqual([ 'Shared with 2 people' ]);
     });
 
     it('says person, not people, for a single grantee', () =>
     {
-        expect(labels(mountBadges({ granteeCount: 1, linkUrl: null }))).toEqual([ 'Shared with 1 person' ]);
+        expect(labels(mountBadges({ granteeCount: 1, linkURL: null }))).toEqual([ 'Shared with 1 person' ]);
     });
 
     it('marks a node anyone with the URL can fetch', () =>
     {
-        expect(labels(mountBadges({ granteeCount: 0, linkUrl: '/d/tok' }))).toEqual([ 'Public link' ]);
+        expect(labels(mountBadges({ granteeCount: 0, linkURL: '/d/tok' }))).toEqual([ 'Public link' ]);
     });
 
     // The two are different sharings -- "I gave someone access" and "anyone with the URL can fetch this" -- so a node
     // that is both shows both, never one standing in for the other.
     it('shows both badges when a node is shared and published at once', () =>
     {
-        expect(labels(mountBadges({ granteeCount: 3, linkUrl: '/d/tok' })))
+        expect(labels(mountBadges({ granteeCount: 3, linkURL: '/d/tok' })))
             .toEqual([ 'Shared with 3 people', 'Public link' ]);
     });
 });

@@ -36,7 +36,7 @@ function session(state : { isAuthenticated ?: boolean; isAdmin ?: boolean; isClo
         isAuthenticated: state.isAuthenticated ?? false,
         isAdmin: state.isAdmin ?? false,
         isClosing: state.isClosing ?? false,
-        initialize: () => Promise.resolve(),
+        init: () => Promise.resolve(),
     };
 }
 

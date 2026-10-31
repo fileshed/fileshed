@@ -54,6 +54,45 @@ describe('RegulationError', () =>
         expect(error.violations).toEqual(violations);
         expect(error.message).toBe('over quota');
     });
+
+    it('is a refusal of authority when any violation is one', () =>
+    {
+        const error = new RegulationError([
+            { code: 'quota.exceeded', message: 'over quota' },
+            { code: 'parent.crossOwner', message: 'not your folder' },
+        ]);
+
+        expect(error.kind).toBe('forbidden');
+    });
+
+    it('is a refusal of an illegal state when no violation is about authority', () =>
+    {
+        const error = new RegulationError([
+            { code: 'move.intoSelf', message: 'into itself' },
+            { code: 'parent.trashed', message: 'trashed parent' },
+        ]);
+
+        expect(error.kind).toBe('illegalState');
+    });
+
+    it('shows the caller the rule and the resources involved, never the other users', () =>
+    {
+        const error = new RegulationError([
+            {
+                code: 'trash.notOwner',
+                message: 'not yours',
+                nodeID: 'node1',
+                parentID: 'parent1',
+                ownerID: 'owner1',
+                actorID: 'caller1',
+            },
+        ]);
+
+        expect(error.details).toEqual({
+            violations: [ { code: 'trash.notOwner', message: 'not yours', nodeID: 'node1', parentID: 'parent1' } ],
+        });
+        expect(error.violations[0]?.ownerID).toBe('owner1');
+    });
 });
 
 describe('RegulationCodeDisplay', () =>

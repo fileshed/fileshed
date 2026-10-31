@@ -8,25 +8,26 @@
 // fixture bytes the way a possessing client would.
 //----------------------------------------------------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaimResponse, NodeResponse } from '@fileshed/core';
 
 // Resource Access
-import { NodeRA } from '@server/resource-access/nodes/node.ts';
+import { NodeRA } from '@server/resource-access/nodes/index.ts';
 
 // Support
+import { sha256Of } from '../support/sha256.ts';
 import {
-    type BootedBlobApp,
+    type BootedStoreApp,
     type TestUser,
     answerReplace,
-    blobDeletedAt,
+    blobDeleted,
     blobRowCount,
     bootBlobApp,
+    buildAnswer,
     claim,
-    computeAnswer,
     fileNodesForBlob,
     grantShare,
     makeUser,
@@ -39,13 +40,6 @@ import { folderNode } from '../resource-access/nodes/support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function sha256Of(data : Buffer) : string
-{
-    return createHash('sha256')
-        .update(data)
-        .digest('hex');
-}
-
 // Just over 1 MiB: past the threshold where a known blob is proof-challenged rather than re-uploaded.
 function largeFixture() : Buffer
 {
@@ -54,7 +48,7 @@ function largeFixture() : Buffer
 
 //----------------------------------------------------------------------------------------------------------------------
 
-let booted : BootedBlobApp;
+let booted : BootedStoreApp;
 
 beforeEach(async () =>
 {
@@ -139,14 +133,14 @@ describe('replace via upload ticket — owner', () =>
         expect(node.id).toBe(file.id);
         expect(node.name).toBe('notes.txt');
         expect(node.parentID).toBe(file.parentID);
-        expect(node.createdAt).toBe(file.createdAt);
+        expect(node.created).toBe(file.created);
         expect(node.role).toBe('owner');
 
-        // New content: blob, size, mime, and a freshly bumped updated_at.
+        // New content: blob, size, mime, and a freshly bumped updated.
         expect(node.blobID).toBe(replacementSha);
         expect(node.size).toBe(replacement.length);
         expect(node.mimeType).toBe('text/markdown');
-        expect(new Date(node.updatedAt).getTime()).toBeGreaterThanOrEqual(beforeReplace);
+        expect(new Date(node.updated).getTime()).toBeGreaterThanOrEqual(beforeReplace);
 
         // The row and the stored bytes agree with the response.
         const row = await nodeContentRow(booted.handle, file.id);
@@ -180,14 +174,14 @@ describe('replace via upload ticket — owner', () =>
         const originalSha = sha256Of(original);
         const file = await uploadOwned(owner, original);
 
-        expect(await blobDeletedAt(booted.handle, originalSha)).toBeNull();
+        expect(await blobDeleted(booted.handle, originalSha)).toBeNull();
 
         const replacement = randomBytes(2048);
         const res = await replaceViaUpload(owner, replacement, file.id);
         expect(res.status).toBe(200);
 
         // The node no longer references the old blob and nothing else does -- it is graveyarded.
-        expect(await blobDeletedAt(booted.handle, originalSha)).not.toBeNull();
+        expect(await blobDeleted(booted.handle, originalSha)).not.toBeNull();
         expect(await blobRowCount(booted.handle, sha256Of(replacement))).toBe(1);
     });
 
@@ -207,7 +201,7 @@ describe('replace via upload ticket — owner', () =>
         expect(res.status).toBe(200);
 
         // The other node still references the shared blob, so the replace must NOT graveyard it.
-        expect(await blobDeletedAt(booted.handle, sharedSha)).toBeNull();
+        expect(await blobDeleted(booted.handle, sharedSha)).toBeNull();
         const stillOnShared = (await fileNodesForBlob(booted.handle, sharedSha)).map((row) => row.id);
         expect(stillOnShared).toEqual([ otherFile.id ]);
     });
@@ -216,6 +210,39 @@ describe('replace via upload ticket — owner', () =>
 //----------------------------------------------------------------------------------------------------------------------
 // An editor on a shared file may replace its content, and the charge lands on the file's OWNER.
 //----------------------------------------------------------------------------------------------------------------------
+
+// The client writes a replace's response straight back over the row it saved, so the response has to say what the
+// file still shares rather than what a brand-new file would.
+describe('replace response sharing', () =>
+{
+    it('answers the owner with the file\'s real grants after replacing a shared file', async () =>
+    {
+        const owner = await makeUser(booted, 'sharing-owner@example.com', null);
+        const friend = await makeUser(booted, 'sharing-friend@example.com', null);
+        const file = await uploadOwned(owner, randomBytes(2048));
+        await grantShare(booted.handle, file.id, friend.id, 'viewer', owner.id);
+
+        const res = await replaceViaUpload(owner, randomBytes(4096), file.id);
+        const node = await res.json() as NodeResponse;
+
+        expect(res.status).toBe(200);
+        expect(node.sharing).toEqual({ granteeCount: 1, linkURL: null });
+    });
+
+    it('answers an editor with no sharing at all, since what the file shares is the owner\'s to know', async () =>
+    {
+        const owner = await makeUser(booted, 'sharing-owner2@example.com', null);
+        const editor = await makeUser(booted, 'sharing-editor@example.com', null);
+        const file = await uploadOwned(owner, randomBytes(2048));
+        await grantShare(booted.handle, file.id, editor.id, 'editor', owner.id);
+
+        const res = await replaceViaUpload(editor, randomBytes(4096), file.id);
+        const node = await res.json() as NodeResponse;
+
+        expect(res.status).toBe(200);
+        expect(node.sharing).toBeNull();
+    });
+});
 
 describe('replace by a shared editor — owner-charged quota', () =>
 {
@@ -371,8 +398,8 @@ describe('replace rejections', () =>
         if(node.type !== 'file') { throw new Error('expected a file node'); }
         expect(node.blobID).toBe(sha256Of(replacement));
         // The replace overwrites content only; a trashed file stays trashed.
-        expect(node.trashedAt).not.toBeNull();
-        expect((await nodeContentRow(booted.handle, file.id)).trashed_at).not.toBeNull();
+        expect(node.trashed).not.toBeNull();
+        expect((await nodeContentRow(booted.handle, file.id)).trashed).not.toBeNull();
     });
 });
 
@@ -402,7 +429,7 @@ describe('replace via proof-of-possession', () =>
         expect(challenge.upload).toBe(false);
         if(challenge.upload !== false) { throw new Error('expected a proof-of-possession challenge'); }
 
-        const answer = computeAnswer(challenge.nonce, challenge.ranges, known);
+        const answer = buildAnswer(challenge.nonce, challenge.ranges, known);
         const res = await answerReplace(booted.app, owner.cookie, challenge.challengeID, answer, file.id);
         const node = await res.json() as NodeResponse;
 
@@ -415,7 +442,7 @@ describe('replace via proof-of-possession', () =>
         // Still one row for the known blob (both the held file and the replaced target reference it); the small blob
         // the target used to hold is now unreferenced and graveyarded.
         expect(await blobRowCount(booted.handle, knownSha)).toBe(1);
-        expect(await blobDeletedAt(booted.handle, originalSha)).not.toBeNull();
+        expect(await blobDeleted(booted.handle, originalSha)).not.toBeNull();
     });
 });
 
