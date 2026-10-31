@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Cloudflare joins the sign-in providers an admin can configure.
+
+### Changed
+
+- **BREAKING** for API clients: timestamps in API responses drop their `At` suffix. `createdAt` is now `created`,
+  `updatedAt` is `updated`, `trashedAt` is `trashed`, `revokedAt` is `revoked`, `resolvedAt` is `resolved`,
+  `requestedAt` is `requested`, `expiresAt` is `expires`, and `lastUsedAt` is `lastUsed`. The sort keys `createdAt`
+  and `updatedAt` are now `created` and `updated`, and `sharing.linkUrl` is `sharing.linkURL`.
+- **BREAKING** for API clients: the sweep that clears abandoned upload staging is `stagedUploads` where it was
+  `partials`, both when an admin runs it and in the sweep status.
+- Database columns drop their `_at` suffix the same way: `created_at` becomes `created`, `trashed_at` becomes
+  `trashed`, and likewise for `updated_at`, `deleted_at`, `revoked_at`, `resolved_at` and `expires_at`. Migrations
+  009 and 010 rename them at boot, so anything that queries the database directly needs the new names. The tables
+  better-auth owns keep their own.
+- Log lines carry `userID` where they carried `actorID`.
+
+### Fixed
+
+- The first boot of a new instance no longer logs the auth tables as missing. better-auth checked for them before
+  the migrations that create them had run.
+- The OpenAPI document reports the version the instance runs instead of 0.1.0.
+- Replacing a shared file's content keeps its sharing badge. The upload answered as though the file were new and
+  unshared, and the interface showed that until the next reload.
+- Search and Shared with me show the results of the latest request. An earlier request that answered last used to
+  replace them, so a quickly typed search could show matches for the term typed before.
+- A settings change that refuses one key saves none of the others. The keys ahead of the refused one used to be
+  saved anyway.
+- On PostgreSQL, deleting the last two files that share stored bytes at the same moment marks those bytes for
+  garbage collection. Each deletion saw the other file still using them, and neither marked them.
+- An upload ticket is spent once even when two whole-file uploads against it arrive together. Both could commit,
+  each as a file of its own.
+- A database error while an access token is being verified answers 500. It answered 401, which tells the client
+  its token is no good.
+- Stopping the server waits for a running sweep to finish before it closes the database. A sweep running at
+  shutdown used to lose the database partway through.
+
+### Security
+
+- The origin check on state-changing API requests reads the request path the way the router does. A
+  percent-encoded spelling of `/api`, such as `/%61pi/...`, was routed to the API without being checked.
+- An account scheduled for deletion can sign in only to see or cancel the deletion. Downloads and archives of its
+  own files were still served to it.
+- An archive leaves out a selected node the caller cannot read and no longer names it in `SKIPPED.txt`.
+- Sign-in no longer follows a `redirect` that starts with `//` or `/\`, which a browser reads as another site. A
+  crafted sign-in link could send someone off the instance the moment they signed in.
+- Hono is updated to 4.13.14, past an advisory against `serveStatic`, which serves this app's interface. nodemailer
+  moves to 10.2.1 for six advisories with no fix on 9.x, and better-auth to 1.7.14.
+
 ## [0.2.1] - 2026-09-16
 
 ### Added
