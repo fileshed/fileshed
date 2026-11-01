@@ -401,9 +401,23 @@ The UX bar is the mainstream cloud file managers. Nuxt UI v4 provides the chrome
 - **Mounts**: a sidebar section listing the mounts the user can reach, each with its free space; an offline mount shows as offline. Each mount has its own Trash view for its editors. Context menus on mounted nodes leave out Share, add "Copy to my drive", and offer "Get link" only where the mount allows public links; drive nodes offer "Copy to mount". Moves between a drive and a mount ask for confirmation and show progress.
 - **Refused saves**: when a save to a mounted file is refused because the file changed on disk, the editor offers to reload or save as a copy.
 - **Admin mount management**: add, configure and remove mounts, with a folder picker limited to `MOUNT_ROOTS`; set default access, per-user grants and the public-link setting; see scan status and run "Rescan now".
-- **Markdown frontmatter**: a markdown file has frontmatter when its first line is `---` and a later line is `---`, the rule Jekyll, gray-matter and remark use. The content between the fences isn't checked, so a blank first line or YAML that doesn't parse still counts; the editor keeps broken YAML as written and shows its error. A file that opens with a `---` divider and has another `---` line later reads as frontmatter.
 - **Narrow viewports**: supported down to 360px wide, with the sidebar moving into a drawer opened from the header below the `md` breakpoint.
 - Image/video/audio/PDF preview via browser-native rendering against the download endpoint (Range support makes video scrubbing work). No bespoke viewers in v1.
+
+### 9.1 Markdown
+
+Markdown files open in an editor with two views: Source, the file as plain text, and Preview, the rendered document, which is also editable.
+
+- **Flavor**: CommonMark with GitHub's extensions (tables, task lists, strikethrough, autolinks), plus footnotes (`[^1]`), callouts (`> [!NOTE]`), highlights (`==text==`), math (`$…$` inline and `$$…$$` as a block, rendered with KaTeX) and Mermaid diagrams (a code fence tagged `mermaid`). There are no per-file compatibility modes.
+- **Preservation**: an edit in Preview changes only what the user edited. The rest of the file is written back byte for byte, including syntax Preview doesn't render, which it shows as plain text, and alternative spellings of syntax it does render (`__bold__`, underlined headings, reference-style links).
+- **Line breaks**: each line of the file shows as its own line, as in Obsidian. A file whose frontmatter sets `strict-line-breaks: true` follows CommonMark instead, joining lines with no blank line between them into one paragraph.
+- **Table of contents**: a line holding only `[TOC]`, `[[toc]]`, `[[TOC]]` or `[[_TOC_]]` shows in Preview as a list of the document's headings, kept current as they change. The file keeps the marker.
+- **Code blocks**: highlighted for the language named on the opening fence. In Preview each block has a language picker, which rewrites that fence's language.
+- **Comments**: `%%…%%` (inline, or `%%` lines around a block) and HTML comments (`<!-- … -->`) show dimmed in Preview, where they can be edited like any other text. HTML comments don't count as HTML for the rule below, so a file whose only HTML is comments shows no banner.
+- **HTML**: rendered after sanitizing. Anyone who doesn't own the file sees HTML unrendered until they choose "Show HTML" on a banner above the document; until then each piece of HTML shows as highlighted source.
+- **Outline panel**: Preview's left margin holds a panel with the document's tags, its headings (choosing one jumps to it), and its word count, or the selection's count while text is selected. It opens and closes on a toggle, and the browser remembers which.
+- **Frontmatter**: a markdown file has frontmatter when its first line is `---` and a later line is `---`, the rule Jekyll, gray-matter and remark use. The content between the fences isn't checked, so a blank first line or YAML that doesn't parse still counts; the editor keeps broken YAML as written and shows its error. A file that opens with a `---` divider and has another `---` line later reads as frontmatter.
+- **Frontmatter keys**: the editor reads four keys, each checked against its own schema. `title` replaces the file name in the header, `tags` fills the outline panel's tags, `lang` (a BCP 47 language tag) sets the document's language for spellcheck and the word count, and `strict-line-breaks` sets the line-break rule above. A value that fails its key's schema is ignored. The properties editor lists every key, and keys the editor doesn't read are kept as written.
 
 ---
 
@@ -429,4 +443,4 @@ The UX bar is the mainstream cloud file managers. Nuxt UI v4 provides the chrome
 
 ## 12. Future Work (explicitly deferred)
 
-Resumable uploads (tus), file versioning, editor re-sharing (explicit clamped share rows, §3.2b), ownership transfer, email notifications for share requests/deletion offers, link expiry/passwords, full-text search, docs/sheets editing, backend-to-backend blob migration tooling, FTP/SFTP/WebDAV gateways.
+Resumable uploads (tus), file versioning, editor re-sharing (explicit clamped share rows, §3.2b), ownership transfer, email notifications for share requests/deletion offers, link expiry/passwords, full-text search, docs/sheets editing, backend-to-backend blob migration tooling, FTP/SFTP/WebDAV gateways, review comments on documents (anchored to a range of text, with authors, replies and resolving; stored outside the file, and they must stay attached when the file changes outside the editor).
