@@ -9,8 +9,10 @@
 // elements so the data flow is directly observable. What this guards: opening parses through the constructor without
 // dirtying, a genuine edit emits the re-serialized markdown, toggling to Source shows the original when clean and the
 // serialization when edited, Source edits write verbatim, an external reload re-parses (its own echo skipped),
-// read-only reaches the editor, and formatting rides a fixed toolbar (hidden in Source and for viewers) beside a
-// slimmed bubble toolbar and a slash menu.
+// read-only reaches the editor, formatting rides a fixed toolbar (hidden in Source and for viewers) beside a
+// slimmed bubble toolbar and a slash menu, the outline panel mounts in WYSIWYG, and frontmatter stays
+// out of the WYSIWYG document: only the body is parsed, every edit puts the file's frontmatter back in front, and
+// Source shows the whole file.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable vue/one-component-per-file -- the UEditor family is stubbed at the boundary; three stubs live here */
@@ -144,6 +146,16 @@ vi.mock('@client/components/handlers/markdown/toolbar.vue', () => ({
         name: 'MarkdownFormatToolbar',
         props: [ 'editor' ],
         template: '<div class="format-toolbar" />',
+    },
+}));
+
+// The outline panel reads the live TipTap document, which the UEditor stub doesn't have; its own spec covers it. Here
+// it is a marker that records it was mounted and handed the editor.
+vi.mock('@client/components/handlers/markdown/outlinePanel.vue', () => ({
+    default: {
+        name: 'MarkdownOutlinePanel',
+        props: [ 'editor' ],
+        template: '<div class="outline-panel" :data-live="String(editor !== null)" />',
     },
 }));
 
@@ -382,12 +394,91 @@ describe('MarkdownEditor formatting surface', () =>
         expect(wrapper.find('.format-toolbar').exists()).toBe(false);
     });
 
+    it('mounts the outline panel inside the WYSIWYG surface with the live editor, for a viewer too', () =>
+    {
+        const wrapper = mountEditor({ readOnly: true });
+
+        expect(wrapper.get('.ueditor .outline-panel').attributes('data-live')).toBe('true');
+    });
+
     it('disables images and mentions so nothing that cannot serialize to GFM is offered', () =>
     {
         mountEditor();
 
         expect(ueditor.image).toBe(false);
         expect(ueditor.mention).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('MarkdownEditor frontmatter', () =>
+{
+    const HEAD = '---\ntitle: Hello World\ntags: [a, b]\n---\n\n';
+
+    beforeEach(() =>
+    {
+        setActivePinia(createPinia());
+        ueditor.modelValue = '';
+        ueditor.markdown = '';
+        ueditor.setContentCalls = [];
+        ueditor.emit = undefined;
+    });
+
+    it('parses only the body into the WYSIWYG document', () =>
+    {
+        mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        expect(ueditor.modelValue).toBe('# Body');
+    });
+
+    it('puts the frontmatter back, unchanged, in front of a WYSIWYG edit', async () =>
+    {
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await editInEditor(wrapper, '# Edited');
+
+        expect(lastEmit(wrapper)).toBe(`${ HEAD }# Edited`);
+    });
+
+    it('shows the whole file, frontmatter included, in Source', async () =>
+    {
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await wrapper.get('.to-source').trigger('click');
+
+        expect(sourceValue(wrapper)).toBe(`${ HEAD }# Body`);
+    });
+
+    it('re-parses only the body when toggling back from Source', async () =>
+    {
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await wrapper.get('.to-source').trigger('click');
+        await wrapper.get('.to-wysiwyg').trigger('click');
+
+        expect(ueditor.setContentCalls.map((call) => call.content)).toEqual([ '# Body' ]);
+    });
+
+    it('leaves the WYSIWYG document alone when only the frontmatter changes', async () =>
+    {
+        ueditor.markdown = '# Body';
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await wrapper.setProps({ modelValue: '---\ntitle: Renamed\n---\n\n# Body' });
+
+        expect(ueditor.setContentCalls).toHaveLength(0);
+    });
+
+    it('spellchecks the page in the language the frontmatter names', async () =>
+    {
+        const store = useEditorStore();
+        store.$patch({ buffer: '---\nlang: de\n---\n\nHallo' });
+
+        const wrapper = mountEditor({ modelValue: store.buffer });
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.get('.ueditor').element.parentElement?.getAttribute('lang')).toBe('de');
     });
 });
 

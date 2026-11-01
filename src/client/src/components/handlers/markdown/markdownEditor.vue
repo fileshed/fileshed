@@ -10,6 +10,9 @@
   -- resync (toggling back from Source, an external reload) goes through setContent with emitUpdate off. Source edits
   -- write the buffer verbatim. The first WYSIWYG edit of a hand-authored file may reflow its markdown to the
   -- serializer's style.
+  --
+  -- WYSIWYG holds only the body: the frontmatter block is split off before parsing and put back verbatim on every
+  -- write, so YAML never reaches the markdown parser or the serializer. Source shows the whole file.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -19,7 +22,7 @@
         <div class="relative min-h-0 flex-1 overflow-hidden">
             <!-- v-show on a plain element, not the component: hiding must never depend on directive transfer to a
                  third-party component's root, and the slot's structure must stay stable across the toggle. -->
-            <div v-show="view === 'wysiwyg'" class="h-full">
+            <div v-show="view === 'wysiwyg'" class="h-full" :lang="frontmatter.meta.lang ?? undefined">
                 <UEditor
                     ref="editorRef"
                     content-type="markdown"
@@ -39,9 +42,9 @@
                     :extensions="extraExtensions"
                     :handlers="editorHandlers"
                     :ui="{
-                        root: 'flex h-full min-h-0 flex-col',
-                        content: 'min-h-0 flex-1 overflow-y-auto bg-default p-4',
-                        base: 'mx-auto min-h-full max-w-3xl rounded-lg border border-accented bg-elevated px-8'
+                        root: 'grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]',
+                        content: 'col-start-1 row-start-2 min-h-0 overflow-y-auto bg-default p-4',
+                        base: 'min-h-full w-auto max-w-3xl rounded-lg border border-accented bg-elevated px-8'
                             + ' py-12 sm:px-12',
                     }"
                     @update:model-value="onEditorUpdate"
@@ -50,11 +53,18 @@
                         <!-- No view condition here: the wrapper's v-show already hides the whole subtree in Source
                              mode, and toggling structure INSIDE a third-party-managed slot breaks Vue's patch
                              anchors. -->
-                        <div v-if="!readOnly" class="shrink-0 border-b border-default px-4 py-1">
+                        <div v-if="!readOnly" class="row-start-1 border-b border-default px-4 py-1">
                             <MarkdownFormatToolbar :editor="editor" class="mx-auto w-full max-w-3xl" />
                         </div>
                         <UEditorToolbar :editor="editor" layout="bubble" :items="bubbleItems" />
                         <UEditorSuggestionMenu :editor="editor" :items="slashItems" />
+
+                        <!-- Shares the scroller's grid cell and stacks above its left margin, so it stays put while the
+                             page scrolls. It spans the margin's full height, so the word count sits at the bottom. -->
+                        <MarkdownOutlinePanel
+                            :editor="editor"
+                            class="z-10 col-start-1 row-start-2 my-4 ms-4 min-h-0 self-stretch justify-self-start"
+                        />
                     </template>
                 </UEditor>
             </div>
@@ -89,6 +99,27 @@
     .md-doc :deep(.tiptap p),
     .md-doc :deep(.tiptap > *) {
         margin-block: 0;
+    }
+
+    /* A blank line is an empty paragraph, so the body's line height is also the gap between blocks. The prose theme's
+       1.75 is sized for paragraphs that have margins between them. */
+    .md-doc :deep(.tiptap :is(p, li)) {
+        line-height: 1.5;
+    }
+
+    /* The outline panel lives in the page's left margin. The page keeps its centered position while the margin fits
+       the panel, and moves right only as far as it must to clear it; the closed panel is just its toggle button. */
+    .md-doc {
+        --outline-width: 14rem;
+        --outline-room: 3rem;
+    }
+
+    .md-doc:has(.md-outline[data-open]) {
+        --outline-room: calc(var(--outline-width) + 1rem);
+    }
+
+    .md-doc :deep(.tiptap) {
+        margin-inline: max((100% - var(--container-3xl)) / 2, var(--outline-room)) auto;
     }
 
     /* Task lists and tables are the two GFM structures the editor theme doesn't paint; everything else (headings,
@@ -158,9 +189,11 @@
 
     // Stores
     import { useEditorStore } from '../../../stores/editor.ts';
+    import { useFrontmatterStore } from '../../../stores/frontmatter.ts';
 
     // Engines
     import type { EditorMode } from '../../../engines/intent/index.ts';
+    import { replaceBody, splitFrontmatter } from '../../../engines/markdown/frontmatter.ts';
     import {
         BlankLines,
         MarkdownBlockquote,
@@ -176,6 +209,7 @@
     import ConflictModal from '../text/modals/conflictModal.vue';
     import MarkdownIdentityBar from './identityBar.vue';
     import MarkdownFormatToolbar from './toolbar.vue';
+    import MarkdownOutlinePanel from './outlinePanel.vue';
     import TextEditor from '../text/textEditor.vue';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -195,6 +229,7 @@
     }>();
 
     const store = useEditorStore();
+    const frontmatter = useFrontmatterStore();
     const view = ref<View>('wysiwyg');
 
     //------------------------------------------------------------------------------------------------------------------
@@ -206,7 +241,7 @@
     // Captured once and never reassigned: UEditor takes this as its constructor content (which fires no update), and
     // because the bound value never changes, UEditor's own model watcher never runs -- every resync goes through
     // reparse() instead, where emitUpdate stays off.
-    const initialContent = ref(props.modelValue);
+    const initialContent = ref(splitFrontmatter(props.modelValue).body);
 
     // The task lists, tables, strikethrough, and code blocks the base StarterKit doesn't ship. Strike rides StarterKit;
     // task lists and tables are layered on here. Each serializes to GFM through the markdown extension UEditor adds.
@@ -296,28 +331,30 @@
     ];
 
     // A genuine WYSIWYG edit -- UEditor only fires this on a real document change, never on construction or an
-    // emitUpdate-off setContent -- so this is the sole path that writes the buffer.
+    // emitUpdate-off setContent -- so this is the sole path that writes the buffer. The serialization is the body; the
+    // file's frontmatter goes back on in front of it.
     function onEditorUpdate(value : string) : void
     {
-        emit('update:modelValue', value);
+        emit('update:modelValue', replaceBody(props.modelValue, value));
     }
 
-    // Push markdown into the live document without counting as an edit: the resync path (a toggle back from Source, an
-    // external reload) that must stay off the buffer-write path.
-    function reparse(markdown : string) : void
+    // Push the file's body into the live document without counting as an edit: the resync path (a toggle back from
+    // Source, an external reload) that must stay off the buffer-write path.
+    function reparse(file : string) : void
     {
-        editorRef.value?.editor?.commands.setContent(markdown, { contentType: 'markdown', emitUpdate: false });
+        const { body } = splitFrontmatter(file);
+        editorRef.value?.editor?.commands.setContent(body, { contentType: 'markdown', emitUpdate: false });
     }
 
-    // An external buffer change while WYSIWYG is showing -- a reload, or a deep-link swap -- is re-parsed into the
-    // document. A change that already matches the current serialization is this editor's own echo and is skipped, so
-    // binding the buffer both ways never loops.
+    // An external buffer change while WYSIWYG is showing -- a reload, a deep-link swap, a properties edit -- is
+    // re-parsed into the document. A body that already matches the current serialization is this editor's own echo
+    // (or a frontmatter-only change) and is skipped, so binding the buffer both ways never loops.
     watch(() => props.modelValue, (value) =>
     {
         if(view.value !== 'wysiwyg') { return; }
 
         const editor = editorRef.value?.editor;
-        if(editor && value !== editor.getMarkdown()) { reparse(value); }
+        if(editor && splitFrontmatter(value).body !== editor.getMarkdown()) { reparse(value); }
     });
 
     // emitUpdate stays off: flipping editability is not an edit and must never write the buffer.

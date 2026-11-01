@@ -25,6 +25,7 @@ export const useAppStore = defineStore('app', () =>
     const branding = ref<InstanceBranding | null>(null);
     const limits = ref<InstanceLimits | null>(null);
     const tagline = ref('Self-hosted, multi-user file hosting.');
+    const pageTitle = ref<string | null>(null);
 
     const name = computed(() => branding.value?.instanceName ?? DEFAULT_INSTANCE_NAME);
     const forcedMode = computed(() => branding.value?.forcedMode ?? false);
@@ -48,6 +49,11 @@ export const useAppStore = defineStore('app', () =>
     const skippedUploadNames = computed(() => limits.value?.skippedUploadNames ?? []);
     const avatarMaxBytes = computed(() => limits.value?.avatarMaxBytes ?? DEFAULT_AVATAR_MAX_BYTES);
 
+    function setPageTitle(title : string | null) : void
+    {
+        pageTitle.value = title;
+    }
+
     async function init() : Promise<void>
     {
         try
@@ -68,11 +74,13 @@ export const useAppStore = defineStore('app', () =>
         limits,
         name,
         tagline,
+        pageTitle,
         forcedMode,
         logoURL,
         uploadMaxBytes,
         skippedUploadNames,
         avatarMaxBytes,
+        setPageTitle,
         init,
     };
 });

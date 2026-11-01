@@ -20,7 +20,9 @@ vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 let wrapper : VueWrapper | null = null;
 
-function mountTitle(options : Partial<{ name : string; readOnly : boolean; rename : Mockable }> = {}) : VueWrapper
+function mountTitle(
+    options : Partial<{ name : string; readOnly : boolean; rename : Mockable; includeExtension : boolean }> = {}
+) : VueWrapper
 {
     wrapper = mount(RenameTitle, {
         attachTo: document.body,
@@ -28,6 +30,7 @@ function mountTitle(options : Partial<{ name : string; readOnly : boolean; renam
             name: options.name ?? 'notes.md',
             readOnly: options.readOnly ?? false,
             rename: options.rename ?? vi.fn().mockResolvedValue(undefined),
+            includeExtension: options.includeExtension ?? false,
         },
     });
 
@@ -80,6 +83,16 @@ describe('RenameTitle', () =>
         expect(input.value).toBe('notes.md');
         expect(input.selectionStart).toBe(0);
         expect(input.selectionEnd).toBe('notes'.length);
+    });
+
+    it('selects the whole name when it has no extension to keep', async () =>
+    {
+        const view = mountTitle({ name: 'Release 2.0 notes', includeExtension: true });
+        await openEditor(view);
+
+        const input = view.get('input').element;
+        expect(input.selectionStart).toBe(0);
+        expect(input.selectionEnd).toBe('Release 2.0 notes'.length);
     });
 
     it('commits the trimmed name on Enter and leaves edit mode', async () =>

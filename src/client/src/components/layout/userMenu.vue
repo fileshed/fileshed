@@ -8,7 +8,7 @@
     <UDropdownMenu :items="userMenuItems">
         <UButton variant="ghost" color="neutral" class="gap-2">
             <UAvatar :src="avatarURL" :alt="displayName" size="sm" />
-            <span class="hidden sm:inline">{{ displayName }}</span>
+            <span class="hidden xl:inline">{{ displayName }}</span>
         </UButton>
     </UDropdownMenu>
 
