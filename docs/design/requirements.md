@@ -402,7 +402,7 @@ The UX bar is the mainstream cloud file managers. Nuxt UI v4 provides the chrome
 - **Refused saves**: when a save to a mounted file is refused because the file changed on disk, the editor offers to reload or save as a copy.
 - **Admin mount management**: add, configure and remove mounts, with a folder picker limited to `MOUNT_ROOTS`; set default access, per-user grants and the public-link setting; see scan status and run "Rescan now".
 - **Narrow viewports**: supported down to 360px wide, with the sidebar moving into a drawer opened from the header below the `md` breakpoint.
-- Image/video/audio/PDF preview via browser-native rendering against the download endpoint (Range support makes video scrubbing work). No bespoke viewers in v1.
+- **Opening files**: a text file under the editor's size cap opens in a text editor, and markdown in the markdown editor (§9.1). A PDF under the annotator's size cap opens in a viewer that adds annotations and never changes page content. Audio and video open in a media player, and `.m3u`/`.m3u8` playlists play as playlists. Any other file the browser can render (images, and text or PDFs over the caps) opens in a new tab against the download endpoint; the rest download. Range support on the download endpoint makes seeking work in the player and in the browser's own preview.
 
 ### 9.1 Markdown
 
