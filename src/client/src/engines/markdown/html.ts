@@ -2,7 +2,7 @@
 // Markdown HTML
 //
 // HTML keeps its source: a block holds it as its text, an inline piece as an attribute, and both write it back
-// unchanged. Comments are left to the markdown parser's own handling.
+// unchanged. A block of nothing but comments is a comment block (comments.ts), not HTML.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { type JSONContent, Node } from '@tiptap/core';
@@ -48,13 +48,14 @@ export const HtmlBlock = Node.create({
 
     markdownTokenName: 'html',
 
-    // Comments, and inline HTML that reaches the block parser, go on to the markdown parser's own handling.
+    // Inline HTML that reaches the block parser goes on to the markdown parser's own handling.
     parseMarkdown: (token, helpers) =>
     {
         const source = token.raw ?? '';
-        if(token.block !== true || COMMENTS_ONLY.test(source)) { return []; }
+        if(token.block !== true) { return []; }
 
-        return helpers.createNode('htmlBlock', null, source === '' ? [] : [ helpers.createTextNode(source) ]);
+        const content = source === '' ? [] : [ helpers.createTextNode(source) ];
+        return helpers.createNode(COMMENTS_ONLY.test(source) ? 'commentBlock' : 'htmlBlock', null, content);
     },
 
     renderMarkdown: (node) => textOf(node),

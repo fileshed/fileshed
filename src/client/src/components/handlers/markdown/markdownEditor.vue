@@ -187,6 +187,90 @@
     .md-doc :deep(.tiptap hr) {
         border-color: var(--ui-border-accented);
     }
+
+    .md-doc :deep(:is([data-comment], [data-comment-block])) {
+        color: var(--ui-text-dimmed);
+    }
+
+    .md-doc :deep([data-comment-block]) {
+        white-space: pre-wrap;
+    }
+
+    .md-doc :deep(.tiptap mark) {
+        background-color: color-mix(in oklab, var(--callout-yellow) 30%, transparent);
+        color: inherit;
+    }
+
+    /* A callout's marker hides while the cursor is off its line; the callout itself draws the type. */
+    .md-doc :deep(.md-callout-marker),
+    .md-doc :deep(.md-math-hidden) {
+        display: none;
+    }
+
+    .md-doc :deep(.tiptap [data-inline-math]) {
+        font-family: var(--font-mono);
+        font-size: 0.875em;
+    }
+
+    /* Footnote definitions are drawn at the end of the page in the order their flex order gives them, under a divider,
+       while the file keeps them where they are. The page is a column of blocks with no margins, so laying it out as a
+       flex column moves nothing else. */
+    .md-doc :deep(.tiptap:has(> [data-footnote-definition])) {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .md-doc :deep(.tiptap > *) {
+        min-width: 0;
+    }
+
+    .md-doc :deep([data-footnote-ref]) {
+        cursor: pointer;
+        color: var(--ui-primary);
+    }
+
+    .md-doc :deep([data-footnote-ref][data-number])::after {
+        content: "[" attr(data-number) "]";
+    }
+
+    .md-doc :deep([data-footnote-ref]:not([data-number]))::after {
+        content: "[^" attr(data-label) "]";
+        color: var(--ui-text);
+    }
+
+    .md-doc :deep([data-footnote-definition]) {
+        position: relative;
+        padding-inline-start: 2rem;
+        font-size: 0.875em;
+    }
+
+    .md-doc :deep([data-footnote-definition])::before {
+        content: attr(data-number) ".";
+        position: absolute;
+        inset-inline-start: 0;
+        color: var(--ui-text-muted);
+    }
+
+    .md-doc :deep([data-footnote-definition]:not([data-number]))::before {
+        content: "[^" attr(data-label) "]:";
+        inset-inline-start: -0.5rem;
+    }
+
+    .md-doc :deep(.md-footnotes-start) {
+        margin-block-start: 1.5rem;
+        border-block-start: 1px solid var(--ui-border-accented);
+        padding-block-start: 1rem;
+    }
+
+    .md-doc :deep(.md-footnotes-start)::before {
+        top: 1rem;
+    }
+
+    .md-doc :deep(.md-footnote-back) {
+        margin-inline-start: 0.25rem;
+        color: var(--ui-primary);
+        cursor: pointer;
+    }
 </style>
 
 <!--------------------------------------------------------------------------------------------------------------------->
@@ -196,8 +280,9 @@
 
     import type { Editor } from '@tiptap/core';
     import { CodeBlock } from '@tiptap/extension-code-block';
+    import { Highlight } from '@tiptap/extension-highlight';
     import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
-    import { VueNodeViewRenderer } from '@tiptap/vue-3';
+    import { VueNodeViewRenderer, VueWidgetRenderer } from '@tiptap/vue-3';
     import type { EditorSuggestionMenuItem } from '@nuxt/ui/components/EditorSuggestionMenu.vue';
     import type { EditorToolbarItem } from '@nuxt/ui/components/EditorToolbar.vue';
 
@@ -208,9 +293,14 @@
 
     // Engines
     import type { EditorMode } from '../../../engines/intent/index.ts';
+    import { CalloutMarkers } from '../../../engines/markdown/callouts.ts';
     import { CodeHighlight } from '../../../engines/markdown/codeHighlight.ts';
+    import { Comment, CommentBlock } from '../../../engines/markdown/comments.ts';
+    import { FootnoteDefinition, FootnoteDisplay, FootnoteReference } from '../../../engines/markdown/footnotes.ts';
     import { replaceBody, splitFrontmatter } from '../../../engines/markdown/frontmatter.ts';
     import { HtmlBlock, HtmlInline } from '../../../engines/markdown/html.ts';
+    import { InlineMath, InlineMathPreview, MathBlock } from '../../../engines/markdown/math.ts';
+    import { TableOfContents } from '../../../engines/markdown/toc.ts';
     import {
         BlankLines,
         MarkdownBlockquote,
@@ -232,8 +322,12 @@
     import MarkdownHTMLBlock from './htmlBlock.vue';
     import MarkdownHTMLInline from './htmlInline.vue';
     import MarkdownIdentityBar from './identityBar.vue';
+    import MarkdownInlineMath from './inlineMath.vue';
+    import MarkdownMathBlock from './mathBlock.vue';
     import MarkdownFormatToolbar from './toolbar.vue';
     import MarkdownOutlinePanel from './outlinePanel.vue';
+    import MarkdownQuoteBlock from './quoteBlock.vue';
+    import MarkdownTOCBlock from './tocBlock.vue';
     import TextEditor from '../text/textEditor.vue';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -275,7 +369,8 @@
     // markdown extension UEditor adds. Document, paragraph, and hard break are the family's own line-model builds (the
     // stock ones are off above): blocks join on single newlines and blank lines are real empty paragraphs (see
     // engines/markdown/lineModel.ts). The code block replaces StarterKit's with the same node drawn with a language
-    // picker, and CodeHighlight colors its code and the source of HTML blocks.
+    // picker or a Mermaid diagram, quotes draw as callouts when they are one, and CodeHighlight colors code and the
+    // source of HTML and math blocks.
     const markdownOptions = { marked: lineModelMarked };
 
     const PreviewCodeBlock = CodeBlock.extend({
@@ -287,14 +382,41 @@
     const PreviewHtmlInline = HtmlInline.extend({
         addNodeView: () => VueNodeViewRenderer(MarkdownHTMLInline),
     });
+    const PreviewBlockquote = MarkdownBlockquote.extend({
+        addNodeView: () => VueNodeViewRenderer(MarkdownQuoteBlock),
+    });
+    const PreviewMathBlock = MathBlock.extend({
+        addNodeView: () => VueNodeViewRenderer(MarkdownMathBlock),
+    });
+    const PreviewTableOfContents = TableOfContents.extend({
+        addNodeView: () => VueNodeViewRenderer(MarkdownTOCBlock),
+    });
+    const PreviewInlineMath = InlineMathPreview.configure({
+        widget: (editor, pos, key, latex) =>
+        {
+            // Ahead of the source, outside its monospace styling.
+            return VueWidgetRenderer(MarkdownInlineMath, { editor, pos, key, side: -1, props: { latex } });
+        },
+    });
 
     const extraExtensions = [
         PreviewCodeBlock,
         PreviewHtmlBlock,
         PreviewHtmlInline,
+        PreviewMathBlock,
+        PreviewTableOfContents,
+        PreviewInlineMath,
         CodeHighlight,
+        CalloutMarkers,
+        Comment,
+        CommentBlock,
+        FootnoteReference,
+        FootnoteDefinition,
+        FootnoteDisplay,
+        InlineMath,
+        Highlight,
         MarkdownDocument,
-        MarkdownBlockquote,
+        PreviewBlockquote,
         MarkdownListItem,
         MarkdownParagraph,
         MarkdownHardBreak,
@@ -307,8 +429,9 @@
         TableCell,
     ];
 
-    // The custom kinds the built-in handler set doesn't cover: a GFM table from the insert menu, and indent/outdent as
-    // list nesting -- the only indent that survives the markdown round-trip -- sinking or lifting the current item.
+    // The custom kinds the built-in handler set doesn't cover: a GFM table and a footnote from the insert menu, the
+    // highlight mark, and indent/outdent as list nesting -- the only indent that survives the markdown round-trip --
+    // sinking or lifting the current item.
     function listItemType(editor : Editor) : 'taskItem' | 'listItem'
     {
         return editor.isActive('taskList') ? 'taskItem' : 'listItem';
@@ -320,6 +443,18 @@
             execute: (editor : Editor) => editor.chain().focus()
                 .insertTable({ rows: 3, cols: 3, withHeaderRow: true }),
             isActive: () => false,
+        },
+        footnote: {
+            canExecute: (editor : Editor) => editor.can().insertFootnote(),
+            execute: (editor : Editor) => editor.chain().focus()
+                .insertFootnote(),
+            isActive: () => false,
+        },
+        highlight: {
+            canExecute: (editor : Editor) => editor.can().toggleHighlight(),
+            execute: (editor : Editor) => editor.chain().focus()
+                .toggleHighlight(),
+            isActive: (editor : Editor) => editor.isActive('highlight'),
         },
         indent: {
             canExecute: (editor : Editor) =>
@@ -337,8 +472,9 @@
         },
     };
 
-    // The bubble toolbar slims to the four inline actions worth a selection: bold, italic, strikethrough, and link.
-    // Block formatting lives on the fixed toolbar above the canvas. Each carries an aria-label for its icon button.
+    // The bubble toolbar slims to the inline actions worth a selection: bold, italic, strikethrough, highlight, and
+    // link. Block formatting lives on the fixed toolbar above the canvas. Each carries an aria-label for its icon
+    // button.
     function bubbleMark(mark : 'bold' | 'italic' | 'strike', icon : string, text : string) : EditorToolbarItem
     {
         return { 'kind': 'mark', mark, icon, 'aria-label': text, 'tooltip': { text } };
@@ -349,6 +485,12 @@
             bubbleMark('bold', 'i-lucide-bold', 'Bold'),
             bubbleMark('italic', 'i-lucide-italic', 'Italic'),
             bubbleMark('strike', 'i-lucide-strikethrough', 'Strikethrough'),
+            {
+                'kind': 'highlight',
+                'icon': 'i-lucide-highlighter',
+                'aria-label': 'Highlight',
+                'tooltip': { text: 'Highlight' },
+            },
             { 'kind': 'link', 'icon': 'i-lucide-link', 'aria-label': 'Link', 'tooltip': { text: 'Link' } },
         ],
     ];
@@ -369,6 +511,7 @@
             { kind: 'blockquote', label: 'Quote', icon: 'i-lucide-text-quote' },
             { kind: 'codeBlock', label: 'Code block', icon: 'i-lucide-code' },
             { kind: 'table', label: 'Table', icon: 'i-lucide-table' },
+            { kind: 'footnote', label: 'Footnote', icon: 'i-lucide-superscript' },
             { kind: 'horizontalRule', label: 'Divider', icon: 'i-lucide-minus' },
         ],
     ];

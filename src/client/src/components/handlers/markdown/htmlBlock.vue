@@ -13,7 +13,7 @@
             contenteditable="false"
             class="md-html-render"
             :class="{ 'cursor-text': !editorStore.readOnly }"
-            @mousedown="editSource"
+            @mousedown="moveCursorInto"
             v-html="sanitized.html"
         />
         <!-- eslint-enable vue/no-v-html -->
@@ -36,9 +36,12 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+    import { computed } from 'vue';
 
     import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3';
+
+    // Components
+    import { useCursorInside } from './editorCursor.ts';
 
     // Stores
     import { useEditorStore } from '../../../stores/editor.ts';
@@ -55,40 +58,12 @@
 
     const editorStore = useEditorStore();
     const html = useMarkdownHTMLStore();
+    const { hasCursor, moveCursorInto } = useCursorInside(props);
 
     const sanitized = computed(() => sanitizeHTML(props.node.textContent));
 
-    const hasCursor = ref(false);
-
-    function onTransaction() : void
-    {
-        const pos = props.getPos();
-        const { from, to } = props.editor.state.selection;
-
-        hasCursor.value = pos !== undefined && from > pos && to < pos + props.node.nodeSize;
-    }
-
-    onMounted(() =>
-    {
-        props.editor.on('transaction', onTransaction);
-        onTransaction();
-    });
-    onBeforeUnmount(() => { props.editor.off('transaction', onTransaction); });
-
     // HTML that draws nothing once sanitized shows its source instead, so it can't be deleted without being seen.
     const showsRendered = computed(() => html.rendered && sanitized.value.visible && !hasCursor.value);
-
-    function editSource(event : MouseEvent) : void
-    {
-        const pos = props.getPos();
-        const onLink = event.target instanceof Element && event.target.closest('a') !== null;
-        if(editorStore.readOnly || pos === undefined || onLink) { return; }
-
-        event.preventDefault();
-        props.editor.chain().focus()
-            .setTextSelection(pos + 1)
-            .run();
-    }
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

@@ -20,13 +20,13 @@
 // - BlankLines: parses a run of N newlines into N-1 empty paragraphs (N when the file opens with them), since one
 //   newline is the previous line's terminator.
 // - joinBlocks: the one join. Blocks land on consecutive lines; empty paragraphs render to nothing, so their join
-//   newlines ARE the blank lines. Three exceptions markdown grammar forces: lists, quotes, tables, and most HTML
-//   blocks swallow a directly-following line, so a non-blank successor gets the terminating blank line written for
-//   it; a `---` divider directly under a text line would underline it into a heading, so it gets a blank line before
-//   it; and a trailing empty paragraph carries its own terminator so it survives the reload.
+//   newlines ARE the blank lines. Three exceptions markdown grammar forces: lists, quotes, tables, footnote
+//   definitions, and most HTML blocks swallow a directly-following line, so a non-blank successor gets the terminating
+//   blank line written for it; a `---` divider directly under a text line would underline it into a heading, so it
+//   gets a blank line before it; and a trailing empty paragraph carries its own terminator so it survives the reload.
 // - MarkdownDocument / MarkdownBlockquote / MarkdownListItem / MarkdownTaskItem: every block container renders its
-//   interior through joinBlocks -- quotes then prefix each line with `>`, items put their marker on the first line
-//   and indent the rest (blank lines stay bare).
+//   interior through joinBlocks -- quotes then prefix each line with `>` and keep a callout's marker unescaped, items
+//   put their marker on the first line and indent the rest (blank lines stay bare).
 // - MarkdownParagraph: an empty paragraph serializes to nothing. Never `&nbsp;` (the stock escape hatch); parsing
 //   is inherited, so legacy `&nbsp;` spacers load as empty paragraphs and heal to blank lines on the next save.
 // - MarkdownHardBreak: Shift+Enter serializes as a plain newline, which reloads as the paragraph split it looks
@@ -52,6 +52,7 @@ import type { MarkdownExtensionOptions } from '@tiptap/markdown';
 
 // Engines
 import { htmlBlockTakesNextLine } from './html.ts';
+import { unescapeCalloutMarker } from './callouts.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // marked instance
@@ -145,27 +146,36 @@ export const BlankLines = Extension.create({
 
 // Block types whose tokenizers lazily swallow a directly-following line; ending them takes a blank line, and the
 // serializer writes that grammar line itself when the next block isn't already one.
-const needsTerminator = new Set([ 'bulletList', 'orderedList', 'taskList', 'blockquote', 'table' ]);
+const needsTerminator = new Set([
+    'bulletList',
+    'orderedList',
+    'taskList',
+    'blockquote',
+    'table',
+    'footnoteDefinition',
+]);
 
 function isEmptyParagraph(node : JSONContent) : boolean
 {
     return node.type === 'paragraph' && (node.content ?? []).length === 0;
 }
 
+// A definition line starts a footnote of its own, so definitions sit on consecutive lines like the items of a list.
 function needsBlankLineBetween(prev : JSONContent, child : JSONContent) : boolean
 {
+    if(prev.type === 'footnoteDefinition' && child.type === 'footnoteDefinition') { return false; }
     if(needsTerminator.has(prev.type ?? '') || htmlBlockTakesNextLine(prev)) { return !isEmptyParagraph(child); }
 
     return child.type === 'horizontalRule' && prev.type === 'paragraph' && !isEmptyParagraph(prev);
 }
 
-interface JoinHelpers
+export interface JoinHelpers
 {
     renderChild ?: (child : JSONContent, index : number) => string;
     indent : (content : string) => string;
 }
 
-function joinBlocks(children : JSONContent[], helpers : JoinHelpers) : string
+export function joinBlocks(children : JSONContent[], helpers : JoinHelpers) : string
 {
     const only = children.length === 1 ? children[0] : undefined;
     if(only && isEmptyParagraph(only)) { return ''; }
@@ -230,7 +240,7 @@ export const MarkdownDocument = Document.extend({
 export const MarkdownBlockquote = Blockquote.extend({
     renderMarkdown: (node, helpers) : string =>
     {
-        return joinBlocks(node.content ?? [], helpers)
+        return unescapeCalloutMarker(joinBlocks(node.content ?? [], helpers))
             .split('\n')
             .map((line) => { return line.length > 0 ? `> ${ line }` : '>'; })
             .join('\n');

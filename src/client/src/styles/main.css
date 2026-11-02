@@ -102,3 +102,27 @@
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/* Callouts — the colors of markdown callouts in Preview, from GitHub's light and dark palettes.                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+:root {
+    --callout-blue: #0969da;
+    --callout-green: #1a7f37;
+    --callout-purple: #8250df;
+    --callout-yellow: #9a6700;
+    --callout-red: #cf222e;
+    --callout-cyan: #1b7c83;
+    --callout-gray: #59636e;
+}
+
+.dark {
+    --callout-blue: #4493f8;
+    --callout-green: #3fb950;
+    --callout-purple: #ab7df8;
+    --callout-yellow: #d29922;
+    --callout-red: #f85149;
+    --callout-cyan: #39c5cf;
+    --callout-gray: #9198a1;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */

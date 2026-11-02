@@ -24,6 +24,7 @@ export interface HighlightedPiece
 function languageOf(block : Node) : string | null
 {
     if(block.type.name === 'htmlBlock') { return 'html'; }
+    if(block.type.name === 'mathBlock') { return 'latex'; }
 
     return block.type.name === 'codeBlock' ? block.attrs.language as string | null : null;
 }

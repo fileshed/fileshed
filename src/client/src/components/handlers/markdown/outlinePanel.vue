@@ -57,7 +57,7 @@
                                     : 'border-transparent text-toned hover:text-highlighted',
                             ]"
                             :aria-current="entry.pos === active?.pos ? 'location' : undefined"
-                            @click="jumpTo(entry)"
+                            @click="jumpToBlock(editor, entry.pos)"
                         >
                             {{ entry.text }}
                         </button>
@@ -83,6 +83,7 @@
     import type { Editor, EditorEvents } from '@tiptap/core';
 
     // Components
+    import { jumpToBlock } from './editorCursor.ts';
     import MarkdownWordCount from './wordCount.vue';
 
     // Stores
@@ -126,17 +127,6 @@
     {
         if(transaction.docChanged) { outline.value = buildOutline(props.editor.state.doc); }
         selection.value = props.editor.state.selection.from;
-    }
-
-    // The caret lands at the start of the heading, and the heading scrolls to the top of the page rather than just
-    // into view.
-    function jumpTo(entry : OutlineEntry) : void
-    {
-        props.editor.chain().focus(entry.pos + 1, { scrollIntoView: false })
-            .run();
-
-        const heading = props.editor.view.nodeDOM(entry.pos);
-        if(heading instanceof HTMLElement) { heading.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     }
 
     onMounted(() => { props.editor.on('transaction', onTransaction); });

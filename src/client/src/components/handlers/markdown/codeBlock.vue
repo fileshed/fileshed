@@ -1,7 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Markdown Code Block
   --
-  -- The header is outside the editable content, so ProseMirror never reads the picker as part of the code.
+  -- The header is outside the editable content, so ProseMirror never reads the picker as part of the code. A Mermaid
+  -- block draws its diagram while the cursor is elsewhere, and shows its code with Mermaid's error when the code
+  -- doesn't read as a diagram.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -24,7 +26,20 @@
             <span v-else class="px-2 py-0.5 text-xs text-muted">{{ selectedOption.label }}</span>
         </div>
 
-        <pre><NodeViewContent as="code" /></pre>
+        <!-- eslint-disable vue/no-v-html -- Mermaid draws at its strict security level, which sanitizes the diagram -->
+        <div
+            v-if="showsDiagram"
+            contenteditable="false"
+            class="flex justify-center overflow-x-auto bg-default p-4"
+            :class="{ 'cursor-text': !store.readOnly }"
+            @mousedown="moveCursorInto"
+            v-html="diagram"
+        />
+        <!-- eslint-enable vue/no-v-html -->
+        <p v-if="isMermaid && !hasCursor && diagramError" contenteditable="false" class="px-4 pt-2 text-xs text-error">
+            {{ diagramError }}
+        </p>
+        <pre v-show="!showsDiagram"><NodeViewContent as="code" /></pre>
     </NodeViewWrapper>
 </template>
 
@@ -43,9 +58,14 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed } from 'vue';
+    import { computed, ref, watch } from 'vue';
 
     import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3';
+    import { useDark } from '@vueuse/core';
+
+    // Components
+    import { useCursorInside } from './editorCursor.ts';
+    import { renderMermaid } from './mermaid.ts';
 
     // Stores
     import { useEditorStore } from '../../../stores/editor.ts';
@@ -93,6 +113,51 @@
 
         props.updateAttributes({ language: withFenceLanguage(info.value, option.value) });
     }
+
+    //------------------------------------------------------------------------------------------------------------------
+    // Mermaid
+    //------------------------------------------------------------------------------------------------------------------
+
+    const { hasCursor, moveCursorInto } = useCursorInside(props);
+    const dark = useDark();
+
+    const isMermaid = computed(() => selected.value === 'mermaid');
+    const diagram = ref<string | null>(null);
+    const diagramError = ref<string | null>(null);
+    const showsDiagram = computed(() => isMermaid.value && !hasCursor.value && diagram.value !== null);
+
+    // Drawn when the cursor leaves, not on every keystroke in the code. A slow draw finishing after a newer one has
+    // started is dropped.
+    let drawing = 0;
+    watch([ isMermaid, hasCursor, () => props.node.textContent, dark ], async ([ mermaid, cursor, source, isDark ]) =>
+    {
+        if(!mermaid || cursor) { return; }
+
+        drawing += 1;
+        const draw = drawing;
+        if(source.trim() === '')
+        {
+            diagram.value = null;
+            diagramError.value = null;
+            return;
+        }
+
+        try
+        {
+            const svg = await renderMermaid(source, isDark);
+            if(draw !== drawing) { return; }
+
+            diagram.value = svg;
+            diagramError.value = null;
+        }
+        catch(error)
+        {
+            if(draw !== drawing) { return; }
+
+            diagram.value = null;
+            diagramError.value = error instanceof Error ? error.message : String(error);
+        }
+    }, { immediate: true });
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->
