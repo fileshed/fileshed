@@ -14,6 +14,7 @@ export * from './handler.ts';
 export * from './http.ts';
 export * from './links.ts';
 export * from './listing.ts';
+export * from './markdown.ts';
 export * from './media.ts';
 export * from './naturalOrder.ts';
 export * from './node.ts';

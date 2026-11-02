@@ -5,11 +5,11 @@
   -- registry. Only features that round-trip to real GFM are offered; the image extension is disabled, so a pasted or
   -- dropped image does nothing rather than inlining a base64 blob.
   --
-  -- Serializing back to markdown normalizes formatting, so to keep the saved diff honest the buffer is written only on
-  -- a real edit, never on a view. The initial content goes through UEditor's constructor (no update fires), and every
-  -- resync (toggling back from Source, an external reload) goes through setContent with emitUpdate off. Source edits
-  -- write the buffer verbatim. The first WYSIWYG edit of a hand-authored file may reflow its markdown to the
-  -- serializer's style.
+  -- The buffer is written only on a real edit, never on a view. The initial content goes through UEditor's constructor
+  -- (no update fires), and every resync (toggling back from Source, an external reload) goes through setContent with
+  -- emitUpdate off. A WYSIWYG edit is merged into the file rather than replacing it with the serializer's output, so
+  -- everything the edit didn't touch keeps its own spelling (see engines/markdown/preservation.ts). Source edits write
+  -- the buffer verbatim.
   --
   -- WYSIWYG holds only the body: the frontmatter block is split off before parsing and put back verbatim on every
   -- write, so YAML never reaches the markdown parser or the serializer. Source shows the whole file.
@@ -204,6 +204,7 @@
         MarkdownTaskItem,
         lineModelMarked,
     } from '../../../engines/markdown/lineModel.ts';
+    import { mergeEdit } from '../../../engines/markdown/preservation.ts';
 
     // Components
     import ConflictModal from '../text/modals/conflictModal.vue';
@@ -330,12 +331,39 @@
         ],
     ];
 
+    // The body as last written, and the serializer's output for the document it was parsed into. An edit is the change
+    // from that output to the next one, merged into the body. Neither drives rendering, so neither is reactive.
+    let written = initialContent.value;
+    let serialized : string | null = null;
+
+    // UEditor builds its editor after mounting, before any edit can happen.
+    watch(() => editorRef.value?.editor, (editor) =>
+    {
+        if(editor) { serialized = editor.getMarkdown(); }
+    }, { immediate: true });
+
     // A genuine WYSIWYG edit -- UEditor only fires this on a real document change, never on construction or an
-    // emitUpdate-off setContent -- so this is the sole path that writes the buffer. The serialization is the body; the
-    // file's frontmatter goes back on in front of it.
+    // emitUpdate-off setContent -- so this is the sole path that writes the buffer. The merged body goes back behind
+    // the file's frontmatter.
     function onEditorUpdate(value : string) : void
     {
-        emit('update:modelValue', replaceBody(props.modelValue, value));
+        const manager = editorRef.value?.editor?.markdown;
+        if(manager && serialized !== null)
+        {
+            written = mergeEdit({
+                file: written,
+                before: serialized,
+                after: value,
+                normalize: (markdown) => manager.serialize(manager.parse(markdown)),
+            });
+        }
+        else
+        {
+            written = value;
+        }
+
+        serialized = value;
+        emit('update:modelValue', replaceBody(props.modelValue, written));
     }
 
     // Push the file's body into the live document without counting as an edit: the resync path (a toggle back from
@@ -343,18 +371,21 @@
     function reparse(file : string) : void
     {
         const { body } = splitFrontmatter(file);
-        editorRef.value?.editor?.commands.setContent(body, { contentType: 'markdown', emitUpdate: false });
+        const editor = editorRef.value?.editor;
+        editor?.commands.setContent(body, { contentType: 'markdown', emitUpdate: false });
+
+        written = body;
+        serialized = editor?.getMarkdown() ?? null;
     }
 
     // An external buffer change while WYSIWYG is showing -- a reload, a deep-link swap, a properties edit -- is
-    // re-parsed into the document. A body that already matches the current serialization is this editor's own echo
-    // (or a frontmatter-only change) and is skipped, so binding the buffer both ways never loops.
+    // re-parsed into the document. A body that matches what this editor last wrote is its own echo (or a
+    // frontmatter-only change) and is skipped, so binding the buffer both ways never loops.
     watch(() => props.modelValue, (value) =>
     {
         if(view.value !== 'wysiwyg') { return; }
 
-        const editor = editorRef.value?.editor;
-        if(editor && splitFrontmatter(value).body !== editor.getMarkdown()) { reparse(value); }
+        if(editorRef.value?.editor && splitFrontmatter(value).body !== written) { reparse(value); }
     });
 
     // emitUpdate stays off: flipping editability is not an edit and must never write the buffer.

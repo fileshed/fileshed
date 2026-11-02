@@ -20,8 +20,9 @@
 // - BlankLines: parses a run of N newlines into N-1 empty paragraphs (N when the file opens with them), since one
 //   newline is the previous line's terminator.
 // - joinBlocks: the one join. Blocks land on consecutive lines; empty paragraphs render to nothing, so their join
-//   newlines ARE the blank lines. Two exceptions markdown grammar forces: lists, quotes, and tables lazily swallow
-//   a directly-following line, so a non-blank successor gets the terminating blank line written for it; and a
+//   newlines ARE the blank lines. Three exceptions markdown grammar forces: lists, quotes, and tables lazily swallow
+//   a directly-following line, so a non-blank successor gets the terminating blank line written for it; a `---`
+//   divider directly under a text line would underline it into a heading, so it gets a blank line before it; and a
 //   trailing empty paragraph carries its own terminator so it survives the reload.
 // - MarkdownDocument / MarkdownBlockquote / MarkdownListItem / MarkdownTaskItem: every block container renders its
 //   interior through joinBlocks -- quotes then prefix each line with `>`, items put their marker on the first line
@@ -139,6 +140,13 @@ function isEmptyParagraph(node : JSONContent) : boolean
     return node.type === 'paragraph' && (node.content ?? []).length === 0;
 }
 
+function needsBlankLineBetween(prev : JSONContent, child : JSONContent) : boolean
+{
+    if(needsTerminator.has(prev.type ?? '')) { return !isEmptyParagraph(child); }
+
+    return child.type === 'horizontalRule' && prev.type === 'paragraph' && !isEmptyParagraph(prev);
+}
+
 interface JoinHelpers
 {
     renderChild ?: (child : JSONContent, index : number) => string;
@@ -154,11 +162,7 @@ function joinBlocks(children : JSONContent[], helpers : JoinHelpers) : string
     children.forEach((child, index) =>
     {
         const prev = index > 0 ? children[index - 1] : undefined;
-        if(prev)
-        {
-            const grammarBreak = needsTerminator.has(prev.type ?? '') && !isEmptyParagraph(child);
-            out += grammarBreak ? '\n\n' : '\n';
-        }
+        if(prev) { out += needsBlankLineBetween(prev, child) ? '\n\n' : '\n'; }
 
         // The join owns every boundary newline; a block render that pads itself (the stock table does) would
         // smuggle phantom blank lines into the file.

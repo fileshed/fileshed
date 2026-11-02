@@ -4,8 +4,9 @@
 // The contract: blocks join on single newlines, so consecutive paragraphs touch ("a\nb"); a blank line is a real
 // empty paragraph, one per blank line ("a\n\nb" is [a, empty, b]); and the mapping is stable across serialize and
 // reload. Lists, quotes, and tables lazily swallow a directly-following line (markdown grammar), so the serializer
-// writes their terminating blank line itself. Exercised through a real TipTap editor with the same extension stack
-// the component wires up, because the round-trip is the contract.
+// writes their terminating blank line itself; a divider directly under a text line would underline it into a heading,
+// so the serializer writes a blank line before it. Exercised through a real TipTap editor with the same extension
+// stack the component wires up, because the round-trip is the contract.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -233,6 +234,33 @@ describe('line model: grammar terminators', () =>
         ]);
 
         expect(editor.getMarkdown()).toBe('- a\n\nb');
+    });
+
+    it('writes a blank line before a divider placed straight under a text line, so it reloads as a divider', () =>
+    {
+        const editor = createEditor();
+        setDoc(editor, [ paragraph('a'), { type: 'horizontalRule' }, paragraph('b') ]);
+
+        const markdown = editor.getMarkdown();
+        expect(markdown).toBe('a\n\n---\nb');
+        expect(blockShapes(parse(markdown)))
+            .toEqual([ 'paragraph|a', 'paragraph|', 'horizontalRule|', 'paragraph|b' ]);
+    });
+
+    it('writes a divider under a heading or a blank line with nothing added', () =>
+    {
+        const editor = createEditor();
+        setDoc(editor, [
+            heading('H'),
+            { type: 'horizontalRule' },
+            paragraph('a'),
+            paragraph(),
+            { type: 'horizontalRule' },
+            paragraph('b'),
+        ]);
+
+        expect(editor.getMarkdown()).toBe('# H\n---\na\n\n---\nb');
+        expectStable('# H\n---\na\n\n---\nb');
     });
 
     it('keeps blank lines after a table as real lines', () =>

@@ -7,8 +7,9 @@
 // exposes an editor whose setContent/getMarkdown/setEditable the component drives, and lets a test fire the
 // update:modelValue edit signal. The child surfaces, the identity bar, and the conflict modal are stubbed to plain
 // elements so the data flow is directly observable. What this guards: opening parses through the constructor without
-// dirtying, a genuine edit emits the re-serialized markdown, toggling to Source shows the original when clean and the
-// serialization when edited, Source edits write verbatim, an external reload re-parses (its own echo skipped),
+// dirtying, a genuine edit is merged into the file so the lines it didn't touch keep their spelling, each later edit
+// merges into what the last one wrote, toggling to Source shows the original when clean and the merged file when
+// edited, Source edits write verbatim, an external reload re-parses (its own echo skipped),
 // read-only reaches the editor, formatting rides a fixed toolbar (hidden in Source and for viewers) beside a
 // slimmed bubble toolbar and a slash menu, the outline panel mounts in WYSIWYG, and frontmatter stays
 // out of the WYSIWYG document: only the body is parsed, every edit puts the file's frontmatter back in front, and
@@ -51,8 +52,14 @@ const ueditor = {
     emit: undefined as ((event : string, value : string) => void) | undefined,
 };
 
+// Its markdown manager hands text through unchanged: what the stub serializes to is whatever a test sets, so the merge
+// sees the file's spelling and the serializer's as the test wrote them.
 const editorInstance = {
     getMarkdown: () : string => ueditor.markdown,
+    markdown: {
+        parse: (markdown : string) : string => markdown,
+        serialize: (content : string) : string => content,
+    },
     commands: {
         setContent: (content : string, options : { contentType : string; emitUpdate : boolean }) : void =>
         {
@@ -219,9 +226,11 @@ function lastEmit(wrapper : VueWrapper) : string | undefined
     return events[events.length - 1]?.[0] as string;
 }
 
-// Fire UEditor's update:modelValue, the signal the component treats as a genuine edit.
+// Fire UEditor's update:modelValue, the signal the component treats as a genuine edit. A tick passes first, as one
+// always does between the editor's creation and a person's first keystroke.
 async function editInEditor(wrapper : VueWrapper, markdown : string) : Promise<void>
 {
+    await wrapper.vm.$nextTick();
     ueditor.markdown = markdown;
     ueditor.emit?.('update:modelValue', markdown);
     await wrapper.vm.$nextTick();
@@ -256,13 +265,25 @@ describe('MarkdownEditor normalization policy', () =>
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     });
 
-    it('emits the re-serialized markdown on a genuine WYSIWYG edit', async () =>
+    it('merges a genuine WYSIWYG edit into the file, so the lines it didn\'t touch keep their spelling', async () =>
     {
-        const wrapper = mountEditor({ modelValue: '# Original' });
+        ueditor.markdown = '# Title\nkeep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: '# Title\nkeep __this__\nedit me' });
 
-        await editInEditor(wrapper, '# Original normalized');
+        await editInEditor(wrapper, '# Title\nkeep **this**\nedit me now');
 
-        expect(lastEmit(wrapper)).toBe('# Original normalized');
+        expect(lastEmit(wrapper)).toBe('# Title\nkeep __this__\nedit me now');
+    });
+
+    it('merges each later edit into what the one before it wrote', async () =>
+    {
+        ueditor.markdown = '# Title\nkeep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: '# Title\nkeep __this__\nedit me' });
+
+        await editInEditor(wrapper, '# Title\nkeep **this**\nedit me now');
+        await editInEditor(wrapper, '# New title\nkeep **this**\nedit me now');
+
+        expect(lastEmit(wrapper)).toBe('# New title\nkeep __this__\nedit me now');
     });
 
     it('shows the untouched original in Source when the document was not edited in WYSIWYG', async () =>
@@ -275,16 +296,32 @@ describe('MarkdownEditor normalization policy', () =>
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     });
 
-    it('shows the current serialization in Source after a WYSIWYG edit', async () =>
+    it('shows the merged file in Source after a WYSIWYG edit', async () =>
     {
-        const wrapper = mountEditor({ modelValue: '# Original' });
+        ueditor.markdown = 'keep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: 'keep __this__\nedit me' });
 
-        await editInEditor(wrapper, '# Normalized');
+        await editInEditor(wrapper, 'keep **this**\nedit me now');
         // The host is controlled: it feeds the emitted value back as the buffer, as the store would.
-        await wrapper.setProps({ modelValue: '# Normalized' });
+        await wrapper.setProps({ modelValue: lastEmit(wrapper) });
         await wrapper.get('.to-source').trigger('click');
 
-        expect(sourceValue(wrapper)).toBe('# Normalized');
+        expect(sourceValue(wrapper)).toBe('keep __this__\nedit me now');
+    });
+
+    it('merges a WYSIWYG edit into the text a Source edit left, once back in WYSIWYG', async () =>
+    {
+        ueditor.markdown = '# Original';
+        const wrapper = mountEditor({ modelValue: '# Original' });
+
+        await wrapper.get('.to-source').trigger('click');
+        await wrapper.get('.source').setValue('keep __this__\nedit me');
+        await wrapper.setProps({ modelValue: 'keep __this__\nedit me' });
+        ueditor.markdown = 'keep **this**\nedit me';
+        await wrapper.get('.to-wysiwyg').trigger('click');
+        await editInEditor(wrapper, 'keep **this**\nedit me now');
+
+        expect(lastEmit(wrapper)).toBe('keep __this__\nedit me now');
     });
 
     it('writes Source-mode edits to the buffer verbatim', async () =>
@@ -324,12 +361,13 @@ describe('MarkdownEditor normalization policy', () =>
         });
     });
 
-    it('skips the re-parse when an incoming buffer change is its own serialization echo', async () =>
+    it('skips the re-parse when the buffer comes back as the body this editor last wrote', async () =>
     {
-        ueditor.markdown = '# Current';
-        const wrapper = mountEditor({ modelValue: '# Current' });
+        ueditor.markdown = 'keep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: 'keep __this__\nedit me' });
 
-        await wrapper.setProps({ modelValue: '# Current' });
+        await editInEditor(wrapper, 'keep **this**\nedit me now');
+        await wrapper.setProps({ modelValue: lastEmit(wrapper) });
 
         expect(ueditor.setContentCalls).toHaveLength(0);
     });
@@ -434,6 +472,7 @@ describe('MarkdownEditor frontmatter', () =>
 
     it('puts the frontmatter back, unchanged, in front of a WYSIWYG edit', async () =>
     {
+        ueditor.markdown = '# Body';
         const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
 
         await editInEditor(wrapper, '# Edited');
