@@ -12,8 +12,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { Editor, type JSONContent } from '@tiptap/core';
-import { TaskList } from '@tiptap/extension-list';
-import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -25,7 +24,9 @@ import {
     MarkdownHardBreak,
     MarkdownListItem,
     MarkdownParagraph,
+    MarkdownTable,
     MarkdownTaskItem,
+    MarkdownTaskList,
     lineModelMarked,
 } from '@client/engines/markdown/lineModel.ts';
 
@@ -51,10 +52,10 @@ function createEditor() : Editor
             MarkdownListItem,
             MarkdownParagraph,
             MarkdownHardBreak,
-            TaskList,
+            MarkdownTaskList,
             MarkdownTaskItem.configure({ nested: true }),
             BlankLines,
-            Table,
+            MarkdownTable,
             TableRow,
             TableHeader,
             TableCell,
@@ -314,6 +315,14 @@ describe('line model: container interiors', () =>
         expect(shapesAt(editor, 0, 0)).toEqual([ 'paragraph|a', 'paragraph|', 'paragraph|b' ]);
     });
 
+    it('keeps blank lines before a task list as real lines, as before any other list', () =>
+    {
+        const editor = expectStable('a\n\n- [ ] task\n\nb');
+
+        expect(blockShapes(editor))
+            .toEqual([ 'paragraph|a', 'paragraph|', 'taskList|task', 'paragraph|', 'paragraph|b' ]);
+    });
+
     it('round-trips task items with their checkbox state', () =>
     {
         const editor = expectStable('- [x] done\n- [ ] pending\n\n');
@@ -343,6 +352,57 @@ describe('line model: hard breaks', () =>
         const markdown = editor.getMarkdown();
         expect(markdown).toBe('a\nb');
         expect(blockShapes(parse(markdown))).toEqual([ 'paragraph|a', 'paragraph|b' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('line model: long files', () =>
+{
+    // Sections of every block kind whose tokenizers run at each block: text, lists, task lists, and tables.
+    function sections(count : number) : string
+    {
+        return Array.from({ length: count }, (_, index) =>
+        {
+            return [
+                `## Section ${ index }`,
+                `Text with __bold__ and a [link](https://example.com/${ index }).`,
+                '',
+                `- item ${ index }`,
+                `- [ ] task ${ index }`,
+                '',
+                '| a | b |',
+                '| --- | --- |',
+                `| ${ index } | x |`,
+                '',
+            ];
+        }).flat()
+            .join('\n');
+    }
+
+    function fastestParse(markdown : string) : number
+    {
+        const manager = createEditor().markdown;
+        if(!manager) { throw new Error('the markdown extension is missing'); }
+
+        manager.parse(markdown);
+        const times = Array.from({ length: 3 }, () =>
+        {
+            const started = performance.now();
+            manager.parse(markdown);
+            return performance.now() - started;
+        });
+
+        return Math.min(...times);
+    }
+
+    // Eight times the file takes about eight times as long; a parse quadratic in the file's length takes sixty-four.
+    it('parses a long file in time proportional to its length', () =>
+    {
+        const short = fastestParse(sections(250));
+        const long = fastestParse(sections(2000));
+
+        expect(long).toBeLessThan(short * 24);
     });
 });
 

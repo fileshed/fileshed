@@ -11,8 +11,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { Editor } from '@tiptap/core';
-import { TaskList } from '@tiptap/extension-list';
-import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -24,7 +23,9 @@ import {
     MarkdownHardBreak,
     MarkdownListItem,
     MarkdownParagraph,
+    MarkdownTable,
     MarkdownTaskItem,
+    MarkdownTaskList,
     lineModelMarked,
 } from '@client/engines/markdown/lineModel.ts';
 
@@ -53,10 +54,10 @@ function parse(markdown : string) : Editor
             MarkdownListItem,
             MarkdownParagraph,
             MarkdownHardBreak,
-            TaskList,
+            MarkdownTaskList,
             MarkdownTaskItem.configure({ nested: true }),
             BlankLines,
-            Table,
+            MarkdownTable,
             TableRow,
             TableHeader,
             TableCell,

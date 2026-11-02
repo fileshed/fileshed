@@ -11,7 +11,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { Editor } from '@tiptap/core';
-import { TaskList } from '@tiptap/extension-list';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -24,6 +23,7 @@ import {
     MarkdownListItem,
     MarkdownParagraph,
     MarkdownTaskItem,
+    MarkdownTaskList,
     lineModelMarked,
 } from '@client/engines/markdown/lineModel.ts';
 
@@ -52,7 +52,7 @@ function open(markdown : string) : Editor
             MarkdownListItem,
             MarkdownParagraph,
             MarkdownHardBreak,
-            TaskList,
+            MarkdownTaskList,
             MarkdownTaskItem.configure({ nested: true }),
             BlankLines,
         ],

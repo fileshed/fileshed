@@ -31,6 +31,10 @@
 //   is inherited, so legacy `&nbsp;` spacers load as empty paragraphs and heal to blank lines on the next save.
 // - MarkdownHardBreak: Shift+Enter serializes as a plain newline, which reloads as the paragraph split it looks
 //   like -- the line model has no second kind of line break.
+// - MarkdownTaskList / MarkdownTable: the stock task list and table, with tokenizer hooks that read only the lines
+//   they decide on. marked runs every block tokenizer on the rest of the file at every block, and the stock hooks split
+//   all of it into lines first, which made a long file's parse quadratic in its length. The task list also leaves the
+//   blank lines around it to BlankLines, as the heading and table raws do.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { Lexer, Marked, type Token, Tokenizer, type Tokens, getDefaults } from 'marked';
@@ -38,8 +42,9 @@ import { Extension, type JSONContent } from '@tiptap/core';
 import { Blockquote } from '@tiptap/extension-blockquote';
 import { Document } from '@tiptap/extension-document';
 import { HardBreak } from '@tiptap/extension-hard-break';
-import { ListItem, TaskItem, getListMarker } from '@tiptap/extension-list';
+import { ListItem, TaskItem, TaskList, getListMarker } from '@tiptap/extension-list';
 import { Paragraph } from '@tiptap/extension-paragraph';
+import { Table } from '@tiptap/extension-table';
 
 // Type-only, and also what puts the Editor augmentations (getMarkdown, setContent's contentType) in the program --
 // nothing else in the client imports @tiptap/markdown directly.
@@ -254,6 +259,40 @@ export const MarkdownTaskItem = TaskItem.extend({
         const checked = node.attrs?.checked === true;
 
         return renderListItem(`- [${ checked ? 'x' : ' ' }] `, node, helpers);
+    },
+});
+
+// A task list starts at a task item, so any other first line is turned away without reading on. The stock tokenizer
+// takes blank lines on both sides into the list, those ahead of the first item and the newline after the last; skipped
+// here and trimmed off, they go to BlankLines and stay real lines.
+const TASK_ITEM = /^[^\S\n]*[-+*][^\S\n]+\[[ xX]\][^\S\n]+/u;
+const stockTaskListTokenizer = TaskList.config.markdownTokenizer;
+
+export const MarkdownTaskList = TaskList.extend({
+    markdownTokenizer: stockTaskListTokenizer && {
+        ...stockTaskListTokenizer,
+        tokenize: (src, tokens, lexer) =>
+        {
+            if(!TASK_ITEM.test(src)) { return undefined; }
+
+            const token = stockTaskListTokenizer.tokenize(src, tokens, lexer);
+            return token ? { ...token, raw: token.raw?.replace(/\n+$/u, '') } : token;
+        },
+    },
+});
+
+// A table starts where a line with a pipe sits over a delimiter row, so the stock start hook only ever reads the
+// first two lines; it gets just those.
+const FIRST_TWO_LINES = /^[^\n]*(?:\n[^\n]*)?/u;
+const stockTableTokenizer = Table.config.markdownTokenizer;
+const stockTableStart = stockTableTokenizer?.start;
+
+export const MarkdownTable = Table.extend({
+    markdownTokenizer: stockTableTokenizer && {
+        ...stockTableTokenizer,
+        start: typeof stockTableStart === 'function'
+            ? (src) => stockTableStart(FIRST_TWO_LINES.exec(src)?.[0] ?? '')
+            : stockTableStart,
     },
 });
 

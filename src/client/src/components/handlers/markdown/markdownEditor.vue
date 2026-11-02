@@ -182,8 +182,7 @@
     import { computed, ref, useTemplateRef, watch } from 'vue';
 
     import type { Editor } from '@tiptap/core';
-    import { TaskList } from '@tiptap/extension-list';
-    import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
+    import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
     import type { EditorSuggestionMenuItem } from '@nuxt/ui/components/EditorSuggestionMenu.vue';
     import type { EditorToolbarItem } from '@nuxt/ui/components/EditorToolbar.vue';
 
@@ -201,7 +200,9 @@
         MarkdownHardBreak,
         MarkdownListItem,
         MarkdownParagraph,
+        MarkdownTable,
         MarkdownTaskItem,
+        MarkdownTaskList,
         lineModelMarked,
     } from '../../../engines/markdown/lineModel.ts';
     import { mergeEdit } from '../../../engines/markdown/preservation.ts';
@@ -257,9 +258,9 @@
         MarkdownParagraph,
         MarkdownHardBreak,
         BlankLines,
-        TaskList,
+        MarkdownTaskList,
         MarkdownTaskItem.configure({ nested: true }),
-        Table.configure({ resizable: false }),
+        MarkdownTable.configure({ resizable: false }),
         TableRow,
         TableHeader,
         TableCell,
