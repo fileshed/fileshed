@@ -25,6 +25,7 @@
 
     // Engines
     import type { EditorMode } from '../../../engines/intent/index.ts';
+    import { findCodeLanguage } from '../../../engines/markdown/codeLanguages.ts';
     import { resolveEditorTheme } from '../../../engines/editorTheme.ts';
 
     // Components
@@ -56,7 +57,7 @@
 
     function languageExtension(mode : EditorMode) : Extension
     {
-        return mode === 'markdown' ? markdown() : [];
+        return mode === 'markdown' ? markdown({ codeLanguages: findCodeLanguage }) : [];
     }
 
     function editableState(readOnly : boolean) : Extension

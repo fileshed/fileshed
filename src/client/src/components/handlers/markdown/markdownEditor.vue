@@ -37,6 +37,7 @@
                         hardBreak: false,
                         blockquote: false,
                         listItem: false,
+                        codeBlock: false,
                     }"
                     :markdown="markdownOptions"
                     :extensions="extraExtensions"
@@ -174,6 +175,11 @@
         background-color: var(--ui-bg-accented);
         font-weight: 600;
     }
+
+    /* The same surface clash as the table borders: a divider in the default border color vanishes in dark mode. */
+    .md-doc :deep(.tiptap hr) {
+        border-color: var(--ui-border-accented);
+    }
 </style>
 
 <!--------------------------------------------------------------------------------------------------------------------->
@@ -182,7 +188,9 @@
     import { computed, ref, useTemplateRef, watch } from 'vue';
 
     import type { Editor } from '@tiptap/core';
+    import { CodeBlock } from '@tiptap/extension-code-block';
     import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
+    import { VueNodeViewRenderer } from '@tiptap/vue-3';
     import type { EditorSuggestionMenuItem } from '@nuxt/ui/components/EditorSuggestionMenu.vue';
     import type { EditorToolbarItem } from '@nuxt/ui/components/EditorToolbar.vue';
 
@@ -192,6 +200,7 @@
 
     // Engines
     import type { EditorMode } from '../../../engines/intent/index.ts';
+    import { CodeHighlight } from '../../../engines/markdown/codeHighlight.ts';
     import { replaceBody, splitFrontmatter } from '../../../engines/markdown/frontmatter.ts';
     import {
         BlankLines,
@@ -209,6 +218,7 @@
 
     // Components
     import ConflictModal from '../text/modals/conflictModal.vue';
+    import MarkdownCodeBlock from './codeBlock.vue';
     import MarkdownIdentityBar from './identityBar.vue';
     import MarkdownFormatToolbar from './toolbar.vue';
     import MarkdownOutlinePanel from './outlinePanel.vue';
@@ -245,13 +255,20 @@
     // reparse() instead, where emitUpdate stays off.
     const initialContent = ref(splitFrontmatter(props.modelValue).body);
 
-    // The task lists, tables, strikethrough, and code blocks the base StarterKit doesn't ship. Strike rides StarterKit;
-    // task lists and tables are layered on here. Each serializes to GFM through the markdown extension UEditor adds.
-    // Document, paragraph, and hard break are the family's own line-model builds (the stock ones are off above):
-    // blocks join on single newlines and blank lines are real empty paragraphs (see engines/markdown/lineModel.ts).
+    // The task lists and tables the base StarterKit doesn't ship, layered on here; each serializes to GFM through the
+    // markdown extension UEditor adds. Document, paragraph, and hard break are the family's own line-model builds (the
+    // stock ones are off above): blocks join on single newlines and blank lines are real empty paragraphs (see
+    // engines/markdown/lineModel.ts). The code block replaces StarterKit's with the same node drawn with a language
+    // picker, and CodeHighlight colors its code.
     const markdownOptions = { marked: lineModelMarked };
 
+    const PreviewCodeBlock = CodeBlock.extend({
+        addNodeView: () => VueNodeViewRenderer(MarkdownCodeBlock),
+    });
+
     const extraExtensions = [
+        PreviewCodeBlock,
+        CodeHighlight,
         MarkdownDocument,
         MarkdownBlockquote,
         MarkdownListItem,

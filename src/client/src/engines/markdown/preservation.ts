@@ -240,6 +240,32 @@ function looseKey(line : string) : string
     return (line.match(WORD) ?? []).join(' ');
 }
 
+// A fence after any blockquote or list-item markers on its line, as Preview writes it.
+const FENCE_PREFIX = /^[\s>]*(?:(?:[-+*]|\d+[.)])\s+)?/u;
+const FENCE = /^(?:`{3,}|~{3,})/u;
+
+// Which of Preview's lines sit inside a fenced code block, the closing fence included. Read without the lines above it,
+// such a line isn't code at all, so it can't bound a window; an opening fence can, since it opens a block anywhere.
+function fencedLines(lines : string[]) : boolean[]
+{
+    let fence : string | null = null;
+
+    return lines.map((line) =>
+    {
+        const bare = line.replace(FENCE_PREFIX, '').trimEnd();
+        if(fence === null)
+        {
+            fence = FENCE.exec(bare)?.[0] ?? null;
+            return false;
+        }
+
+        // A closing fence is at least as long as the opening one, of the same character, with nothing after it.
+        if(bare.startsWith(fence) && bare === bare.charAt(0).repeat(bare.length)) { fence = null; }
+
+        return true;
+    });
+}
+
 // Only the lines between the nearest line on each side of the edit whose words occur once in both texts get compared:
 // those lines pin where the window sits in the file. Comparing whole files instead costs time quadratic in their
 // length on every keystroke.
@@ -256,16 +282,19 @@ function findWindow(file : string[], before : string[], after : string[]) : Edit
     const beforeKeys = before.map(looseKey);
     const fileCounts = countOf(fileKeys);
     const beforeCounts = countOf(beforeKeys);
-    const isAnchor = (key : string | undefined) : boolean =>
+    const fenced = fencedLines(before);
+    const isAnchor = (index : number) : boolean =>
     {
-        return key !== undefined && key !== '' && fileCounts.get(key) === 1 && beforeCounts.get(key) === 1;
+        const key = beforeKeys[index];
+        return key !== undefined && key !== '' && !fenced[index]
+            && fileCounts.get(key) === 1 && beforeCounts.get(key) === 1;
     };
 
     let start = prefix - 1;
-    while(start >= 0 && !isAnchor(beforeKeys[start])) { start -= 1; }
+    while(start >= 0 && !isAnchor(start)) { start -= 1; }
 
     let end = before.length - suffix;
-    while(end < before.length && !isAnchor(beforeKeys[end])) { end += 1; }
+    while(end < before.length && !isAnchor(end)) { end += 1; }
 
     const fileStart = start < 0 ? 0 : fileKeys.indexOf(beforeKeys[start] ?? '') + 1;
     const fileEnd = end >= before.length ? file.length : fileKeys.indexOf(beforeKeys[end] ?? '');

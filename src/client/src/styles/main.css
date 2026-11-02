@@ -25,3 +25,30 @@
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/* Code highlighting — the syntax colors for code blocks in markdown Preview, from GitHub's light and dark palettes.  */
+/* Source mode paints code with the chosen editor theme instead.                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+:root {
+    --code-keyword: #cf222e;
+    --code-string: #0a3069;
+    --code-comment: #59636e;
+    --code-constant: #0550ae;
+    --code-entity: #6639ba;
+    --code-type: #953800;
+    --code-inserted: #116329;
+    --code-deleted: #82071e;
+}
+
+.dark {
+    --code-keyword: #ff7b72;
+    --code-string: #a5d6ff;
+    --code-comment: #8b949e;
+    --code-constant: #79c0ff;
+    --code-entity: #d2a8ff;
+    --code-type: #ffa657;
+    --code-inserted: #7ee787;
+    --code-deleted: #ffa198;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */

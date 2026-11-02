@@ -190,6 +190,37 @@ describe('mergeEdit', () =>
         expect(written).toBe('Title\n=====\nAdded\nBody with __bold__');
     });
 
+    it('keeps a code block\'s own fences when its language changes, with another code block above it', () =>
+    {
+        const file = '```ts\nconst a = 1;\n```\n\n~~~python\nx = "hi"  # a comment\n~~~\n\nAfter';
+
+        const written = editFile(file, (editor) =>
+        {
+            editor.state.doc.descendants((node, pos) =>
+            {
+                if(node.attrs.language === 'python')
+                {
+                    editor.commands.command(({ tr }) =>
+                    {
+                        tr.setNodeMarkup(pos, undefined, { ...node.attrs, language: 'javascript' });
+                        return true;
+                    });
+                }
+            });
+        });
+
+        expect(written).toBe('```ts\nconst a = 1;\n```\n\n~~~javascript\nx = "hi"  # a comment\n~~~\n\nAfter');
+    });
+
+    it('keeps a code block\'s own fences when a line inside it is edited', () =>
+    {
+        const file = 'Intro\n\n~~~\nfirst\nsecond\n~~~\n\nAfter';
+
+        const written = editFile(file, (editor) => replaceText(editor, 'second', 'changed'));
+
+        expect(written).toBe('Intro\n\n~~~\nfirst\nchanged\n~~~\n\nAfter');
+    });
+
     it('leaves the file alone when the edit doesn\'t change what Preview writes', () =>
     {
         const file = 'Some __bold__ text.';
