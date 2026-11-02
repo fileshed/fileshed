@@ -14,6 +14,7 @@ import {
     DEFAULT_EDITOR_GUTTER,
     DEFAULT_EDITOR_THEME,
     DEFAULT_ROOT_LABEL,
+    DEFAULT_SHOW_MARKDOWN_HTML,
     DEFAULT_TIME_FORMAT,
     DEFAULT_TRASH_PURGE_DAYS,
     DEFAULT_VIEW_MODE,
@@ -80,6 +81,11 @@ export const useSessionStore = defineStore('session', () =>
     // something one user hands another, and this is the reader deciding whether their own browser answers it.
     const allowRemoteMedia = computed(
         () => me.value?.preferences.allowRemoteMedia ?? DEFAULT_ALLOW_REMOTE_MEDIA
+    );
+
+    // Whether HTML in a markdown file someone else owns renders without the banner asking first.
+    const showMarkdownHTML = computed(
+        () => me.value?.preferences.showMarkdownHTML ?? DEFAULT_SHOW_MARKDOWN_HTML
     );
 
     // The user's light/dark/system choice, deliberately WITHOUT a fallback: undefined means "never chose", which
@@ -264,6 +270,7 @@ export const useSessionStore = defineStore('session', () =>
         chooseViewMode,
         colorMode,
         allowRemoteMedia,
+        showMarkdownHTML,
         trashRetentionDays,
         init,
         signIn,

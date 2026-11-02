@@ -25,8 +25,9 @@
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
-/* Code highlighting — the syntax colors for code blocks in markdown Preview, from GitHub's light and dark palettes.  */
-/* Source mode paints code with the chosen editor theme instead.                                                      */
+/* Code highlighting — syntax colors for code and HTML in markdown Preview, from GitHub's light and dark palettes.    */
+/* The tok- classes are the ones @lezer/highlight's classHighlighter writes. Source mode paints code with the chosen  */
+/* editor theme instead.                                                                                              */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 :root {
@@ -49,6 +50,55 @@
     --code-type: #ffa657;
     --code-inserted: #7ee787;
     --code-deleted: #ffa198;
+}
+
+:is(.tok-keyword, .tok-operator) {
+    color: var(--code-keyword);
+}
+
+:is(.tok-string, .tok-string2, .tok-url) {
+    color: var(--code-string);
+}
+
+.tok-comment {
+    color: var(--code-comment);
+}
+
+:is(.tok-number, .tok-bool, .tok-atom, .tok-literal, .tok-propertyName, .tok-meta) {
+    color: var(--code-constant);
+}
+
+:is(.tok-definition, .tok-className, .tok-macroName, .tok-labelName) {
+    color: var(--code-entity);
+}
+
+:is(.tok-typeName, .tok-namespace, .tok-variableName2) {
+    color: var(--code-type);
+}
+
+.tok-inserted {
+    color: var(--code-inserted);
+}
+
+:is(.tok-deleted, .tok-invalid) {
+    color: var(--code-deleted);
+}
+
+.tok-heading {
+    color: var(--code-constant);
+    font-weight: 600;
+}
+
+.tok-strong {
+    font-weight: 600;
+}
+
+.tok-emphasis {
+    font-style: italic;
+}
+
+.tok-link {
+    text-decoration: underline;
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */

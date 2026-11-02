@@ -11,9 +11,9 @@
 // merges into what the last one wrote, toggling to Source shows the original when clean and the merged file when
 // edited, Source edits write verbatim, an external reload re-parses (its own echo skipped),
 // read-only reaches the editor, formatting rides a fixed toolbar (hidden in Source and for viewers) beside a
-// slimmed bubble toolbar and a slash menu, the outline panel mounts in WYSIWYG, and frontmatter stays
-// out of the WYSIWYG document: only the body is parsed, every edit puts the file's frontmatter back in front, and
-// Source shows the whole file.
+// slimmed bubble toolbar and a slash menu, the outline panel and the HTML banner mount in WYSIWYG, a choice to show
+// the file's HTML ends when the editor closes, and frontmatter stays out of the WYSIWYG document: only the body is
+// parsed, every edit puts the file's frontmatter back in front, and Source shows the whole file.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable vue/one-component-per-file -- the UEditor family is stubbed at the boundary; three stubs live here */
@@ -25,9 +25,13 @@ import { createPinia, setActivePinia } from 'pinia';
 
 // Stores
 import { useEditorStore } from '@client/stores/editor.ts';
+import { useMarkdownHTMLStore } from '@client/stores/markdownHTML.ts';
 
 // Under test
 import MarkdownEditor from '@client/components/handlers/markdown/markdownEditor.vue';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -163,6 +167,16 @@ vi.mock('@client/components/handlers/markdown/outlinePanel.vue', () => ({
         name: 'MarkdownOutlinePanel',
         props: [ 'editor' ],
         template: '<div class="outline-panel" :data-live="String(editor !== null)" />',
+    },
+}));
+
+// The HTML banner reads the live TipTap document too, and its own spec covers it. Here it is a marker that records it
+// was mounted and handed the editor.
+vi.mock('@client/components/handlers/markdown/htmlBanner.vue', () => ({
+    default: {
+        name: 'MarkdownHTMLBanner',
+        props: [ 'editor' ],
+        template: '<div class="html-banner" :data-live="String(editor !== null)" />',
     },
 }));
 
@@ -437,6 +451,25 @@ describe('MarkdownEditor formatting surface', () =>
         const wrapper = mountEditor({ readOnly: true });
 
         expect(wrapper.get('.ueditor .outline-panel').attributes('data-live')).toBe('true');
+    });
+
+    it('mounts the HTML banner inside the WYSIWYG surface with the live editor, for a viewer too', () =>
+    {
+        const wrapper = mountEditor({ readOnly: true });
+
+        expect(wrapper.get('.ueditor .html-banner').attributes('data-live')).toBe('true');
+    });
+
+    it('ends a choice to show the file\'s HTML when the reader leaves the file', () =>
+    {
+        useEditorStore().$patch({ node: fileNode({ name: 'notes.md', role: 'viewer' }) });
+        const html = useMarkdownHTMLStore();
+        const wrapper = mountEditor({ readOnly: true });
+        html.show();
+
+        wrapper.unmount();
+
+        expect(html.rendered).toBe(false);
     });
 
     it('disables images and mentions so nothing that cannot serialize to GFM is offered', () =>

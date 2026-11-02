@@ -15,9 +15,42 @@ import { findCodeLanguage } from './codeLanguages.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
+export interface HighlightedPiece
+{
+    text : string;
+    classes : string;
+}
+
+function languageOf(block : Node) : string | null
+{
+    if(block.type.name === 'htmlBlock') { return 'html'; }
+
+    return block.type.name === 'codeBlock' ? block.attrs.language as string | null : null;
+}
+
+// Code split into the pieces its highlighting colors, for code drawn outside a code block.
+export async function highlightCode(code : string, language : string) : Promise<HighlightedPiece[]>
+{
+    const description = findCodeLanguage(language);
+    if(description === null) { return [ { text: code, classes: '' } ]; }
+
+    const support = description.support ?? await description.load();
+    const pieces : HighlightedPiece[] = [];
+    let at = 0;
+    highlightTree(support.language.parser.parse(code), classHighlighter, (from, to, classes) =>
+    {
+        if(from > at) { pieces.push({ text: code.slice(at, from), classes: '' }); }
+        pieces.push({ text: code.slice(from, to), classes });
+        at = to;
+    });
+    if(at < code.length) { pieces.push({ text: code.slice(at), classes: '' }); }
+
+    return pieces;
+}
+
 function highlightBlock(block : Node, pos : number, load : (description : LanguageDescription) => void) : Decoration[]
 {
-    const description = findCodeLanguage(block.attrs.language as string | null);
+    const description = findCodeLanguage(languageOf(block));
     if(description === null) { return []; }
     if(!description.support)
     {
@@ -46,7 +79,7 @@ function highlightBetween(
     const decorations : Decoration[] = [];
     doc.nodesBetween(from, to, (node, pos) =>
     {
-        if(node.type.name !== 'codeBlock') { return !node.isTextblock; }
+        if(!node.type.spec.code) { return !node.isTextblock; }
 
         decorations.push(...highlightBlock(node, pos, load));
         return false;

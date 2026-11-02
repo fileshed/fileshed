@@ -26,6 +26,7 @@
             </h2>
             <EditorColorScheme />
             <EditorGutter />
+            <MarkdownHTML />
         </section>
     </div>
 </template>
@@ -40,6 +41,7 @@
     import RemoteMedia from '../../components/account/remoteMedia.vue';
     import EditorColorScheme from '../../components/account/editorColorScheme.vue';
     import EditorGutter from '../../components/account/editorGutter.vue';
+    import MarkdownHTML from '../../components/account/markdownHTML.vue';
 </script>
 
 <!--------------------------------------------------------------------------------------------------------------------->

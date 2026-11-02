@@ -38,55 +38,6 @@
         border-radius: 0;
         background: transparent;
     }
-
-    .md-code-block :deep(:is(.tok-keyword, .tok-operator)) {
-        color: var(--code-keyword);
-    }
-
-    .md-code-block :deep(:is(.tok-string, .tok-string2, .tok-url)) {
-        color: var(--code-string);
-    }
-
-    .md-code-block :deep(.tok-comment) {
-        color: var(--code-comment);
-    }
-
-    .md-code-block :deep(:is(.tok-number, .tok-bool, .tok-atom, .tok-literal, .tok-propertyName, .tok-meta)) {
-        color: var(--code-constant);
-    }
-
-    .md-code-block :deep(:is(.tok-definition, .tok-className, .tok-macroName, .tok-labelName)) {
-        color: var(--code-entity);
-    }
-
-    .md-code-block :deep(:is(.tok-typeName, .tok-namespace, .tok-variableName2)) {
-        color: var(--code-type);
-    }
-
-    .md-code-block :deep(.tok-inserted) {
-        color: var(--code-inserted);
-    }
-
-    .md-code-block :deep(:is(.tok-deleted, .tok-invalid)) {
-        color: var(--code-deleted);
-    }
-
-    .md-code-block :deep(.tok-heading) {
-        color: var(--code-constant);
-        font-weight: 600;
-    }
-
-    .md-code-block :deep(.tok-strong) {
-        font-weight: 600;
-    }
-
-    .md-code-block :deep(.tok-emphasis) {
-        font-style: italic;
-    }
-
-    .md-code-block :deep(.tok-link) {
-        text-decoration: underline;
-    }
 </style>
 
 <!--------------------------------------------------------------------------------------------------------------------->

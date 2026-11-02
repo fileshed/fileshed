@@ -54,8 +54,13 @@
                         <!-- No view condition here: the wrapper's v-show already hides the whole subtree in Source
                              mode, and toggling structure INSIDE a third-party-managed slot breaks Vue's patch
                              anchors. -->
-                        <div v-if="!readOnly" class="row-start-1 border-b border-default px-4 py-1">
-                            <MarkdownFormatToolbar :editor="editor" class="mx-auto w-full max-w-3xl" />
+                        <div class="row-start-1">
+                            <div v-if="!readOnly" class="border-b border-default px-4 py-1">
+                                <MarkdownFormatToolbar :editor="editor" class="mx-auto w-full max-w-3xl" />
+                            </div>
+                            <div class="px-4">
+                                <MarkdownHTMLBanner :editor="editor" class="md-html-banner mt-3 w-auto max-w-3xl" />
+                            </div>
                         </div>
                         <UEditorToolbar :editor="editor" layout="bubble" :items="bubbleItems" />
                         <UEditorSuggestionMenu :editor="editor" :items="slashItems" />
@@ -109,7 +114,8 @@
     }
 
     /* The outline panel lives in the page's left margin. The page keeps its centered position while the margin fits
-       the panel, and moves right only as far as it must to clear it; the closed panel is just its toggle button. */
+       the panel, and moves right only as far as it must to clear it; the closed panel is just its toggle button. The
+       HTML banner above the scroller follows the page. */
     .md-doc {
         --outline-width: 14rem;
         --outline-room: 3rem;
@@ -119,7 +125,8 @@
         --outline-room: calc(var(--outline-width) + 1rem);
     }
 
-    .md-doc :deep(.tiptap) {
+    .md-doc :deep(.tiptap),
+    .md-doc .md-html-banner {
         margin-inline: max((100% - var(--container-3xl)) / 2, var(--outline-room)) auto;
     }
 
@@ -185,7 +192,7 @@
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { computed, ref, useTemplateRef, watch } from 'vue';
+    import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
     import type { Editor } from '@tiptap/core';
     import { CodeBlock } from '@tiptap/extension-code-block';
@@ -197,11 +204,13 @@
     // Stores
     import { useEditorStore } from '../../../stores/editor.ts';
     import { useFrontmatterStore } from '../../../stores/frontmatter.ts';
+    import { useMarkdownHTMLStore } from '../../../stores/markdownHTML.ts';
 
     // Engines
     import type { EditorMode } from '../../../engines/intent/index.ts';
     import { CodeHighlight } from '../../../engines/markdown/codeHighlight.ts';
     import { replaceBody, splitFrontmatter } from '../../../engines/markdown/frontmatter.ts';
+    import { HtmlBlock, HtmlInline } from '../../../engines/markdown/html.ts';
     import {
         BlankLines,
         MarkdownBlockquote,
@@ -219,6 +228,9 @@
     // Components
     import ConflictModal from '../text/modals/conflictModal.vue';
     import MarkdownCodeBlock from './codeBlock.vue';
+    import MarkdownHTMLBanner from './htmlBanner.vue';
+    import MarkdownHTMLBlock from './htmlBlock.vue';
+    import MarkdownHTMLInline from './htmlInline.vue';
     import MarkdownIdentityBar from './identityBar.vue';
     import MarkdownFormatToolbar from './toolbar.vue';
     import MarkdownOutlinePanel from './outlinePanel.vue';
@@ -242,7 +254,11 @@
 
     const store = useEditorStore();
     const frontmatter = useFrontmatterStore();
+    const markdownHTML = useMarkdownHTMLStore();
     const view = ref<View>('wysiwyg');
+
+    // A choice to show a file's HTML lasts until the reader leaves the file.
+    onBeforeUnmount(() => { markdownHTML.hide(); });
 
     //------------------------------------------------------------------------------------------------------------------
     // WYSIWYG editor
@@ -259,15 +275,23 @@
     // markdown extension UEditor adds. Document, paragraph, and hard break are the family's own line-model builds (the
     // stock ones are off above): blocks join on single newlines and blank lines are real empty paragraphs (see
     // engines/markdown/lineModel.ts). The code block replaces StarterKit's with the same node drawn with a language
-    // picker, and CodeHighlight colors its code.
+    // picker, and CodeHighlight colors its code and the source of HTML blocks.
     const markdownOptions = { marked: lineModelMarked };
 
     const PreviewCodeBlock = CodeBlock.extend({
         addNodeView: () => VueNodeViewRenderer(MarkdownCodeBlock),
     });
+    const PreviewHtmlBlock = HtmlBlock.extend({
+        addNodeView: () => VueNodeViewRenderer(MarkdownHTMLBlock),
+    });
+    const PreviewHtmlInline = HtmlInline.extend({
+        addNodeView: () => VueNodeViewRenderer(MarkdownHTMLInline),
+    });
 
     const extraExtensions = [
         PreviewCodeBlock,
+        PreviewHtmlBlock,
+        PreviewHtmlInline,
         CodeHighlight,
         MarkdownDocument,
         MarkdownBlockquote,

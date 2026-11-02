@@ -13,17 +13,17 @@
 // The pieces, front to back:
 //
 // - marked tokenizers: a `blankLines` block extension claims every newline run as its own token, which also cuts
-//   paragraphs at each newline (its `start` hook interrupts the paragraph scan). Heading and table raws get their
-//   trailing newlines trimmed back into that run -- stock marked swallows them, which would silently delete blank
-//   lines on reload. Blockquotes are confined to their `>`-prefixed lines, killing CommonMark lazy continuation:
+//   paragraphs at each newline (its `start` hook interrupts the paragraph scan). Heading, table and HTML block raws get
+//   their trailing newlines trimmed back into that run -- stock marked swallows them, which would silently delete
+//   blank lines on reload. Blockquotes are confined to their `>`-prefixed lines, killing CommonMark lazy continuation:
 //   a line typed under a quote stays outside it.
 // - BlankLines: parses a run of N newlines into N-1 empty paragraphs (N when the file opens with them), since one
 //   newline is the previous line's terminator.
 // - joinBlocks: the one join. Blocks land on consecutive lines; empty paragraphs render to nothing, so their join
-//   newlines ARE the blank lines. Three exceptions markdown grammar forces: lists, quotes, and tables lazily swallow
-//   a directly-following line, so a non-blank successor gets the terminating blank line written for it; a `---`
-//   divider directly under a text line would underline it into a heading, so it gets a blank line before it; and a
-//   trailing empty paragraph carries its own terminator so it survives the reload.
+//   newlines ARE the blank lines. Three exceptions markdown grammar forces: lists, quotes, tables, and most HTML
+//   blocks swallow a directly-following line, so a non-blank successor gets the terminating blank line written for
+//   it; a `---` divider directly under a text line would underline it into a heading, so it gets a blank line before
+//   it; and a trailing empty paragraph carries its own terminator so it survives the reload.
 // - MarkdownDocument / MarkdownBlockquote / MarkdownListItem / MarkdownTaskItem: every block container renders its
 //   interior through joinBlocks -- quotes then prefix each line with `>`, items put their marker on the first line
 //   and indent the rest (blank lines stay bare).
@@ -49,6 +49,9 @@ import { Table } from '@tiptap/extension-table';
 // Type-only, and also what puts the Editor augmentations (getMarkdown, setContent's contentType) in the program --
 // nothing else in the client imports @tiptap/markdown directly.
 import type { MarkdownExtensionOptions } from '@tiptap/markdown';
+
+// Engines
+import { htmlBlockTakesNextLine } from './html.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 // marked instance
@@ -80,6 +83,10 @@ lineModelMarked.use({
         table(this : Tokenizer, src : string) : Tokens.Table | undefined
         {
             return trimTrailingBlanks(Tokenizer.prototype.table.call(this, src));
+        },
+        html(this : Tokenizer, src : string) : Tokens.HTML | undefined
+        {
+            return trimTrailingBlanks(Tokenizer.prototype.html.call(this, src));
         },
         blockquote(this : Tokenizer, src : string) : Tokens.Blockquote | undefined
         {
@@ -147,7 +154,7 @@ function isEmptyParagraph(node : JSONContent) : boolean
 
 function needsBlankLineBetween(prev : JSONContent, child : JSONContent) : boolean
 {
-    if(needsTerminator.has(prev.type ?? '')) { return !isEmptyParagraph(child); }
+    if(needsTerminator.has(prev.type ?? '') || htmlBlockTakesNextLine(prev)) { return !isEmptyParagraph(child); }
 
     return child.type === 'horizontalRule' && prev.type === 'paragraph' && !isEmptyParagraph(prev);
 }
