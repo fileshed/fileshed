@@ -235,6 +235,14 @@ describe('replaceFrontmatter', () =>
         expect(replaceFrontmatter('', 'title: New')).toBe('---\ntitle: New\n---\n');
     });
 
+    it('writes the block with the CRLF line endings of a CRLF file', () =>
+    {
+        const file = '---\r\na: 1\r\n---\r\n\r\n# Body\r\nMore';
+
+        expect(replaceFrontmatter(file, 'a: 2\nb: 3\n')).toBe('---\r\na: 2\r\nb: 3\r\n---\r\n\r\n# Body\r\nMore');
+        expect(replaceFrontmatter('# Body\r\nMore', 'a: 1\n')).toBe('---\r\na: 1\r\n---\r\n\r\n# Body\r\nMore');
+    });
+
     it('removes the block entirely when the YAML is blank', () =>
     {
         expect(replaceFrontmatter('---\na: 1\n---\n\n# Body', '')).toBe('# Body');

@@ -91,6 +91,20 @@ describe('Footnote markdown', () =>
         expect(open(markdown).getMarkdown()).toBe(markdown);
     });
 
+    it('leaves the lines of a paragraph with references in them as they are, under either line rule', () =>
+    {
+        const markdown = 'a [^1] b\nOne\n[^1] two';
+        const strictExtensions = [ FootnoteReference, FootnoteDefinition.configure({ strictLineBreaks: true }) ];
+
+        const lineModel = open(markdown);
+        const strict = openMarkdown(markdown, strictExtensions, true);
+
+        expect(topBlocks(lineModel)).toEqual([ 'paragraph|a  b', 'paragraph|One', 'paragraph| two' ]);
+        expect(lineModel.getMarkdown()).toBe(markdown);
+        expect(topBlocks(strict)).toEqual([ 'paragraph|a  b\nOne\n two' ]);
+        expect(strict.getMarkdown()).toBe(markdown);
+    });
+
     it('writes a blank line between a definition and a line added directly under it', () =>
     {
         const editor = open('[^1]: The note.');

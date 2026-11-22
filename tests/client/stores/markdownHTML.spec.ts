@@ -1,9 +1,9 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Markdown HTML Store — whether the open markdown file's HTML renders
 //
-// The contract: the reader's own files render their HTML. Anyone else's render it once the reader has turned on the
-// preference, or has chosen to show it for that file; the choice covers only that file, and ends when it's hidden,
-// which the editor does when the reader leaves the file.
+// The contract: the files the reader owns render their HTML, and a file someone else put in the reader's folder is not
+// one of them. Anyone else's render it once the reader has turned on the preference, or has chosen to show it for that
+// file; the choice covers only that file, and ends when it's hidden, which the editor does when the reader leaves it.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,7 +19,7 @@ import { useSessionStore } from '@client/stores/session.ts';
 import { useMarkdownHTMLStore } from '@client/stores/markdownHTML.ts';
 
 // Support
-import { fileNode, meFixture } from '../support.ts';
+import { ME_ID, fileNode, meFixture } from '../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -27,9 +27,11 @@ vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function openFile(role : Role, id = 'f1') : void
+const OTHER_ID = 'u2';
+
+function openFile(ownerID : string, role : Role, id = 'f1') : void
 {
-    useEditorStore().$patch({ node: fileNode({ id, name: 'notes.md', role }) });
+    useEditorStore().$patch({ node: fileNode({ id, name: 'notes.md', ownerID, role }) });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -44,7 +46,7 @@ describe('useMarkdownHTMLStore', () =>
 
     it('renders HTML in the reader\'s own file', () =>
     {
-        openFile('owner');
+        openFile(ME_ID, 'owner');
 
         expect(useMarkdownHTMLStore().rendered).toBe(true);
     });
@@ -53,17 +55,24 @@ describe('useMarkdownHTMLStore', () =>
     {
         const html = useMarkdownHTMLStore();
 
-        openFile('editor');
+        openFile(OTHER_ID, 'editor');
         expect(html.rendered).toBe(false);
 
-        openFile('viewer');
+        openFile(OTHER_ID, 'viewer');
         expect(html.rendered).toBe(false);
+    });
+
+    it('does not render HTML in a file someone else put in the reader\'s folder', () =>
+    {
+        openFile(OTHER_ID, 'owner');
+
+        expect(useMarkdownHTMLStore().rendered).toBe(false);
     });
 
     it('renders HTML in someone else\'s file once the reader chooses to show it', () =>
     {
         const html = useMarkdownHTMLStore();
-        openFile('viewer');
+        openFile(OTHER_ID, 'viewer');
 
         html.show();
 
@@ -73,10 +82,10 @@ describe('useMarkdownHTMLStore', () =>
     it('keeps the choice to the file it was made on', () =>
     {
         const html = useMarkdownHTMLStore();
-        openFile('viewer', 'f1');
+        openFile(OTHER_ID, 'viewer', 'f1');
         html.show();
 
-        openFile('viewer', 'f2');
+        openFile(OTHER_ID, 'viewer', 'f2');
 
         expect(html.rendered).toBe(false);
     });
@@ -84,7 +93,7 @@ describe('useMarkdownHTMLStore', () =>
     it('stops rendering once the choice is hidden again', () =>
     {
         const html = useMarkdownHTMLStore();
-        openFile('viewer');
+        openFile(OTHER_ID, 'viewer');
         html.show();
 
         html.hide();
@@ -96,7 +105,7 @@ describe('useMarkdownHTMLStore', () =>
     {
         useSessionStore().me = meFixture({ preferences: { showMarkdownHTML: true } });
 
-        openFile('viewer');
+        openFile(OTHER_ID, 'viewer');
 
         expect(useMarkdownHTMLStore().rendered).toBe(true);
     });

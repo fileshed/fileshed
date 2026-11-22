@@ -11,6 +11,9 @@ import { Decoration, type Editor, Extension, InputRule, Mark, Node } from '@tipt
 import type { NodeType, Node as ProseMirrorNode, ResolvedPos } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 
+// Engines
+import { findBlockStart } from './lineModel.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
 const INLINE_MATH = /^\$(?=[^\s$])(?:\\.|[^\\$\n])*?(?<=[^\s\\])\$(?!\d|\$)/u;
@@ -19,7 +22,7 @@ const TYPED_INLINE_MATH = /(?:^|[^$\\])(\$(?=[^\s$])(?:\\.|[^\\$\n])*?(?<=[^\s\\
 // `$$` at the start of a line, through the `$$` that ends a line: on the same line, or on a later one when the
 // opening line holds no other `$$`.
 const MATH_BLOCK = /^ {0,3}\$\$(?:[^\n]*?\$\$|(?:(?!\$\$)[^\n])*\n[\s\S]*?\$\$)[ \t]*(?=\n|$)/u;
-const MATH_BLOCK_START = /^ {0,3}\$\$/mu;
+const MATH_BLOCK_START = /\n {0,3}\$\$/u;
 const TYPED_BLOCK_OPENING = /^\$\$\n$/u;
 const TYPED_ONE_LINE_BLOCK = /^\$\$(?:(?!\$\$)[^\n])+\$\$$/u;
 
@@ -71,7 +74,7 @@ export const MathBlock = Node.create({
     markdownTokenizer: {
         name: 'mathBlock',
         level: 'block',
-        start: (src) => src.search(MATH_BLOCK_START),
+        start: (src) => findBlockStart(src, MATH_BLOCK_START),
         tokenize: (src) =>
         {
             const match = MATH_BLOCK.exec(src);

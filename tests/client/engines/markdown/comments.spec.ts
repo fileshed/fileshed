@@ -83,6 +83,19 @@ describe('CommentBlock', () =>
         expect(editor.getMarkdown()).toBe(markdown);
     });
 
+    it('leaves the lines of a paragraph with inline `%%` comments in them as they are, under either line rule', () =>
+    {
+        const markdown = 'a %%c%% b\nOne\n%%d%% two';
+
+        const lineModel = openMarkdown(markdown, extensions);
+        const strict = openMarkdown(markdown, extensions, true);
+
+        expect(topBlocks(lineModel)).toEqual([ 'paragraph|a %%c%% b', 'paragraph|One', 'paragraph|%%d%% two' ]);
+        expect(lineModel.getMarkdown()).toBe(markdown);
+        expect(topBlocks(strict)).toEqual([ 'paragraph|a %%c%% b\nOne\n%%d%% two' ]);
+        expect(strict.getMarkdown()).toBe(markdown);
+    });
+
     it('reads a block of nothing but HTML comments as a comment, not HTML', () =>
     {
         const markdown = '<!-- one -->\n\nAfter';

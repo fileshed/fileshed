@@ -7,6 +7,9 @@
 
 import { InputRule, Mark, Node } from '@tiptap/core';
 
+// Engines
+import { findBlockStart } from './lineModel.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 // Inline comments
 //----------------------------------------------------------------------------------------------------------------------
@@ -76,7 +79,7 @@ export const Comment = Mark.create({
 
 // From a line that opens a `%%` comment without closing it, through the line holding the `%%` that does.
 const BLOCK_COMMENT = /^ {0,3}%%(?:(?!%%)[^\n])*\n[\s\S]*?%%[^\n]*/u;
-const BLOCK_COMMENT_START = /^ {0,3}%%/mu;
+const BLOCK_COMMENT_START = /\n {0,3}%%/u;
 
 export const CommentBlock = Node.create({
     name: 'commentBlock',
@@ -99,7 +102,7 @@ export const CommentBlock = Node.create({
     markdownTokenizer: {
         name: 'commentBlock',
         level: 'block',
-        start: (src) => src.search(BLOCK_COMMENT_START),
+        start: (src) => findBlockStart(src, BLOCK_COMMENT_START),
         tokenize: (src) =>
         {
             const match = BLOCK_COMMENT.exec(src);

@@ -13,12 +13,16 @@ import type { Role } from '@fileshed/core';
 
 // Stores
 import { useEditorStore } from '@client/stores/editor.ts';
+import { useSessionStore } from '@client/stores/session.ts';
 
 // Under test
 import MarkdownHTMLInline from '@client/components/handlers/markdown/htmlInline.vue';
 
 // Support
-import { fileNode } from '../../../support.ts';
+import { ME_ID, fileNode, meFixture } from '../../../support.ts';
+
+// The owner of the files the reader opens without owning them.
+const OTHER_ID = 'u2';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -28,7 +32,9 @@ vi.mock('@nuxt/ui/composables', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 async function mountPiece(source : string, role : Role) : Promise<VueWrapper>
 {
-    useEditorStore().$patch({ node: fileNode({ name: 'notes.md', role }) });
+    const ownerID = role === 'owner' ? ME_ID : OTHER_ID;
+    useSessionStore().me = meFixture({ preferences: {} });
+    useEditorStore().$patch({ node: fileNode({ name: 'notes.md', ownerID, role }) });
 
     const piece = mount(MarkdownHTMLInline, {
         props: { node: { attrs: { source } } } as never,

@@ -80,6 +80,19 @@ describe('MathBlock', () =>
         expect(editor.getMarkdown()).toBe(markdown);
     });
 
+    it('leaves the lines of a paragraph with `$$` in them as they are, under either line rule', () =>
+    {
+        const markdown = 'a $$x$$ b\nOne\n$$y$$ two';
+
+        const lineModel = openMarkdown(markdown, extensions);
+        const strict = openMarkdown(markdown, extensions, true);
+
+        expect(topBlocks(lineModel)).toEqual([ 'paragraph|a $$x$$ b', 'paragraph|One', 'paragraph|$$y$$ two' ]);
+        expect(lineModel.getMarkdown()).toBe(markdown);
+        expect(topBlocks(strict)).toEqual([ 'paragraph|a $$x$$ b\nOne\n$$y$$ two' ]);
+        expect(strict.getMarkdown()).toBe(markdown);
+    });
+
     it('reads `$$…$$` on a line of its own as a block', () =>
     {
         expect(topBlocks(openMarkdown('$$ e = mc^2 $$', extensions))).toEqual([ 'mathBlock|$$ e = mc^2 $$' ]);

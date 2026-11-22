@@ -78,6 +78,15 @@ function trimTrailingBlanks<T extends { raw : string }>(token : T | undefined) :
     return token;
 }
 
+// marked hands a block extension's `start` hook the paragraph from its second character on, so the hook's text begins
+// mid-line and a block can only open after one of its newlines. `opening` matches that newline and the start of the
+// block's line; the result is where that line starts, or -1.
+export function findBlockStart(src : string, opening : RegExp) : number
+{
+    const index = src.search(opening);
+    return index === -1 ? -1 : index + 1;
+}
+
 // Only lines that actually carry the `>` prefix belong to a quote.
 const QUOTE_LINES = /^(?: {0,3}>[^\n]*(?:\n|$))+/u;
 
@@ -129,10 +138,14 @@ function buildLineModelMarked(strictLineBreaks : boolean) : MarkedLike
                     const match = /^\n+/u.exec(src);
                     if(!match) { return undefined; }
 
-                    // Inside a list item a paragraph's lines are `text` tokens, which marked joins only when nothing
-                    // stands between them, so a strict file leaves it the newline after one.
+                    // marked joins a paragraph's lines (`text` tokens inside a list item) only when nothing stands
+                    // between them, so a strict file leaves it a lone newline inside one: after `text`, and after a
+                    // paragraph that another block's `start` hook cut short of a line that turned out not to be one.
+                    // After a paragraph, a newline that ends the file is still claimed, as the trailing run below.
                     const previous = tokens.at(-1)?.type;
-                    if(strictLineBreaks && match[0].length === 1 && previous === 'text') { return undefined; }
+                    const isLone = match[0].length === 1;
+                    const isInside = previous === 'text' || (previous === 'paragraph' && src.length > 1);
+                    if(strictLineBreaks && isLone && isInside) { return undefined; }
 
                     // The run's length rides on a field of our own rather than being read back off `raw`: the token
                     // reaches parseMarkdown with `raw` emptied, and a count taken from there is a count of nothing.

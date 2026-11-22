@@ -6,8 +6,12 @@
 
 import { InputRule, Node } from '@tiptap/core';
 
+// Engines
+import { findBlockStart } from './lineModel.ts';
+
 //----------------------------------------------------------------------------------------------------------------------
 
+const MARKER_START = /\n {0,3}\[/u;
 const MARKER = String.raw`(?:\[TOC\]|\[\[toc\]\]|\[\[TOC\]\]|\[\[_TOC_\]\])`;
 const MARKER_LINE = new RegExp(String.raw`^ {0,3}${ MARKER }[ \t]*(?=\n|$)`, 'u');
 const WHOLE_MARKER = new RegExp(String.raw`^ {0,3}${ MARKER }[ \t]*$`, 'u');
@@ -39,7 +43,7 @@ export const TableOfContents = Node.create({
     markdownTokenizer: {
         name: 'tableOfContents',
         level: 'block',
-        start: (src) => src.search(/^ {0,3}\[/mu),
+        start: (src) => findBlockStart(src, MARKER_START),
         tokenize: (src) =>
         {
             const match = MARKER_LINE.exec(src);

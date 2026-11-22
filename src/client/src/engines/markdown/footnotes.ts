@@ -12,7 +12,7 @@ import { Plugin, TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 
 // Engines
-import { type LineBreakOptions, joinBlocks } from './lineModel.ts';
+import { type LineBreakOptions, findBlockStart, joinBlocks } from './lineModel.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -88,7 +88,7 @@ function scanFootnotes(doc : ProseMirrorNode) : FootnoteScan
 const LABEL = String.raw`[^\]\s^]+`;
 const REFERENCE = new RegExp(String.raw`^\[\^(${ LABEL })\]`, 'u');
 const DEFINITION = new RegExp(String.raw`^ {0,3}\[\^(${ LABEL })\]:[ \t]?([^\n]*)`, 'u');
-const DEFINITION_START = /^ {0,3}\[\^/mu;
+const DEFINITION_START = /\n {0,3}\[\^/u;
 const CONTINUATION = /^(?: {4}|\t)/u;
 const INDENT = '    ';
 
@@ -222,7 +222,7 @@ export const FootnoteDefinition = Node.create<LineBreakOptions>({
     markdownTokenizer: {
         name: 'footnoteDefinition',
         level: 'block',
-        start: (src) => src.search(DEFINITION_START),
+        start: (src) => findBlockStart(src, DEFINITION_START),
         tokenize: (src, _tokens, lexer) =>
         {
             const match = matchFootnoteDefinition(src);

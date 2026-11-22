@@ -34,6 +34,8 @@ export interface MarkdownSplit
 const OPEN_FENCE = /^---[ \t]*\r?\n/u;
 const CLOSE_FENCE = /^---[ \t]*(?:\r?\n|$)/mu;
 const BLANK_LINE = /^\r?\n/u;
+const LINE_ENDING = /\r?\n/u;
+const LINE_ENDINGS = /\r?\n/gu;
 
 function terminated(text : string) : string
 {
@@ -72,15 +74,17 @@ export function replaceBody(text : string, body : string) : string
 }
 
 // Blank YAML removes the block. A new block gets the conventional blank line before a body; a replaced one keeps the
-// separation it had.
+// separation it had. The block is written with the line ending the file's first line has.
 export function replaceFrontmatter(text : string, yaml : string) : string
 {
     const { frontmatter, body } = splitFrontmatter(text);
     if(yaml.trim() === '') { return body; }
 
-    const gap = body === '' ? '' : (frontmatter?.gap ?? '\n');
+    const eol = LINE_ENDING.exec(text)?.[0] ?? '\n';
+    const lines = terminated(yaml).replace(LINE_ENDINGS, eol);
+    const gap = body === '' ? '' : (frontmatter?.gap ?? eol);
 
-    return `---\n${ terminated(yaml) }---\n${ gap }${ body }`;
+    return `---${ eol }${ lines }---${ eol }${ gap }${ body }`;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

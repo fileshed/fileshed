@@ -20,6 +20,7 @@ import type { Role } from '@fileshed/core';
 // Stores
 import { useEditorStore } from '@client/stores/editor.ts';
 import { useMarkdownHTMLStore } from '@client/stores/markdownHTML.ts';
+import { useSessionStore } from '@client/stores/session.ts';
 
 // Engines
 import { HtmlBlock, HtmlInline } from '@client/engines/markdown/html.ts';
@@ -28,7 +29,10 @@ import { HtmlBlock, HtmlInline } from '@client/engines/markdown/html.ts';
 import MarkdownHTMLBanner from '@client/components/handlers/markdown/htmlBanner.vue';
 
 // Support
-import { fileNode } from '../../../support.ts';
+import { ME_ID, fileNode, meFixture } from '../../../support.ts';
+
+// The owner of the files the reader opens without owning them.
+const OTHER_ID = 'u2';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -48,7 +52,9 @@ let editor : Editor | null = null;
 
 function mountBanner(markdown : string, role : Role) : { live : Editor; banner : VueWrapper }
 {
-    useEditorStore().$patch({ node: fileNode({ name: 'notes.md', role }) });
+    const ownerID = role === 'owner' ? ME_ID : OTHER_ID;
+    useSessionStore().me = meFixture({ preferences: {} });
+    useEditorStore().$patch({ node: fileNode({ name: 'notes.md', ownerID, role }) });
 
     editor = new Editor({
         element: document.createElement('div'),

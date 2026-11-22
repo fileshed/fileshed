@@ -36,6 +36,19 @@ describe('TableOfContents', () =>
         expect(topBlocks(openMarkdown('See [TOC] here', [ TableOfContents ]))).toEqual([ 'paragraph|See [TOC] here' ]);
     });
 
+    it('leaves the lines of a paragraph with brackets in them as they are, under either line rule', () =>
+    {
+        const markdown = 'a [link](x) b\nOne\n[link](y) two';
+
+        const lineModel = openMarkdown(markdown, [ TableOfContents ]);
+        const strict = openMarkdown(markdown, [ TableOfContents ], true);
+
+        expect(topBlocks(lineModel)).toEqual([ 'paragraph|a link b', 'paragraph|One', 'paragraph|link two' ]);
+        expect(lineModel.getMarkdown()).toBe(markdown);
+        expect(topBlocks(strict)).toEqual([ 'paragraph|a link b\nOne\nlink two' ]);
+        expect(strict.getMarkdown()).toBe(markdown);
+    });
+
     it('makes a table of contents of a marker typed on a line of its own', () =>
     {
         const editor = openMarkdown('Intro\n\nEnd', [ TableOfContents ]);

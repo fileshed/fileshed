@@ -8,6 +8,9 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
+// Engines
+import { intent } from '../engines/intent/index.ts';
+
 // Stores
 import { useEditorStore } from './editor.ts';
 import { useSessionStore } from './session.ts';
@@ -27,7 +30,10 @@ export const useMarkdownHTMLStore = defineStore('markdownHTML', () =>
         const node = editor.node;
         if(node === null) { return false; }
 
-        return node.role === 'owner' || session.showMarkdownHTML || shownNodeID.value === node.id;
+        // The file's own owner, not a folder owner whose resolved role reads 'owner' over someone's contribution.
+        const isOwn = intent.selection.isOwnedBy(node, session.me?.id ?? null);
+
+        return isOwn || session.showMarkdownHTML || shownNodeID.value === node.id;
     });
 
     function show() : void

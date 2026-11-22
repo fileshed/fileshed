@@ -22,6 +22,7 @@ import type { Role } from '@fileshed/core';
 // Stores
 import { useEditorStore } from '@client/stores/editor.ts';
 import { useMarkdownHTMLStore } from '@client/stores/markdownHTML.ts';
+import { useSessionStore } from '@client/stores/session.ts';
 
 // Engines
 import { HtmlBlock, HtmlInline } from '@client/engines/markdown/html.ts';
@@ -30,7 +31,10 @@ import { HtmlBlock, HtmlInline } from '@client/engines/markdown/html.ts';
 import MarkdownHTMLBlock from '@client/components/handlers/markdown/htmlBlock.vue';
 
 // Support
-import { fileNode } from '../../../support.ts';
+import { ME_ID, fileNode, meFixture } from '../../../support.ts';
+
+// The owner of the files the reader opens without owning them.
+const OTHER_ID = 'u2';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -49,7 +53,9 @@ let wrapper : VueWrapper | null = null;
 // The file opens with the HTML block, followed by a paragraph the cursor starts in.
 function mountBlock(source : string, role : Role) : { live : Editor; block : VueWrapper }
 {
-    useEditorStore().$patch({ node: fileNode({ name: 'notes.md', role }) });
+    const ownerID = role === 'owner' ? ME_ID : OTHER_ID;
+    useSessionStore().me = meFixture({ preferences: {} });
+    useEditorStore().$patch({ node: fileNode({ name: 'notes.md', ownerID, role }) });
 
     editor = new Editor({
         element: document.createElement('div'),
