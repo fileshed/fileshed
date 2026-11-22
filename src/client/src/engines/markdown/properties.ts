@@ -120,12 +120,14 @@ function keyOf(pair : Pair) : string
     return isScalar(pair.key) ? String(pair.key.value) : '';
 }
 
+// The value is written on its own, away from the anchors its aliases name, so an alias is written as `*name` instead of
+// failing the check that its anchor comes first.
 function yamlOf(node : Node) : string
 {
     const doc = new Document();
     doc.contents = node;
 
-    return doc.toString(STRINGIFY);
+    return doc.toString({ ...STRINGIFY, verifyAliasOrder: false });
 }
 
 function propertyOf(key : string, node : unknown) : Property

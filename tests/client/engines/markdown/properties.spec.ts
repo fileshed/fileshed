@@ -84,6 +84,22 @@ describe('parseFrontmatter', () =>
         });
     });
 
+    it('shows a value that is or holds an alias as nested YAML spelled as the file has it', () =>
+    {
+        const yaml = 'defaults: &defaults {draft: true}\nsettings: *defaults\nlist:\n  - *defaults\n';
+
+        const state = parseFrontmatter(yaml);
+
+        expect(state).toEqual({
+            kind: 'properties',
+            properties: [
+                { kind: 'nested', key: 'defaults', yaml: '&defaults {draft: true}\n' },
+                { kind: 'nested', key: 'settings', yaml: '*defaults\n' },
+                { kind: 'nested', key: 'list', yaml: '- *defaults\n' },
+            ],
+        });
+    });
+
     it('reads YAML that does not parse as raw, with the parse error', () =>
     {
         const state = parseFrontmatter('title: [unclosed\n');

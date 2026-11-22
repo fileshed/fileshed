@@ -33,21 +33,21 @@ export const calloutKinds = [
 export type CalloutKind = typeof calloutKinds[number];
 
 // Obsidian's other names for its kinds. IMPORTANT and CAUTION are GitHub's kinds here, where Obsidian reads them as tip
-// and warning.
-const ALIASES : Readonly<Record<string, CalloutKind>> = {
-    summary: 'abstract',
-    tldr: 'abstract',
-    hint: 'tip',
-    check: 'success',
-    done: 'success',
-    help: 'question',
-    faq: 'question',
-    attention: 'warning',
-    fail: 'failure',
-    missing: 'failure',
-    error: 'danger',
-    cite: 'quote',
-};
+// and warning. A Map, so a type spelled like an Object property (`constructor`) finds nothing.
+const aliasMap : ReadonlyMap<string, CalloutKind> = new Map([
+    [ 'summary', 'abstract' ],
+    [ 'tldr', 'abstract' ],
+    [ 'hint', 'tip' ],
+    [ 'check', 'success' ],
+    [ 'done', 'success' ],
+    [ 'help', 'question' ],
+    [ 'faq', 'question' ],
+    [ 'attention', 'warning' ],
+    [ 'fail', 'failure' ],
+    [ 'missing', 'failure' ],
+    [ 'error', 'danger' ],
+    [ 'cite', 'quote' ],
+]);
 
 export interface CalloutHeader
 {
@@ -84,7 +84,7 @@ export function parseCalloutHeader(line : string) : CalloutHeader | null
     const title = written.trim();
 
     return {
-        kind: isCalloutKind(word) ? word : ALIASES[word] ?? 'note',
+        kind: isCalloutKind(word) ? word : aliasMap.get(word) ?? 'note',
         fold: FOLDS[fold] ?? null,
         title: title === '' ? `${ type.charAt(0).toUpperCase() }${ type.slice(1).toLowerCase() }` : title,
         hasOwnTitle: title !== '',

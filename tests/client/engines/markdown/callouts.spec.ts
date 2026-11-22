@@ -35,6 +35,14 @@ describe('parseCalloutHeader', () =>
         expect(kinds).toEqual([ 'abstract', 'tip', 'question', 'danger', 'quote', 'note' ]);
     });
 
+    it('reads a type spelled like a built-in object property as a note', () =>
+    {
+        const kinds = [ '[!constructor]', '[!toString]', '[!hasOwnProperty]' ]
+            .map((line) => parseCalloutHeader(line)?.kind);
+
+        expect(kinds).toEqual([ 'note', 'note', 'note' ]);
+    });
+
     it('takes a title after the marker, and names an untitled callout after its type as written', () =>
     {
         expect(parseCalloutHeader('[!tip] Use the *fast* path')).toMatchObject({
