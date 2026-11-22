@@ -490,7 +490,9 @@ describe('line model: long files', () =>
     }
 
     // Eight times the file takes about eight times as long; a parse quadratic in the file's length takes sixty-four.
-    it('parses a long file in time proportional to its length', () =>
+    // The ratio is the check, not the clock: four parses of a 20,000-line file take 0.4s on a workstation and passed 5s
+    // on CI's two-core runners, so the test gets room beyond the default timeout.
+    it('parses a long file in time proportional to its length', { timeout: 30_000 }, () =>
     {
         const short = fastestParse(sections(250));
         const long = fastestParse(sections(2000));
