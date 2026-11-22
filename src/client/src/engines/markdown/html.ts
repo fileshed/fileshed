@@ -11,7 +11,8 @@ import { type JSONContent, Node } from '@tiptap/core';
 // Blocks
 //----------------------------------------------------------------------------------------------------------------------
 
-const COMMENTS_ONLY = /^(?:\s*<!--[\s\S]*?-->)+\s*$/u;
+// A comment's body stops at its first `-->`, so each comment ends in one place and a run of them can't backtrack.
+const COMMENTS_ONLY = /^(?:\s*<!--(?:(?!-->)[\s\S])*-->)+\s*$/u;
 
 // The HTML blocks that end at a closing marker of their own: <pre>, <script>, <style> and <textarea> elements,
 // comments, processing instructions, declarations and CDATA. Every other kind runs on until a blank line.

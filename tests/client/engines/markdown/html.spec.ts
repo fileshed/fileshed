@@ -163,6 +163,17 @@ describe('HtmlBlock', () =>
     {
         expect(htmlNodeCount(open('<!-- a note -->\n\nText'))).toBe(0);
     });
+
+    it('reads a long line of comments whose last one is left open as HTML, without stalling on it', () =>
+    {
+        const line = `<!--${ '--><!--'.repeat(60) }x`;
+
+        const started = performance.now();
+        const editor = open(line);
+
+        expect(blocks(editor)[0]).toBe(`htmlBlock|${ line }`);
+        expect(performance.now() - started).toBeLessThan(1000);
+    });
 });
 
 describe('HtmlInline', () =>
