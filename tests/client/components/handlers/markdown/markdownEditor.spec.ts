@@ -13,7 +13,8 @@
 // read-only reaches the editor, formatting rides a fixed toolbar (hidden in Source and for viewers) beside a
 // slimmed bubble toolbar and a slash menu, the outline panel and the HTML banner mount in WYSIWYG, a choice to show
 // the file's HTML ends when the editor closes, and frontmatter stays out of the WYSIWYG document: only the body is
-// parsed, every edit puts the file's frontmatter back in front, and Source shows the whole file.
+// parsed, every edit puts the file's frontmatter back in front, and Source shows the whole file. The body is read and
+// written with the line rule the frontmatter names, and a change to the rule builds the editor again over the body.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable vue/one-component-per-file -- the UEditor family is stubbed at the boundary; three stubs live here */
@@ -26,6 +27,9 @@ import { createPinia, setActivePinia } from 'pinia';
 // Stores
 import { useEditorStore } from '@client/stores/editor.ts';
 import { useMarkdownHTMLStore } from '@client/stores/markdownHTML.ts';
+
+// Engines
+import { strictLineModelMarked } from '@client/engines/markdown/lineModel.ts';
 
 // Under test
 import MarkdownEditor from '@client/components/handlers/markdown/markdownEditor.vue';
@@ -51,6 +55,9 @@ const ueditor = {
     mention: true as boolean,
     layout: '',
     markdown: '',
+    marked: undefined as unknown,
+    extensions: [] as { name : string; options : Record<string, unknown> }[],
+    mounts: 0,
     setContentCalls: [] as SetContentCapture[],
     setEditableCalls: [] as boolean[],
     emit: undefined as ((event : string, value : string) => void) | undefined,
@@ -84,6 +91,7 @@ const UEditorStub = defineComponent({
         starterKit: { type: [ Boolean, Object ], default: undefined },
         extensions: { type: Array, default: () => [] },
         handlers: { type: Object, default: () => ({}) },
+        markdown: { type: Object, default: () => ({}) },
         placeholder: { type: String, default: '' },
         ui: { type: Object, default: () => ({}) },
     },
@@ -91,10 +99,13 @@ const UEditorStub = defineComponent({
     setup(props, { emit, expose, slots })
     {
         ueditor.emit = emit as (event : string, value : string) => void;
+        ueditor.mounts += 1;
         expose({ editor: editorInstance });
 
         return () =>
         {
+            ueditor.marked = (props.markdown as { marked ?: unknown }).marked;
+            ueditor.extensions = props.extensions as typeof ueditor.extensions;
             ueditor.modelValue = props.modelValue;
             ueditor.contentType = props.contentType;
             ueditor.editable = props.editable;
@@ -492,6 +503,7 @@ describe('MarkdownEditor frontmatter', () =>
         setActivePinia(createPinia());
         ueditor.modelValue = '';
         ueditor.markdown = '';
+        ueditor.mounts = 0;
         ueditor.setContentCalls = [];
         ueditor.emit = undefined;
     });
@@ -551,6 +563,32 @@ describe('MarkdownEditor frontmatter', () =>
         await wrapper.vm.$nextTick();
 
         expect(wrapper.get('.ueditor').element.parentElement?.getAttribute('lang')).toBe('de');
+    });
+
+    it('reads and writes the body with strict line breaks when the frontmatter sets them', () =>
+    {
+        const store = useEditorStore();
+        store.$patch({ buffer: '---\nstrict-line-breaks: true\n---\n\nOne\nparagraph' });
+
+        mountEditor({ modelValue: store.buffer });
+
+        expect(ueditor.marked).toBe(strictLineModelMarked);
+        expect(ueditor.extensions.find((extension) => extension.name === 'doc')?.options.strictLineBreaks).toBe(true);
+    });
+
+    it('builds the editor again over the body as it stands when the line rule changes, writing nothing', async () =>
+    {
+        const store = useEditorStore();
+        store.$patch({ buffer: '# Body' });
+        const wrapper = mountEditor({ modelValue: store.buffer });
+
+        store.$patch({ buffer: '---\nstrict-line-breaks: true\n---\n\n# Body\nadded in Source' });
+        await wrapper.setProps({ modelValue: store.buffer });
+
+        expect(ueditor.mounts).toBe(2);
+        expect(ueditor.marked).toBe(strictLineModelMarked);
+        expect(ueditor.modelValue).toBe('# Body\nadded in Source');
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     });
 });
 

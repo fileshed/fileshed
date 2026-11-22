@@ -12,7 +12,7 @@ import { Plugin, TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 
 // Engines
-import { joinBlocks } from './lineModel.ts';
+import { type LineBreakOptions, joinBlocks } from './lineModel.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -137,10 +137,10 @@ function stringField(token : object, field : string) : string
 }
 
 // The label on the first line and the rest indented under it; blank lines stay bare.
-function renderDefinition(node : JSONContent, helpers : MarkdownRendererHelpers) : string
+function renderDefinition(node : JSONContent, helpers : MarkdownRendererHelpers, strictLineBreaks : boolean) : string
 {
     const label = (node.attrs?.label as string | undefined) ?? '';
-    const [ first = '', ...rest ] = joinBlocks(node.content ?? [], helpers).split('\n');
+    const [ first = '', ...rest ] = joinBlocks(node.content ?? [], helpers, strictLineBreaks).split('\n');
     const head = first === '' ? `[^${ label }]:` : `[^${ label }]: ${ first }`;
 
     return [ head, ...rest.map((line) => { return line === '' ? '' : `${ INDENT }${ line }`; }) ].join('\n');
@@ -190,11 +190,16 @@ export const FootnoteReference = Node.create({
     renderMarkdown: (node) => `[^${ (node.attrs?.label as string | undefined) ?? '' }]`,
 });
 
-export const FootnoteDefinition = Node.create({
+export const FootnoteDefinition = Node.create<LineBreakOptions>({
     name: 'footnoteDefinition',
     group: 'block',
     content: 'block+',
     defining: true,
+
+    addOptions()
+    {
+        return { strictLineBreaks: false };
+    },
 
     addAttributes()
     {
@@ -243,7 +248,10 @@ export const FootnoteDefinition = Node.create({
         );
     },
 
-    renderMarkdown: renderDefinition,
+    renderMarkdown(node, helpers) : string
+    {
+        return renderDefinition(node, helpers, this.options.strictLineBreaks);
+    },
 
     // A new footnote takes the first free number as its label. Its definition goes at the end of the document after a
     // blank line, which GitHub needs between a paragraph and a definition, and the cursor goes into it.

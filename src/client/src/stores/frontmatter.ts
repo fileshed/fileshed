@@ -13,7 +13,8 @@ import { useEditorStore } from './editor.ts';
 
 // Engines
 import { replaceFrontmatter, splitFrontmatter } from '../engines/markdown/frontmatter.ts';
-import { buildDocumentMeta, parseFrontmatter, updateProperty } from '../engines/markdown/properties.ts';
+import { buildDocumentMeta } from '../engines/markdown/frontmatterKeys.ts';
+import { parseFrontmatter, updateProperty } from '../engines/markdown/properties.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 

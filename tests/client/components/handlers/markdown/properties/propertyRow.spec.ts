@@ -3,7 +3,7 @@
 //
 // The contract: a number is typed as text and goes out only once the text reads as a finite number, and the field
 // shows the property's value again when it loses focus; clearing a date sends nothing (removal is the remove button);
-// and a nested value shows as YAML with no control to edit it.
+// a nested value shows as YAML with no control to edit it; and a value the editor ignores carries a note saying so.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -83,6 +83,15 @@ describe('PropertyRow', () =>
         await wrapper.get('button').trigger('click');
 
         expect(wrapper.emitted('remove')).toHaveLength(1);
+    });
+
+    it('notes a value the editor ignores, and nothing for one it reads', () =>
+    {
+        const ignored = mountRow({ kind: 'text', key: 'lang', value: 'English please' });
+        const read = mountRow({ kind: 'text', key: 'lang', value: 'en' });
+
+        expect(ignored.text()).toContain('The editor ignores this value');
+        expect(read.text()).not.toContain('ignores');
     });
 });
 

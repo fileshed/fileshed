@@ -18,18 +18,19 @@ import {
     MarkdownListItem,
     MarkdownParagraph,
     lineModelMarked,
+    strictLineModelMarked,
 } from '@client/engines/markdown/lineModel.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 let editors : Editor[] = [];
 
-export function openMarkdown(markdown : string, extensions : Extensions) : Editor
+export function openMarkdown(markdown : string, extensions : Extensions, strictLineBreaks = false) : Editor
 {
     const editor = new Editor({
         element: document.createElement('div'),
         extensions: [
-            Markdown.configure({ marked: lineModelMarked }),
+            Markdown.configure({ marked: strictLineBreaks ? strictLineModelMarked : lineModelMarked }),
             StarterKit.configure({
                 document: false,
                 paragraph: false,
@@ -38,11 +39,11 @@ export function openMarkdown(markdown : string, extensions : Extensions) : Edito
                 listItem: false,
                 trailingNode: false,
             }),
-            MarkdownDocument,
-            MarkdownBlockquote,
-            MarkdownListItem,
+            MarkdownDocument.configure({ strictLineBreaks }),
+            MarkdownBlockquote.configure({ strictLineBreaks }),
+            MarkdownListItem.configure({ strictLineBreaks }),
             MarkdownParagraph,
-            MarkdownHardBreak,
+            MarkdownHardBreak.configure({ strictLineBreaks }),
             BlankLines,
             ...extensions,
         ],

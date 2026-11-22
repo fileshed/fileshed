@@ -20,6 +20,19 @@
         <p v-if="taken" class="text-xs text-error">
             There's already a property named “{{ trimmed }}”.
         </p>
+        <div v-if="suggestions.length > 0" class="flex flex-wrap items-center gap-1">
+            <span class="me-1 text-xs text-muted">Suggested</span>
+            <UButton
+                v-for="suggestion in suggestions"
+                :key="suggestion.key"
+                icon="i-lucide-plus"
+                :label="suggestion.key"
+                color="neutral"
+                variant="soft"
+                size="xs"
+                @click="emit('add', suggestion.key, initialPropertyValue(suggestion.kind, new Date()))"
+            />
+        </div>
     </div>
 </template>
 
@@ -29,6 +42,7 @@
     import { computed, ref } from 'vue';
 
     // Engines
+    import { frontmatterKeys } from '../../../../engines/markdown/frontmatterKeys.ts';
     import {
         type PropertyKind,
         type PropertyValue,
@@ -61,6 +75,9 @@
     const trimmed = computed(() => key.value.trim());
     const taken = computed(() => props.keys.includes(trimmed.value));
     const valid = computed(() => trimmed.value !== '' && !taken.value);
+
+    // The keys the editor reads that the file doesn't have yet, each added as the kind the editor reads it as.
+    const suggestions = computed(() => frontmatterKeys.filter((def) => !props.keys.includes(def.key)));
 
     function onAdd() : void
     {

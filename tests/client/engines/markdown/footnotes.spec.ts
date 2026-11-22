@@ -3,9 +3,10 @@
 //
 // The contract: references are numbered in the order of their first use, and only when their label has a definition.
 // A definition runs on through its indented lines, and the file keeps references and definitions as written and where
-// written. Preview draws each top-level definition at the end of the page in its reference's order, under a divider,
-// and choosing a reference goes to its definition. A new footnote takes the first free number and puts its definition
-// at the end of the document after a blank line.
+// written; with strict line breaks, a definition's paragraphs read as the document's do. Preview draws each top-level
+// definition at the end of the page in its reference's order, under a divider, and choosing a reference goes to its
+// definition. A new footnote takes the first free number and puts its definition at the end of the document after a
+// blank line.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -99,6 +100,17 @@ describe('Footnote markdown', () =>
         });
 
         expect(editor.getMarkdown()).toBe('[^1]: The note.\n\nNew line');
+    });
+
+    it('keeps a definition\'s paragraphs apart, and its touching lines together, with strict line breaks', () =>
+    {
+        const markdown = '[^1]: The first\n    paragraph.\n\n    The second.';
+        const strictExtensions = [ FootnoteReference, FootnoteDefinition.configure({ strictLineBreaks: true }) ];
+
+        const editor = openMarkdown(markdown, strictExtensions, true);
+
+        expect(editor.state.doc.child(0).childCount).toBe(2);
+        expect(editor.getMarkdown()).toBe(markdown);
     });
 });
 

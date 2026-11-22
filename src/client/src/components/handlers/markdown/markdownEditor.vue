@@ -25,6 +25,7 @@
             <div v-show="view === 'wysiwyg'" class="h-full" :lang="frontmatter.meta.lang ?? undefined">
                 <UEditor
                     ref="editorRef"
+                    :key="strictLineBreaks ? 'strict-line-breaks' : 'line-model'"
                     content-type="markdown"
                     :model-value="initialContent"
                     :editable="!readOnly"
@@ -40,7 +41,7 @@
                         codeBlock: false,
                     }"
                     :markdown="markdownOptions"
-                    :extensions="extraExtensions"
+                    :extensions="extensions"
                     :handlers="editorHandlers"
                     :ui="{
                         root: 'grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]',
@@ -163,6 +164,17 @@
         overflow-x: auto;
     }
 
+    /* Collapses the newline inside into the space CommonMark reads it as. */
+    .md-doc :deep(.md-soft-break) {
+        white-space: normal;
+    }
+
+    /* The blank line that ends a strict paragraph, as the one row of space it is in the default mode. The selector
+       outranks the zero margin above. */
+    .md-doc :deep(.tiptap p.md-paragraph-end) {
+        margin-block-end: 1lh;
+    }
+
     .md-doc :deep(table) {
         width: 100%;
         border-collapse: collapse;
@@ -278,7 +290,7 @@
 <script setup lang="ts">
     import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
-    import type { Editor } from '@tiptap/core';
+    import type { Editor, Extensions } from '@tiptap/core';
     import { CodeBlock } from '@tiptap/extension-code-block';
     import { Highlight } from '@tiptap/extension-highlight';
     import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
@@ -303,6 +315,7 @@
     import { TableOfContents } from '../../../engines/markdown/toc.ts';
     import {
         BlankLines,
+        type LineBreakOptions,
         MarkdownBlockquote,
         MarkdownDocument,
         MarkdownHardBreak,
@@ -311,7 +324,9 @@
         MarkdownTable,
         MarkdownTaskItem,
         MarkdownTaskList,
+        StrictParagraphs,
         lineModelMarked,
+        strictLineModelMarked,
     } from '../../../engines/markdown/lineModel.ts';
     import { mergeEdit } from '../../../engines/markdown/preservation.ts';
 
@@ -360,18 +375,25 @@
 
     const editorRef = useTemplateRef<{ editor ?: Editor }>('editorRef');
 
-    // Captured once and never reassigned: UEditor takes this as its constructor content (which fires no update), and
-    // because the bound value never changes, UEditor's own model watcher never runs -- every resync goes through
-    // reparse() instead, where emitUpdate stays off.
+    // The file's line rule is built into the editor's parser and serializer, so a change to it builds a new UEditor
+    // (the key above) over the body as it stands.
+    const strictLineBreaks = computed(() => frontmatter.meta.strictLineBreaks);
+
+    // UEditor takes this as its constructor content (which fires no update). It is reassigned only for the UEditor a
+    // line rule change builds, never under a live one, so UEditor's own model watcher never runs -- every resync goes
+    // through reparse() instead, where emitUpdate stays off.
     const initialContent = ref(splitFrontmatter(props.modelValue).body);
 
     // The task lists and tables the base StarterKit doesn't ship, layered on here; each serializes to GFM through the
     // markdown extension UEditor adds. Document, paragraph, and hard break are the family's own line-model builds (the
-    // stock ones are off above): blocks join on single newlines and blank lines are real empty paragraphs (see
-    // engines/markdown/lineModel.ts). The code block replaces StarterKit's with the same node drawn with a language
-    // picker or a Mermaid diagram, quotes draw as callouts when they are one, and CodeHighlight colors code and the
-    // source of HTML and math blocks.
-    const markdownOptions = { marked: lineModelMarked };
+    // stock ones are off above): blocks join on single newlines and blank lines are real empty paragraphs, unless the
+    // file follows strict line breaks (see engines/markdown/lineModel.ts). The code block replaces StarterKit's with
+    // the same node drawn with a language picker or a Mermaid diagram, quotes draw as callouts when they are one, and
+    // CodeHighlight colors code and the source of HTML and math blocks.
+    const markdownOptions = computed(() =>
+    {
+        return { marked: strictLineBreaks.value ? strictLineModelMarked : lineModelMarked };
+    });
 
     const PreviewCodeBlock = CodeBlock.extend({
         addNodeView: () => VueNodeViewRenderer(MarkdownCodeBlock),
@@ -399,35 +421,42 @@
         },
     });
 
-    const extraExtensions = [
-        PreviewCodeBlock,
-        PreviewHtmlBlock,
-        PreviewHtmlInline,
-        PreviewMathBlock,
-        PreviewTableOfContents,
-        PreviewInlineMath,
-        CodeHighlight,
-        CalloutMarkers,
-        Comment,
-        CommentBlock,
-        FootnoteReference,
-        FootnoteDefinition,
-        FootnoteDisplay,
-        InlineMath,
-        Highlight,
-        MarkdownDocument,
-        PreviewBlockquote,
-        MarkdownListItem,
-        MarkdownParagraph,
-        MarkdownHardBreak,
-        BlankLines,
-        MarkdownTaskList,
-        MarkdownTaskItem.configure({ nested: true }),
-        MarkdownTable.configure({ resizable: false }),
-        TableRow,
-        TableHeader,
-        TableCell,
-    ];
+    // The nodes that join blocks or write line breaks take the file's line rule.
+    function buildExtensions(lineBreaks : LineBreakOptions) : Extensions
+    {
+        return [
+            PreviewCodeBlock,
+            PreviewHtmlBlock,
+            PreviewHtmlInline,
+            PreviewMathBlock,
+            PreviewTableOfContents,
+            PreviewInlineMath,
+            CodeHighlight,
+            CalloutMarkers,
+            Comment,
+            CommentBlock,
+            FootnoteReference,
+            FootnoteDefinition.configure(lineBreaks),
+            FootnoteDisplay,
+            InlineMath,
+            Highlight,
+            MarkdownDocument.configure(lineBreaks),
+            PreviewBlockquote.configure(lineBreaks),
+            MarkdownListItem.configure(lineBreaks),
+            MarkdownParagraph,
+            MarkdownHardBreak.configure(lineBreaks),
+            BlankLines,
+            MarkdownTaskList,
+            MarkdownTaskItem.configure({ nested: true, ...lineBreaks }),
+            MarkdownTable.configure({ resizable: false }),
+            TableRow,
+            TableHeader,
+            TableCell,
+            ...lineBreaks.strictLineBreaks ? [ StrictParagraphs ] : [],
+        ];
+    }
+
+    const extensions = computed(() => buildExtensions({ strictLineBreaks: strictLineBreaks.value }));
 
     // The custom kinds the built-in handler set doesn't cover: a GFM table and a footnote from the insert menu, the
     // highlight mark, and indent/outdent as list nesting -- the only indent that survives the markdown round-trip --
@@ -571,6 +600,15 @@
         if(view.value !== 'wysiwyg') { return; }
 
         if(editorRef.value?.editor && splitFrontmatter(value).body !== written) { reparse(value); }
+    });
+
+    // Runs ahead of the render that builds the new UEditor, so the editor starts on the body as it stands; the watch
+    // on editorRef takes its first serialization.
+    watch(strictLineBreaks, () =>
+    {
+        initialContent.value = splitFrontmatter(props.modelValue).body;
+        written = initialContent.value;
+        serialized = null;
     });
 
     // emitUpdate stays off: flipping editability is not an edit and must never write the buffer.

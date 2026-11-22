@@ -4,14 +4,13 @@
 // The contract: a frontmatter block that parses to a key/value map reads as properties whose kind comes from the
 // value (text, number, checkbox, date, list of scalars, or nested); anything else reads as raw, with the parse error.
 // Editing one property changes only that property: other keys keep their comments, order, quoting, and layout, and
-// removing the last property leaves blank YAML. The document meta reads the keys the editor gives meaning to.
+// removing the last property leaves blank YAML.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
 
 // Under test
 import {
-    buildDocumentMeta,
     initialPropertyValue,
     parseFrontmatter,
     removeProperty,
@@ -218,44 +217,6 @@ describe('initialPropertyValue', () =>
         expect(initialPropertyValue('checkbox', today)).toBe(false);
         expect(initialPropertyValue('list', today)).toEqual([]);
         expect(initialPropertyValue('date', today)).toBe('2026-03-07');
-    });
-});
-
-//----------------------------------------------------------------------------------------------------------------------
-// Document meta
-//----------------------------------------------------------------------------------------------------------------------
-
-describe('buildDocumentMeta', () =>
-{
-    it('reads the title, tags, and language', () =>
-    {
-        const meta = buildDocumentMeta(parseFrontmatter('title: Hello\ntags: [a, b]\nlang: en-GB\n'));
-
-        expect(meta).toEqual({ title: 'Hello', tags: [ 'a', 'b' ], lang: 'en-GB' });
-    });
-
-    it('has nothing to read without property frontmatter', () =>
-    {
-        const empty = { title: null, tags: [], lang: null };
-
-        expect(buildDocumentMeta(parseFrontmatter(null))).toEqual(empty);
-        expect(buildDocumentMeta(parseFrontmatter('title: [unclosed\n'))).toEqual(empty);
-    });
-
-    it('reads a blank title as no title, and a numeric one as its text', () =>
-    {
-        expect(buildDocumentMeta(parseFrontmatter('title: "  "\n')).title).toBeNull();
-        expect(buildDocumentMeta(parseFrontmatter('title: 1984\n')).title).toBe('1984');
-    });
-
-    it('reads tags written as one comma-separated string', () =>
-    {
-        expect(buildDocumentMeta(parseFrontmatter('tags: rust, web , \n')).tags).toEqual([ 'rust', 'web' ]);
-    });
-
-    it('ignores a language that is not a language tag', () =>
-    {
-        expect(buildDocumentMeta(parseFrontmatter('lang: English please\n')).lang).toBeNull();
     });
 });
 

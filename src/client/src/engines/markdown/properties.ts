@@ -91,20 +91,11 @@ export interface RawFrontmatter
 
 export type FrontmatterState = NoFrontmatter | PropertyMap | RawFrontmatter;
 
-// The properties the editor gives meaning to beyond the panel.
-export interface DocumentMeta
-{
-    title : string | null;
-    tags : string[];
-    lang : string | null;
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 // Parsing
 //----------------------------------------------------------------------------------------------------------------------
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/u;
-const LANGUAGE_TAG = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu;
 
 const STRINGIFY : ToStringOptions = { lineWidth: 0, flowCollectionPadding: false };
 
@@ -263,43 +254,6 @@ export function initialPropertyValue(kind : PropertyKind, today : Date) : Proper
             return `${ today.getFullYear() }-${ month }-${ day }`;
         }
     }
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// Document meta
-//----------------------------------------------------------------------------------------------------------------------
-
-// Tags come as a list, or as one comma-separated string.
-function tagsOf(property : Property | undefined) : string[]
-{
-    let tags : string[] = [];
-    if(property?.kind === 'list') { tags = property.value; }
-    if(property?.kind === 'text') { tags = property.value.split(','); }
-
-    return tags.map((tag) => tag.trim()).filter((tag) => tag !== '');
-}
-
-function titleOf(property : Property | undefined) : string | null
-{
-    if(property?.kind === 'number') { return String(property.value); }
-    if(property?.kind !== 'text' && property?.kind !== 'date') { return null; }
-
-    const title = property.value.trim();
-    return title === '' ? null : title;
-}
-
-export function buildDocumentMeta(state : FrontmatterState) : DocumentMeta
-{
-    const properties = state.kind === 'properties' ? state.properties : [];
-    const find = (key : string) : Property | undefined => properties.find((property) => property.key === key);
-
-    const lang = find('lang');
-
-    return {
-        title: titleOf(find('title')),
-        tags: tagsOf(find('tags')),
-        lang: lang?.kind === 'text' && LANGUAGE_TAG.test(lang.value) ? lang.value : null,
-    };
 }
 
 //----------------------------------------------------------------------------------------------------------------------

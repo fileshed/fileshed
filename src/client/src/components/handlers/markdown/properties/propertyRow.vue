@@ -73,15 +73,20 @@
             @click="emit('remove')"
         />
         <span v-else />
+
+        <p v-if="note" class="col-span-2 col-start-2 text-xs text-warning">
+            {{ note }}
+        </p>
     </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
 
 <script setup lang="ts">
-    import { ref, watch } from 'vue';
+    import { computed, ref, watch } from 'vue';
 
     // Engines
+    import { checkProperty } from '../../../../engines/markdown/frontmatterKeys.ts';
     import type { Property, PropertyValue } from '../../../../engines/markdown/properties.ts';
 
     //------------------------------------------------------------------------------------------------------------------
@@ -97,6 +102,8 @@
         update : [ value : PropertyValue ];
         remove : [];
     }>();
+
+    const note = computed(() => checkProperty(props.property));
 
     // Typed as text: a half-typed "1." or "-" stays in the field and goes out only once it reads as a finite number.
     const numberDraft = ref(props.property.kind === 'number' ? String(props.property.value) : '');

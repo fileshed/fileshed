@@ -2,7 +2,8 @@
 // Add Property Form — naming and typing a new property
 //
 // The contract: a new property needs a name that is not blank and not already taken; it goes out trimmed, with the
-// starting value for the chosen kind, and the name field clears for the next one.
+// starting value for the chosen kind, and the name field clears for the next one. The keys the editor reads that the
+// file doesn't have yet are suggested, and one picked goes out with the starting value of the kind the editor reads.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -28,8 +29,8 @@ const stubs = {
             + '</select>',
     },
     UButton: {
-        props: [ 'disabled', 'type' ],
-        template: '<button :type="type" :disabled="disabled" />',
+        props: [ 'disabled', 'type', 'label' ],
+        template: '<button :type="type" :disabled="disabled">{{ label }}</button>',
     },
 };
 
@@ -74,6 +75,26 @@ describe('AddPropertyForm', () =>
 
         expect(wrapper.emitted('add')).toBeUndefined();
         expect(wrapper.text()).toContain('already a property named');
+    });
+
+    it('suggests the keys the editor reads that the file doesn\'t have yet', () =>
+    {
+        const wrapper = mountForm([ 'title', 'lang' ]);
+
+        const suggested = wrapper.findAll('button:not([type="submit"])').map((button) => button.text());
+
+        expect(suggested).toEqual([ 'tags', 'strict-line-breaks' ]);
+    });
+
+    it('adds a suggested key with the starting value of the kind the editor reads', async () =>
+    {
+        const wrapper = mountForm();
+        const suggestions = wrapper.findAll('button:not([type="submit"])');
+
+        await suggestions.find((button) => button.text() === 'strict-line-breaks')?.trigger('click');
+        await suggestions.find((button) => button.text() === 'tags')?.trigger('click');
+
+        expect(wrapper.emitted('add')).toEqual([ [ 'strict-line-breaks', false ], [ 'tags', [] ] ]);
     });
 });
 
