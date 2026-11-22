@@ -3,7 +3,18 @@
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
-    <span v-if="label" :class="[ 'text-sm', tone ]">{{ label }}</span>
+    <div v-if="label" class="flex items-center gap-1.5">
+        <span :class="[ 'text-sm', tone ]">{{ label }}</span>
+        <UButton
+            v-if="saveError !== null"
+            icon="i-lucide-rotate-cw"
+            label="Retry"
+            color="error"
+            variant="soft"
+            size="xs"
+            @click="emit('retry')"
+        />
+    </div>
 </template>
 
 <!--------------------------------------------------------------------------------------------------------------------->
@@ -18,6 +29,10 @@
         dirty : boolean;
         lastSaved : number | null;
         saveError : string | null;
+    }>();
+
+    const emit = defineEmits<{
+        retry : [];
     }>();
 
     const label = computed<string>(() =>

@@ -7,10 +7,14 @@
 // exposes an editor whose setContent/getMarkdown/setEditable the component drives, and lets a test fire the
 // update:modelValue edit signal. The child surfaces, the identity bar, and the conflict modal are stubbed to plain
 // elements so the data flow is directly observable. What this guards: opening parses through the constructor without
-// dirtying, a genuine edit emits the re-serialized markdown, toggling to Source shows the original when clean and the
-// serialization when edited, Source edits write verbatim, an external reload re-parses (its own echo skipped),
-// read-only reaches the editor, and formatting rides a fixed toolbar (hidden in Source and for viewers) beside a
-// slimmed bubble toolbar and a slash menu.
+// dirtying, a genuine edit is merged into the file so the lines it didn't touch keep their spelling, each later edit
+// merges into what the last one wrote, toggling to Source shows the original when clean and the merged file when
+// edited, Source edits write verbatim, an external reload re-parses (its own echo skipped),
+// read-only reaches the editor, formatting rides a fixed toolbar (hidden in Source and for viewers) beside a
+// slimmed bubble toolbar and a slash menu, the outline panel and the HTML banner mount in WYSIWYG, a choice to show
+// the file's HTML ends when the editor closes, and frontmatter stays out of the WYSIWYG document: only the body is
+// parsed, every edit puts the file's frontmatter back in front, and Source shows the whole file. The body is read and
+// written with the line rule the frontmatter names, and a change to the rule builds the editor again over the body.
 //----------------------------------------------------------------------------------------------------------------------
 
 /* eslint-disable vue/one-component-per-file -- the UEditor family is stubbed at the boundary; three stubs live here */
@@ -22,9 +26,16 @@ import { createPinia, setActivePinia } from 'pinia';
 
 // Stores
 import { useEditorStore } from '@client/stores/editor.ts';
+import { useMarkdownHTMLStore } from '@client/stores/markdownHTML.ts';
+
+// Engines
+import { strictLineModelMarked } from '@client/engines/markdown/lineModel.ts';
 
 // Under test
 import MarkdownEditor from '@client/components/handlers/markdown/markdownEditor.vue';
+
+// Support
+import { fileNode } from '../../../support.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -44,13 +55,22 @@ const ueditor = {
     mention: true as boolean,
     layout: '',
     markdown: '',
+    marked: undefined as unknown,
+    extensions: [] as { name : string; options : Record<string, unknown> }[],
+    mounts: 0,
     setContentCalls: [] as SetContentCapture[],
     setEditableCalls: [] as boolean[],
     emit: undefined as ((event : string, value : string) => void) | undefined,
 };
 
+// Its markdown manager hands text through unchanged: what the stub serializes to is whatever a test sets, so the merge
+// sees the file's spelling and the serializer's as the test wrote them.
 const editorInstance = {
     getMarkdown: () : string => ueditor.markdown,
+    markdown: {
+        parse: (markdown : string) : string => markdown,
+        serialize: (content : string) : string => content,
+    },
     commands: {
         setContent: (content : string, options : { contentType : string; emitUpdate : boolean }) : void =>
         {
@@ -71,6 +91,7 @@ const UEditorStub = defineComponent({
         starterKit: { type: [ Boolean, Object ], default: undefined },
         extensions: { type: Array, default: () => [] },
         handlers: { type: Object, default: () => ({}) },
+        markdown: { type: Object, default: () => ({}) },
         placeholder: { type: String, default: '' },
         ui: { type: Object, default: () => ({}) },
     },
@@ -78,10 +99,13 @@ const UEditorStub = defineComponent({
     setup(props, { emit, expose, slots })
     {
         ueditor.emit = emit as (event : string, value : string) => void;
+        ueditor.mounts += 1;
         expose({ editor: editorInstance });
 
         return () =>
         {
+            ueditor.marked = (props.markdown as { marked ?: unknown }).marked;
+            ueditor.extensions = props.extensions as typeof ueditor.extensions;
             ueditor.modelValue = props.modelValue;
             ueditor.contentType = props.contentType;
             ueditor.editable = props.editable;
@@ -147,6 +171,26 @@ vi.mock('@client/components/handlers/markdown/toolbar.vue', () => ({
     },
 }));
 
+// The outline panel reads the live TipTap document, which the UEditor stub doesn't have; its own spec covers it. Here
+// it is a marker that records it was mounted and handed the editor.
+vi.mock('@client/components/handlers/markdown/outlinePanel.vue', () => ({
+    default: {
+        name: 'MarkdownOutlinePanel',
+        props: [ 'editor' ],
+        template: '<div class="outline-panel" :data-live="String(editor !== null)" />',
+    },
+}));
+
+// The HTML banner reads the live TipTap document too, and its own spec covers it. Here it is a marker that records it
+// was mounted and handed the editor.
+vi.mock('@client/components/handlers/markdown/htmlBanner.vue', () => ({
+    default: {
+        name: 'MarkdownHTMLBanner',
+        props: [ 'editor' ],
+        template: '<div class="html-banner" :data-live="String(editor !== null)" />',
+    },
+}));
+
 vi.mock('@client/components/handlers/text/textEditor.vue', () => ({
     default: {
         name: 'TextEditor',
@@ -207,9 +251,11 @@ function lastEmit(wrapper : VueWrapper) : string | undefined
     return events[events.length - 1]?.[0] as string;
 }
 
-// Fire UEditor's update:modelValue, the signal the component treats as a genuine edit.
+// Fire UEditor's update:modelValue, the signal the component treats as a genuine edit. A tick passes first, as one
+// always does between the editor's creation and a person's first keystroke.
 async function editInEditor(wrapper : VueWrapper, markdown : string) : Promise<void>
 {
+    await wrapper.vm.$nextTick();
     ueditor.markdown = markdown;
     ueditor.emit?.('update:modelValue', markdown);
     await wrapper.vm.$nextTick();
@@ -244,13 +290,25 @@ describe('MarkdownEditor normalization policy', () =>
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     });
 
-    it('emits the re-serialized markdown on a genuine WYSIWYG edit', async () =>
+    it('merges a genuine WYSIWYG edit into the file, so the lines it didn\'t touch keep their spelling', async () =>
     {
-        const wrapper = mountEditor({ modelValue: '# Original' });
+        ueditor.markdown = '# Title\nkeep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: '# Title\nkeep __this__\nedit me' });
 
-        await editInEditor(wrapper, '# Original normalized');
+        await editInEditor(wrapper, '# Title\nkeep **this**\nedit me now');
 
-        expect(lastEmit(wrapper)).toBe('# Original normalized');
+        expect(lastEmit(wrapper)).toBe('# Title\nkeep __this__\nedit me now');
+    });
+
+    it('merges each later edit into what the one before it wrote', async () =>
+    {
+        ueditor.markdown = '# Title\nkeep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: '# Title\nkeep __this__\nedit me' });
+
+        await editInEditor(wrapper, '# Title\nkeep **this**\nedit me now');
+        await editInEditor(wrapper, '# New title\nkeep **this**\nedit me now');
+
+        expect(lastEmit(wrapper)).toBe('# New title\nkeep __this__\nedit me now');
     });
 
     it('shows the untouched original in Source when the document was not edited in WYSIWYG', async () =>
@@ -263,16 +321,32 @@ describe('MarkdownEditor normalization policy', () =>
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     });
 
-    it('shows the current serialization in Source after a WYSIWYG edit', async () =>
+    it('shows the merged file in Source after a WYSIWYG edit', async () =>
     {
-        const wrapper = mountEditor({ modelValue: '# Original' });
+        ueditor.markdown = 'keep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: 'keep __this__\nedit me' });
 
-        await editInEditor(wrapper, '# Normalized');
+        await editInEditor(wrapper, 'keep **this**\nedit me now');
         // The host is controlled: it feeds the emitted value back as the buffer, as the store would.
-        await wrapper.setProps({ modelValue: '# Normalized' });
+        await wrapper.setProps({ modelValue: lastEmit(wrapper) });
         await wrapper.get('.to-source').trigger('click');
 
-        expect(sourceValue(wrapper)).toBe('# Normalized');
+        expect(sourceValue(wrapper)).toBe('keep __this__\nedit me now');
+    });
+
+    it('merges a WYSIWYG edit into the text a Source edit left, once back in WYSIWYG', async () =>
+    {
+        ueditor.markdown = '# Original';
+        const wrapper = mountEditor({ modelValue: '# Original' });
+
+        await wrapper.get('.to-source').trigger('click');
+        await wrapper.get('.source').setValue('keep __this__\nedit me');
+        await wrapper.setProps({ modelValue: 'keep __this__\nedit me' });
+        ueditor.markdown = 'keep **this**\nedit me';
+        await wrapper.get('.to-wysiwyg').trigger('click');
+        await editInEditor(wrapper, 'keep **this**\nedit me now');
+
+        expect(lastEmit(wrapper)).toBe('keep __this__\nedit me now');
     });
 
     it('writes Source-mode edits to the buffer verbatim', async () =>
@@ -312,12 +386,13 @@ describe('MarkdownEditor normalization policy', () =>
         });
     });
 
-    it('skips the re-parse when an incoming buffer change is its own serialization echo', async () =>
+    it('skips the re-parse when the buffer comes back as the body this editor last wrote', async () =>
     {
-        ueditor.markdown = '# Current';
-        const wrapper = mountEditor({ modelValue: '# Current' });
+        ueditor.markdown = 'keep **this**\nedit me';
+        const wrapper = mountEditor({ modelValue: 'keep __this__\nedit me' });
 
-        await wrapper.setProps({ modelValue: '# Current' });
+        await editInEditor(wrapper, 'keep **this**\nedit me now');
+        await wrapper.setProps({ modelValue: lastEmit(wrapper) });
 
         expect(ueditor.setContentCalls).toHaveLength(0);
     });
@@ -382,12 +457,138 @@ describe('MarkdownEditor formatting surface', () =>
         expect(wrapper.find('.format-toolbar').exists()).toBe(false);
     });
 
+    it('mounts the outline panel inside the WYSIWYG surface with the live editor, for a viewer too', () =>
+    {
+        const wrapper = mountEditor({ readOnly: true });
+
+        expect(wrapper.get('.ueditor .outline-panel').attributes('data-live')).toBe('true');
+    });
+
+    it('mounts the HTML banner inside the WYSIWYG surface with the live editor, for a viewer too', () =>
+    {
+        const wrapper = mountEditor({ readOnly: true });
+
+        expect(wrapper.get('.ueditor .html-banner').attributes('data-live')).toBe('true');
+    });
+
+    it('ends a choice to show the file\'s HTML when the reader leaves the file', () =>
+    {
+        useEditorStore().$patch({ node: fileNode({ name: 'notes.md', role: 'viewer' }) });
+        const html = useMarkdownHTMLStore();
+        const wrapper = mountEditor({ readOnly: true });
+        html.show();
+
+        wrapper.unmount();
+
+        expect(html.rendered).toBe(false);
+    });
+
     it('disables images and mentions so nothing that cannot serialize to GFM is offered', () =>
     {
         mountEditor();
 
         expect(ueditor.image).toBe(false);
         expect(ueditor.mention).toBe(false);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('MarkdownEditor frontmatter', () =>
+{
+    const HEAD = '---\ntitle: Hello World\ntags: [a, b]\n---\n\n';
+
+    beforeEach(() =>
+    {
+        setActivePinia(createPinia());
+        ueditor.modelValue = '';
+        ueditor.markdown = '';
+        ueditor.mounts = 0;
+        ueditor.setContentCalls = [];
+        ueditor.emit = undefined;
+    });
+
+    it('parses only the body into the WYSIWYG document', () =>
+    {
+        mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        expect(ueditor.modelValue).toBe('# Body');
+    });
+
+    it('puts the frontmatter back, unchanged, in front of a WYSIWYG edit', async () =>
+    {
+        ueditor.markdown = '# Body';
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await editInEditor(wrapper, '# Edited');
+
+        expect(lastEmit(wrapper)).toBe(`${ HEAD }# Edited`);
+    });
+
+    it('shows the whole file, frontmatter included, in Source', async () =>
+    {
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await wrapper.get('.to-source').trigger('click');
+
+        expect(sourceValue(wrapper)).toBe(`${ HEAD }# Body`);
+    });
+
+    it('re-parses only the body when toggling back from Source', async () =>
+    {
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await wrapper.get('.to-source').trigger('click');
+        await wrapper.get('.to-wysiwyg').trigger('click');
+
+        expect(ueditor.setContentCalls.map((call) => call.content)).toEqual([ '# Body' ]);
+    });
+
+    it('leaves the WYSIWYG document alone when only the frontmatter changes', async () =>
+    {
+        ueditor.markdown = '# Body';
+        const wrapper = mountEditor({ modelValue: `${ HEAD }# Body` });
+
+        await wrapper.setProps({ modelValue: '---\ntitle: Renamed\n---\n\n# Body' });
+
+        expect(ueditor.setContentCalls).toHaveLength(0);
+    });
+
+    it('spellchecks the page in the language the frontmatter names', async () =>
+    {
+        const store = useEditorStore();
+        store.$patch({ buffer: '---\nlang: de\n---\n\nHallo' });
+
+        const wrapper = mountEditor({ modelValue: store.buffer });
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.get('.ueditor').element.parentElement?.getAttribute('lang')).toBe('de');
+    });
+
+    it('reads and writes the body with strict line breaks when the frontmatter sets them', () =>
+    {
+        const store = useEditorStore();
+        store.$patch({ buffer: '---\nstrict-line-breaks: true\n---\n\nOne\nparagraph' });
+
+        mountEditor({ modelValue: store.buffer });
+
+        expect(ueditor.marked).toBe(strictLineModelMarked);
+        expect(ueditor.extensions.find((extension) => extension.name === 'doc')?.options.strictLineBreaks).toBe(true);
+    });
+
+    it('builds the editor again over the body as it stands when the line rule changes, writing nothing', async () =>
+    {
+        const store = useEditorStore();
+        store.$patch({ buffer: '# Body' });
+        const wrapper = mountEditor({ modelValue: store.buffer });
+
+        store.$patch({ buffer: '---\nstrict-line-breaks: true\n---\n\n# Body\nadded in Source' });
+        await wrapper.setProps({ modelValue: store.buffer });
+
+        expect(ueditor.mounts).toBe(2);
+        expect(ueditor.marked).toBe(strictLineModelMarked);
+        expect(ueditor.modelValue).toBe('# Body\nadded in Source');
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     });
 });
 

@@ -159,6 +159,17 @@ describe('toUserPreferences', () =>
         expect(toUserPreferences({ allowRemoteMedia: 'no' })).toEqual({});
     });
 
+    it('carries the markdown HTML choice into the view', () =>
+    {
+        expect(toUserPreferences({ showMarkdownHTML: true })).toEqual({ showMarkdownHTML: true });
+        expect(toUserPreferences({ showMarkdownHTML: false })).toEqual({ showMarkdownHTML: false });
+    });
+
+    it('collapses a malformed markdown HTML choice to the empty view instead of throwing', () =>
+    {
+        expect(toUserPreferences({ showMarkdownHTML: 'yes' })).toEqual({});
+    });
+
     it('carries a valid view mode into the view', () =>
     {
         expect(toUserPreferences({ viewMode: 'list' })).toEqual({ viewMode: 'list' });

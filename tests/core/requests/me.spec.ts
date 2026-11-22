@@ -196,6 +196,14 @@ describe('updatePreferencesRequestCodec', () =>
         expect(updatePreferencesRequestCodec.safeParse({ allowRemoteMedia: 'yes' }).success).toBe(false);
     });
 
+    it('accepts a boolean showMarkdownHTML and a null delete, rejecting anything else', () =>
+    {
+        expect(updatePreferencesRequestCodec.parse({ showMarkdownHTML: true }).showMarkdownHTML).toBe(true);
+        expect(updatePreferencesRequestCodec.parse({ showMarkdownHTML: false }).showMarkdownHTML).toBe(false);
+        expect(updatePreferencesRequestCodec.parse({ showMarkdownHTML: null }).showMarkdownHTML).toBeNull();
+        expect(updatePreferencesRequestCodec.safeParse({ showMarkdownHTML: 'yes' }).success).toBe(false);
+    });
+
     // A colorMode outside the three literals must die HERE: the read side collapses the whole blob to empty on
     // any invalid known value, so an unvalidated write would wipe every preference the user has.
     it('accepts the three color-mode literals and a null delete, rejecting anything else', () =>

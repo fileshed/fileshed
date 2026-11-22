@@ -2,8 +2,8 @@
 // Settings Tab — preferences composition
 //
 // The tab re-parents the existing preference controls under headings. What this guards: the Preferences group
-// (files-root name, time format, colour mode), the Media group, and the Editor group (colorscheme, line numbers) are
-// all present, in order, so the move never silently drops one.
+// (files-root name, time format, colour mode), the Media group, and the Editor group (colorscheme, line numbers,
+// markdown HTML) are all present, in order, so the move never silently drops one.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it, vi } from 'vitest';
@@ -23,6 +23,7 @@ import ColorModePreference from '@client/components/account/colorModePreference.
 import RemoteMedia from '@client/components/account/remoteMedia.vue';
 import EditorColorScheme from '@client/components/account/editorColorScheme.vue';
 import EditorGutter from '@client/components/account/editorGutter.vue';
+import MarkdownHTML from '@client/components/account/markdownHTML.vue';
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -37,6 +38,7 @@ function mountTab() : VueWrapper
                 RemoteMedia: true,
                 EditorColorScheme: true,
                 EditorGutter: true,
+                MarkdownHTML: true,
             },
         },
     });
@@ -64,6 +66,7 @@ describe('SettingsTab', () =>
         expect(wrapper.findComponent(RemoteMedia).exists()).toBe(true);
         expect(wrapper.findComponent(EditorColorScheme).exists()).toBe(true);
         expect(wrapper.findComponent(EditorGutter).exists()).toBe(true);
+        expect(wrapper.findComponent(MarkdownHTML).exists()).toBe(true);
     });
 });
 

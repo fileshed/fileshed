@@ -4,15 +4,17 @@
 // The contract: blocks join on single newlines, so consecutive paragraphs touch ("a\nb"); a blank line is a real
 // empty paragraph, one per blank line ("a\n\nb" is [a, empty, b]); and the mapping is stable across serialize and
 // reload. Lists, quotes, and tables lazily swallow a directly-following line (markdown grammar), so the serializer
-// writes their terminating blank line itself. Exercised through a real TipTap editor with the same extension stack
-// the component wires up, because the round-trip is the contract.
+// writes their terminating blank line itself; a divider directly under a text line would underline it into a heading,
+// so the serializer writes a blank line before it. With strict line breaks, touching lines are one paragraph that keeps
+// its newlines, drawn as spaces; the blank line that ends a paragraph is its end, drawn as space below it, every other
+// blank line is still a real line, and Shift+Enter writes a backslash line break. Exercised through a real TipTap
+// editor with the same extension stack the component wires up, because the round-trip is the contract.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { Editor, type JSONContent } from '@tiptap/core';
-import { TaskList } from '@tiptap/extension-list';
-import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -24,20 +26,24 @@ import {
     MarkdownHardBreak,
     MarkdownListItem,
     MarkdownParagraph,
+    MarkdownTable,
     MarkdownTaskItem,
+    MarkdownTaskList,
+    StrictParagraphs,
     lineModelMarked,
+    strictLineModelMarked,
 } from '@client/engines/markdown/lineModel.ts';
 
 //----------------------------------------------------------------------------------------------------------------------
 
 let editors : Editor[] = [];
 
-function createEditor() : Editor
+function createEditor(strictLineBreaks = false) : Editor
 {
     const editor = new Editor({
         element: document.createElement('div'),
         extensions: [
-            Markdown.configure({ marked: lineModelMarked }),
+            Markdown.configure({ marked: strictLineBreaks ? strictLineModelMarked : lineModelMarked }),
             StarterKit.configure({
                 document: false,
                 paragraph: false,
@@ -45,18 +51,19 @@ function createEditor() : Editor
                 blockquote: false,
                 listItem: false,
             }),
-            MarkdownDocument,
-            MarkdownBlockquote,
-            MarkdownListItem,
+            MarkdownDocument.configure({ strictLineBreaks }),
+            MarkdownBlockquote.configure({ strictLineBreaks }),
+            MarkdownListItem.configure({ strictLineBreaks }),
             MarkdownParagraph,
-            MarkdownHardBreak,
-            TaskList,
-            MarkdownTaskItem.configure({ nested: true }),
+            MarkdownHardBreak.configure({ strictLineBreaks }),
+            MarkdownTaskList,
+            MarkdownTaskItem.configure({ nested: true, strictLineBreaks }),
             BlankLines,
-            Table,
+            MarkdownTable,
             TableRow,
             TableHeader,
             TableCell,
+            ...strictLineBreaks ? [ StrictParagraphs ] : [],
         ],
     });
 
@@ -81,9 +88,9 @@ function setDoc(editor : Editor, blocks : JSONContent[]) : void
     editor.commands.setContent({ type: 'doc', content: blocks });
 }
 
-function parse(markdown : string) : Editor
+function parse(markdown : string, strictLineBreaks = false) : Editor
 {
-    const editor = createEditor();
+    const editor = createEditor(strictLineBreaks);
     editor.commands.setContent(markdown, { contentType: 'markdown' });
     return editor;
 }
@@ -110,15 +117,15 @@ function shapesAt(editor : Editor, ...path : number[]) : string[]
 
 // The core line-model guarantee: serializing what was parsed reproduces the input byte-for-byte, and stays a fixed
 // point over repeated save/reload cycles -- growth on any cycle is the corruption this spec exists to prevent.
-function expectStable(markdown : string) : Editor
+function expectStable(markdown : string, strictLineBreaks = false) : Editor
 {
-    const first = parse(markdown);
+    const first = parse(markdown, strictLineBreaks);
     expect(first.getMarkdown()).toBe(markdown);
 
     let current = markdown;
     for(let cycle = 0; cycle < 3; cycle++)
     {
-        const editor = parse(current);
+        const editor = parse(current, strictLineBreaks);
         const next = editor.getMarkdown();
         expect(next).toBe(current);
         current = next;
@@ -235,6 +242,33 @@ describe('line model: grammar terminators', () =>
         expect(editor.getMarkdown()).toBe('- a\n\nb');
     });
 
+    it('writes a blank line before a divider placed straight under a text line, so it reloads as a divider', () =>
+    {
+        const editor = createEditor();
+        setDoc(editor, [ paragraph('a'), { type: 'horizontalRule' }, paragraph('b') ]);
+
+        const markdown = editor.getMarkdown();
+        expect(markdown).toBe('a\n\n---\nb');
+        expect(blockShapes(parse(markdown)))
+            .toEqual([ 'paragraph|a', 'paragraph|', 'horizontalRule|', 'paragraph|b' ]);
+    });
+
+    it('writes a divider under a heading or a blank line with nothing added', () =>
+    {
+        const editor = createEditor();
+        setDoc(editor, [
+            heading('H'),
+            { type: 'horizontalRule' },
+            paragraph('a'),
+            paragraph(),
+            { type: 'horizontalRule' },
+            paragraph('b'),
+        ]);
+
+        expect(editor.getMarkdown()).toBe('# H\n---\na\n\n---\nb');
+        expectStable('# H\n---\na\n\n---\nb');
+    });
+
     it('keeps blank lines after a table as real lines', () =>
     {
         const editor = parse('| a |\n| --- |\n| 1 |\n\n\nb');
@@ -286,6 +320,14 @@ describe('line model: container interiors', () =>
         expect(shapesAt(editor, 0, 0)).toEqual([ 'paragraph|a', 'paragraph|', 'paragraph|b' ]);
     });
 
+    it('keeps blank lines before a task list as real lines, as before any other list', () =>
+    {
+        const editor = expectStable('a\n\n- [ ] task\n\nb');
+
+        expect(blockShapes(editor))
+            .toEqual([ 'paragraph|a', 'paragraph|', 'taskList|task', 'paragraph|', 'paragraph|b' ]);
+    });
+
     it('round-trips task items with their checkbox state', () =>
     {
         const editor = expectStable('- [x] done\n- [ ] pending\n\n');
@@ -315,6 +357,147 @@ describe('line model: hard breaks', () =>
         const markdown = editor.getMarkdown();
         expect(markdown).toBe('a\nb');
         expect(blockShapes(parse(markdown))).toEqual([ 'paragraph|a', 'paragraph|b' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('line model: strict line breaks', () =>
+{
+    it('reads touching lines as one paragraph that keeps its newlines, and writes them back as they were', () =>
+    {
+        const editor = expectStable('First line\nsecond line', true);
+
+        expect(blockShapes(editor)).toEqual([ 'paragraph|First line\nsecond line' ]);
+    });
+
+    it('reads the blank line that ends a paragraph as the end of it, and each further blank line as a real line', () =>
+    {
+        expect(blockShapes(expectStable('a\n\nb', true))).toEqual([ 'paragraph|a', 'paragraph|b' ]);
+        expect(blockShapes(expectStable('a\n\n\nb', true))).toEqual([ 'paragraph|a', 'paragraph|', 'paragraph|b' ]);
+    });
+
+    it('keeps a blank line that ends no paragraph as a real line', () =>
+    {
+        expect(blockShapes(expectStable('# Title\n\nText', true)))
+            .toEqual([ 'heading|Title', 'paragraph|', 'paragraph|Text' ]);
+    });
+
+    it('writes a blank line after each paragraph made in Preview, so paragraphs and empty lines stay as made', () =>
+    {
+        const cases = [
+            [ paragraph('a'), paragraph('b') ],
+            [ paragraph('a'), paragraph(), paragraph('b') ],
+            [ paragraph('a'), paragraph() ],
+            [ heading('Title'), paragraph('a'), paragraph('b') ],
+        ];
+
+        for(const blocks of cases)
+        {
+            const editor = createEditor(true);
+            setDoc(editor, blocks);
+
+            expect(parse(editor.getMarkdown(), true).getJSON().content).toEqual(blocks);
+        }
+    });
+
+    it('reads the paragraphs inside a quote and a list item as it does the document\'s', () =>
+    {
+        expect(shapesAt(expectStable('> a\n> b\n>\n> c\n\n', true), 0)).toEqual([ 'paragraph|a\nb', 'paragraph|c' ]);
+        expect(shapesAt(expectStable('- a\n  b\n\n', true), 0, 0)).toEqual([ 'paragraph|a\nb' ]);
+        expect(shapesAt(expectStable('- a\n\n  b\n\n', true), 0, 0)).toEqual([ 'paragraph|a', 'paragraph|b' ]);
+    });
+
+    it('writes Shift+Enter as a backslash at the end of the line, which reloads as the same line break', () =>
+    {
+        const editor = createEditor(true);
+        const blocks = [
+            {
+                type: 'paragraph',
+                content: [
+                    { type: 'text', text: 'a' },
+                    { type: 'hardBreak' },
+                    { type: 'text', text: 'b' },
+                ],
+            },
+        ];
+        setDoc(editor, blocks);
+
+        const markdown = editor.getMarkdown();
+        expect(markdown).toBe('a\\\nb');
+        expect(parse(markdown, true).getJSON().content).toEqual(blocks);
+    });
+
+    it('draws a paragraph\'s newlines as collapsible spaces, and leaves a code block\'s alone', () =>
+    {
+        const editor = parse('First line\nsecond line\n\n```\ncode\nmore\n```', true);
+
+        const drawn = [ ...editor.view.dom.querySelectorAll('.md-soft-break') ].map((span) => span.textContent);
+
+        expect(drawn).toEqual([ '\n' ]);
+        expect(editor.view.dom.querySelector('pre .md-soft-break')).toBeNull();
+    });
+
+    it('marks each paragraph with a block after it as ending on a blank line, and no other', () =>
+    {
+        const editor = parse('a\n\n\nb\n\nc', true);
+
+        const ending = [ ...editor.view.dom.querySelectorAll('.md-paragraph-end') ];
+
+        expect(ending.map((element) => element.textContent)).toEqual([ 'a', 'b' ]);
+    });
+});
+
+//----------------------------------------------------------------------------------------------------------------------
+
+describe('line model: long files', () =>
+{
+    // Sections of every block kind whose tokenizers run at each block: text, lists, task lists, and tables.
+    function sections(count : number) : string
+    {
+        return Array.from({ length: count }, (_, index) =>
+        {
+            return [
+                `## Section ${ index }`,
+                `Text with __bold__ and a [link](https://example.com/${ index }).`,
+                '',
+                `- item ${ index }`,
+                `- [ ] task ${ index }`,
+                '',
+                '| a | b |',
+                '| --- | --- |',
+                `| ${ index } | x |`,
+                '',
+            ];
+        }).flat()
+            .join('\n');
+    }
+
+    function fastestParse(markdown : string) : number
+    {
+        const manager = createEditor().markdown;
+        if(!manager) { throw new Error('the markdown extension is missing'); }
+
+        manager.parse(markdown);
+        const times = Array.from({ length: 3 }, () =>
+        {
+            const started = performance.now();
+            manager.parse(markdown);
+            return performance.now() - started;
+        });
+
+        return Math.min(...times);
+    }
+
+    // Eight times the file takes about eight times as long; a parse quadratic in the file's length takes sixty-four.
+    // The ratio is the check, not the clock: four parses of a 20,000-line file take 0.4s on a workstation and passed 5s
+    // on CI's two-core runners, so the test gets room beyond the default timeout.
+    it('parses a long file in time proportional to its length', { timeout: 30_000 }, () =>
+    {
+        const short = fastestParse(sections(250));
+        const long = fastestParse(sections(2000));
+
+        expect(long).toBeLessThan(short * 24);
     });
 });
 

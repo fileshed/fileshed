@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Text Identity Bar — the header contribution
 //
-// The text editor's header chrome: the file name, a save-state readout, and Save (a Read only badge in its place for a
-// viewer). It teleports into the layout header, so the real editor store runs and the assertions read the teleported
-// content out of the target. What this guards: the name teleports into the target when present, Save drives a store
-// save only over a dirty writable session and is disabled when clean, and a viewer sees a Read only badge.
+// The text editor's header chrome: the file name, a save-state readout, and a Read only badge for a viewer. It
+// teleports into the layout header, so the real editor store runs and the assertions read the teleported content out of
+// the target. What this guards: the name teleports into the target when present, there is no Save button because edits
+// save themselves, the readout's Retry after a failed save drives a store save, and a viewer sees a Read only badge.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,7 +41,10 @@ const UButtonStub = {
 
 const stubs = {
     UButton: UButtonStub,
-    DownloadAction: { props: [ 'nodeID' ], template: '<a class="download" :data-node="nodeID" />' },
+    FileActionsMenu: {
+        props: [ 'nodeID', 'readOnly' ],
+        template: '<div class="file-actions" :data-node="nodeID" :data-read-only="String(readOnly)" />',
+    },
     UBadge: {
         name: 'UBadge',
         props: [ 'label', 'icon', 'color', 'variant' ],
@@ -99,49 +102,49 @@ describe('TextIdentityBar', () =>
         expect(header().textContent).toContain('report.txt');
     });
 
-    it('drives a store save when Save is clicked over a dirty writable session', async () =>
+    it('has no Save button over unsaved changes, since edits save themselves', async () =>
+    {
+        await mountBar({ buffer: 'changed' });
+
+        expect(header().querySelector('[data-label="Save"]')).toBeNull();
+    });
+
+    it('saves again when Retry is clicked after a failed save', async () =>
     {
         const store = useEditorStore();
         const saveSpy = vi.spyOn(store, 'save').mockResolvedValue();
         await mountBar({ buffer: 'changed' });
+        store.$patch({ saveError: 'Network error' });
+        await nextTick();
 
-        header().querySelector<HTMLButtonElement>('[data-label="Save"]')
+        header().querySelector<HTMLButtonElement>('[data-label="Retry"]')
             ?.click();
 
         expect(saveSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('disables Save when the buffer is clean', async () =>
-    {
-        await mountBar({ buffer: '' });
-
-        expect(header().querySelector('[data-label="Save"]')
-            ?.hasAttribute('disabled')).toBe(true);
-    });
-
-    it('shows a Read only badge and no Save button for a viewer', async () =>
+    it('shows a Read only badge for a viewer', async () =>
     {
         await mountBar({ role: 'viewer' });
 
         expect(header().querySelector('.badge')
             ?.getAttribute('data-label')).toBe('Read only');
-        expect(header().querySelector('[data-label="Save"]')).toBeNull();
     });
 
-    it('offers a download of the open file', async () =>
+    it('puts the file actions menu for the open file beside its name', async () =>
     {
         await mountBar();
 
-        expect(header().querySelector('.download')
+        expect(header().querySelector('.file-actions')
             ?.getAttribute('data-node')).toBe('f1');
     });
 
-    // Reading a file is enough to take a copy of it, so the control a viewer loses is Save, never Download.
-    it('still offers the download to a viewer who cannot save', async () =>
+    it('still gives a viewer the file actions menu, read-only', async () =>
     {
         await mountBar({ role: 'viewer' });
 
-        expect(header().querySelector('.download')).not.toBeNull();
+        expect(header().querySelector('.file-actions')
+            ?.getAttribute('data-read-only')).toBe('true');
     });
 });
 

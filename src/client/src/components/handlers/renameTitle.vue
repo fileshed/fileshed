@@ -1,9 +1,9 @@
 <!----------------------------------------------------------------------------------------------------------------------
   -- Rename Title
   --
-  -- A click opens the field with the name's stem selected, so retyping keeps the extension. It is prop-driven because
-  -- each owner fronts a different store: the editor headers rename the file with it, the playlist panel its display
-  -- title.
+  -- A click opens the field with the name's stem selected, so retyping keeps the extension; includeExtension selects
+  -- the whole name instead, for a title whose dots are punctuation. It is prop-driven because each owner fronts a
+  -- different store: the editor headers rename the file with it, the playlist panel its display title.
   --------------------------------------------------------------------------------------------------------------------->
 
 <template>
@@ -52,7 +52,8 @@
         rename : (name : string) => Promise<void>;
         tooltip ?: string;
         inputLabel ?: string;
-    }>(), { tooltip: 'Rename', inputLabel: 'File name' });
+        includeExtension ?: boolean;
+    }>(), { tooltip: 'Rename', inputLabel: 'File name', includeExtension: false });
 
     const { runMutation } = useRunWithToast();
 
@@ -71,7 +72,7 @@
         if(!el) { return; }
 
         el.focus();
-        const lastDot = draft.value.lastIndexOf('.');
+        const lastDot = props.includeExtension ? -1 : draft.value.lastIndexOf('.');
         el.setSelectionRange(0, lastDot > 0 ? lastDot : draft.value.length);
     }
 

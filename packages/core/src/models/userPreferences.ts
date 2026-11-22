@@ -7,7 +7,8 @@
 // chosen.
 //
 // colorMode is overridden by an instance-forced mode and itself overrides the instance default. allowRemoteMedia is
-// whether a playlist entry pointing off this instance may be played.
+// whether a playlist entry pointing off this instance may be played. showMarkdownHTML is whether HTML in a markdown
+// file someone else owns renders without first asking.
 //----------------------------------------------------------------------------------------------------------------------
 
 // Models
@@ -30,6 +31,7 @@ export interface UserPreferences
     viewMode ?: ViewMode;
     colorMode ?: ColorMode;
     allowRemoteMedia ?: boolean;
+    showMarkdownHTML ?: boolean;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

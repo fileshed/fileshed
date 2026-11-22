@@ -33,7 +33,7 @@
 
     watchEffect(() =>
     {
-        document.title = app.name;
+        document.title = app.pageTitle === null ? app.name : `${ app.pageTitle } · ${ app.name }`;
     });
 
     watchEffect(() =>

@@ -71,6 +71,7 @@ export interface UpdatePreferencesRequest
     viewMode ?: ViewMode | null;
     colorMode ?: ColorMode | null;
     allowRemoteMedia ?: boolean | null;
+    showMarkdownHTML ?: boolean | null;
     [key : string] : unknown;
 }
 

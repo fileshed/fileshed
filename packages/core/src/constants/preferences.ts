@@ -30,4 +30,8 @@ export const DEFAULT_VIEW_MODE : ViewMode = 'grid';
 // entries are a real feature of a playlist file and refusing them by default would break playlists that already work.
 export const DEFAULT_ALLOW_REMOTE_MEDIA = true;
 
+// Whether HTML in a markdown file someone else owns renders without asking first, when a user has set none. Off, so a
+// file someone hands you can't draw a lookalike of the app's own screens until you choose to see its HTML.
+export const DEFAULT_SHOW_MARKDOWN_HTML = false;
+
 //----------------------------------------------------------------------------------------------------------------------

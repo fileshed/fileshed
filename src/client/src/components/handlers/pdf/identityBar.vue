@@ -8,6 +8,13 @@
             <UIcon name="i-lucide-file-pen" class="shrink-0 text-dimmed" />
             <RenameTitle :name="store.node?.name ?? 'Untitled'" :read-only="store.readOnly" :rename="store.rename" />
             <SharingBadges :sharing="store.node?.sharing ?? null" />
+            <FileActionsMenu
+                v-if="store.node !== null"
+                :node-i-d="store.node.id"
+                :name="store.node.name"
+                :read-only="store.readOnly"
+                :rename="store.rename"
+            />
         </div>
 
         <div class="ml-auto flex shrink-0 items-center gap-3">
@@ -16,9 +23,8 @@
                 :dirty="store.dirty"
                 :last-saved="store.lastSaved"
                 :save-error="store.saveError"
+                @retry="store.save()"
             />
-
-            <DownloadAction v-if="store.node !== null" :node-i-d="store.node.id" />
 
             <UBadge v-if="store.readOnly" color="neutral" variant="subtle" label="Read only" icon="i-lucide-eye" />
             <UButton
@@ -42,8 +48,8 @@
     import { usePDFAnnotatorStore } from '../../../stores/pdfAnnotator.ts';
 
     // Components
-    import DownloadAction from '../downloadAction.vue';
     import EditorHeaderSlot from '../editorHeaderSlot.vue';
+    import FileActionsMenu from '../fileActionsMenu.vue';
     import SharingBadges from '../../share/sharingBadges.vue';
     import RenameTitle from '../renameTitle.vue';
     import SaveIndicator from '../saveIndicator.vue';

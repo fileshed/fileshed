@@ -1,10 +1,10 @@
 //----------------------------------------------------------------------------------------------------------------------
 // Save Indicator — the save-state priority
 //
-// The one-line readout the editing families share. Its whole contract is the priority order: a save error outranks an
+// The one-line readout the editing families share. Its contract is the priority order: a save error outranks an
 // in-flight save, which outranks unsaved changes, which outranks a settled "Saved"; a clean session that has never
-// saved shows nothing. What this guards: each rung wins over the ones below it, an error is toned as an error, and the
-// empty state renders no element at all.
+// saved shows nothing. What this guards: each rung wins over the ones below it, an error is toned as an error and
+// offers a Retry that asks for another save, no other state offers Retry, and the empty state renders no element.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { describe, expect, it } from 'vitest';
@@ -23,11 +23,19 @@ interface State
     saveError : string | null;
 }
 
+const stubs = {
+    UButton: {
+        props: [ 'label' ],
+        emits: [ 'click' ],
+        template: '<button :data-label="label" @click="$emit(\'click\')">{{ label }}</button>',
+    },
+};
+
 function mountIndicator(overrides : Partial<State> = {}) : VueWrapper
 {
     const props : State = { saving: false, dirty: false, lastSaved: null, saveError: null, ...overrides };
 
-    return mount(SaveIndicator, { props });
+    return mount(SaveIndicator, { props, global: { stubs } });
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,8 +74,33 @@ describe('SaveIndicator', () =>
     {
         const wrapper = mountIndicator({ saveError: 'boom', saving: true, dirty: true });
 
-        expect(wrapper.text()).toBe('Couldn\'t save');
+        expect(wrapper.get('span').text()).toBe('Couldn\'t save');
         expect(wrapper.get('span').classes()).toContain('text-error');
+    });
+
+    it('asks for another save when Retry is clicked after a failed save', async () =>
+    {
+        const wrapper = mountIndicator({ saveError: 'boom', dirty: true });
+
+        await wrapper.get('[data-label="Retry"]').trigger('click');
+
+        expect(wrapper.emitted('retry')).toHaveLength(1);
+    });
+
+    it('offers Retry only after a failed save', () =>
+    {
+        const states : Partial<State>[] = [
+            { lastSaved: Date.now() },
+            { dirty: true },
+            { saving: true, dirty: true },
+        ];
+
+        for(const state of states)
+        {
+            const retry = mountIndicator(state).find('[data-label="Retry"]');
+
+            expect(retry.exists()).toBe(false);
+        }
     });
 });
 

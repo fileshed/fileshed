@@ -8,6 +8,13 @@
             <UIcon name="i-lucide-file-pen" class="shrink-0 text-dimmed" />
             <RenameTitle :name="editor.node?.name ?? 'Untitled'" :read-only="editor.readOnly" :rename="editor.rename" />
             <SharingBadges :sharing="editor.node?.sharing ?? null" />
+            <FileActionsMenu
+                v-if="editor.node !== null"
+                :node-i-d="editor.node.id"
+                :name="editor.node.name"
+                :read-only="editor.readOnly"
+                :rename="editor.rename"
+            />
         </div>
 
         <div class="ml-auto flex shrink-0 items-center gap-3">
@@ -16,19 +23,10 @@
                 :dirty="editor.dirty"
                 :last-saved="editor.lastSaved"
                 :save-error="editor.saveError"
+                @retry="editor.save()"
             />
-
-            <DownloadAction v-if="editor.node !== null" :node-i-d="editor.node.id" />
 
             <UBadge v-if="editor.readOnly" color="neutral" variant="subtle" label="Read only" icon="i-lucide-eye" />
-            <UButton
-                v-else
-                icon="i-lucide-save"
-                label="Save"
-                :loading="editor.saving"
-                :disabled="!editor.dirty || editor.saving"
-                @click="editor.save()"
-            />
         </div>
     </EditorHeaderSlot>
 </template>
@@ -42,8 +40,8 @@
     import { useEditorStore } from '../../../stores/editor.ts';
 
     // Components
-    import DownloadAction from '../downloadAction.vue';
     import EditorHeaderSlot from '../editorHeaderSlot.vue';
+    import FileActionsMenu from '../fileActionsMenu.vue';
     import SharingBadges from '../../share/sharingBadges.vue';
     import RenameTitle from '../renameTitle.vue';
     import SaveIndicator from '../saveIndicator.vue';

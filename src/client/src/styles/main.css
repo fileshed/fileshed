@@ -25,3 +25,104 @@
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/* Code highlighting — syntax colors for code and HTML in markdown Preview, from GitHub's light and dark palettes.    */
+/* The tok- classes are the ones @lezer/highlight's classHighlighter writes. Source mode paints code with the chosen  */
+/* editor theme instead.                                                                                              */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+:root {
+    --code-keyword: #cf222e;
+    --code-string: #0a3069;
+    --code-comment: #59636e;
+    --code-constant: #0550ae;
+    --code-entity: #6639ba;
+    --code-type: #953800;
+    --code-inserted: #116329;
+    --code-deleted: #82071e;
+}
+
+.dark {
+    --code-keyword: #ff7b72;
+    --code-string: #a5d6ff;
+    --code-comment: #8b949e;
+    --code-constant: #79c0ff;
+    --code-entity: #d2a8ff;
+    --code-type: #ffa657;
+    --code-inserted: #7ee787;
+    --code-deleted: #ffa198;
+}
+
+:is(.tok-keyword, .tok-operator) {
+    color: var(--code-keyword);
+}
+
+:is(.tok-string, .tok-string2, .tok-url) {
+    color: var(--code-string);
+}
+
+.tok-comment {
+    color: var(--code-comment);
+}
+
+:is(.tok-number, .tok-bool, .tok-atom, .tok-literal, .tok-propertyName, .tok-meta) {
+    color: var(--code-constant);
+}
+
+:is(.tok-definition, .tok-className, .tok-macroName, .tok-labelName) {
+    color: var(--code-entity);
+}
+
+:is(.tok-typeName, .tok-namespace, .tok-variableName2) {
+    color: var(--code-type);
+}
+
+.tok-inserted {
+    color: var(--code-inserted);
+}
+
+:is(.tok-deleted, .tok-invalid) {
+    color: var(--code-deleted);
+}
+
+.tok-heading {
+    color: var(--code-constant);
+    font-weight: 600;
+}
+
+.tok-strong {
+    font-weight: 600;
+}
+
+.tok-emphasis {
+    font-style: italic;
+}
+
+.tok-link {
+    text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* Callouts — the colors of markdown callouts in Preview, from GitHub's light and dark palettes.                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+:root {
+    --callout-blue: #0969da;
+    --callout-green: #1a7f37;
+    --callout-purple: #8250df;
+    --callout-yellow: #9a6700;
+    --callout-red: #cf222e;
+    --callout-cyan: #1b7c83;
+    --callout-gray: #59636e;
+}
+
+.dark {
+    --callout-blue: #4493f8;
+    --callout-green: #3fb950;
+    --callout-purple: #ab7df8;
+    --callout-yellow: #d29922;
+    --callout-red: #f85149;
+    --callout-cyan: #39c5cf;
+    --callout-gray: #9198a1;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */

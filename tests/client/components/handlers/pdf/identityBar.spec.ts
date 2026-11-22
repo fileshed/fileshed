@@ -4,7 +4,8 @@
 // The PDF annotator's header chrome: the file name, a save-state readout, and Save (a Read only badge in its place for
 // a viewer). It teleports into the layout header, so the real annotator store runs and the assertions read the
 // teleported content out of the target. What this guards: the name teleports into the target when present, Save drives
-// a store save only over a dirty writable session and is disabled when clean, and a viewer sees a Read only badge.
+// a store save only over a dirty writable session and is disabled when clean, the readout's Retry after a failed save
+// drives a store save, and a viewer sees a Read only badge.
 //----------------------------------------------------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,7 +46,10 @@ const UButtonStub = {
 
 const stubs = {
     UButton: UButtonStub,
-    DownloadAction: { props: [ 'nodeID' ], template: '<a class="download" :data-node="nodeID" />' },
+    FileActionsMenu: {
+        props: [ 'nodeID', 'readOnly' ],
+        template: '<div class="file-actions" :data-node="nodeID" :data-read-only="String(readOnly)" />',
+    },
     UBadge: {
         name: 'UBadge',
         props: [ 'label', 'icon', 'color', 'variant' ],
@@ -121,6 +125,20 @@ describe('PDFIdentityBar', () =>
             ?.hasAttribute('disabled')).toBe(true);
     });
 
+    it('saves again when Retry is clicked after a failed save', async () =>
+    {
+        const store = usePDFAnnotatorStore();
+        const saveSpy = vi.spyOn(store, 'save').mockResolvedValue();
+        await mountBar({ dirty: true });
+        store.$patch({ saveError: 'Network error' });
+        await nextTick();
+
+        header().querySelector<HTMLButtonElement>('[data-label="Retry"]')
+            ?.click();
+
+        expect(saveSpy).toHaveBeenCalledTimes(1);
+    });
+
     it('shows a Read only badge and no Save button for a viewer', async () =>
     {
         await mountBar({ role: 'viewer', dirty: true });
@@ -130,11 +148,11 @@ describe('PDFIdentityBar', () =>
         expect(header().querySelector('[data-label="Save"]')).toBeNull();
     });
 
-    it('offers a download of the open file', async () =>
+    it('puts the file actions menu for the open file beside its name', async () =>
     {
         await mountBar();
 
-        expect(header().querySelector('.download')
+        expect(header().querySelector('.file-actions')
             ?.getAttribute('data-node')).toBe('f1');
     });
 });
